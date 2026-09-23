@@ -131,5 +131,14 @@ How to create attendee info?
 
 You can use @aws-sdk/client-chime-sdk-meetings CreateAttendeeCommand to create one, please check out this [link](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/chime-sdk-meetings/command/CreateAttendeeCommand/)
 
+## Roadmap
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | Upgrade Flutter and AWS Chime SDK to the latest versions | Planned |
+| 2 | Support more APIs from the latest Chime SDK | Planned |
+| 3 | Add video/audio communication backends besides Chime: Agora, LiveKit, TRTC, ARTC | Planned |
+| 4 | Add one-to-many livestreaming: IVS, LiveKit, Agora, TRTC, ARTC | Planned |
+
 
 
