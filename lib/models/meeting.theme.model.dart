@@ -34,9 +34,9 @@ class MeetingTheme {
     fontSize: 16,
   );
 
-  Color dotActiveColor = Colors.blue;
-  Color audioActiveColor = Colors.blue;
-  Color errorBackground = Colors.redAccent;
+  Color dotActiveColor = const Color(0xFF6366F1);
+  Color audioActiveColor = const Color(0xFF6366F1);
+  Color errorBackground = const Color(0xFFF43F5E);
 
   int pageAttendeeSize = 6;
 

@@ -11,17 +11,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_aws_chime_example/main.dart';
 
 void main() {
-  testWidgets('Verify Platform version', (WidgetTester tester) async {
+  testWidgets('Verify JoinScreen loads with tabs', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MyApp());
 
-    // Verify that platform version is retrieved.
-    expect(
-      find.byWidgetPredicate(
-        (Widget widget) => widget is Text &&
-                           widget.data!.startsWith('Running on:'),
-      ),
-      findsOneWidget,
-    );
+    // Verify that Chime Live title and tabs are rendered.
+    expect(find.text('Chime Live'), findsOneWidget);
+    expect(find.text('加入房间'), findsOneWidget);
+    expect(find.text('创建房间'), findsOneWidget);
   });
 }

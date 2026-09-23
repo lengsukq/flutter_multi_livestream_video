@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_aws_chime/models/meeting.model.dart';
@@ -44,8 +45,8 @@ class _MessagesViewState extends State<MessagesView> {
   Widget build(BuildContext context) {
     var size = MediaQuery.of(context).size;
     return Positioned(
-      left: MeetingTheme().baseUnit * 2,
-      bottom: MeetingTheme().actionViewHeight,
+      left: 14,
+      bottom: MeetingTheme().actionViewHeight + 16,
       child: Container(
         constraints: BoxConstraints(
           minHeight: 0,
@@ -66,49 +67,55 @@ class _MessagesViewState extends State<MessagesView> {
   }
 
   Widget chatBubble(MessageModel message) {
+    final isSelf = MeetingModel().localAttendeeId.value == message.attendeeId;
     return Container(
       alignment: Alignment.topLeft,
-      margin: EdgeInsets.only(top: MeetingTheme().baseUnit),
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: MeetingTheme().baseUnit * 2,
-          vertical: MeetingTheme().baseUnit,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.2),
-          borderRadius: BorderRadius.all(
-            Radius.circular(MeetingTheme().baseUnit * 2),
-          ),
-        ),
-        child: RichText(
-          text: TextSpan(
-            style: DefaultTextStyle.of(context).style,
-            children: [
-              TextSpan(
-                text: shortTextWithAsterisk(message.externalUserId),
-                style:
-                    MeetingModel().localAttendeeId.value == message.attendeeId
-                        ? TextStyle(
-                            color: Colors.black,
-                            background: Paint()
-                              ..color = Colors.white
-                              ..style = PaintingStyle.fill
-                              ..strokeCap = StrokeCap.round
-                              ..strokeWidth = 1.0,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          )
-                        : MeetingTheme().chatNameTextStyle,
+      margin: const EdgeInsets.only(top: 6),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: isSelf
+                  ? const Color(0xFF6366F1).withValues(alpha: 0.25)
+                  : Colors.black.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelf
+                    ? const Color(0xFF818CF8).withValues(alpha: 0.35)
+                    : Colors.white.withValues(alpha: 0.12),
+                width: 1,
               ),
-              TextSpan(
-                text: ': ',
-                style: MeetingTheme().chatNameTextStyle,
+            ),
+            child: RichText(
+              text: TextSpan(
+                style: DefaultTextStyle.of(context).style,
+                children: [
+                  TextSpan(
+                    text: shortTextWithAsterisk(message.externalUserId),
+                    style: TextStyle(
+                      color: isSelf ? const Color(0xFFA5B4FC) : const Color(0xFF38BDF8),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const TextSpan(
+                    text: '  ',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  TextSpan(
+                    text: message.message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
               ),
-              TextSpan(
-                text: message.message,
-                style: MeetingTheme().chatMessageTextStyle,
-              ),
-            ],
+            ),
           ),
         ),
       ),

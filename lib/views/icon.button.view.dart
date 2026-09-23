@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../utils/snackbar.dart';
@@ -59,37 +60,50 @@ class _IconButtonViewState extends State<IconButtonView> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6.0),
       child: _loading
-          ? const SizedBox(
-              width: 36,
-              height: 36,
+          ? SizedBox(
+              width: 38,
+              height: 38,
               child: Center(
                 child: SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
-                    color: Colors.white,
+                    strokeWidth: 2,
+                    color: widget.iconColor,
                   ),
                 ),
               ),
             )
-          : Material(
-              color: Colors.transparent,
-              shape: const CircleBorder(),
-              clipBehavior: Clip.hardEdge,
-              child: InkWell(
-                onTap: onTap,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: widget.showBackgroundColor
-                        ? Colors.black.withOpacity(0.3)
-                        : null,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _icon,
-                    color: widget.iconColor,
+          : ClipOval(
+              child: BackdropFilter(
+                filter: widget.showBackgroundColor
+                    ? ImageFilter.blur(sigmaX: 12, sigmaY: 12)
+                    : ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onTap,
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: widget.showBackgroundColor
+                            ? Colors.black.withValues(alpha: 0.35)
+                            : Colors.transparent,
+                        shape: BoxShape.circle,
+                        border: widget.showBackgroundColor
+                            ? Border.all(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                width: 1,
+                              )
+                            : null,
+                      ),
+                      child: Icon(
+                        _icon,
+                        size: 20,
+                        color: widget.iconColor,
+                      ),
+                    ),
                   ),
                 ),
               ),

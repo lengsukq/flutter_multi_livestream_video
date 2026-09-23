@@ -7,6 +7,8 @@ import 'package:flutter_aws_chime/handlers/method_channel_coordinator.dart';
 import 'package:flutter_aws_chime/models/meeting.model.dart';
 import 'package:http/http.dart' as http;
 
+import 'widgets/glass_widgets.dart';
+
 /// Device self-test: camera preview, mic/speaker status, server reachability.
 /// Runs before joining any room. Chime join is NOT required here.
 class DeviceCheckPage extends StatefulWidget {
@@ -162,79 +164,212 @@ class _DeviceCheckPageState extends State<DeviceCheckPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF090D16),
       appBar: AppBar(
-        title: const Text('设备自检'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          '设备就绪自检',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
         actions: [
           IconButton(
-            tooltip: '重测',
+            tooltip: '重新检测',
             onPressed: _busy ? null : _runAll,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('进房前先过一遍：哪项红了就先修哪项，不用猜。',
-                style: TextStyle(fontSize: 13, color: Colors.grey)),
-            const SizedBox(height: 12),
-            _section(
-              icon: Icons.videocam,
-              title: '摄像头',
-              status: _cameraStatus,
-              child: _camera == null
-                  ? const SizedBox(
-                      height: 160,
-                      child: Center(child: Text('无预览 — 看上面的状态')),
-                    )
-                  : Column(
-                      children: [
-                        AspectRatio(
-                          aspectRatio: 4 / 3,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: CameraPreview(_camera!),
+      body: AmbientBackground(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded,
+                        color: Color(0xFF818CF8), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '进房前先过一遍：哪项红了就先修哪项，保障通话顺畅。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _section(
+                icon: Icons.videocam_rounded,
+                title: '摄像头设备',
+                status: _cameraStatus,
+                child: _camera == null
+                    ? Container(
+                        height: 140,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.06),
                           ),
                         ),
-                        if (_cameras.length > 1)
-                          TextButton.icon(
-                            onPressed: _switchPreviewCamera,
-                            icon: const Icon(Icons.flip_camera_android),
-                            label: const Text('切换前后摄试试'),
+                        child: Center(
+                          child: Text(
+                            '无画面预览（请看上方状态）',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.4),
+                              fontSize: 13,
+                            ),
                           ),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          AspectRatio(
+                            aspectRatio: 4 / 3,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                ),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: CameraPreview(_camera!),
+                            ),
+                          ),
+                          if (_cameras.length > 1) ...[
+                            const SizedBox(height: 8),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: _switchPreviewCamera,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.flip_camera_ios_rounded,
+                                        size: 16, color: Color(0xFF818CF8)),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      '切换前后摄试试',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+              ),
+              _section(
+                  icon: Icons.mic_rounded,
+                  title: '麦克风输入',
+                  status: _micStatus),
+              _section(
+                  icon: Icons.volume_up_rounded,
+                  title: '扬声器输出',
+                  status: _speakerStatus),
+              _section(
+                icon: Icons.dns_rounded,
+                title: '服务器通讯 (${widget.server})',
+                status: _serverStatus,
+              ),
+              if (_error != null)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF43F5E).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFF43F5E).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(color: Color(0xFFFDA4AF), fontSize: 13),
+                  ),
+                ),
+              const SizedBox(height: 6),
+              GlassGradientButton(
+                onPressed: _busy ? null : _runAll,
+                isLoading: _busy,
+                icon: Icons.refresh_rounded,
+                child: const Text('重新检测全部项目'),
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                borderRadius: BorderRadius.circular(25),
+                onTap: () {
+                  try {
+                    MeetingModel();
+                  } catch (_) {}
+                  Navigator.of(context).pop(true);
+                },
+                child: Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.14),
+                    ),
+                  ),
+                  child: const Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_rounded,
+                            color: Color(0xFF34D399), size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          '自检通过，返回加入房间',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ],
                     ),
-            ),
-            _section(icon: Icons.mic, title: '麦克风', status: _micStatus),
-            _section(icon: Icons.volume_up, title: '扬声器', status: _speakerStatus),
-            _section(
-              icon: Icons.dns,
-              title: '服务器 ${widget.server}',
-              status: _serverStatus,
-            ),
-            if (_error != null)
-              Text(_error!, style: const TextStyle(color: Colors.red)),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: _busy ? null : _runAll,
-              icon: const Icon(Icons.refresh),
-              label: Text(_busy ? '检测中…' : '重新检测'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () {
-                // Leave a breadcrumb for join(): local mic state snapshot.
-                try {
-                  MeetingModel();
-                } catch (_) {}
-                Navigator.of(context).pop(true);
-              },
-              icon: const Icon(Icons.check),
-              label: const Text('自检通过，去加入房间'),
-            ),
-          ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
       ),
     );
@@ -248,27 +383,68 @@ class _DeviceCheckPageState extends State<DeviceCheckPage> {
   }) {
     final ok = status.startsWith('✅');
     final bad = status.startsWith('❌');
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Icon(icon,
-                  color: ok ? Colors.green : (bad ? Colors.red : Colors.grey)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(title,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
+    Color accentColor =
+        ok ? const Color(0xFF10B981) : (bad ? const Color(0xFFF43F5E) : const Color(0xFF94A3B8));
+
+    return GlassContainer(
+      borderRadius: 20,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+                ),
+                child: Icon(icon, color: accentColor, size: 20),
               ),
-            ]),
-            const SizedBox(height: 8),
-            Text(status, style: const TextStyle(fontSize: 13)),
-            if (child != null) ...[const SizedBox(height: 8), child],
-          ],
-        ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: accentColor.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: ok
+                          ? const Color(0xFF6EE7B7)
+                          : (bad ? const Color(0xFFFDA4AF) : Colors.white70),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (child != null) ...[const SizedBox(height: 12), child],
+        ],
       ),
     );
   }

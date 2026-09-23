@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,8 +7,9 @@ import 'package:flutter_aws_chime/flutter_aws_chime.dart';
 import 'package:flutter_aws_chime/models/join_info.model.dart';
 import 'package:flutter_aws_chime/views/meeting.view.dart';
 
-import 'join_link.dart';
 import 'device_check_page.dart';
+import 'join_link.dart';
+import 'widgets/glass_widgets.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,7 +20,20 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(home: JoinScreen());
+    return MaterialApp(
+      title: 'Chime Live',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF090D16),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF6366F1),
+          surface: Color(0xFF0F172A),
+        ),
+        useMaterial3: true,
+      ),
+      home: const JoinScreen(),
+    );
   }
 }
 
@@ -31,12 +46,14 @@ class JoinScreen extends StatefulWidget {
   State<JoinScreen> createState() => _JoinScreenState();
 }
 
-class _JoinScreenState extends State<JoinScreen> with SingleTickerProviderStateMixin {
+class _JoinScreenState extends State<JoinScreen>
+    with SingleTickerProviderStateMixin {
   late final StreamSubscription<ChimeEvent> _eventsSubscription;
   late final TabController _tabs;
   CameraPosition _cameraPosition = CameraPosition.front;
 
-  final _serverController = TextEditingController(text: 'http://192.168.31.8:3000');
+  final _serverController =
+      TextEditingController(text: 'http://192.168.31.8:3000');
   final _createCodeController = TextEditingController();
   final _createNameController = TextEditingController();
   final _joinCodeController = TextEditingController();
@@ -63,9 +80,11 @@ class _JoinScreenState extends State<JoinScreen> with SingleTickerProviderStateM
       case CameraAvailabilityEvent():
         debugPrint('Camera available: ${event.available}');
       case AttendeeVolumeEvent():
-        debugPrint('Attendee ${event.attendeeId} volume: ${event.volumeLevel.name}');
+        debugPrint(
+            'Attendee ${event.attendeeId} volume: ${event.volumeLevel.name}');
       case AttendeeSignalStrengthEvent():
-        debugPrint('Attendee ${event.attendeeId} signal: ${event.signalStrength.name}');
+        debugPrint(
+            'Attendee ${event.attendeeId} signal: ${event.signalStrength.name}');
       case VideoTileEvent():
         debugPrint('Video tile ${event.videoTile.tileId}: ${event.kind.name}');
     }
@@ -97,7 +116,8 @@ class _JoinScreenState extends State<JoinScreen> with SingleTickerProviderStateM
         ? null
         : (parsed?.roomCode ?? _createCodeController.text.trim());
     final nickname = _nickname(_createNameController);
-    if (wantCode != null && !RegExp(r'^[A-Za-z0-9]{4,12}$').hasMatch(wantCode)) {
+    if (wantCode != null &&
+        !RegExp(r'^[A-Za-z0-9]{4,12}$').hasMatch(wantCode)) {
       setState(() => _error = '房间号用4-12位字母/数字，不填则随机分配。');
       return;
     }
@@ -138,7 +158,8 @@ class _JoinScreenState extends State<JoinScreen> with SingleTickerProviderStateM
     try {
       final gate = await backend.enterGate();
       if (gate != null) throw gate;
-      final session = await backend.joinRoom(roomCode: code, nickname: nickname);
+      final session =
+          await backend.joinRoom(roomCode: code, nickname: nickname);
       await _enterRoom(session);
     } catch (e) {
       if (!mounted) return;
@@ -173,14 +194,17 @@ class _JoinScreenState extends State<JoinScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _switchCamera() async {
-    final requested =
-        _cameraPosition == CameraPosition.front ? CameraPosition.back : CameraPosition.front;
+    final requested = _cameraPosition == CameraPosition.front
+        ? CameraPosition.back
+        : CameraPosition.front;
     final ok = await MeetingModel().switchCamera(requested);
     if (!mounted) return;
     if (ok) {
       setState(() => _cameraPosition = requested);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('摄像头: ${requested == CameraPosition.front ? '前置' : '后置'}')),
+        SnackBar(
+            content:
+                Text('摄像头: ${requested == CameraPosition.front ? '前置' : '后置'}')),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -191,53 +215,194 @@ class _JoinScreenState extends State<JoinScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('视频房间'),
-          bottom: TabBar(
-            controller: _tabs,
-            tabs: const [Tab(text: '加入房间'), Tab(text: '创建房间')],
+    return Scaffold(
+      body: AmbientBackground(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 12),
+                _buildHeroHeader(),
+                const SizedBox(height: 24),
+                _buildServerCard(),
+                const SizedBox(height: 20),
+                _buildMainTabCard(),
+                if (_error != null) _buildErrorBanner(),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: _serverController,
-                decoration: const InputDecoration(
-                  labelText: '服务器 (Mac 局域网 IP)',
-                  hintText: 'http://192.168.31.8:3000',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.url,
+      ),
+    );
+  }
+
+  Widget _buildHeroHeader() {
+    return Center(
+      child: Column(
+        children: [
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFFD946EF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => DeviceCheckPage(server: _server),
-                )),
-                icon: const Icon(Icons.health_and_safety),
-                label: const Text('先做设备自检（摄像头/语音/服务器）'),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 320,
-                child: TabBarView(
-                  controller: _tabs,
-                  children: [_joinTab(), _createTab()],
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6366F1).withValues(alpha: 0.45),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
-              ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 8),
-                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
-                ),
-            ],
+              ],
+            ),
+            child: const Icon(
+              Icons.videocam_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
           ),
-        ),
+          const SizedBox(height: 14),
+          const Text(
+            'Chime Live',
+            style: TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '低延迟多流互动直播 · 音视频会议',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.6),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServerCard() {
+    return GlassContainer(
+      borderRadius: 22,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          GlassTextField(
+            controller: _serverController,
+            label: '后台服务器地址 (Mac 局域网 IP)',
+            hintText: 'http://192.168.31.8:3000',
+            prefixIcon: Icons.dns_rounded,
+            keyboardType: TextInputType.url,
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => DeviceCheckPage(server: _server),
+            )),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.28),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.health_and_safety_rounded,
+                    color: Color(0xFF34D399),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      '设备就绪自检（摄像头/麦克风/连通性）',
+                      style: TextStyle(
+                        color: Color(0xFF6EE7B7),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: const Color(0xFF34D399).withValues(alpha: 0.7),
+                    size: 12,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainTabCard() {
+    return GlassContainer(
+      borderRadius: 26,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+            child: TabBar(
+              controller: _tabs,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white60,
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+              dividerColor: Colors.transparent,
+              tabs: const [Tab(text: '加入房间'), Tab(text: '创建房间')],
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            height: 270,
+            child: TabBarView(
+              controller: _tabs,
+              children: [_joinTab(), _createTab()],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -246,34 +411,36 @@ class _JoinScreenState extends State<JoinScreen> with SingleTickerProviderStateM
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(
+        GlassTextField(
           controller: _joinCodeController,
-          decoration: const InputDecoration(
-            labelText: '房间号',
-            hintText: '如 482913',
-            border: OutlineInputBorder(),
-          ),
-          keyboardType: TextInputType.text,
-          textCapitalization: TextCapitalization.none,
+          label: '房间号',
+          hintText: '如 482913',
+          prefixIcon: Icons.tag_rounded,
         ),
         const SizedBox(height: 12),
-        TextField(
+        GlassTextField(
           controller: _joinNameController,
-          decoration: const InputDecoration(
-            labelText: '昵称 (可选)',
-            hintText: '观众-1',
-            border: OutlineInputBorder(),
+          label: '我的昵称 (可选)',
+          hintText: '观众-1',
+          prefixIcon: Icons.person_rounded,
+        ),
+        const SizedBox(height: 18),
+        GlassGradientButton(
+          onPressed: _busy ? null : _joinRoom,
+          isLoading: _busy,
+          icon: Icons.login_rounded,
+          child: const Text('进入房间'),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: Text(
+            '输入房主分享的 4~12 位房间号即可快速接入',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white.withValues(alpha: 0.45),
+            ),
           ),
         ),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: _busy ? null : _joinRoom,
-          icon: const Icon(Icons.login),
-          label: Text(_busy ? '加入中…' : '加入房间'),
-        ),
-        const SizedBox(height: 8),
-        const Text('房主把6位房间号告诉你，填入即可开看。',
-            style: TextStyle(fontSize: 12, color: Colors.grey)),
       ],
     );
   }
@@ -282,35 +449,68 @@ class _JoinScreenState extends State<JoinScreen> with SingleTickerProviderStateM
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(
+        GlassTextField(
           controller: _createCodeController,
-          decoration: const InputDecoration(
-            labelText: '房间号 (可选，不填随机)',
-            hintText: '如 888888',
-            border: OutlineInputBorder(),
-          ),
-          keyboardType: TextInputType.text,
-          textCapitalization: TextCapitalization.none,
+          label: '期望房间号 (可选，4-12位)',
+          hintText: '不填则系统随机分配',
+          prefixIcon: Icons.add_circle_outline_rounded,
         ),
         const SizedBox(height: 12),
-        TextField(
+        GlassTextField(
           controller: _createNameController,
-          decoration: const InputDecoration(
-            labelText: '昵称 (可选)',
-            hintText: '主播',
-            border: OutlineInputBorder(),
+          label: '主播昵称 (可选)',
+          hintText: '主播',
+          prefixIcon: Icons.badge_rounded,
+        ),
+        const SizedBox(height: 18),
+        GlassGradientButton(
+          onPressed: _busy ? null : _createAndJoin,
+          isLoading: _busy,
+          icon: Icons.video_call_rounded,
+          child: const Text('创建并开始直播'),
+        ),
+        const SizedBox(height: 10),
+        Center(
+          child: Text(
+            '创建房间后可直接将房间号分享给观众',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white.withValues(alpha: 0.45),
+            ),
           ),
         ),
-        const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: _busy ? null : _createAndJoin,
-          icon: const Icon(Icons.add),
-          label: Text(_busy ? '创建中…' : '创建并加入'),
-        ),
-        const SizedBox(height: 8),
-        const Text('创建后把房间号发给观众即可，不用复制长链接。',
-            style: TextStyle(fontSize: 12, color: Colors.grey)),
       ],
+    );
+  }
+
+  Widget _buildErrorBanner() {
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF43F5E).withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFF43F5E).withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              color: Color(0xFFFDA4AF), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _error!,
+              style: const TextStyle(
+                color: Color(0xFFFDA4AF),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -362,38 +562,118 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Scaffold(
+        backgroundColor: Colors.black,
         body: Stack(
           children: [
             MeetingView(widget.joinInfo,
                 onLeave: (_) => Navigator.of(context).pop()),
+            // Top Left Floating Room Code Pill
             Positioned(
-              top: 12,
-              left: 12,
-              child: GestureDetector(
-                onTap: () {
-                  Clipboard.setData(ClipboardData(text: widget.roomCode));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('房间号 ${widget.roomCode} 已复制')),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
+              top: 66,
+              left: 14,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: widget.roomCode));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor:
+                                const Color(0xFF1E293B).withValues(alpha: 0.95),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            content: Row(
+                              children: [
+                                const Icon(Icons.check_circle_rounded,
+                                    color: Color(0xFF10B981), size: 18),
+                                const SizedBox(width: 8),
+                                Text('房间号 ${widget.roomCode} 已复制到剪贴板'),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.copy_rounded,
+                              color: Color(0xFF818CF8),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '房号 ${widget.roomCode}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-                  child: Text('房间 ${widget.roomCode} · 点我复制',
-                      style: const TextStyle(color: Colors.white, fontSize: 14)),
                 ),
               ),
             ),
+            // Top Right Floating Camera Switch Button
             Positioned(
-              top: 12,
-              right: 12,
-              child: IconButton.filledTonal(
-                tooltip: '切换摄像头',
-                onPressed: widget.onSwitchCamera,
-                icon: const Icon(Icons.flip_camera_android),
+              top: 66,
+              right: 14,
+              child: ClipOval(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: widget.onSwitchCamera,
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.flip_camera_ios_rounded,
+                          color: Colors.white,
+                          size: 19,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
