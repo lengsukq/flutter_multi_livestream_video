@@ -96,7 +96,56 @@ See the [AWS Chime SDK guide to creating meetings](https://docs.aws.amazon.com/c
 
 ## Quick start
 
-`response` is the JSON object returned by your backend after creating a meeting and attendee.
+If your application backend implements [`BACKEND_CONTRACT.md`](BACKEND_CONTRACT.md),
+the high-level client handles HTTP, `JoinInfo`, heartbeat, and best-effort leave
+notification for you. The backend may be implemented in Java, Python, Node.js,
+Go, or any other stack.
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_aws_chime/flutter_aws_chime.dart';
+
+Future<void> openRoom(BuildContext context) async {
+  final client = ChimeClient(
+    backendUrl: 'https://api.example.com',
+    // Optional application auth. This is not an AWS credential.
+    tokenProvider: () async => 'your-app-token',
+  );
+
+  final room = await client.joinRoom(
+    roomCode: '482913',
+    nickname: 'Leo',
+  );
+  try {
+    if (!context.mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          body: ChimeMeetingView(
+            session: room.session,
+            title: 'Room ${room.roomCode}',
+            onLeave: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  } finally {
+    await room.dispose();
+    client.dispose();
+  }
+}
+```
+
+Use `ChimeClient.createRoomAndJoin(...)` for the matching create-and-join flow.
+`ChimeRoomSession` owns backend presence lifecycle while the media session is
+active. Backend heartbeat failures are exposed through `room.backendErrors`
+and do not automatically stop healthy Chime media.
+
+### Direct `JoinInfo` integration
+
+Applications with an existing backend contract can skip `ChimeClient` and
+continue to pass meeting and attendee responses directly. `response` below is
+the JSON object returned by that backend after creating a meeting and attendee.
 
 ```dart
 import 'package:flutter/material.dart';
@@ -133,7 +182,10 @@ Future<void> openMeeting(
 
 ## Session API
 
-The package entry point exports `ChimeMeetingSession`, `JoinInfo`, meeting models, state and event types, `ChimeException`, audio device types, `MeetingVideoTileView`, and `ChimeMeetingView`.
+The package entry point exports the high-level `ChimeClient` / `ChimeRoomSession`
+API as well as `ChimeMeetingSession`, `JoinInfo`, meeting models, state and event
+types, typed backend/media errors, audio device types, `MeetingVideoTileView`,
+and `ChimeMeetingView`.
 
 ```dart
 final session = ChimeMeetingSession();
@@ -314,7 +366,53 @@ dependencies:
 
 ## 快速接入
 
-`response` 是后端创建会议和 attendee 后返回的 JSON 对象。
+如果你的业务后端实现了 [`BACKEND_CONTRACT.md`](BACKEND_CONTRACT.md)，可以直接
+使用高层 `ChimeClient`。SDK 会负责 HTTP 请求、`JoinInfo` 转换、心跳和 best-effort
+离会通知。后端可以使用 Java、Python、Node.js、Go 或其他任意技术栈。
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_aws_chime/flutter_aws_chime.dart';
+
+Future<void> openRoom(BuildContext context) async {
+  final client = ChimeClient(
+    backendUrl: 'https://api.example.com',
+    // 可选业务鉴权 Token；这不是 AWS 凭证。
+    tokenProvider: () async => 'your-app-token',
+  );
+
+  final room = await client.joinRoom(
+    roomCode: '482913',
+    nickname: 'Leo',
+  );
+  try {
+    if (!context.mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          body: ChimeMeetingView(
+            session: room.session,
+            title: '房间 ${room.roomCode}',
+            onLeave: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  } finally {
+    await room.dispose();
+    client.dispose();
+  }
+}
+```
+
+创建并立即加入可使用 `ChimeClient.createRoomAndJoin(...)`。`ChimeRoomSession`
+负责媒体会话期间的后端 presence 生命周期；heartbeat 失败会通过
+`room.backendErrors` 暴露，但不会自动中断仍然健康的 Chime 音视频连接。
+
+### 直接使用 `JoinInfo`
+
+已经有自定义后端的项目可以完全跳过 `ChimeClient`，继续直接使用底层 API。
+下面的 `response` 是后端创建 meeting 和 attendee 后返回的 JSON 对象。
 
 ```dart
 import 'package:flutter/material.dart';
@@ -351,7 +449,9 @@ Future<void> openMeeting(
 
 ## 会话 API
 
-包入口统一导出 `ChimeMeetingSession`、`JoinInfo`、会议模型、状态和事件类型、`ChimeException`、音频设备类型、`MeetingVideoTileView` 和 `ChimeMeetingView`。
+包入口同时导出高层 `ChimeClient` / `ChimeRoomSession`，以及底层
+`ChimeMeetingSession`、`JoinInfo`、会议模型、状态和事件类型、类型化后端/媒体错误、
+音频设备类型、`MeetingVideoTileView` 和 `ChimeMeetingView`。
 
 ```dart
 final session = ChimeMeetingSession();

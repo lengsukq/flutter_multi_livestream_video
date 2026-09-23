@@ -15,10 +15,9 @@ class ChimeRoomSession {
     required this.roomCode,
     required this.attendeeId,
     required this.session,
-    required ChimeBackendClient backend,
-    required Duration heartbeatInterval,
-  }) : _backend = backend,
-       _heartbeatInterval = heartbeatInterval {
+    required this._backend,
+    required this._heartbeatInterval,
+  }) {
     _stateSubscription = session.states.listen(_onMeetingState);
     _startHeartbeat();
   }

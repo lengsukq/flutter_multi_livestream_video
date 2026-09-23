@@ -11,10 +11,7 @@ const int chimeBackendContractVersion = 1;
 const String chimeBackendContractHeader = 'X-Chime-Backend-Contract';
 
 class ChimeRoomJoinResponse {
-  const ChimeRoomJoinResponse({
-    required this.roomCode,
-    required this.joinInfo,
-  });
+  const ChimeRoomJoinResponse({required this.roomCode, required this.joinInfo});
 
   final String roomCode;
   final JoinInfo joinInfo;
@@ -25,11 +22,9 @@ class ChimeRoomJoinResponse {
 /// A compatible backend may be written in Java, Python, Node.js, Go, .NET, or
 /// any other stack. It only needs to implement the documented HTTP contract.
 class ChimeBackendClient {
-  ChimeBackendClient(
-    this.config, {
-    ChimeBackendTransport? transport,
-  }) : _transport = transport ?? createDefaultChimeBackendTransport(),
-       _ownsTransport = transport == null;
+  ChimeBackendClient(this.config, {ChimeBackendTransport? transport})
+    : _transport = transport ?? createDefaultChimeBackendTransport(),
+      _ownsTransport = transport == null;
 
   final ChimeClientConfig config;
   final ChimeBackendTransport _transport;
@@ -54,10 +49,9 @@ class ChimeBackendClient {
     required String nickname,
   }) async {
     final code = _required(roomCode, 'roomCode');
-    final data = await _post(
-      '/rooms/${Uri.encodeComponent(code)}/join',
-      {'userId': _required(nickname, 'nickname')},
-    );
+    final data = await _post('/rooms/${Uri.encodeComponent(code)}/join', {
+      'userId': _required(nickname, 'nickname'),
+    });
     return _parseJoinResponse(data, fallbackRoomCode: code);
   }
 
@@ -85,10 +79,8 @@ class ChimeBackendClient {
     if (_ownsTransport) _transport.close();
   }
 
-  Future<Map<String, dynamic>> _post(
-    String path,
-    Map<String, Object?> body,
-  ) => _request('POST', path, body: body);
+  Future<Map<String, dynamic>> _post(String path, Map<String, Object?> body) =>
+      _request('POST', path, body: body);
 
   Future<Map<String, dynamic>> _request(
     String method,
@@ -203,7 +195,9 @@ class ChimeBackendClient {
   void _validateContractVersion(Map<String, dynamic> data) {
     final value = data['contractVersion'];
     if (value == null) return;
-    final parsed = value is num ? value.toInt() : int.tryParse(value.toString());
+    final parsed = value is num
+        ? value.toInt()
+        : int.tryParse(value.toString());
     if (parsed != chimeBackendContractVersion) {
       throw ChimeBackendException(
         code: ChimeBackendErrorCode.invalidResponse,

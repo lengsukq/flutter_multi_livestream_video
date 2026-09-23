@@ -268,10 +268,7 @@ class _JoinScreenState extends State<JoinScreen>
 }
 
 class MeetingRoomPage extends StatefulWidget {
-  const MeetingRoomPage({
-    super.key,
-    required this.room,
-  });
+  const MeetingRoomPage({super.key, required this.room});
 
   final ChimeRoomSession room;
 

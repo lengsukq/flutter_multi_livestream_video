@@ -121,13 +121,13 @@ void main() {
       transport: transport,
     );
 
-    final response = await client.joinRoom(
-      roomCode: '482913',
-      nickname: 'Leo',
-    );
+    final response = await client.joinRoom(roomCode: '482913', nickname: 'Leo');
 
     expect(captured.method, 'POST');
-    expect(captured.uri.toString(), 'https://api.example.com/chime/rooms/482913/join');
+    expect(
+      captured.uri.toString(),
+      'https://api.example.com/chime/rooms/482913/join',
+    );
     expect(captured.headers[chimeBackendContractHeader], '1');
     expect(captured.headers['Authorization'], 'Bearer app-token');
     expect(captured.headers['X-Tenant'], 'tenant-1');
@@ -136,32 +136,35 @@ void main() {
     expect(response.joinInfo.attendee.attendeeId, 'attendee-1');
   });
 
-  test('createRoom sends the optional room code and parses join info', () async {
-    late _CapturedRequest captured;
-    final transport = _FakeTransport((request) {
-      captured = request;
-      return ChimeBackendTransportResponse(
-        statusCode: 200,
-        body: jsonEncode(_joinPayload(roomCode: 'ABCD12')),
+  test(
+    'createRoom sends the optional room code and parses join info',
+    () async {
+      late _CapturedRequest captured;
+      final transport = _FakeTransport((request) {
+        captured = request;
+        return ChimeBackendTransportResponse(
+          statusCode: 200,
+          body: jsonEncode(_joinPayload(roomCode: 'ABCD12')),
+        );
+      });
+      final client = ChimeBackendClient(
+        ChimeClientConfig.fromUrl('https://api.example.com'),
+        transport: transport,
       );
-    });
-    final client = ChimeBackendClient(
-      ChimeClientConfig.fromUrl('https://api.example.com'),
-      transport: transport,
-    );
 
-    final response = await client.createRoom(
-      roomCode: 'ABCD12',
-      nickname: 'Leo',
-    );
+      final response = await client.createRoom(
+        roomCode: 'ABCD12',
+        nickname: 'Leo',
+      );
 
-    expect(captured.uri.path, '/rooms');
-    expect(jsonDecode(captured.body!), {
-      'nickname': 'Leo',
-      'roomCode': 'ABCD12',
-    });
-    expect(response.roomCode, 'ABCD12');
-  });
+      expect(captured.uri.path, '/rooms');
+      expect(jsonDecode(captured.body!), {
+        'nickname': 'Leo',
+        'roomCode': 'ABCD12',
+      });
+      expect(response.roomCode, 'ABCD12');
+    },
+  );
 
   test('backend errors map to stable typed codes', () async {
     final transport = _FakeTransport(
@@ -169,10 +172,7 @@ void main() {
         statusCode: 404,
         body: jsonEncode({
           'contractVersion': 1,
-          'error': {
-            'code': 'room-not-found',
-            'message': 'Missing room.',
-          },
+          'error': {'code': 'room-not-found', 'message': 'Missing room.'},
         }),
       ),
     );
@@ -195,30 +195,33 @@ void main() {
     );
   });
 
-  test('declared incompatible backend contract versions are rejected', () async {
-    final payload = _joinPayload()..['contractVersion'] = 2;
-    final transport = _FakeTransport(
-      (_) => ChimeBackendTransportResponse(
-        statusCode: 200,
-        body: jsonEncode(payload),
-      ),
-    );
-    final client = ChimeBackendClient(
-      ChimeClientConfig.fromUrl('https://api.example.com'),
-      transport: transport,
-    );
-
-    await expectLater(
-      client.joinRoom(roomCode: '482913', nickname: 'Leo'),
-      throwsA(
-        isA<ChimeBackendException>().having(
-          (error) => error.code,
-          'code',
-          ChimeBackendErrorCode.invalidResponse,
+  test(
+    'declared incompatible backend contract versions are rejected',
+    () async {
+      final payload = _joinPayload()..['contractVersion'] = 2;
+      final transport = _FakeTransport(
+        (_) => ChimeBackendTransportResponse(
+          statusCode: 200,
+          body: jsonEncode(payload),
         ),
-      ),
-    );
-  });
+      );
+      final client = ChimeBackendClient(
+        ChimeClientConfig.fromUrl('https://api.example.com'),
+        transport: transport,
+      );
+
+      await expectLater(
+        client.joinRoom(roomCode: '482913', nickname: 'Leo'),
+        throwsA(
+          isA<ChimeBackendException>().having(
+            (error) => error.code,
+            'code',
+            ChimeBackendErrorCode.invalidResponse,
+          ),
+        ),
+      );
+    },
+  );
 
   test('high-level client rejects unsupported platforms before HTTP', () async {
     final transport = _FakeTransport(
@@ -294,7 +297,9 @@ void main() {
 
     await Future<void>.delayed(Duration.zero);
     expect(
-      transport.requests.any((request) => request.uri.path.endsWith('/heartbeat')),
+      transport.requests.any(
+        (request) => request.uri.path.endsWith('/heartbeat'),
+      ),
       isTrue,
     );
 
@@ -306,47 +311,54 @@ void main() {
     );
 
     client.dispose();
-    expect(transport.closed, isFalse, reason: 'Injected transports are caller-owned.');
-  });
-
-  test('room dispose waits for an in-flight best-effort leave request', () async {
-    final leaveStarted = Completer<void>();
-    final allowLeaveToFinish = Completer<void>();
-    final transport = _FakeTransport((request) async {
-      if (request.uri.path.endsWith('/join')) {
-        return ChimeBackendTransportResponse(
-          statusCode: 200,
-          body: jsonEncode(_joinPayload()),
-        );
-      }
-      if (request.uri.path.endsWith('/leave')) {
-        if (!leaveStarted.isCompleted) leaveStarted.complete();
-        await allowLeaveToFinish.future;
-      }
-      return const ChimeBackendTransportResponse(
-        statusCode: 200,
-        body: '{"contractVersion":1,"ok":true}',
-      );
-    });
-    final client = ChimeClient(
-      backendUrl: 'https://api.example.com',
-      heartbeatInterval: const Duration(hours: 1),
-      transport: transport,
+    expect(
+      transport.closed,
+      isFalse,
+      reason: 'Injected transports are caller-owned.',
     );
-    final room = await client.joinRoom(roomCode: '482913', nickname: 'Leo');
-
-    await room.session.leave();
-    await leaveStarted.future;
-
-    var disposed = false;
-    final disposeFuture = room.dispose().then((_) => disposed = true);
-    await Future<void>.delayed(Duration.zero);
-    expect(disposed, isFalse);
-
-    allowLeaveToFinish.complete();
-    await disposeFuture;
-    expect(disposed, isTrue);
-
-    client.dispose();
   });
+
+  test(
+    'room dispose waits for an in-flight best-effort leave request',
+    () async {
+      final leaveStarted = Completer<void>();
+      final allowLeaveToFinish = Completer<void>();
+      final transport = _FakeTransport((request) async {
+        if (request.uri.path.endsWith('/join')) {
+          return ChimeBackendTransportResponse(
+            statusCode: 200,
+            body: jsonEncode(_joinPayload()),
+          );
+        }
+        if (request.uri.path.endsWith('/leave')) {
+          if (!leaveStarted.isCompleted) leaveStarted.complete();
+          await allowLeaveToFinish.future;
+        }
+        return const ChimeBackendTransportResponse(
+          statusCode: 200,
+          body: '{"contractVersion":1,"ok":true}',
+        );
+      });
+      final client = ChimeClient(
+        backendUrl: 'https://api.example.com',
+        heartbeatInterval: const Duration(hours: 1),
+        transport: transport,
+      );
+      final room = await client.joinRoom(roomCode: '482913', nickname: 'Leo');
+
+      await room.session.leave();
+      await leaveStarted.future;
+
+      var disposed = false;
+      final disposeFuture = room.dispose().then((_) => disposed = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(disposed, isFalse);
+
+      allowLeaveToFinish.complete();
+      await disposeFuture;
+      expect(disposed, isTrue);
+
+      client.dispose();
+    },
+  );
 }

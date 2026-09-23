@@ -33,10 +33,8 @@ class ChimeClient {
          transport: transport,
        );
 
-  ChimeClient.withConfig(
-    this.config, {
-    ChimeBackendTransport? transport,
-  }) : backend = ChimeBackendClient(config, transport: transport);
+  ChimeClient.withConfig(this.config, {ChimeBackendTransport? transport})
+    : backend = ChimeBackendClient(config, transport: transport);
 
   final ChimeClientConfig config;
   final ChimeBackendClient backend;
@@ -78,9 +76,7 @@ class ChimeClient {
     }
   }
 
-  Future<ChimeRoomSession> _joinResponse(
-    ChimeRoomJoinResponse response,
-  ) async {
+  Future<ChimeRoomSession> _joinResponse(ChimeRoomJoinResponse response) async {
     final session = ChimeMeetingSession();
     try {
       await session.join(response.joinInfo);
