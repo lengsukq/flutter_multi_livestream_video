@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_aws_chime/flutter_aws_chime.dart';
 
-import 'join_link.dart';
 import 'widgets/glass_widgets.dart';
 
 void main() => runApp(const ChimeExampleApp());
@@ -41,9 +40,7 @@ class JoinScreen extends StatefulWidget {
 class _JoinScreenState extends State<JoinScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
-  final _serverController = TextEditingController(
-    text: 'http://192.168.31.8:3000',
-  );
+  final _serverController = TextEditingController();
   final _createCodeController = TextEditingController();
   final _createNameController = TextEditingController();
   final _joinCodeController = TextEditingController();
@@ -68,49 +65,55 @@ class _JoinScreenState extends State<JoinScreen>
     super.dispose();
   }
 
-  String get _server => _serverController.text.trim().isEmpty
-      ? 'http://192.168.31.8:3000'
-      : _serverController.text.trim();
+  String get _server => _serverController.text.trim();
 
   String _nickname(TextEditingController controller) =>
       controller.text.trim().isEmpty
-      ? RoomLink.defaultNickname()
+      ? 'user-${DateTime.now().millisecondsSinceEpoch % 100000}'
       : controller.text.trim();
 
   Future<void> _createRoom() async {
+    if (_server.isEmpty) {
+      setState(() => _error = 'Enter your backend URL first.');
+      return;
+    }
     final requestedCode = _createCodeController.text.trim();
     if (requestedCode.isNotEmpty &&
         !RegExp(r'^[A-Za-z0-9]{4,12}$').hasMatch(requestedCode)) {
       setState(() => _error = 'Room code must be 4–12 letters or digits.');
       return;
     }
-    final backend = DemoBackend(_server);
+    final client = ChimeClient(backendUrl: _server);
     await _run(() async {
-      final room = await backend.createRoom(
+      final room = await client.createRoomAndJoin(
         roomCode: requestedCode.isEmpty ? null : requestedCode,
         nickname: _nickname(_createNameController),
       );
-      await _joinMeeting(room, backend);
-    }, backend);
+      await _openMeeting(room);
+    }, client);
   }
 
   Future<void> _joinRoom() async {
+    if (_server.isEmpty) {
+      setState(() => _error = 'Enter your backend URL first.');
+      return;
+    }
     final code = _joinCodeController.text.trim();
     if (code.isEmpty) {
       setState(() => _error = 'Enter a room code first.');
       return;
     }
-    final backend = DemoBackend(_server);
+    final client = ChimeClient(backendUrl: _server);
     await _run(() async {
-      final room = await backend.joinRoom(
+      final room = await client.joinRoom(
         roomCode: code,
         nickname: _nickname(_joinNameController),
       );
-      await _joinMeeting(room, backend);
-    }, backend);
+      await _openMeeting(room);
+    }, client);
   }
 
-  Future<void> _run(Future<void> Function() action, DemoBackend backend) async {
+  Future<void> _run(Future<void> Function() action, ChimeClient client) async {
     setState(() {
       _busy = true;
       _error = null;
@@ -120,38 +123,24 @@ class _JoinScreenState extends State<JoinScreen>
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
-      backend.dispose();
+      client.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _joinMeeting(RoomSession room, DemoBackend backend) async {
-    final attendeeJson = room.attendee;
-    if (attendeeJson == null) throw 'Backend did not return attendee data.';
-    final joinInfo = JoinInfo(
-      meeting: MeetingInfo.fromJson(room.meeting),
-      attendee: AttendeeInfo.fromJson(attendeeJson),
-    );
-    final meeting = ChimeMeetingSession();
+  Future<void> _openMeeting(ChimeRoomSession room) async {
+    if (!mounted) {
+      await room.dispose();
+      return;
+    }
     try {
-      await meeting.join(joinInfo);
-      if (!mounted) {
-        await meeting.dispose();
-        return;
-      }
       await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => MeetingRoomPage(
-            roomCode: room.roomCode,
-            server: _server,
-            attendeeId: attendeeJson['AttendeeId']?.toString(),
-            session: meeting,
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => MeetingRoomPage(room: room)),
       );
-    } catch (_) {
-      await meeting.dispose();
-      rethrow;
+    } finally {
+      // Finish backend presence cleanup before the owning ChimeClient closes
+      // its HTTP client.
+      await room.dispose();
     }
   }
 
@@ -281,42 +270,19 @@ class _JoinScreenState extends State<JoinScreen>
 class MeetingRoomPage extends StatefulWidget {
   const MeetingRoomPage({
     super.key,
-    required this.roomCode,
-    required this.server,
-    required this.session,
-    this.attendeeId,
+    required this.room,
   });
 
-  final String roomCode;
-  final String server;
-  final String? attendeeId;
-  final ChimeMeetingSession session;
+  final ChimeRoomSession room;
 
   @override
   State<MeetingRoomPage> createState() => _MeetingRoomPageState();
 }
 
 class _MeetingRoomPageState extends State<MeetingRoomPage> {
-  late final DemoBackend _backend;
-  Timer? _heartbeat;
-
-  @override
-  void initState() {
-    super.initState();
-    _backend = DemoBackend(widget.server);
-    _backend.heartbeat(widget.roomCode);
-    _heartbeat = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => _backend.heartbeat(widget.roomCode),
-    );
-  }
-
   @override
   void dispose() {
-    _heartbeat?.cancel();
-    _backend.leave(widget.roomCode, attendeeId: widget.attendeeId);
-    _backend.dispose();
-    unawaited(widget.session.dispose());
+    unawaited(widget.room.dispose());
     super.dispose();
   }
 
@@ -326,8 +292,8 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
     body: Stack(
       children: [
         ChimeMeetingView(
-          session: widget.session,
-          title: 'Room ${widget.roomCode}',
+          session: widget.room.session,
+          title: 'Room ${widget.room.roomCode}',
           onLeave: () => Navigator.of(context).pop(),
         ),
         Positioned(
@@ -336,9 +302,11 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
           child: IconButton.filledTonal(
             tooltip: 'Copy room code',
             onPressed: () {
-              Clipboard.setData(ClipboardData(text: widget.roomCode));
+              Clipboard.setData(ClipboardData(text: widget.room.roomCode));
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Room code ${widget.roomCode} copied')),
+                SnackBar(
+                  content: Text('Room code ${widget.room.roomCode} copied'),
+                ),
               );
             },
             icon: const Icon(Icons.copy_rounded),

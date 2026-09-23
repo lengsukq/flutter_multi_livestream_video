@@ -1,3 +1,9 @@
+## Unreleased
+
+* Add the optional `ChimeClient` / `ChimeRoomSession` high-level backend-contract API while preserving direct `ChimeMeetingSession.join(JoinInfo)` integration.
+* Add typed backend errors, application token/custom-header providers, request timeouts, heartbeat, best-effort leave lifecycle, and an injectable backend transport.
+* Add backend contract and integration guides, align the demo server with contract v1, and simplify the example to consume the public SDK client.
+
 ## 3.0.0
 
 * Redesign the public API around `ChimeMeetingSession` and typed join information, state, events,

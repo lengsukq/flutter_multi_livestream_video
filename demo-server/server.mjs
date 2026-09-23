@@ -1,6 +1,8 @@
 // Chime demo backend — keys stay server-side, never ship to Flutter.
 // Uses AWS_PROFILE=chime-demo (IAM least-privilege), control plane us-east-1.
 // Billing: creating meetings is free; attendee-minutes bill only when someone joins.
+// Room endpoints implement BACKEND_CONTRACT.md v1. Set DEMO_BEARER_TOKEN to
+// exercise ChimeClient tokenProvider locally; this remains a demo auth hook.
 //
 // Room model (user-facing):
 //   POST /rooms              { roomCode?, nickname? } -> { roomCode, meeting, attendee? }
@@ -37,6 +39,9 @@ import {
 
 const CONTROL_REGION = process.env.AWS_REGION ?? 'us-east-1';
 const MEDIA_REGION = process.env.CHIME_MEDIA_REGION ?? 'ap-southeast-1';
+const CONTRACT_VERSION = 1;
+const CONTRACT_HEADER = 'X-Chime-Backend-Contract';
+const DEMO_BEARER_TOKEN = process.env.DEMO_BEARER_TOKEN?.trim() || null;
 const STARTED_AT = Date.now();
 // Empty-room auto close: sweep every 30s, close rooms with no heartbeat for 90s.
 // Heartbeat comes from the app (see POST /rooms/:code/heartbeat).
@@ -49,6 +54,35 @@ const client = new ChimeSDKMeetingsClient({ region: CONTROL_REGION });
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '64kb' }));
+
+function contractError(res, status, code, message, details = undefined) {
+  return res.status(status).json({
+    contractVersion: CONTRACT_VERSION,
+    error: { code, message, ...(details === undefined ? {} : { details }) },
+  });
+}
+
+function requireRoomContract(req, res, next) {
+  res.set(CONTRACT_HEADER, String(CONTRACT_VERSION));
+  const requestedVersion = req.get(CONTRACT_HEADER);
+  if (requestedVersion && requestedVersion !== String(CONTRACT_VERSION)) {
+    return contractError(
+      res,
+      400,
+      'unsupported-contract-version',
+      `This demo server supports backend contract v${CONTRACT_VERSION}.`,
+    );
+  }
+  if (DEMO_BEARER_TOKEN) {
+    const expected = `Bearer ${DEMO_BEARER_TOKEN}`;
+    if (req.get('Authorization') !== expected) {
+      return contractError(res, 401, 'unauthorized', 'A valid demo bearer token is required.');
+    }
+  }
+  next();
+}
+
+app.use('/rooms', requireRoomContract);
 
 // ---- in-memory state (restart clears the room directory) ----
 // entries: meetingId -> { meeting, roomCode, createdAt, attendees: [{ attendeeId, externalUserId, joinedAt }] }
@@ -234,7 +268,10 @@ app.get('/api/overview', (req, res) => {
 });
 
 app.get('/rooms', (req, res) => {
-  res.json({ rooms: [...meetings.values()].map((e) => roomSummary(e, req)) });
+  res.json({
+    contractVersion: CONTRACT_VERSION,
+    rooms: [...meetings.values()].map((e) => roomSummary(e, req)),
+  });
 });
 
 // ---- room API (primary for the app) ----
@@ -245,10 +282,20 @@ app.post('/rooms', async (req, res) => {
   try {
     let code = normalizeRoomCode(req.body?.roomCode);
     if (req.body?.roomCode && !code) {
-      return res.status(400).json({ error: 'bad-room-code', hint: 'roomCode must be 4-12 letters/digits' });
+      return contractError(
+        res,
+        400,
+        'bad-room-code',
+        'roomCode must be 4-12 letters/digits.',
+      );
     }
     if (code && rooms.has(code)) {
-      return res.status(409).json({ error: 'room-exists', hint: 'room taken — join it or pick another code' });
+      return contractError(
+        res,
+        409,
+        'room-exists',
+        'The room code is already in use.',
+      );
     }
     code ??= generateRoomCode();
     const rawNickname = req.body?.nickname?.trim() || null;
@@ -268,13 +315,18 @@ app.post('/rooms', async (req, res) => {
     if (nickname) {
       const attendee = await createAttendeeIn(entry, nickname);
       logEvent('join', `${nickname} created+joined room ${code}`);
-      return res.json({ roomCode: code, meeting: entry.meeting, attendee });
+      return res.json({
+        contractVersion: CONTRACT_VERSION,
+        roomCode: code,
+        meeting: entry.meeting,
+        attendee,
+      });
     }
-    res.json({ roomCode: code, meeting: entry.meeting });
+    res.json({ contractVersion: CONTRACT_VERSION, roomCode: code, meeting: entry.meeting });
   } catch (err) {
     console.error('create room failed', err);
     logEvent('error', `create room failed: ${err?.name ?? err}`);
-    res.status(500).json({ error: 'create-room-failed' });
+    contractError(res, 500, 'create-room-failed', 'Unable to create the room.');
   }
 });
 
@@ -284,18 +336,23 @@ app.post('/rooms/:code/join', async (req, res) => {
     const entry = await resolveEntry(req.params.code);
     if (!entry) {
       logEvent('error', `join ${req.params.code} failed: not found`);
-      return res.status(404).json({ error: 'room-not-found', hint: 'ask the host for the room number' });
+      return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
     const userId = req.body?.userId;
     const safeId = normalizeUserId(userId);
     const attendee = await createAttendeeIn(entry, safeId);
     touchHeartbeat(entry);
     logEvent('join', `${safeId} joined room ${entry.roomCode}`);
-    res.json({ roomCode: entry.roomCode, meeting: entry.meeting, attendee });
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      roomCode: entry.roomCode,
+      meeting: entry.meeting,
+      attendee,
+    });
   } catch (err) {
     console.error('room join failed', err);
     logEvent('error', `join room failed: ${err?.name ?? err}`);
-    res.status(500).json({ error: 'join-failed' });
+    contractError(res, 500, 'join-failed', 'Unable to join the room.');
   }
 });
 
@@ -303,9 +360,9 @@ app.post('/rooms/:code/join', async (req, res) => {
 // Any active client calls this every ~30s; rooms without it get auto-closed.
 app.post('/rooms/:code/heartbeat', async (req, res) => {
   const entry = await resolveEntry(req.params.code);
-  if (!entry) return res.status(404).json({ error: 'room-not-found' });
+  if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
   touchHeartbeat(entry);
-  res.json({ ok: true, roomCode: entry.roomCode });
+  res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode });
 });
 
 // Explicit leave notice from the app (best-effort; auto-close covers kills).
@@ -314,10 +371,10 @@ app.post('/rooms/:code/heartbeat', async (req, res) => {
 // the sweep handle the close to avoid kicking a second viewer.
 app.post('/rooms/:code/leave', async (req, res) => {
   const entry = await resolveEntry(req.params.code);
-  if (!entry) return res.status(404).json({ error: 'room-not-found' });
+  if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
   const who = req.body?.attendeeId ?? req.body?.userId ?? 'someone';
   logEvent('leave', `${who} left room ${entry.roomCode} (auto-close in ~90s if empty)`);
-  res.json({ ok: true, roomCode: entry.roomCode });
+  res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode });
 });
 
 // Force close a room. Deletes the Chime meeting (stops future joins/billing) and drops the directory entry.
@@ -331,12 +388,16 @@ app.delete('/rooms/:code', async (req, res) => {
       rooms.delete(entry.roomCode);
       meetings.delete(meetingId);
       logEvent('delete', `room ${entry.roomCode} force-closed (${entry.attendees.length} attendee records)`);
-      return res.json({ deleted: true, roomCode: entry.roomCode });
+      return res.json({
+        contractVersion: CONTRACT_VERSION,
+        deleted: true,
+        roomCode: entry.roomCode,
+      });
     }
     rooms.delete(key);
     meetings.delete(meetingId);
     logEvent('delete', `meeting ${String(meetingId).slice(0, 8)} force-closed`);
-    res.json({ deleted: true });
+    res.json({ contractVersion: CONTRACT_VERSION, deleted: true });
   } catch (err) {
     const notFound = err?.name === 'NotFoundException';
     if (notFound) {
@@ -346,10 +407,10 @@ app.delete('/rooms/:code', async (req, res) => {
         rooms.delete(key);
         meetings.delete(id);
       }
-      return res.status(404).json({ error: 'room-not-found' });
+      return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
     console.error('room delete failed', err);
-    res.status(500).json({ error: 'delete-failed' });
+    contractError(res, 500, 'delete-failed', 'Unable to close the room.');
   }
 });
 

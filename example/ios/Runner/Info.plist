@@ -30,6 +30,13 @@
 	<string>The app needs camera permission for video conferencing</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Use microphone to start call</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to the locally running Chime demo backend.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
