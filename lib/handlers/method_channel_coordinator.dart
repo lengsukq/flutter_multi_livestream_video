@@ -194,6 +194,71 @@ class MethodChannelCoordinator {
     });
     return response?.result ?? false;
   }
+
+  /// Permission preflight used by the device self-test page.
+  /// Returns per-permission status; never throws.
+  Future<PermissionCheckResult> checkPermissions() async {
+    var audio = false;
+    var video = false;
+    try {
+      audio = await requestAudioPermissions().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => false,
+      );
+    } catch (_) {
+      audio = false;
+    }
+    try {
+      video = await requestVideoPermissions().timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => false,
+      );
+    } catch (_) {
+      video = false;
+    }
+    return PermissionCheckResult(audio: audio, video: video);
+  }
+
+  /// Local-device self-test: mic permission + speaker/earpiece list.
+  /// Never throws; reports what it could actually reach.
+  Future<AudioCheckResult> checkAudioDevices() async {
+    String? active;
+    List<String> devices = [];
+    try {
+      final initial = await callMethod(
+        MethodCallOption.initialAudioSelection,
+      ).timeout(const Duration(seconds: 10), onTimeout: () => null);
+      active = initial?.arguments?.toString();
+    } catch (_) {
+      active = null;
+    }
+    try {
+      final list = await callMethod(
+        MethodCallOption.listAudioDevices,
+      ).timeout(const Duration(seconds: 10), onTimeout: () => null);
+      final args = list?.arguments;
+      if (args is Iterable) {
+        devices = args.map((e) => e.toString()).toList();
+      }
+    } catch (_) {
+      devices = [];
+    }
+    return AudioCheckResult(activeDevice: active, devices: devices);
+  }
+}
+
+class PermissionCheckResult {
+  final bool audio;
+  final bool video;
+
+  const PermissionCheckResult({required this.audio, required this.video});
+}
+
+class AudioCheckResult {
+  final String? activeDevice;
+  final List<String> devices;
+
+  const AudioCheckResult({this.activeDevice, this.devices = const []});
 }
 
 class MethodChannelResponse {

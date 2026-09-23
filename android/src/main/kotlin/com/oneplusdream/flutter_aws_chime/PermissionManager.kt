@@ -58,6 +58,18 @@ class PermissionManager(
         }
     }
 
+    /**
+     * Called from [FlutterAwsChimePlugin.onRequestPermissionsResult] when the
+     * system permission dialog closes. Completes the pending MethodChannel call
+     * so Dart's join() doesn't wait forever.
+     */
+    fun onRequestPermissionsResult(requestCode: Int) {
+        when (requestCode) {
+            AUDIO_PERMISSION_REQUEST_CODE -> audioCallbackReceived()
+            VIDEO_PERMISSION_REQUEST_CODE -> videoCallbackReceived()
+        }
+    }
+
     fun audioCallbackReceived() {
         val callResult: MethodChannelResult
         if (hasPermissionsAlready(AUDIO_PERMISSIONS)) {

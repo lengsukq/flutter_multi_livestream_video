@@ -28,3 +28,25 @@ migrate_working_dir/
 .dart_tool/
 .packages
 build/
+
+# Agent prompts & skills (local only, never commit)
+# AGENTS.md 是项目级提示词注入，保持跟踪，不在这里忽略
+prompts/
+.prompts/
+prompt/
+.prompt/
+skills/
+.skills/
+.local-prompts/
+.ai-prompts/
+.claude/
+.cursor/
+.codex/
+.aider*/
+.agents/
+.agent/
+CLAUDE.local.md
+GEMINI.local.md
+
+
+*/node_modules

@@ -1,0 +1,16 @@
+{
+  "name": "chime-demo-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Chime demo backend: create/join/delete meetings. Keys stay server-side.",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-chime-sdk-meetings": "^3.600.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

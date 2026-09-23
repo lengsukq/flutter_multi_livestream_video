@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chime Demo 监控</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; margin: 0; padding: 20px; max-width: 960px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #888; font-size: 13px; margin-bottom: 16px; }
+  .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px 16px; min-width: 140px; }
+  .card b { font-size: 22px; display: block; }
+  .card span { color: #888; font-size: 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  input, button { font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid #ccc; }
+  button { cursor: pointer; }
+  button.danger { background: #d33; color: #fff; border-color: #d33; }
+  button.primary { background: #1668dc; color: #fff; border-color: #1668dc; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+  code { font-size: 12px; }
+  .muted { color: #888; }
+  .att { display: inline-block; background: #eef; border-radius: 6px; padding: 2px 6px; margin: 1px 2px; font-size: 12px; }
+  #events { font-size: 12px; max-height: 260px; overflow: auto; border: 1px solid #eee; border-radius: 8px; padding: 8px 12px; }
+  #events div { padding: 2px 0; border-bottom: 1px dashed #eee; }
+  .err { color: #c00; }
+</style>
+</head>
+<body>
+<h1>Chime Demo 监控</h1>
+<div class="sub" id="meta">loading…</div>
+
+<div class="cards">
+  <div class="card"><b id="c-rooms">–</b><span>房间数</span></div>
+  <div class="card"><b id="c-att">–</b><span>加入人次（累计）</span></div>
+  <div class="card"><b id="c-up">–</b><span>后端运行时长</span></div>
+</div>
+
+<div class="row">
+  <input id="new-code" placeholder="房间号(可选,4-12位,不填随机)" style="width:240px" />
+  <button class="primary" onclick="createRoom()">创建房间</button>
+  <button onclick="refresh()">刷新</button>
+</div>
+<div id="msg" class="err"></div>
+
+<h3>房间列表</h3>
+<table>
+  <thead><tr><th>房间号</th><th>人数</th><th>成员</th><th>创建时间</th><th>操作</th></tr></thead>
+  <tbody id="rooms"><tr><td colspan="5" class="muted">暂无房间</td></tr></tbody>
+</table>
+
+<h3>事件</h3>
+<div id="events"><div class="muted">暂无事件</div></div>
+
+<script>
+let timer = null;
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+async function refresh() {
+  try {
+    document.getElementById('msg').textContent = '';
+    const d = await api('/api/overview');
+    document.getElementById('meta').textContent =
+      `control=${d.controlRegion} media=${d.mediaRegion} started=${d.startedAt}`;
+    document.getElementById('c-rooms').textContent = d.roomCount;
+    document.getElementById('c-att').textContent = d.attendeeCount;
+    document.getElementById('c-up').textContent = Math.floor(d.uptimeSec / 60) + 'min';
+    const tb = document.getElementById('rooms');
+    if (!d.rooms.length) { tb.innerHTML = '<tr><td colspan="5" class="muted">暂无房间</td></tr>'; }
+    else tb.innerHTML = d.rooms.map(r => `<tr>
+      <td><b style="font-size:18px">${esc(r.roomCode)}</b><br/><code class="muted">${esc(r.meetingId.slice(0,8))}</code></td>
+      <td><b>${r.attendeeCount}</b></td>
+      <td>${r.attendees.length ? r.attendees.map(a => `<span class="att">${esc(a.externalUserId)}</span>`).join('') : '<span class="muted">—</span>'}</td>
+      <td class="muted">${esc(r.createdAt)}</td>
+      <td>
+        <button onclick="copyRoom('${esc(r.roomCode)}')">复制房号</button>
+        <button class="danger" onclick="closeRoom('${esc(r.roomCode)}')">强制关闭</button>
+      </td></tr>`).join('');
+    const ev = document.getElementById('events');
+    ev.innerHTML = d.events.length
+      ? d.events.map(e => `<div><span class="muted">${esc(e.ts)}</span> <b>[${esc(e.type)}]</b> ${esc(e.message)}</div>`).join('')
+      : '<div class="muted">暂无事件</div>';
+  } catch (e) { document.getElementById('msg').textContent = '刷新失败: ' + e.message; }
+}
+async function createRoom() {
+  try {
+    document.getElementById('msg').textContent = '';
+    const code = document.getElementById('new-code').value.trim();
+    const d = await api('/rooms', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(code ? { roomCode: code } : {}) });
+    document.getElementById('new-code').value = '';
+    await refresh();
+    alert('房间已创建: ' + d.roomCode);
+  } catch (e) { document.getElementById('msg').textContent = '创建失败: ' + e.message; }
+}
+async function closeRoom(code) {
+  if (!confirm('强制关闭房间 ' + code + '？在线成员会被断开，并停止计费。')) return;
+  try { await api('/rooms/' + encodeURIComponent(code), { method: 'DELETE' }); await refresh(); }
+  catch (e) { document.getElementById('msg').textContent = '关闭失败: ' + e.message; }
+}
+function copyRoom(code) { navigator.clipboard.writeText(code); alert('房号已复制: ' + code); }
+refresh();
+timer = setInterval(refresh, 5000);
+</script>
+</body>
+</html>
