@@ -16,6 +16,7 @@ class MeetingSession {
     static let shared = MeetingSession()
     
     var meetingSession: DefaultMeetingSession?
+    var cameraPosition = "front"
     
     let audioVideoConfig = AudioVideoConfiguration()
     private let logger = ConsoleLogger(name: "MeetingSession")
@@ -57,4 +58,3 @@ class MeetingSession {
         return true
     }
 }
-

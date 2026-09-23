@@ -23,6 +23,8 @@ enum MethodCall: String {
     case videoTileRemove
     case listAudioDevices
     case updateAudioDevice
+    case setCameraPosition
+    case meetingEvent
     case audioSessionDidStop
     case messageReceived
     case sendMessage
@@ -72,4 +74,3 @@ enum Response: String {
     case message_payload_error = "iOS: Error Message payload is wrong."
     case message_sent_failed = "iOS: Error Could not sent message."
 }
-

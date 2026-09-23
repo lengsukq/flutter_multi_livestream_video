@@ -68,6 +68,8 @@ class MethodCallOption {
   static const String videoTileRemove = "videoTileRemove";
   static const String listAudioDevices = "listAudioDevices";
   static const String updateAudioDevice = "updateAudioDevice";
+  static const String setCameraPosition = "setCameraPosition";
+  static const String meetingEvent = "meetingEvent";
   static const String audioSessionDidDrop = "audioSessionDidDrop";
   static const String audioSessionDidStop = "audioSessionDidStop";
   static const String sendMessage = "sendMessage";

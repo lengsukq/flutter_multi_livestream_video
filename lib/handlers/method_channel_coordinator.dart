@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: MIT-0
  */
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_aws_chime/models/message.model.dart';
@@ -11,12 +13,17 @@ import '../interfaces/audio_video_interface.dart';
 import '../interfaces/realtime_interface.dart';
 import '../interfaces/video_tile_interfcae.dart';
 import '../models/attendee.model.dart';
+import '../models/meeting_event.model.dart';
 import '../models/meeting.model.dart';
 import '../models/video_tile.model.dart';
 import 'response_enums.dart';
 
 class MethodChannelCoordinator {
   late MethodChannel methodChannel;
+  final StreamController<ChimeEvent> _eventController =
+      StreamController<ChimeEvent>.broadcast();
+
+  Stream<ChimeEvent> get events => _eventController.stream;
 
   static final MethodChannelCoordinator _instance =
       MethodChannelCoordinator._internal();
@@ -33,8 +40,9 @@ class MethodChannelCoordinator {
   // it's also private, so it can only be called in this class
   MethodChannelCoordinator._internal() {
     // initialization logic
-    methodChannel =
-        const MethodChannel("com.oneplusdream.aws.chime.methodChannel");
+    methodChannel = const MethodChannel(
+      "com.oneplusdream.aws.chime.methodChannel",
+    );
     methodChannel.setMethodCallHandler(methodCallHandler);
   }
 
@@ -60,8 +68,10 @@ class MethodChannelCoordinator {
     initializeVideoTileObserver(meeting);
   }
 
-  Future<MethodChannelResponse?> callMethod(String methodName,
-      [dynamic args]) async {
+  Future<MethodChannelResponse?> callMethod(
+    String methodName, [
+    dynamic args,
+  ]) async {
     try {
       dynamic response = await methodChannel.invokeMethod(methodName, args);
       return MethodChannelResponse.fromJson(response);
@@ -96,36 +106,46 @@ class MethodChannelCoordinator {
           break;
         case MethodCallOption.videoTileAdd:
           final String attendeeId = call.arguments["attendeeId"];
-          final VideoTileModel videoTile =
-              VideoTileModel.fromJson(call.arguments);
+          final VideoTileModel videoTile = VideoTileModel.fromJson(
+            call.arguments,
+          );
           videoTileObserver?.videoTileDidAdd(attendeeId, videoTile);
           break;
         case MethodCallOption.videoTileRemove:
           final String attendeeId = call.arguments["attendeeId"];
-          final VideoTileModel videoTile =
-              VideoTileModel.fromJson(call.arguments);
+          final VideoTileModel videoTile = VideoTileModel.fromJson(
+            call.arguments,
+          );
           videoTileObserver?.videoTileDidRemove(attendeeId, videoTile);
           break;
         case MethodCallOption.audioSessionDidStop:
           audioVideoObserver?.audioSessionDidStop();
           break;
+        case MethodCallOption.meetingEvent:
+          final event = ChimeEvent.fromJson(call.arguments);
+          if (event != null) _eventController.add(event);
+          break;
         case MethodCallOption.messageReceived:
-          realtimeObserver
-              ?.messageDidReceive(MessageModel.fromJson(call.arguments));
+          realtimeObserver?.messageDidReceive(
+            MessageModel.fromJson(call.arguments),
+          );
           break;
         default:
           debugPrint(
-              "Method ${call.method} with args ${call.arguments} does not exist");
+            "Method ${call.method} with args ${call.arguments} does not exist",
+          );
       }
     } catch (e) {
       debugPrint(
-          "Error: call ${call.method} with arguments ${call.arguments} failed: $e");
+        "Error: call ${call.method} with arguments ${call.arguments} failed: $e",
+      );
     }
   }
 
   Future<bool> requestAudioPermissions() async {
-    MethodChannelResponse? audioPermission =
-        await callMethod(MethodCallOption.manageAudioPermissions);
+    MethodChannelResponse? audioPermission = await callMethod(
+      MethodCallOption.manageAudioPermissions,
+    );
     if (audioPermission == null) {
       return false;
     }
@@ -133,8 +153,9 @@ class MethodChannelCoordinator {
   }
 
   Future<bool> requestVideoPermissions() async {
-    MethodChannelResponse? videoPermission =
-        await callMethod(MethodCallOption.manageVideoPermissions);
+    MethodChannelResponse? videoPermission = await callMethod(
+      MethodCallOption.manageVideoPermissions,
+    );
     if (videoPermission != null) {
       return videoPermission.result;
     }
@@ -157,12 +178,21 @@ class MethodChannelCoordinator {
   }
 
   Future<bool> toggleSound(bool off) async {
-    MethodChannelResponse? res =
-        await callMethod(MethodCallOption.toggleSound, off);
+    MethodChannelResponse? res = await callMethod(
+      MethodCallOption.toggleSound,
+      off,
+    );
     if (res == null) {
       return false;
     }
     return res.result;
+  }
+
+  Future<bool> setCameraPosition(CameraPosition position) async {
+    final response = await callMethod(MethodCallOption.setCameraPosition, {
+      'position': position.name,
+    });
+    return response?.result ?? false;
   }
 }
 

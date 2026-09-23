@@ -13,7 +13,7 @@ class VideoTileObserver(val methodChannel: MethodChannelCoordinator) : VideoTile
     }
 
     override fun onVideoTilePaused(tileState: VideoTileState) {
-        // Out of scope
+        callVideoTileEvent("videoTilePaused", tileState)
     }
 
     override fun onVideoTileRemoved(tileState: VideoTileState) {
@@ -26,11 +26,18 @@ class VideoTileObserver(val methodChannel: MethodChannelCoordinator) : VideoTile
     }
 
     override fun onVideoTileResumed(tileState: VideoTileState) {
-        // Out of scope
+        callVideoTileEvent("videoTileResumed", tileState)
     }
 
     override fun onVideoTileSizeChanged(tileState: VideoTileState) {
-        // Out of scope
+        callVideoTileEvent("videoTileSizeChanged", tileState)
+    }
+
+    private fun callVideoTileEvent(type: String, state: VideoTileState) {
+        methodChannel.callFlutterEvent(
+                type,
+                mapOf("videoTile" to videoTileStateToMap(state))
+        )
     }
 
     private fun videoTileStateToMap(state: VideoTileState): Map<String, Any?> {

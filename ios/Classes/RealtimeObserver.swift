@@ -21,11 +21,29 @@ class MyRealtimeObserver: RealtimeObserver {
     }
 
     func volumeDidChange(volumeUpdates: [VolumeUpdate]) {
-        // Out of scope
+        for update in volumeUpdates {
+            methodChannel.callFlutterEvent(
+                "attendeeVolumeChanged",
+                args: [
+                    "attendeeId": update.attendeeInfo.attendeeId,
+                    "externalUserId": update.attendeeInfo.externalUserId,
+                    "volumeLevel": volumeLevelName(update.volumeLevel)
+                ]
+            )
+        }
     }
 
     func signalStrengthDidChange(signalUpdates: [SignalUpdate]) {
-        // Out of scope
+        for update in signalUpdates {
+            methodChannel.callFlutterEvent(
+                "attendeeSignalStrengthChanged",
+                args: [
+                    "attendeeId": update.attendeeInfo.attendeeId,
+                    "externalUserId": update.attendeeInfo.externalUserId,
+                    "signalStrength": signalStrengthName(update.signalStrength)
+                ]
+            )
+        }
     }
 
     func attendeesDidJoin(attendeeInfo: [AttendeeInfo]) {
@@ -64,6 +82,26 @@ class MyRealtimeObserver: RealtimeObserver {
             "externalUserId": attendeeInfo.externalUserId
         ]
     }
+
+    private func volumeLevelName(_ level: VolumeLevel) -> String {
+        switch level {
+        case .muted: return "MUTED"
+        case .notSpeaking: return "NOT_SPEAKING"
+        case .low: return "LOW"
+        case .medium: return "MEDIUM"
+        case .high: return "HIGH"
+        @unknown default: return "UNKNOWN"
+        }
+    }
+
+    private func signalStrengthName(_ strength: SignalStrength) -> String {
+        switch strength {
+        case .none: return "NONE"
+        case .low: return "LOW"
+        case .high: return "HIGH"
+        @unknown default: return "UNKNOWN"
+        }
+    }
     
     private func messageInfoToDictionary(dataMessage: AmazonChimeSDK.DataMessage) ->[String:Any] {
         return [
@@ -76,4 +114,3 @@ class MyRealtimeObserver: RealtimeObserver {
         ]
     }
 }
-

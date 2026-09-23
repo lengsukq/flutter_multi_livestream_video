@@ -56,11 +56,29 @@ class RealtimeObserver(val methodChannel: MethodChannelCoordinator) : RealtimeOb
     }
 
     override fun onSignalStrengthChanged(signalUpdates: Array<SignalUpdate>) {
-        // Out of Scope
+        for (update in signalUpdates) {
+            methodChannel.callFlutterEvent(
+                    "attendeeSignalStrengthChanged",
+                    mapOf(
+                            "attendeeId" to update.attendeeInfo.attendeeId,
+                            "externalUserId" to update.attendeeInfo.externalUserId,
+                            "signalStrength" to update.signalStrength.name
+                    )
+            )
+        }
     }
 
     override fun onVolumeChanged(volumeUpdates: Array<VolumeUpdate>) {
-        // Out of Scope
+        for (update in volumeUpdates) {
+            methodChannel.callFlutterEvent(
+                    "attendeeVolumeChanged",
+                    mapOf(
+                            "attendeeId" to update.attendeeInfo.attendeeId,
+                            "externalUserId" to update.attendeeInfo.externalUserId,
+                            "volumeLevel" to update.volumeLevel.name
+                    )
+            )
+        }
     }
 
     private fun attendeeInfoToMap(attendee: AttendeeInfo): Map<String, Any?> {

@@ -82,6 +82,10 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
                     callResult = updateAudioDevice(call)
                 }
 
+                MethodCallFlutter.setCameraPosition.call -> {
+                    callResult = setCameraPosition(call)
+                }
+
                 MethodCallFlutter.sendMessage.call -> {
                     callResult = sendMessage(call)
                 }
@@ -103,6 +107,13 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
 
     fun callFlutterMethod(method: MethodCallFlutter, args: Any?) {
         methodChannel.invokeMethod(method.call, args)
+    }
+
+    fun callFlutterEvent(type: String, values: Map<String, Any?> = emptyMap()) {
+        methodChannel.invokeMethod(
+                MethodCallFlutter.meetingEvent.call,
+                mapOf("type" to type) + values
+        )
     }
 
     fun join(call: MethodCall): MethodChannelResult {
@@ -222,6 +233,21 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
             }
         }
         return MethodChannelResult(false, Response.audio_device_update_failed.msg)
+    }
+
+    fun setCameraPosition(call: MethodCall): MethodChannelResult {
+        val position = call.argument<String>("position")?.lowercase()
+                ?: return MethodChannelResult(false, "Camera position is required.")
+        if (position != "front" && position != "back") {
+            return MethodChannelResult(false, "Unsupported camera position: $position")
+        }
+        val session = MeetingSessionManager.meetingSession
+                ?: return NULL_MEETING_SESSION_RESPONSE
+        if (position != MeetingSessionManager.cameraPosition) {
+            session.audioVideo.switchCamera()
+            MeetingSessionManager.cameraPosition = position
+        }
+        return MethodChannelResult(true, position)
     }
 
     fun sendMessage(call: MethodCall): MethodChannelResult {

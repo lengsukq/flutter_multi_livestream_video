@@ -65,6 +65,8 @@ class MethodChannelCoordinator {
                 response = self.listAudioDevices()
             case .updateAudioDevice:
                 response = self.updateAudioDevice(call: call)
+            case .setCameraPosition:
+                response = self.setCameraPosition(call: call)
             case .sendMessage:
                 response = self.sendMessage(call: call)
             default:
@@ -76,6 +78,12 @@ class MethodChannelCoordinator {
     
     func callFlutterMethod(method: MethodCall, args: Any?) {
         self.methodChannel.invokeMethod(method.rawValue, arguments: args)
+    }
+
+    func callFlutterEvent(_ type: String, args: [String: Any] = [:]) {
+        var event = args
+        event["type"] = type
+        callFlutterMethod(method: .meetingEvent, args: event)
     }
     
     //
@@ -143,6 +151,7 @@ class MethodChannelCoordinator {
         
         // Update Singleton Class
         MeetingSession.shared.meetingSession = meetingSession
+        MeetingSession.shared.cameraPosition = "front"
         
         self.setupAudioVideoFacadeObservers()
         let meetingStartResponse = MeetingSession.shared.startMeetingAudio()
@@ -152,6 +161,7 @@ class MethodChannelCoordinator {
     func stop() -> MethodChannelResponse {
         MeetingSession.shared.meetingSession?.audioVideo.stop()
         MeetingSession.shared.meetingSession = nil
+        MeetingSession.shared.cameraPosition = "front"
         return MethodChannelResponse(result: true, arguments: Response.meeting_stopped_successfully.rawValue)
     }
     
@@ -233,6 +243,22 @@ class MethodChannelCoordinator {
         }
         
         return MethodChannelResponse(result: false, arguments: Response.audio_device_update_failed.rawValue)
+    }
+
+    func setCameraPosition(call: FlutterMethodCall) -> MethodChannelResponse {
+        guard let arguments = call.arguments as? [String: Any],
+              let position = arguments["position"] as? String,
+              position == "front" || position == "back" else {
+            return MethodChannelResponse(result: false, arguments: "Unsupported camera position.")
+        }
+        guard let session = MeetingSession.shared.meetingSession else {
+            return MethodChannelResponse(result: false, arguments: Response.create_meeting_failed.rawValue)
+        }
+        if position != MeetingSession.shared.cameraPosition {
+            session.audioVideo.switchCamera()
+            MeetingSession.shared.cameraPosition = position
+        }
+        return MethodChannelResponse(result: true, arguments: position)
     }
     
     func sendMessage(call: FlutterMethodCall) -> MethodChannelResponse {
@@ -343,4 +369,3 @@ class MethodChannelCoordinator {
         }
     }
 }
-

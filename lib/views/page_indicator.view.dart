@@ -75,7 +75,7 @@ class _PageIndicatorViewState extends State<PageIndicatorView> {
       child: Center(
         child: DotsIndicator(
           dotsCount: total,
-          position: currentIndex,
+          position: currentIndex.toDouble(),
           decorator: DotsDecorator(
             activeColor: MeetingTheme().dotActiveColor,
             size: const Size.square(9.0),

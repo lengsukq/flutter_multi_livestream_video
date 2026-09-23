@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'flutter_aws_chime'
-  s.version          = '1.1.0'
+  s.version          = '2.0.0'
   s.summary          = 'A flutter plugin for supporting aws chime usage.'
   s.description      = <<-DESC
 A flutter plugin for supporting aws chime usage.
@@ -15,12 +15,13 @@ A flutter plugin for supporting aws chime usage.
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'
-  s.platform = :ios, '12.0'
+  s.platform = :ios, '15.0'
   s.static_framework = true
 
   # third party platform
-  s.dependency 'AmazonChimeSDK'
-  s.dependency 'AmazonChimeSDKMachineLearning'
+  s.dependency 'AmazonChimeSDK', '= 0.27.4'
+  s.dependency 'AmazonChimeSDKMedia', '= 0.25.4'
+  s.dependency 'AmazonChimeSDKMachineLearning', '= 0.3.3'
 
   # s.xcconfig = { 'OTHER_LDFLAGS' => '-framework AmazonChimeSDKMachineLearning' }
 

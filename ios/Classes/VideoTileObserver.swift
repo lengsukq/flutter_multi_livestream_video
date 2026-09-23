@@ -27,15 +27,22 @@ class MyVideoTileObserver: VideoTileObserver {
     }
     
     func videoTileDidPause(tileState: VideoTileState) {
-        // Out of Scope
+        callVideoTileEvent("videoTilePaused", tileState: tileState)
     }
-    
+
     func videoTileDidResume(tileState: VideoTileState) {
-        // Out of Scope
+        callVideoTileEvent("videoTileResumed", tileState: tileState)
     }
-    
+
     func videoTileSizeDidChange(tileState: VideoTileState) {
-        // Out of Scope
+        callVideoTileEvent("videoTileSizeChanged", tileState: tileState)
+    }
+
+    private func callVideoTileEvent(_ type: String, tileState: VideoTileState) {
+        methodChannel.callFlutterEvent(
+            type,
+            args: ["videoTile": videoTileStateToDict(state: tileState)]
+        )
     }
     
     private func videoTileStateToDict(state: VideoTileState) -> [String: Any?] {
@@ -49,4 +56,3 @@ class MyVideoTileObserver: VideoTileObserver {
         ]
     }
 }
-

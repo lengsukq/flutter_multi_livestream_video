@@ -6,35 +6,48 @@ import com.amazonaws.services.chime.sdk.meetings.session.MeetingSessionStatus
 
 class AudioVideoObserver(val methodChannel: MethodChannelCoordinator) : AudioVideoObserver {
     override fun onAudioSessionCancelledReconnect() {
-        // Out of Scope
+        methodChannel.callFlutterEvent("audioSessionReconnectCancelled")
     }
 
     override fun onAudioSessionDropped() {
-        // Out of Scope
+        methodChannel.callFlutterEvent("audioSessionDropped")
     }
 
     override fun onAudioSessionStarted(reconnecting: Boolean) {
-        // Out of Scope
+        methodChannel.callFlutterEvent(
+                "audioSessionStarted",
+                mapOf("reconnecting" to reconnecting)
+        )
     }
 
     override fun onAudioSessionStartedConnecting(reconnecting: Boolean) {
-        // Out of Scope
+        methodChannel.callFlutterEvent(
+                "audioSessionConnecting",
+                mapOf("reconnecting" to reconnecting)
+        )
     }
 
     override fun onAudioSessionStopped(sessionStatus: MeetingSessionStatus) {
+        methodChannel.callFlutterEvent(
+                "audioSessionStopped",
+                mapOf("statusCode" to sessionStatus.statusCode?.value?.toString())
+        )
         methodChannel.callFlutterMethod(MethodCall.audioSessionDidStop, null)
     }
 
     override fun onCameraSendAvailabilityUpdated(available: Boolean) {
-       // Out of Scope
+        methodChannel.callFlutterEvent(
+                "cameraAvailabilityChanged",
+                mapOf("available" to available)
+        )
     }
 
     override fun onConnectionBecamePoor() {
-        // Out of Scope
+        methodChannel.callFlutterEvent("connectionBecamePoor")
     }
 
     override fun onConnectionRecovered() {
-        // Out of Scope
+        methodChannel.callFlutterEvent("connectionRecovered")
     }
 
     override fun onRemoteVideoSourceAvailable(sources: List<RemoteVideoSource>) {
@@ -46,14 +59,20 @@ class AudioVideoObserver(val methodChannel: MethodChannelCoordinator) : AudioVid
     }
 
     override fun onVideoSessionStarted(sessionStatus: MeetingSessionStatus) {
-        // Out of Scope
+        methodChannel.callFlutterEvent(
+                "videoSessionStarted",
+                mapOf("statusCode" to sessionStatus.statusCode?.value?.toString())
+        )
     }
 
     override fun onVideoSessionStartedConnecting() {
-        // Out of Scope
+        methodChannel.callFlutterEvent("videoSessionConnecting")
     }
 
     override fun onVideoSessionStopped(sessionStatus: MeetingSessionStatus) {
-        // Out of Scope
+        methodChannel.callFlutterEvent(
+                "videoSessionStopped",
+                mapOf("statusCode" to sessionStatus.statusCode?.value?.toString())
+        )
     }
 }

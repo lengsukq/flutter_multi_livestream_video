@@ -15,6 +15,7 @@ object MeetingSessionManager {
     var dataMessageObserver: DataMessageObserver? = null
 
     var meetingSession: DefaultMeetingSession? = null
+    var cameraPosition: String = "front"
 
 
     private val NULL_MEETING_SESSION_RESPONSE: MethodChannelResult =
@@ -28,6 +29,7 @@ object MeetingSessionManager {
     ): MethodChannelResult {
         val audioVideo: AudioVideoFacade =
                 meetingSession?.audioVideo ?: return NULL_MEETING_SESSION_RESPONSE
+        cameraPosition = "front"
         addObservers(realtimeObserver, videoTileObserver, audioVideoObserver, dataMessageObserver)
         audioVideo.start()
         audioVideo.startRemoteVideo()
@@ -39,6 +41,7 @@ object MeetingSessionManager {
         meetingSession?.audioVideo?.stop() ?: return NULL_MEETING_SESSION_RESPONSE
         removeObservers()
         meetingSession = null
+        cameraPosition = "front"
         return MethodChannelResult(true, Response.meeting_stopped_successfully.msg)
     }
 

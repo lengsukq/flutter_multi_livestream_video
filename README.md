@@ -4,7 +4,13 @@ A Flutter plugin project for iOS, Android and Web for live stream meeting on a w
 
 |             | Android | iOS   | Web    |
 |-------------|---------|-------|--------|
-| **Support** | SDK 21+ | 11.0+ | NotYet |
+| **Support** | SDK 23+ | 15.0+ | NotYet |
+
+The plugin and bundled example require Flutter 3.47.0 or newer.
+Android builds use Java 17 and compile against Android API 37. Flutter 3.47 requires Android API
+23 or newer, so the 2.0.0 release raises the minimum Android SDK from API 21 to API 23. It also
+raises the minimum iOS deployment target from iOS 12 to iOS 15; update the host app's platform
+targets before upgrading.
 
 
 # Preview Images
@@ -112,6 +118,33 @@ Most of useful functions are integrated inside native, so it's easy for you to u
 
 ### APIs
 
+#### Meeting events and camera
+
+`MeetingModel.events` is a broadcast stream of typed Chime events. Subscribe before joining to
+receive session connection and stop states, connection quality, camera availability, attendee
+volume and signal changes, and video tile pause, resume, and size changes. `switchCamera` asks the
+native SDK to use the front or back camera and returns `false` if the request cannot be sent to an
+active meeting.
+
+```dart
+final meeting = MeetingModel();
+final events = meeting.events.listen((event) {
+  if (event is MeetingSessionEvent) {
+    debugPrint('${event.kind} ${event.statusCode ?? ''}');
+  }
+});
+
+await meeting.switchCamera(CameraPosition.back);
+// Cancel the subscription when the screen is disposed.
+await events.cancel();
+```
+
+The example app logs typed events and has a camera switch control. Its headphones control opens
+the existing audio device picker; applications can also use `listAudioDevices()`,
+`initialAudioSelection()`, and `updateCurrentDevice(device)` directly.
+
+#### Existing meeting controls
+
 > MeetingView Widget Parameters
 
 **JoinInfo** required
@@ -135,10 +168,7 @@ You can use @aws-sdk/client-chime-sdk-meetings CreateAttendeeCommand to create o
 
 | # | Item | Status |
 |---|------|--------|
-| 1 | Upgrade Flutter and AWS Chime SDK to the latest versions | Planned |
-| 2 | Support more APIs from the latest Chime SDK | Planned |
+| 1 | Upgrade Flutter and AWS Chime SDK to the latest versions | Complete in 2.0.0 |
+| 2 | Support more APIs from the latest Chime SDK | Complete in 2.0.0 |
 | 3 | Add video/audio communication backends besides Chime: Agora, LiveKit, TRTC, ARTC | Planned |
 | 4 | Add one-to-many livestreaming: IVS, LiveKit, Agora, TRTC, ARTC | Planned |
-
-
-

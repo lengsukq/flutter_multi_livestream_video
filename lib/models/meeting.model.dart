@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_aws_chime/models/attendee.model.dart';
 import 'package:flutter_aws_chime/models/message.model.dart';
+import 'package:flutter_aws_chime/models/meeting_event.model.dart';
 
 import 'package:flutter_aws_chime/models/video_tile.model.dart';
 import 'package:rxdart/subjects.dart';
@@ -41,16 +42,16 @@ class MeetingModel
   // AttendeeId is the key
   BehaviorSubject<Map<String, AttendeeModel>> currAttendees =
       BehaviorSubject.seeded({
-    // '1': AttendeeModel("attendeeId1", "externalUserId1"),
-    // '2': AttendeeModel("attendeeId2", "externalUserId2"),
-    // '3': AttendeeModel("attendeeId3", "externalUserId3"),
-    // '4': AttendeeModel("attendeeId4", "externalUserId4"),
-    // '5': AttendeeModel("attendeeId5", "externalUserId5"),
-    // '6': AttendeeModel("attendeeId6", "externalUserId6"),
-    // '7': AttendeeModel("attendeeId7", "externalUserId7"),
-    // '8': AttendeeModel("attendeeId8", "externalUserId8"),
-    // '9': AttendeeModel("attendeeId9", "externalUserId9"),
-  });
+        // '1': AttendeeModel("attendeeId1", "externalUserId1"),
+        // '2': AttendeeModel("attendeeId2", "externalUserId2"),
+        // '3': AttendeeModel("attendeeId3", "externalUserId3"),
+        // '4': AttendeeModel("attendeeId4", "externalUserId4"),
+        // '5': AttendeeModel("attendeeId5", "externalUserId5"),
+        // '6': AttendeeModel("attendeeId6", "externalUserId6"),
+        // '7': AttendeeModel("attendeeId7", "externalUserId7"),
+        // '8': AttendeeModel("attendeeId8", "externalUserId8"),
+        // '9': AttendeeModel("attendeeId9", "externalUserId9"),
+      });
   BehaviorSubject<MessageModel?> receivedMessage = BehaviorSubject.seeded(null);
 
   BehaviorSubject<bool> isReceivingScreenShare = BehaviorSubject.seeded(false);
@@ -67,12 +68,22 @@ class MeetingModel
     methodChannelProvider = MethodChannelCoordinator();
   }
 
+  /// Typed native Chime events. Subscribe before joining to receive all events.
+  Stream<ChimeEvent> get events => methodChannelProvider.events;
+
+  /// Requests use of the front or back camera for local video.
+  /// Returns false when no meeting is active or the platform call fails.
+  Future<bool> switchCamera(CameraPosition position) {
+    return methodChannelProvider.setCameraPosition(position);
+  }
+
   void config({required JoinInfo meetingData}) {
     _instance.meetingData = meetingData;
     var attendeeId = meetingData.attendee.attendeeId;
     localAttendeeId.add(attendeeId);
     _updateCurrentAttendee(
-        AttendeeModel(attendeeId, meetingData.attendee.externalUserId));
+      AttendeeModel(attendeeId, meetingData.attendee.externalUserId),
+    );
     methodChannelProvider.initializeObservers(MeetingModel());
   }
 
@@ -109,9 +120,10 @@ class MeetingModel
   Future<bool> toggleMute({bool? unmute}) async {
     var local = getLocalAttendee();
 
-    var res = (unmute ?? local.muteStatus)
-        ? await methodChannelProvider.callMethod(MethodCallOption.unmute)
-        : await methodChannelProvider.callMethod(MethodCallOption.mute);
+    var res =
+        (unmute ?? local.muteStatus)
+            ? await methodChannelProvider.callMethod(MethodCallOption.unmute)
+            : await methodChannelProvider.callMethod(MethodCallOption.mute);
     if (res == null || !res.result) {
       debugPrint('Toggle mute failed');
       throw 'Failed to toggle your audio';
@@ -123,9 +135,14 @@ class MeetingModel
 
   Future<bool> toggleVideo() async {
     var local = getLocalAttendee();
-    var res = local.isVideoOn
-        ? await methodChannelProvider.callMethod(MethodCallOption.localVideoOff)
-        : await methodChannelProvider.callMethod(MethodCallOption.localVideoOn);
+    var res =
+        local.isVideoOn
+            ? await methodChannelProvider.callMethod(
+              MethodCallOption.localVideoOff,
+            )
+            : await methodChannelProvider.callMethod(
+              MethodCallOption.localVideoOn,
+            );
     if (res == null || !res.result) {
       throw 'Failed to toggle your audio';
     }
@@ -160,11 +177,12 @@ class MeetingModel
   }
 
   List<AttendeeModel> getSortedAttendees() {
-    var res = currAttendees.value.keys
-        .map((k) => currAttendees.value[k])
-        .whereType<AttendeeModel>()
-        .where((e) => !_isAttendeeContent(e.attendeeId))
-        .toList();
+    var res =
+        currAttendees.value.keys
+            .map((k) => currAttendees.value[k])
+            .whereType<AttendeeModel>()
+            .where((e) => !_isAttendeeContent(e.attendeeId))
+            .toList();
     res.sort((a, b) {
       if (a.isVideoOn && !b.isVideoOn) {
         return -1;
@@ -178,11 +196,12 @@ class MeetingModel
   }
 
   int getTotal() {
-    var total = currAttendees.value.keys
-        .map((k) => currAttendees.value[k])
-        .whereType<AttendeeModel>()
-        .where((e) => !_isAttendeeContent(e.attendeeId))
-        .length;
+    var total =
+        currAttendees.value.keys
+            .map((k) => currAttendees.value[k])
+            .whereType<AttendeeModel>()
+            .where((e) => !_isAttendeeContent(e.attendeeId))
+            .length;
     return total;
   }
 
@@ -226,8 +245,8 @@ class MeetingModel
   }
 
   Future<bool> stopMeeting() async {
-    MethodChannelResponse? stopResponse =
-        await methodChannelProvider.callMethod(MethodCallOption.stop);
+    MethodChannelResponse? stopResponse = await methodChannelProvider
+        .callMethod(MethodCallOption.stop);
     return stopResponse?.result ?? false;
   }
 
@@ -249,7 +268,8 @@ class MeetingModel
   @override
   void attendeeDidJoin(AttendeeModel attendee) {
     debugPrint(
-        'attendeeDidJoin: ${attendee.attendeeId}, ${attendee.externalUserId}');
+      'attendeeDidJoin: ${attendee.attendeeId}, ${attendee.externalUserId}',
+    );
     if (_isAttendeeContent(attendee.attendeeId)) {
       contentAttendeeId.add(attendee.attendeeId);
       return;
@@ -264,7 +284,8 @@ class MeetingModel
   void attendeeDidLeave(AttendeeModel attendee, {required bool didDrop}) {
     _updateCurrentAttendee(attendee, isRemove: true);
     debugPrint(
-        '${attendee.externalUserId} has ${didDrop ? 'dropped' : 'left'} from the meeting');
+      '${attendee.externalUserId} has ${didDrop ? 'dropped' : 'left'} from the meeting',
+    );
   }
 
   @override
@@ -296,8 +317,9 @@ class MeetingModel
 
   @override
   Future<void> initialAudioSelection() async {
-    MethodChannelResponse? device = await methodChannelProvider
-        .callMethod(MethodCallOption.initialAudioSelection);
+    MethodChannelResponse? device = await methodChannelProvider.callMethod(
+      MethodCallOption.initialAudioSelection,
+    );
     if (device == null) {
       debugPrint(Response.null_initial_audio_device);
       return;
@@ -307,8 +329,9 @@ class MeetingModel
 
   @override
   Future<void> listAudioDevices() async {
-    MethodChannelResponse? devices = await methodChannelProvider
-        .callMethod(MethodCallOption.listAudioDevices);
+    MethodChannelResponse? devices = await methodChannelProvider.callMethod(
+      MethodCallOption.listAudioDevices,
+    );
 
     if (devices == null) {
       debugPrint(Response.null_audio_device_list);
@@ -324,7 +347,9 @@ class MeetingModel
   Future<void> updateCurrentDevice(String device) async {
     if (device == '') {
       var res = await methodChannelProvider.callMethod(
-          MethodCallOption.toggleSound, true);
+        MethodCallOption.toggleSound,
+        true,
+      );
       selectedAudioDevice = device;
       debugPrint('Turn off sound successfully with ${res?.result}');
       return;
@@ -339,7 +364,9 @@ class MeetingModel
     if (updateDeviceResponse.result) {
       debugPrint("${updateDeviceResponse.arguments} to: $device");
       await methodChannelProvider.callMethod(
-          MethodCallOption.toggleSound, false);
+        MethodCallOption.toggleSound,
+        false,
+      );
       selectedAudioDevice = device;
     } else {
       debugPrint("error: ${updateDeviceResponse.arguments}");
@@ -390,7 +417,8 @@ class MeetingModel
     val.muteStatus = mute;
     _updateCurrentAttendee(val);
     debugPrint(
-        '${attendee.externalUserId} has been ${mute ? 'muted' : 'unmuted'}');
+      '${attendee.externalUserId} has been ${mute ? 'muted' : 'unmuted'}',
+    );
   }
 
   void _updateCurrentAttendee(AttendeeModel attendee, {bool isRemove = false}) {
@@ -402,7 +430,8 @@ class MeetingModel
     }
     currAttendees.add(val);
     debugPrint(
-        'currAttendees: ${currAttendees.value} value is changed in here');
+      'currAttendees: ${currAttendees.value} value is changed in here',
+    );
   }
 
   @override
