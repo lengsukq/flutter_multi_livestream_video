@@ -32,8 +32,11 @@ class MyAudioVideoObserver: AudioVideoObserver {
     }
 
     func audioSessionDidStopWithStatus(sessionStatus: MeetingSessionStatus) {
+        let stoppedSession = MeetingSession.shared.meetingSession
         methodChannel.stopAudioVideoFacadeObservers()
-        MeetingSession.shared.meetingSession?.logger.info(msg: "Meeting session stopped with status \(sessionStatus.description)")
+        stoppedSession?.logger.info(msg: "Meeting session stopped with status \(sessionStatus.description)")
+        MeetingSession.shared.meetingSession = nil
+        MeetingSession.shared.cameraPosition = "front"
         methodChannel.callFlutterEvent("audioSessionStopped", args: ["statusCode": String(sessionStatus.statusCode.rawValue)])
         methodChannel.callFlutterMethod(method: .audioSessionDidStop, args: nil)
     }

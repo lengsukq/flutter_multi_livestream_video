@@ -20,7 +20,7 @@ curl http://localhost:3000/health
 1. Create (host): `POST /meetings {"externalMeetingId":"demo-1"}`
 2. Share the link: `chimedemo://join?meetingId=<MeetingId>&server=http://<lan-ip>:3000`
 3. Join (each viewer): `POST /join {"meetingId":"<id>","userId":"user-xxx"}`
-4. App builds `JoinInfo.fromJson({meeting, attendee})` → `MeetingView`
+4. App builds `JoinInfo.fromJson({meeting, attendee})` → `ChimeMeetingSession.join(...)` and passes the session to `ChimeMeetingView` (or a custom UI).
 5. Done: `DELETE /meetings/<id>` (stops billing for future joins)
 
 ## Env

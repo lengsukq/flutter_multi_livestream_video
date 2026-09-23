@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_aws_chime/handlers/method_channel_coordinator.dart';
 import 'package:http/http.dart' as http;
 
 /// Room-code based client for demo-server. Keys never touch the app.
@@ -47,8 +46,7 @@ class RoomLink {
           uri.pathSegments[uri.pathSegments.length - 2] == 'j') {
         code = uri.pathSegments.last.trim();
       }
-      if (code == null &&
-          (uri.scheme == 'http' || uri.scheme == 'https')) {
+      if (code == null && (uri.scheme == 'http' || uri.scheme == 'https')) {
         server =
             '${uri.scheme}://${uri.host}${uri.hasPort ? ':${uri.port}' : ''}';
       }
@@ -69,13 +67,17 @@ class RoomLink {
   }
 }
 
-/// Result of create/join: room code + credentials for MeetingView.
+/// Result of create/join: room code + credentials for ChimeMeetingView.
 class RoomSession {
   final String roomCode;
   final Map<String, dynamic> meeting;
   final Map<String, dynamic>? attendee;
 
-  const RoomSession({required this.roomCode, required this.meeting, this.attendee});
+  const RoomSession({
+    required this.roomCode,
+    required this.meeting,
+    this.attendee,
+  });
 }
 
 /// Thin client for demo-server room API.
@@ -84,17 +86,26 @@ class DemoBackend {
   final http.Client _http;
 
   DemoBackend(this.server, [http.Client? httpClient])
-      : _http = httpClient ?? http.Client();
+    : _http = httpClient ?? http.Client();
 
   void dispose() => _http.close();
 
-  Future<RoomSession> createRoom({String? roomCode, required String nickname}) async {
+  Future<RoomSession> createRoom({
+    String? roomCode,
+    required String nickname,
+  }) async {
     final uri = Uri.parse('$server/rooms');
     final body = <String, String>{'nickname': nickname};
     if (roomCode != null && roomCode.isNotEmpty) body['roomCode'] = roomCode;
-    debugPrint('POST $uri create room ${body['roomCode'] ?? '(auto)'} as $nickname');
+    debugPrint(
+      'POST $uri create room ${body['roomCode'] ?? '(auto)'} as $nickname',
+    );
     final resp = await _http
-        .post(uri, headers: {'Content-Type': 'application/json'}, body: jsonEncode(body))
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
         .timeout(const Duration(seconds: 15));
     if (resp.statusCode == 409) {
       throw '房间号已被占用 — 换一个号，或直接加入它。';
@@ -113,15 +124,20 @@ class DemoBackend {
     );
   }
 
-  Future<RoomSession> joinRoom({required String roomCode, required String nickname}) async {
+  Future<RoomSession> joinRoom({
+    required String roomCode,
+    required String nickname,
+  }) async {
     final code = roomCode.trim();
     if (code.isEmpty) throw '先填房间号。';
     final uri = Uri.parse('$server/rooms/$code/join');
     debugPrint('POST $uri as $nickname');
     final resp = await _http
-        .post(uri,
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'userId': nickname}))
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'userId': nickname}),
+        )
         .timeout(const Duration(seconds: 15));
     if (resp.statusCode == 404) {
       throw '房间 $code 不存在 — 问房主要个新房号。';
@@ -145,8 +161,11 @@ class DemoBackend {
   Future<void> heartbeat(String roomCode) async {
     try {
       await _http
-          .post(Uri.parse('$server/rooms/${roomCode.trim()}/heartbeat'),
-              headers: {'Content-Type': 'application/json'}, body: '{}')
+          .post(
+            Uri.parse('$server/rooms/${roomCode.trim()}/heartbeat'),
+            headers: {'Content-Type': 'application/json'},
+            body: '{}',
+          )
           .timeout(const Duration(seconds: 8));
     } catch (_) {}
   }
@@ -154,33 +173,12 @@ class DemoBackend {
   Future<void> leave(String roomCode, {String? attendeeId}) async {
     try {
       await _http
-          .post(Uri.parse('$server/rooms/${roomCode.trim()}/leave'),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({'attendeeId': attendeeId}))
+          .post(
+            Uri.parse('$server/rooms/${roomCode.trim()}/leave'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'attendeeId': attendeeId}),
+          )
           .timeout(const Duration(seconds: 8));
     } catch (_) {}
-  }
-
-  /// Enter gate: server reachable AND camera/mic permission granted.
-  /// Returns null when clear to proceed, otherwise a human message.
-  Future<String?> enterGate() async {
-    try {
-      final resp = await _http
-          .get(Uri.parse('$server/health'))
-          .timeout(const Duration(seconds: 8));
-      if (resp.statusCode != 200) return '服务器不通 ($server) — 先去设备自检。';
-    } catch (_) {
-      return '连不上服务器 ($server) — 同 WiFi？IP 对吗？先去设备自检。';
-    }
-    try {
-      final coordinator = MethodChannelCoordinator();
-      final perm = await coordinator.checkPermissions();
-      if (!perm.audio || !perm.video) {
-        return '相机/麦克风权限没过 — 点“设备自检”允许后再进房。';
-      }
-    } catch (_) {
-      return '权限检测异常 — 点“设备自检”看详情。';
-    }
-    return null;
   }
 }

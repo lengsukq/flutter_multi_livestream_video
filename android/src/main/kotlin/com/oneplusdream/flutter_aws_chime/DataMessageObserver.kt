@@ -15,7 +15,7 @@ class DataMessageObserver(val methodChannel: MethodChannelCoordinator) : DataMes
                 "externalUserId" to state.senderExternalUserId,
                 "topic" to state.topic,
                 "timestampMs" to state.timestampMs,
-                "message" to String(state.data),
+                "message" to String(state.data, Charsets.UTF_8),
                 "throttled" to state.throttled
         )
     }

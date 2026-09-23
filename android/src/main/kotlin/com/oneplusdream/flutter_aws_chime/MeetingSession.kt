@@ -19,7 +19,11 @@ object MeetingSessionManager {
 
 
     private val NULL_MEETING_SESSION_RESPONSE: MethodChannelResult =
-            MethodChannelResult(false, Response.meeting_session_is_null.msg)
+            MethodChannelResult(
+                    false,
+                    Response.meeting_session_is_null.msg,
+                    "session_not_found"
+            )
 
     fun startMeeting(
             realtimeObserver: RealtimeObserver? = null,
@@ -37,12 +41,20 @@ object MeetingSessionManager {
     }
 
     fun stop(): MethodChannelResult {
-        meetingSession?.audioVideo?.stopRemoteVideo() ?: return NULL_MEETING_SESSION_RESPONSE
-        meetingSession?.audioVideo?.stop() ?: return NULL_MEETING_SESSION_RESPONSE
+        val session = meetingSession ?: return NULL_MEETING_SESSION_RESPONSE
         removeObservers()
+        session.audioVideo.stopRemoteVideo()
+        session.audioVideo.stop()
         meetingSession = null
         cameraPosition = "front"
         return MethodChannelResult(true, Response.meeting_stopped_successfully.msg)
+    }
+
+    @Synchronized
+    fun onSessionStopped() {
+        removeObservers()
+        meetingSession = null
+        cameraPosition = "front"
     }
 
     private fun addObservers(
@@ -76,17 +88,16 @@ object MeetingSessionManager {
     }
 
     private fun removeObservers() {
-        realtimeObserver?.let {
-            meetingSession?.audioVideo?.removeRealtimeObserver(it)
-        }
-        audioVideoObserver?.let {
-            meetingSession?.audioVideo?.removeAudioVideoObserver(it)
-        }
-        videoTileObserver?.let {
-            meetingSession?.audioVideo?.removeVideoTileObserver(it)
-        }
+        val audioVideo = meetingSession?.audioVideo ?: return
+        realtimeObserver?.let { audioVideo.removeRealtimeObserver(it) }
+        audioVideoObserver?.let { audioVideo.removeAudioVideoObserver(it) }
+        videoTileObserver?.let { audioVideo.removeVideoTileObserver(it) }
         dataMessageObserver?.let {
-            meetingSession?.audioVideo?.removeRealtimeDataMessageObserverFromTopic("chat")
+            audioVideo.removeRealtimeDataMessageObserverFromTopic("chat")
         }
+        realtimeObserver = null
+        audioVideoObserver = null
+        videoTileObserver = null
+        dataMessageObserver = null
     }
 }

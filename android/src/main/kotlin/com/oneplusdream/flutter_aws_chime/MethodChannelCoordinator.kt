@@ -14,14 +14,13 @@ import android.app.Activity
 import android.content.Context
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
-import androidx.appcompat.app.AppCompatActivity
 import io.flutter.plugin.common.MethodChannel
 
-class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activity) :
-        AppCompatActivity() {
+class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activity) {
     val methodChannel: MethodChannel
     val context: Context
-    var permissionsManager: PermissionManager = PermissionManager(activity)
+    val permissionsManager: PermissionManager =
+            PermissionManager(activity.applicationContext, activity)
 
     init {
         methodChannel =
@@ -30,7 +29,11 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
     }
 
     private val NULL_MEETING_SESSION_RESPONSE: MethodChannelResult =
-            MethodChannelResult(false, Response.meeting_session_is_null.msg)
+            MethodChannelResult(
+                    false,
+                    Response.meeting_session_is_null.msg,
+                    "session_not_found"
+            )
 
     fun setupMethodChannel() {
         methodChannel.setMethodCallHandler { call, result ->
@@ -90,19 +93,28 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
                     callResult = sendMessage(call)
                 }
 
-                else -> callResult = MethodChannelResult(false, Response.method_not_implemented)
-            }
-
-            if (callResult.result) {
-                result.success(callResult.toFlutterCompatibleType())
-            } else {
-                result.error(
-                        "Failed",
-                        "MethodChannelHandler failed",
-                        callResult.toFlutterCompatibleType()
+                else -> callResult = MethodChannelResult(
+                        false,
+                        Response.method_not_implemented.msg,
+                        "method_not_implemented"
                 )
             }
+
+            result.success(callResult.toFlutterCompatibleType())
         }
+    }
+
+    fun updateActivity(activity: Activity) {
+        permissionsManager.updateActivity(activity)
+    }
+
+    fun detachActivity() {
+        permissionsManager.updateActivity(null)
+    }
+
+    fun dispose() {
+        permissionsManager.cancelPendingRequests()
+        methodChannel.setMethodCallHandler(null)
     }
 
     fun callFlutterMethod(method: MethodCallFlutter, args: Any?) {
@@ -117,8 +129,19 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
     }
 
     fun join(call: MethodCall): MethodChannelResult {
+        if (MeetingSessionManager.meetingSession != null) {
+            return MethodChannelResult(
+                    false,
+                    "A Chime meeting session is already active.",
+                    "meeting_already_active"
+            )
+        }
         if (call.arguments == null) {
-            return MethodChannelResult(false, Response.incorrect_join_response_params.msg)
+            return MethodChannelResult(
+                    false,
+                    Response.incorrect_join_response_params.msg,
+                    "invalid_join_info"
+            )
         }
         val meetingId: String? = call.argument("MeetingId")
         val externalMeetingId: String? = call.argument("ExternalMeetingId")
@@ -142,7 +165,11 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
                 attendeeId == null ||
                 joinToken == null
         ) {
-            return MethodChannelResult(false, Response.incorrect_join_response_params.msg)
+            return MethodChannelResult(
+                    false,
+                    Response.incorrect_join_response_params.msg,
+                    "invalid_join_info"
+            )
         }
 
         val createMeetingResponse = CreateMeetingResponse(
@@ -201,7 +228,7 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
     fun stopLocalVideo(): MethodChannelResult {
         MeetingSessionManager.meetingSession?.audioVideo?.stopLocalVideo()
                 ?: return NULL_MEETING_SESSION_RESPONSE
-        return MethodChannelResult(true, Response.local_video_on_success.msg)
+        return MethodChannelResult(true, Response.local_video_off_success.msg)
     }
 
     fun initialAudioSelection(): MethodChannelResult {
@@ -220,7 +247,11 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
 
     fun updateAudioDevice(call: MethodCall): MethodChannelResult {
         val device =
-                call.arguments ?: return MethodChannelResult(false, Response.null_audio_device.msg)
+                call.arguments ?: return MethodChannelResult(
+                        false,
+                        Response.null_audio_device.msg,
+                        "invalid_argument"
+                )
 
         val audioDevices = MeetingSessionManager.meetingSession?.audioVideo?.listAudioDevices()
                 ?: return NULL_MEETING_SESSION_RESPONSE
@@ -228,18 +259,26 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
         for (dev in audioDevices) {
             if (device == dev.label) {
                 MeetingSessionManager.meetingSession?.audioVideo?.chooseAudioDevice(dev)
-                        ?: return MethodChannelResult(false, Response.audio_device_update_failed.msg)
+                        ?: return MethodChannelResult(
+                                false,
+                                Response.audio_device_update_failed.msg,
+                                "invalid_argument"
+                        )
                 return MethodChannelResult(true, Response.audio_device_updated.msg)
             }
         }
-        return MethodChannelResult(false, Response.audio_device_update_failed.msg)
+        return MethodChannelResult(
+                false,
+                Response.audio_device_update_failed.msg,
+                "invalid_argument"
+        )
     }
 
     fun setCameraPosition(call: MethodCall): MethodChannelResult {
         val position = call.argument<String>("position")?.lowercase()
-                ?: return MethodChannelResult(false, "Camera position is required.")
+                ?: return MethodChannelResult(false, "Camera position is required.", "invalid_argument")
         if (position != "front" && position != "back") {
-            return MethodChannelResult(false, "Unsupported camera position: $position")
+            return MethodChannelResult(false, "Unsupported camera position: $position", "invalid_argument")
         }
         val session = MeetingSessionManager.meetingSession
                 ?: return NULL_MEETING_SESSION_RESPONSE
@@ -255,8 +294,9 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
         val message: String? = call.argument("message")
         val lifetimeMs: Int? = call.argument("lifetimeMs")
         if (topic == null || message == null) {
-            return MethodChannelResult(false, Response.message_payload_error.msg)
+            return MethodChannelResult(false, Response.message_payload_error.msg, "invalid_argument")
         }
+        if (MeetingSessionManager.meetingSession == null) return NULL_MEETING_SESSION_RESPONSE
         return try {
             MeetingSessionManager.meetingSession?.audioVideo?.realtimeSendDataMessage(topic, message, lifetimeMs
                     ?: 300000)

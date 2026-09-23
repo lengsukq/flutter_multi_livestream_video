@@ -30,15 +30,17 @@ class FlutterAwsChimePlugin : FlutterPlugin, ActivityAware,
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-
-
+        if (::methodChannel.isInitialized) {
+            if (MeetingSessionManager.meetingSession != null) MeetingSessionManager.stop()
+            methodChannel.dispose()
+        }
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activityBinding = binding
         binding.addRequestPermissionsResultListener(this)
         methodChannel = MethodChannelCoordinator(binaryMessenger, binding.activity);
-        methodChannel?.setupMethodChannel()
+        methodChannel.setupMethodChannel()
     }
 
     override fun onRequestPermissionsResult(
@@ -48,25 +50,25 @@ class FlutterAwsChimePlugin : FlutterPlugin, ActivityAware,
     ): Boolean {
         // Route the system callback back to the pending permission request.
         // Without this, join() hangs forever waiting for camera/mic approval.
-        if (::methodChannel.isInitialized) {
-            methodChannel.permissionsManager.onRequestPermissionsResult(requestCode)
-            return true
-        }
-        return false
+        if (!::methodChannel.isInitialized) return false
+        return methodChannel.permissionsManager.onRequestPermissionsResult(requestCode)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
         activityBinding?.removeRequestPermissionsResultListener(this)
+        if (::methodChannel.isInitialized) methodChannel.detachActivity()
         activityBinding = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activityBinding = binding
         binding.addRequestPermissionsResultListener(this)
+        if (::methodChannel.isInitialized) methodChannel.updateActivity(binding.activity)
     }
 
     override fun onDetachedFromActivity() {
         activityBinding?.removeRequestPermissionsResultListener(this)
+        if (::methodChannel.isInitialized) methodChannel.detachActivity()
         activityBinding = null
     }
 

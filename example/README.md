@@ -1,16 +1,12 @@
-# flutter_aws_chime_example
+# flutter_aws_chime v3 example
 
-Demonstrates how to use the flutter_aws_chime plugin.
+This app demonstrates the v3 `ChimeMeetingSession` API, the optional `ChimeMeetingView`, and the backend boundary. The demo backend creates Chime meetings and attendees; the Flutter client receives only short-lived join information.
 
-## Getting Started
+## Run the example
 
-This project is a starting point for a Flutter application.
+1. Start the backend by following [`../demo-server/README.md`](../demo-server/README.md). Keep AWS credentials on the backend and use a test account/profile.
+2. Set the backend URL to an address reachable from the test device.
+3. Run the example app on iOS 15+ or Android API 24+ and create or join a room. The package itself supports Android API 23+; the example's integration-test dependency requires API 24+.
+4. Allow microphone and camera access when prompted.
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Use Flutter 3.47+, Dart 3.12+, Java 17, and Android compile SDK 37. The example exercises the current v3 API; it does not provide a web or desktop meeting implementation.

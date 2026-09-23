@@ -12,6 +12,7 @@ import Flutter
 
 class VideoTileView: NSObject, FlutterPlatformView {
     private var _view: UIView
+    private let tileId: Int
 
     init(
         frame: CGRect,
@@ -19,10 +20,9 @@ class VideoTileView: NSObject, FlutterPlatformView {
         arguments args: Any?
     ) {
         _view = DefaultVideoRenderView()
+        tileId = args as? Int ?? -1
         super.init()
-           
-        // Receieve tileId as a param.
-        let tileId = args as! Int
+        guard tileId >= 0 else { return }
         let videoRenderView = _view as! VideoRenderView
            
         // Bind view to VideoView
@@ -38,5 +38,10 @@ class VideoTileView: NSObject, FlutterPlatformView {
     func view() -> UIView {
         return _view
     }
-}
 
+    deinit {
+        if tileId >= 0 {
+            MeetingSession.shared.meetingSession?.audioVideo.unbindVideoView(tileId: tileId)
+        }
+    }
+}

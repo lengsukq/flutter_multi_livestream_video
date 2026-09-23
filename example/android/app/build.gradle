@@ -29,6 +29,7 @@ android {
         applicationId "com.oneplusdream.flutter_aws_chime_example"
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
+        // integration_test currently requires API 24; the plugin itself supports API 23.
         minSdk 24
         targetSdk 31
         versionCode flutter.versionCode

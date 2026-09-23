@@ -1,3 +1,11 @@
+## 3.0.0
+
+* Redesign the public API around `ChimeMeetingSession` and typed join information, state, events,
+  audio devices, and errors. This is a breaking release; v2 API compatibility is not provided.
+* Add the optional `ChimeMeetingView`, while leaving join/leave/dispose ownership with the caller.
+* Align the Android and iOS method-channel response protocol and use typed native error codes.
+* Declare iOS and Android as the only supported meeting platforms and update package metadata.
+
 ## 2.0.0
 
 * Require Flutter 3.47.0 or newer.

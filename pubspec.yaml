@@ -1,6 +1,6 @@
 name: flutter_aws_chime
-description: A live stream flutter plugin base on aws chime.
-version: 2.0.0
+description: An iOS and Android Flutter client for Amazon Chime SDK meetings.
+version: 3.0.0
 homepage: https://github.com/likeconan/flutter_aws_chime
 
 environment:
@@ -10,11 +10,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_web_plugins:
-    sdk: flutter
-  plugin_platform_interface: ^2.0.2
-  rxdart: ^0.28.0
-  dots_indicator: ^4.0.1
 
 dev_dependencies:
   flutter_test:
@@ -43,15 +38,6 @@ flutter:
         pluginClass: FlutterAwsChimePlugin
       ios:
         pluginClass: FlutterAwsChimePlugin
-      linux:
-        pluginClass: FlutterAwsChimePlugin
-      macos:
-        pluginClass: FlutterAwsChimePlugin
-      windows:
-        pluginClass: FlutterAwsChimePluginCApi
-      web:
-        pluginClass: FlutterAwsChimeWeb
-        fileName: flutter_aws_chime_web.dart
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

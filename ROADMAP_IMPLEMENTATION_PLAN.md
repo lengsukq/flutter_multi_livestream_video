@@ -17,7 +17,7 @@
 - 观众规模按功能 MVP 验收：至少一位主播和两位观众可正常收看；不承诺固定并发容量或性能 SLA。
 - 应用后端负责提供 LiveKit 服务地址和短期 participant token；本仓库不实现 token 签发、房间管理服务，也不保存服务端密钥。token 的 room、identity 和权限由签发端设置。
 - 同一时刻只允许一个媒体会话运行。切换 Chime/LiveKit 前须完整断开并释放当前会话。
-- 保持当前 `flutter_aws_chime` 包名及 Chime 公开 API；增加服务商无关的统一 API 和可选通用 UI。新接口不要求现有 Chime 用户立即迁移。
+- 保持 `flutter_aws_chime` 包名。v3 已将 Chime API 重设计为 `ChimeMeetingSession`，不提供 v2 `MeetingModel` / `MeetingView` 兼容层。未来新增服务商无关 API 时，以 v3 会话为 Chime 适配器基础，不恢复已移除的 v2 接口。
 - 将供应商 SDK 依赖设为可选：新建 `flutter_multi_livestream_video_core` 公共核心包和 `flutter_multi_livestream_video_livekit` LiveKit 适配包；现有 `flutter_aws_chime` 保留原生 Chime 实现，并通过兼容适配层接入公共接口、重新导出公共类型。
 
 ## 架构与公共接口
@@ -37,13 +37,13 @@
 ### 适配包与兼容性
 
 - `flutter_multi_livestream_video_livekit` 依赖 LiveKit 官方 Flutter 客户端 SDK，将 LiveKit room、participant、track 和状态映射到核心接口。
-- `flutter_aws_chime` 保留既有 `MeetingModel`、`MeetingView` 及 Chime 原生调用行为，并提供 Chime 到核心会话接口的兼容适配。
+- `flutter_aws_chime` 当前对外 API 为 v3 `ChimeMeetingSession` 和可选 `ChimeMeetingView`。后续如抽取公共核心包，增加 Chime 到核心会话接口的适配；不会保留 v2 的 `MeetingModel` / `MeetingView` API。
 - 每个新增供应商以后以独立可选适配包接入，避免 Chime-only 应用被迫解析 LiveKit、Agora 等 SDK 依赖。
 - 发布前先验证同一应用同时包含 Chime 与 LiveKit 依赖时的 Android/iOS 构建、资源释放与跨后端顺序切换。AWS Chime issue #699 报告了同一应用使用 Chime 与另一套 WebRTC 时的视频互操作问题，因此 iOS 视频互操作是发布门槛；若失败，不绕过门槛或宣称兼容，先定位并解决依赖/编解码问题。
 
 ### 通用组件
 
-增加可选的 `MediaSessionView` 和 `LiveBroadcastView`，支持本地预览、远端画面、基础音视频控制，以及加载、连接中断/重连和错误状态。组件通过 builder/theme 等入口允许应用自定义布局；现有 Chime `MeetingView` 保持不变。
+后续可增加可选的 `MediaSessionView` 和 `LiveBroadcastView`，支持本地预览、远端画面、基础音视频控制，以及加载、连接中断/重连和错误状态。组件通过 builder/theme 等入口允许应用自定义布局；本计划不改动 v3 会话 API。
 
 ## 实施阶段
 
@@ -61,7 +61,7 @@
 - **组件测试**：验证会议、主播和观众视图，以及加载、权限拒绝、断线重连和错误状态。
 - **平台构建**：公共包、Chime 包、LiveKit 包和示例均通过 Android/iOS 构建，保持当前部署下限；确认相机/麦克风权限配置完整。
 - **服务集成验收**：在不把凭证提交进仓库的测试环境中，验证多人实时会议，以及一位主播加至少两位观众的直播；覆盖无效/过期 token、拒绝相机或麦克风权限、网络中断恢复、主播离开、观众离开及两种后端顺序切换。
-- **回归**：现有 Chime API、Chime 示例及相关测试继续通过；不要求一次性复制 Chime 的聊天、屏幕共享等供应商特有功能到公共 API。
+- **回归**：Chime v3 会话 API、Chime 示例及相关测试继续通过；不要求一次性复制 Chime 的聊天、屏幕共享等供应商特有功能到公共 API，也不要求恢复 v2 兼容 API。
 
 ## 路线图状态
 

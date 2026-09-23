@@ -4,12 +4,12 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'flutter_aws_chime'
-  s.version          = '2.0.0'
-  s.summary          = 'A flutter plugin for supporting aws chime usage.'
+  s.version          = '3.0.0'
+  s.summary          = 'Flutter client package for Amazon Chime SDK meetings on iOS and Android.'
   s.description      = <<-DESC
-A flutter plugin for supporting aws chime usage.
+A Flutter client package for Amazon Chime SDK meetings. Meeting creation and attendee credentials are provided by the application backend.
                        DESC
-  s.homepage         = 'https://www.linkedin.com/in/yijia-li/'
+  s.homepage         = 'https://github.com/likeconan/flutter_aws_chime'
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Your Company' => 'liyijia428@gmail.com' }
   s.source           = { :path => '.' }

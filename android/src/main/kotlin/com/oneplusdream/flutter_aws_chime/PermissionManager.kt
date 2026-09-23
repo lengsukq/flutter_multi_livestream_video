@@ -4,15 +4,15 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.plugin.common.MethodChannel
 
 class PermissionManager(
-        val activity: Activity
-) : AppCompatActivity() {
-    val context: Context
+        private val context: Context,
+        activity: Activity?
+) {
+    private var activity: Activity? = activity
 
     val VIDEO_PERMISSION_REQUEST_CODE = 1
     val VIDEO_PERMISSIONS = arrayOf(
@@ -28,8 +28,9 @@ class PermissionManager(
     var audioResult: MethodChannel.Result? = null
     var videoResult: MethodChannel.Result? = null
 
-    init {
-        context = activity.applicationContext
+    fun updateActivity(activity: Activity?) {
+        if (activity == null) cancelPendingRequests()
+        this.activity = activity
     }
 
     fun manageAudioPermissions(result: MethodChannel.Result) {
@@ -37,8 +38,14 @@ class PermissionManager(
         if (hasPermissionsAlready(AUDIO_PERMISSIONS)) {
             audioCallbackReceived()
         } else {
+            val currentActivity = activity
+            if (currentActivity == null) {
+                complete(audioResult, "The Android activity is not attached.", "invalid_state")
+                audioResult = null
+                return
+            }
             ActivityCompat.requestPermissions(
-                    activity,
+                    currentActivity,
                     AUDIO_PERMISSIONS,
                     AUDIO_PERMISSION_REQUEST_CODE
             )
@@ -50,8 +57,14 @@ class PermissionManager(
         if (hasPermissionsAlready(VIDEO_PERMISSIONS)) {
             videoCallbackReceived()
         } else {
+            val currentActivity = activity
+            if (currentActivity == null) {
+                complete(videoResult, "The Android activity is not attached.", "invalid_state")
+                videoResult = null
+                return
+            }
             ActivityCompat.requestPermissions(
-                    activity,
+                    currentActivity,
                     VIDEO_PERMISSIONS,
                     VIDEO_PERMISSION_REQUEST_CODE
             )
@@ -63,35 +76,49 @@ class PermissionManager(
      * system permission dialog closes. Completes the pending MethodChannel call
      * so Dart's join() doesn't wait forever.
      */
-    fun onRequestPermissionsResult(requestCode: Int) {
-        when (requestCode) {
-            AUDIO_PERMISSION_REQUEST_CODE -> audioCallbackReceived()
-            VIDEO_PERMISSION_REQUEST_CODE -> videoCallbackReceived()
+    fun onRequestPermissionsResult(requestCode: Int): Boolean {
+        return when (requestCode) {
+            AUDIO_PERMISSION_REQUEST_CODE -> {
+                audioCallbackReceived()
+                true
+            }
+            VIDEO_PERMISSION_REQUEST_CODE -> {
+                videoCallbackReceived()
+                true
+            }
+            else -> false
         }
     }
 
     fun audioCallbackReceived() {
-        val callResult: MethodChannelResult
         if (hasPermissionsAlready(AUDIO_PERMISSIONS)) {
-            callResult = MethodChannelResult(true, Response.audio_auth_granted.msg)
-            audioResult?.success(callResult.toFlutterCompatibleType())
+            complete(audioResult, Response.audio_auth_granted.msg)
         } else {
-            callResult = MethodChannelResult(false, Response.audio_auth_not_granted.msg)
-            audioResult?.error("Failed", "Permission Error", callResult.toFlutterCompatibleType())
+            complete(audioResult, Response.audio_auth_not_granted.msg, "permission_denied")
         }
         audioResult = null
     }
 
     fun videoCallbackReceived() {
-        val callResult: MethodChannelResult
         if (hasPermissionsAlready(VIDEO_PERMISSIONS)) {
-            callResult = MethodChannelResult(true, Response.video_auth_granted.msg)
-            videoResult?.success(callResult.toFlutterCompatibleType())
+            complete(videoResult, Response.video_auth_granted.msg)
         } else {
-            callResult = MethodChannelResult(false, Response.video_auth_not_granted.msg)
-            videoResult?.error("Failed", "Permission Error", callResult.toFlutterCompatibleType())
+            complete(videoResult, Response.video_auth_not_granted.msg, "permission_denied")
         }
         videoResult = null
+    }
+
+    fun cancelPendingRequests() {
+        complete(audioResult, "Permission request was cancelled.", "invalid_state")
+        complete(videoResult, "Permission request was cancelled.", "invalid_state")
+        audioResult = null
+        videoResult = null
+    }
+
+    private fun complete(result: MethodChannel.Result?, message: String, code: String? = null) {
+        result?.success(
+                MethodChannelResult(code == null, message, code).toFlutterCompatibleType()
+        )
     }
 
     private fun hasPermissionsAlready(PERMISSIONS: Array<String>): Boolean {

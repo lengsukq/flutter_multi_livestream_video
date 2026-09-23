@@ -233,7 +233,11 @@ class GlassGradientButton extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: enabled
             ? const LinearGradient(
-                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6), Color(0xFFD946EF)],
+                colors: [
+                  Color(0xFF6366F1),
+                  Color(0xFF8B5CF6),
+                  Color(0xFFD946EF),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               )
@@ -250,7 +254,7 @@ class GlassGradientButton extends StatelessWidget {
                   color: const Color(0xFF6366F1).withValues(alpha: 0.45),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
-                )
+                ),
               ]
             : [],
       ),

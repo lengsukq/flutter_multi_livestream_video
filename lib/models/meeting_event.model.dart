@@ -1,4 +1,4 @@
-import 'video_tile.model.dart';
+import 'meeting_snapshot.dart';
 
 /// Camera to use for local video capture.
 enum CameraPosition { front, back }
@@ -80,7 +80,7 @@ sealed class ChimeEvent {
         };
         return VideoTileEvent(
           kind,
-          VideoTileModel.fromJson(Map<String, dynamic>.from(tileJson)),
+          MeetingVideoTile.fromJson(Map<String, dynamic>.from(tileJson)),
         );
       default:
         return null;
@@ -153,7 +153,7 @@ enum VideoTileEventKind { paused, resumed, sizeChanged }
 
 class VideoTileEvent extends ChimeEvent {
   final VideoTileEventKind kind;
-  final VideoTileModel videoTile;
+  final MeetingVideoTile videoTile;
 
   const VideoTileEvent(this.kind, this.videoTile);
 }

@@ -28,6 +28,7 @@ class AudioVideoObserver(val methodChannel: MethodChannelCoordinator) : AudioVid
     }
 
     override fun onAudioSessionStopped(sessionStatus: MeetingSessionStatus) {
+        MeetingSessionManager.onSessionStopped()
         methodChannel.callFlutterEvent(
                 "audioSessionStopped",
                 mapOf("statusCode" to sessionStatus.statusCode?.value?.toString())

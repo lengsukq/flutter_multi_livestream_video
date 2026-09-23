@@ -1,174 +1,435 @@
-# Flutter Live Stream Meeting Plugin base on AWS Chime
+# flutter_aws_chime
 
-A Flutter plugin project for iOS, Android and Web for live stream meeting on a widget surface
+**English** | [简体中文](#简体中文)
 
-|             | Android | iOS   | Web    |
-|-------------|---------|-------|--------|
-| **Support** | SDK 23+ | 15.0+ | NotYet |
+`flutter_aws_chime` is a Flutter client package for joining Amazon Chime SDK meetings from iOS and Android apps. It provides a Dart session API, typed meeting state and events, media controls, data messages, remote video and screen-share rendering, and an optional ready-to-use meeting view.
 
-The plugin and bundled example require Flutter 3.47.0 or newer.
-Android builds use Java 17 and compile against Android API 37. Flutter 3.47 requires Android API
-23 or newer, so the 2.0.0 release raises the minimum Android SDK from API 21 to API 23. It also
-raises the minimum iOS deployment target from iOS 12 to iOS 15; update the host app's platform
-targets before upgrading.
+The application backend creates the Chime meeting and attendee and returns short-lived join information. This package only connects the client to the meeting media session; it does not create AWS meetings or handle AWS long-term credentials.
 
+## v3 platform support
 
-# Preview Images
-![Preview1](https://github.com/likeconan/flutter_aws_chime/blob/main/previews/preview1.png)
-![Preview2](https://github.com/likeconan/flutter_aws_chime/blob/main/previews/preview2.png)
+| Platform | Meeting support | Minimum / build requirement |
+| --- | --- | --- |
+| iOS | Supported | iOS 15+ |
+| Android | Supported | Android API 23+; Java 17; compile SDK 37 |
+| macOS | Not supported | No meeting implementation in v3 |
+| Windows | Not supported | No meeting implementation in v3 |
+| Linux | Not supported | No meeting implementation in v3 |
+| Web | Not supported | No meeting implementation in v3 |
+
+Requires Flutter 3.47.0+ and Dart 3.12.0+. The iOS plugin uses Swift 5.0. Desktop and Web are not declared as plugin platforms; meeting API calls there throw `ChimeException` with `ChimeErrorCode.unsupportedPlatform`.
+
+## Features
+
+- Join and leave an existing Chime SDK meeting.
+- Microphone mute/unmute, local camera start/stop, and front/back camera switching.
+- Enumerate and choose the active audio output device.
+- Receive attendee changes, remote video tiles, and screen-share tiles.
+- Send and receive Chime real-time data messages.
+- Observe connection and reconnect, camera availability, attendee volume/signal, and video-tile events.
+- Use `ChimeMeetingSession` independently with a custom UI, or pass it to optional `ChimeMeetingView`.
+
+Only one active Chime session is allowed at a time by the native implementation. Removing `ChimeMeetingView` does not release the meeting; the code that created the session owns its lifecycle and must call `leave()` or `dispose()`.
 
 ## Installation
 
-First, add `flutter_aws_chime` as a [dependency in your pubspec.yaml file](https://flutter.dev/using-packages/).
+After v3 is published, add it to your app:
+
+```yaml
+dependencies:
+  flutter_aws_chime: ^3.0.0
+```
+
+For local development, use a path dependency to this repository. The host app must meet the Flutter, Dart, Java, Android compile SDK, and iOS deployment requirements above.
+
+## App permissions
 
 ### iOS
 
-Add permissions in Info.plist
+Add purpose strings to the host app's `ios/Runner/Info.plist`. iOS requests microphone and camera access when `join()` is called.
 
-<key>NSCameraUsageDescription</key>
-<string>The app needs camera permission for video conferencing</string>
+```xml
 <key>NSMicrophoneUsageDescription</key>
-<string>Use microphone to start call</string>
+<string>Allow microphone access for Chime meetings.</string>
+<key>NSCameraUsageDescription</key>
+<string>Allow camera access for Chime meetings.</string>
+```
 
 ### Android
 
-If you are using network-based videos, ensure that the following permission is present in your
-Android Manifest file, located in `<project root>/android/app/src/main/AndroidManifest.xml`:
+The plugin manifest contributes Internet, camera, microphone, and audio-settings permissions. The package requests camera and microphone access when `join()` is called. Check the merged manifest and provide any application-specific permission rationale in your own UI.
 
 ```xml
-<uses-permission android:name="android.permission.CAMERA"/>
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.CAMERA" />
 <uses-permission android:name="android.permission.RECORD_AUDIO" />
 ```
 
-## Example
+If either runtime permission is denied, `join()` fails with a typed `ChimeException` whose code is `permissionDenied`.
 
-<?code-excerpt "basic.dart (basic-example)"?>
+## Backend responsibility and credentials
+
+Your backend must create the meeting and attendee for the authenticated app user, then return the meeting, media placement, attendee ID, external user ID, and short-lived `JoinToken` to the app over an authenticated connection. Keep AWS access keys and secret keys on the server. Never embed them in the Flutter app or send them to this package.
+
+See the [AWS Chime SDK guide to creating meetings](https://docs.aws.amazon.com/chime-sdk/latest/dg/create-mtgs.html) and [`demo-server/README.md`](demo-server/README.md) for the response shape. This package does not call `CreateMeeting` or `CreateAttendee` and does not store AWS credentials.
+
+```json
+{
+  "meeting": {
+    "MeetingId": "...",
+    "ExternalMeetingId": "...",
+    "MediaRegion": "us-east-1",
+    "MediaPlacement": {
+      "AudioHostUrl": "...",
+      "AudioFallbackUrl": "...",
+      "SignalingUrl": "...",
+      "TurnControlUrl": "..."
+    }
+  },
+  "attendee": {
+    "AttendeeId": "...",
+    "ExternalUserId": "...",
+    "JoinToken": "..."
+  }
+}
+```
+
+## Quick start
+
+`response` is the JSON object returned by your backend after creating a meeting and attendee.
+
 ```dart
 import 'package:flutter/material.dart';
+import 'package:flutter_aws_chime/flutter_aws_chime.dart';
 
-import 'package:flutter_aws_chime/models/join_info.model.dart';
-import 'package:flutter_aws_chime/views/meeting.view.dart';
+Future<void> openMeeting(
+  BuildContext context,
+  Map<String, dynamic> response,
+) async {
+  final session = ChimeMeetingSession();
+  try {
+    await session.join(JoinInfo.fromJson(response));
+    if (!context.mounted) return;
 
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatefulWidget {
-  const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      home: SafeArea(
-        child: Scaffold(
-          body: MeetingView(
-            JoinInfo(
-              MeetingInfo.fromJson({
-                'MeetingId': '',
-                'ExternalMeetingId': '',
-                'MediaRegion': 'us-east-1',
-                'MediaPlacement': {
-                  "AudioFallbackUrl": "",
-                  "AudioHostUrl": "",
-                  "EventIngestionUrl": "",
-                  "ScreenDataUrl": "",
-                  "ScreenSharingUrl": "",
-                  "ScreenViewingUrl": "",
-                  "SignalingUrl": "",
-                  "TurnControlUrl": ""
-                },
-              }),
-              AttendeeInfo.fromJson(
-                  {"AttendeeId": "", "ExternalUserId": "", "JoinToken": ""}),
-            ),
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          body: ChimeMeetingView(
+            session: session,
+            title: 'Team meeting',
+            onLeave: () => Navigator.of(context).pop(),
           ),
         ),
       ),
     );
+  } finally {
+    // The code that created the session owns cleanup, including after errors.
+    await session.dispose();
   }
 }
-
-
 ```
-Furthermore, see the example app for playing around.
 
+`join()` requests microphone and camera access, then connects using the short-lived meeting and attendee data. The view calls `session.leave()` when the user taps Leave. Removing the view does not call `dispose()`.
 
-## Usage and APIs
-Most of useful functions are integrated inside native, so it's easy for you to use without implementing them in flutter code. Please see how to use and the API documentation, if you have any requests you could [create an issue](https://github.com/likeconan/flutter_video_player/issues)
+## Session API
 
-### List functions
-
-|                                         | Android            | iOS                 |
-|-----------------------------------------|--------------------|---------------------|
-| **Video and Audio**                     | :heavy_check_mark: | :heavy_check_mark:  |
-| **Mute self and turn on/off video**     | :heavy_check_mark: | :heavy_check_mark:  |
-| **See shared screen content**           | :heavy_check_mark: | :heavy_check_mark:  |
-| **Message chat**                        | :heavy_check_mark: | :heavy_check_mark:  |
-| **Toggle full screen**                  | :heavy_check_mark: | :heavy_check_mark:  |
-| **FullScreen**                          | :heavy_check_mark: | :heavy_check_mark:  |
-| **Poster Image**                        | :heavy_check_mark: | :heavy_check_mark:  |
-| **Prevent Screen Capture**              | WIP                | WIP                 |
-| **Marquee Text**                        | WIP                | WIP                 |
-
-
-### APIs
-
-#### Meeting events and camera
-
-`MeetingModel.events` is a broadcast stream of typed Chime events. Subscribe before joining to
-receive session connection and stop states, connection quality, camera availability, attendee
-volume and signal changes, and video tile pause, resume, and size changes. `switchCamera` asks the
-native SDK to use the front or back camera and returns `false` if the request cannot be sent to an
-active meeting.
+The package entry point exports `ChimeMeetingSession`, `JoinInfo`, meeting models, state and event types, `ChimeException`, audio device types, `MeetingVideoTileView`, and `ChimeMeetingView`.
 
 ```dart
-final meeting = MeetingModel();
-final events = meeting.events.listen((event) {
-  if (event is MeetingSessionEvent) {
-    debugPrint('${event.kind} ${event.statusCode ?? ''}');
-  }
+final session = ChimeMeetingSession();
+final stateSubscription = session.states.listen((state) {
+  debugPrint('Meeting state: $state');
+});
+final eventSubscription = session.events.listen((event) {
+  debugPrint('Chime event: $event');
 });
 
-await meeting.switchCamera(CameraPosition.back);
-// Cancel the subscription when the screen is disposed.
-await events.cancel();
+await session.join(joinInfo);
+debugPrint('Current state: ${session.state}');
+await session.setMuted(true);
+await session.setVideoEnabled(true);
+await session.switchCamera(CameraPosition.back);
+
+final devices = await session.listAudioDevices();
+if (devices.isNotEmpty) await session.selectAudioDevice(devices.first);
+await session.sendMessage('Hello', topic: 'chat');
+
+await session.leave();
+await stateSubscription.cancel();
+await eventSubscription.cancel();
+await session.dispose();
 ```
 
-The example app logs typed events and has a camera switch control. Its headphones control opens
-the existing audio device picker; applications can also use `listAudioDevices()`,
-`initialAudioSelection()`, and `updateCurrentDevice(device)` directly.
+`session.snapshot` exposes the latest attendees, local media state, received screen-share tile, messages, and audio-device selection. `states` and `events` are broadcast streams; read `session.state` or `session.snapshot` for the current value when subscribing later. A session may be joined again after it has ended, but only one session may be active at a time.
 
-#### Existing meeting controls
+`ChimeAudioDevice` provides the native `label` used for selection and a best-effort `ChimeAudioDeviceType` classification (`bluetooth`, `wiredHeadset`, `speaker`, `earpiece`, or `other`). Use the label for display and selection; native labels can vary by device and OS.
 
-> MeetingView Widget Parameters
+## Errors and troubleshooting
 
-**JoinInfo** required
+Asynchronous failures are reported as `ChimeException`, with a stable `code`, readable `message`, and optional native `details`.
 
-It's required when you use with MeetingView Widget, the JoinInfo model has below attributes
+| Code | Meaning |
+| --- | --- |
+| `invalidJoinInfo` | Join response is malformed or missing required AWS fields. |
+| `invalidArgument` | A method argument is invalid. |
+| `invalidState` | The operation is invalid for the current session state. |
+| `meetingAlreadyActive` | Another Chime session is already active in the native implementation. |
+| `permissionDenied` | Microphone or camera permission was denied or restricted. |
+| `unsupportedPlatform` | Meeting APIs were called outside iOS or Android. |
+| `sessionNotFound` | The native session has already ended or is unavailable. |
+| `methodNotImplemented` | The host plugin does not implement the requested method. |
+| `nativeError`, `unknown` | The native SDK or platform returned an unclassified failure. |
 
-|                       | Type    | Required | Comment   |
-|-----------------------|---------|-------|-|
-| **MeetingInfo**       | Model   | YES | meeting info from aws_chime_sdk |
-| **AttendeeInfo**      | Model   | YES | attendee info from aws_chime_sdk |
+Common checks:
 
-How to create meeting info?
+- **Permission error:** verify the iOS purpose strings or Android merged manifest, then enable access in system settings.
+- **Invalid join information:** ensure the backend returns complete `Meeting` and `Attendee` objects, including `MediaPlacement` URLs and `JoinToken`.
+- **No audio/video:** confirm the user granted microphone/camera access and that another session has been left.
+- **Unsupported platform:** v3 meeting media runs only on iOS 15+ and Android API 23+.
+- **Native build failure:** use Flutter 3.47+, Dart 3.12+, Java 17, Android compile SDK 37, and iOS deployment target 15.0+.
 
-You can use @aws-sdk/client-chime-sdk-meetings CreateMeetingCommand to create one, please check out this [link](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/chime-sdk-meetings/command/CreateMeetingCommand/)
+## Migrating from v2 to v3
 
-How to create attendee info?
+Version 3.0.0 is a breaking API redesign. The old `MeetingModel`, `MeetingView`, and platform-interface APIs are removed; there is no v2 compatibility layer.
 
-You can use @aws-sdk/client-chime-sdk-meetings CreateAttendeeCommand to create one, please check out this [link](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/chime-sdk-meetings/command/CreateAttendeeCommand/)
+| v2 | v3 |
+| --- | --- |
+| `MeetingModel()` | `ChimeMeetingSession()` |
+| `meeting.joinMeeting(joinInfo)` | `session.join(joinInfo)` |
+| `MeetingView(joinInfo)` | `ChimeMeetingView(session: session)` |
+| Boolean media-control results | `Future<void>` methods that throw `ChimeException` on failure |
+| String audio-device list | `List<ChimeAudioDevice>` with `label` and `type` |
+| Widget managed setup and teardown | Caller owns `join`, `leave`, and `dispose`; the view requests leave on user action |
+
+Create the session in the screen or controller that owns the call. Subscribe to its streams, call `join()`, pass it to your UI, and call `dispose()` when that owner is finished.
 
 ## Roadmap
 
+The following future work is not part of v3. The two multi-backend items remain **Planned**:
+
 | # | Item | Status |
-|---|------|--------|
+|---:|---|---|
 | 1 | Upgrade Flutter and AWS Chime SDK to the latest versions | Complete in 2.0.0 |
 | 2 | Support more APIs from the latest Chime SDK | Complete in 2.0.0 |
 | 3 | Add video/audio communication backends besides Chime: Agora, LiveKit, TRTC, ARTC | Planned |
 | 4 | Add one-to-many livestreaming: IVS, LiveKit, Agora, TRTC, ARTC | Planned |
+
+See [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md) for the detailed follow-up plan. The Planned items are not implemented or in progress.
+
+---
+
+# 简体中文
+
+`flutter_aws_chime` 是面向 Flutter 应用开发者的 Amazon Chime SDK 客户端包，支持在 iOS 和 Android 应用中加入 Chime 会议。包提供 Dart 会话 API、类型化的会议状态与事件、音视频控制、数据消息、远端视频和屏幕共享画面渲染，也提供可选的 `ChimeMeetingView` 会议界面。
+
+应用后端负责创建 Chime 会议和 attendee，并向客户端返回短期加入信息。本包只负责连接会议媒体会话；不创建 AWS 会议，也不处理 AWS 长期凭证。
+
+## v3 平台支持
+
+| 平台 | 会议支持 | 最低版本 / 构建要求 |
+| --- | --- | --- |
+| iOS | 已支持 | iOS 15+ |
+| Android | 已支持 | Android API 23+；Java 17；compile SDK 37 |
+| macOS | 不支持 | v3 暂无会议实现 |
+| Windows | 不支持 | v3 暂无会议实现 |
+| Linux | 不支持 | v3 暂无会议实现 |
+| Web | 不支持 | v3 暂无会议实现 |
+
+本包要求 Flutter 3.47.0+、Dart 3.12.0+；iOS 插件使用 Swift 5.0。桌面和 Web 未声明为插件支持平台；在这些平台调用会议 API 会抛出 `ChimeException`，错误码为 `ChimeErrorCode.unsupportedPlatform`。
+
+## 功能
+
+- 加入和离开已由后端创建的 Chime SDK 会议。
+- 麦克风静音/取消静音、本地摄像头开关、前后摄像头切换。
+- 获取和选择音频输出设备。
+- 接收 attendee 变化、远端视频画面和屏幕共享画面。
+- 发送和接收 Chime 实时数据消息。
+- 监听连接与重连、摄像头可用性、参会者音量/信号强度及视频 tile 事件。
+- 独立使用 `ChimeMeetingSession`，或将会话传给可选的 `ChimeMeetingView`。
+
+原生实现同一时间只允许一个活动 Chime 会话。移除 `ChimeMeetingView` 不会释放会议；创建会话的业务代码负责生命周期，必须调用 `leave()` 或 `dispose()`。
+
+## 安装
+
+v3 发布后，在应用的 `pubspec.yaml` 添加：
+
+```yaml
+dependencies:
+  flutter_aws_chime: ^3.0.0
+```
+
+本地开发时可使用指向本仓库的 path dependency。宿主应用需要满足上表中的 Flutter、Dart、Java、Android compile SDK 和 iOS 部署版本要求。
+
+## 应用权限
+
+### iOS
+
+在宿主应用的 `ios/Runner/Info.plist` 添加用途说明。调用 `join()` 时，iOS 会请求麦克风和摄像头权限。
+
+```xml
+<key>NSMicrophoneUsageDescription</key>
+<string>允许在 Chime 会议中使用麦克风。</string>
+<key>NSCameraUsageDescription</key>
+<string>允许在 Chime 会议中使用摄像头。</string>
+```
+
+### Android
+
+插件 manifest 会声明互联网、摄像头、麦克风和音频设置权限。调用 `join()` 时会请求摄像头和麦克风运行时权限。请检查应用合并后的 manifest；如需说明权限用途，可在应用自己的界面中补充提示。
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+```
+
+用户拒绝任一运行时权限时，`join()` 会以 `ChimeException` 失败，错误码为 `permissionDenied`。
+
+## 后端职责与凭证
+
+应用后端需要为已认证的用户创建会议和 attendee，然后通过经过身份验证的连接向应用返回 meeting、media placement、attendee ID、external user ID 和短期 `JoinToken`。AWS access key 和 secret key 必须保存在服务端；不要将它们写入 Flutter 应用或传给本包。
+
+参见 [AWS Chime SDK 创建会议指南](https://docs.aws.amazon.com/chime-sdk/latest/dg/create-mtgs.html) 和 [`demo-server/README.md`](demo-server/README.md) 中的响应格式。本包不会调用 `CreateMeeting` 或 `CreateAttendee`，也不会保存 AWS 凭证。
+
+```json
+{
+  "meeting": {
+    "MeetingId": "...",
+    "ExternalMeetingId": "...",
+    "MediaRegion": "us-east-1",
+    "MediaPlacement": {
+      "AudioHostUrl": "...",
+      "AudioFallbackUrl": "...",
+      "SignalingUrl": "...",
+      "TurnControlUrl": "..."
+    }
+  },
+  "attendee": {
+    "AttendeeId": "...",
+    "ExternalUserId": "...",
+    "JoinToken": "..."
+  }
+}
+```
+
+## 快速接入
+
+`response` 是后端创建会议和 attendee 后返回的 JSON 对象。
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter_aws_chime/flutter_aws_chime.dart';
+
+Future<void> openMeeting(
+  BuildContext context,
+  Map<String, dynamic> response,
+) async {
+  final session = ChimeMeetingSession();
+  try {
+    await session.join(JoinInfo.fromJson(response));
+    if (!context.mounted) return;
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          body: ChimeMeetingView(
+            session: session,
+            title: '团队会议',
+            onLeave: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  } finally {
+    // 创建会话的代码负责释放资源，包括发生错误时。
+    await session.dispose();
+  }
+}
+```
+
+`join()` 会请求麦克风和摄像头权限，然后使用短期 meeting 和 attendee 信息连接。用户点击离开按钮时，view 会调用 `session.leave()`；组件从 widget tree 移除时不会调用 `dispose()`。
+
+## 会话 API
+
+包入口统一导出 `ChimeMeetingSession`、`JoinInfo`、会议模型、状态和事件类型、`ChimeException`、音频设备类型、`MeetingVideoTileView` 和 `ChimeMeetingView`。
+
+```dart
+final session = ChimeMeetingSession();
+final stateSubscription = session.states.listen((state) {
+  debugPrint('会议状态：$state');
+});
+final eventSubscription = session.events.listen((event) {
+  debugPrint('Chime 事件：$event');
+});
+
+await session.join(joinInfo);
+debugPrint('当前状态：${session.state}');
+await session.setMuted(true);
+await session.setVideoEnabled(true);
+await session.switchCamera(CameraPosition.back);
+
+final devices = await session.listAudioDevices();
+if (devices.isNotEmpty) await session.selectAudioDevice(devices.first);
+await session.sendMessage('你好', topic: 'chat');
+
+await session.leave();
+await stateSubscription.cancel();
+await eventSubscription.cancel();
+await session.dispose();
+```
+
+`session.snapshot` 包含最新参会者、本地媒体状态、收到的屏幕共享 tile、消息和音频设备选择。`states` 和 `events` 是广播流；晚订阅时可通过 `session.state` 或 `session.snapshot` 读取当前值。会议结束后可以再次加入，但同一时间只能有一个活动会话。
+
+`ChimeAudioDevice` 包含原生 Chime SDK 返回的 `label` 和基于标签推断的 `ChimeAudioDeviceType`（`bluetooth`、`wiredHeadset`、`speaker`、`earpiece` 或 `other`）。展示和选择时使用 `label`；不同设备和系统返回的标签可能不同。
+
+## 错误与排查
+
+所有异步操作失败都会以 `ChimeException` 暴露，包含稳定的 `code`、可读的 `message` 和可选原生 `details`。
+
+| 错误码 | 含义 |
+| --- | --- |
+| `invalidJoinInfo` | 加入信息格式错误或缺少 AWS 必需字段。 |
+| `invalidArgument` | 方法参数无效。 |
+| `invalidState` | 当前会话状态不允许执行该操作。 |
+| `meetingAlreadyActive` | 原生实现中已有另一个活动 Chime 会话。 |
+| `permissionDenied` | 麦克风或摄像头权限被拒绝或受限。 |
+| `unsupportedPlatform` | 在 iOS 和 Android 以外的平台调用会议 API。 |
+| `sessionNotFound` | 原生会话已结束或不可用。 |
+| `methodNotImplemented` | 宿主平台插件没有实现该方法。 |
+| `nativeError`、`unknown` | 原生 SDK 或平台返回未分类错误。 |
+
+常见检查：
+
+- **权限错误：**检查 iOS 用途说明或 Android 合并后的 manifest，并在系统设置中允许应用使用权限。
+- **加入信息无效：**检查后端返回完整的 `Meeting` 和 `Attendee` 对象，包括 `MediaPlacement` URL 和 attendee `JoinToken`。
+- **没有音视频：**确认用户已允许麦克风/摄像头，并在加入前离开其他会议会话。
+- **平台不支持：**v3 会议媒体仅支持 iOS 15+ 和 Android API 23+。
+- **原生构建失败：**使用 Flutter 3.47+、Dart 3.12+、Java 17、Android compile SDK 37 和 iOS deployment target 15.0+。
+
+## 从 v2 迁移到 v3
+
+3.0.0 是破坏性 API 重设计。旧版 `MeetingModel`、`MeetingView` 和 platform-interface API 已移除；不提供 v2 兼容层。
+
+| v2 | v3 |
+| --- | --- |
+| `MeetingModel()` | `ChimeMeetingSession()` |
+| `meeting.joinMeeting(joinInfo)` | `session.join(joinInfo)` |
+| `MeetingView(joinInfo)` | `ChimeMeetingView(session: session)` |
+| 媒体控制返回布尔值 | `Future<void>`；失败时抛出 `ChimeException` |
+| 音频设备字符串列表 | 包含 `label` 和 `type` 的 `List<ChimeAudioDevice>` |
+| Widget 管理会议创建和清理 | 调用方管理 `join`、`leave`、`dispose`；用户点击离开时 view 请求离会 |
+
+在负责通话的页面或 controller 中创建会话，订阅状态与事件，调用 `join()`，然后把 session 传给自定义 UI 或 `ChimeMeetingView`。所有者结束使用后调用 `dispose()`。
+
+## 路线图
+
+以下是未来计划，不属于 v3 的已实现范围；多后端两项仍为 **Planned**：
+
+| # | 项目 | 状态 |
+|---:|---|---|
+| 1 | 升级 Flutter 和 AWS Chime SDK | Complete in 2.0.0 |
+| 2 | 支持更多新版 Chime SDK API | Complete in 2.0.0 |
+| 3 | 增加 Chime 以外的音视频通信后端：Agora、LiveKit、TRTC、ARTC | Planned |
+| 4 | 增加一对多直播后端：IVS、LiveKit、Agora、TRTC、ARTC | Planned |
+
+详细后续计划见 [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)。Planned 项目尚未实现，也未开始开发。

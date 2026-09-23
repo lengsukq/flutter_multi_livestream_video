@@ -42,9 +42,19 @@ class MethodChannelCoordinator {
             var response: MethodChannelResponse = .init(result: false, arguments: nil)
             switch callMethod {
             case .manageAudioPermissions:
-                response = self.manageAudioPermissions()
+                self.manageAudioPermissions { permissionResponse in
+                    DispatchQueue.main.async {
+                        result(permissionResponse.toFlutterCompatibleType())
+                    }
+                }
+                return
             case .manageVideoPermissions:
-                response = self.manageVideoPermissions()
+                self.manageVideoPermissions { permissionResponse in
+                    DispatchQueue.main.async {
+                        result(permissionResponse.toFlutterCompatibleType())
+                    }
+                }
+                return
             case .join:
                 response = self.join(call: call)
             case .stop:
@@ -70,7 +80,7 @@ class MethodChannelCoordinator {
             case .sendMessage:
                 response = self.sendMessage(call: call)
             default:
-                response = MethodChannelResponse(result: false, arguments: Response.method_not_implemented)
+                response = MethodChannelResponse(result: false, arguments: Response.method_not_implemented.rawValue, code: "method_not_implemented")
             }
             result(response.toFlutterCompatibleType())
         }
@@ -90,51 +100,57 @@ class MethodChannelCoordinator {
     // ————————————————————————————————— Method Call Options —————————————————————————————————
     //
     
-    func manageAudioPermissions() -> MethodChannelResponse {
+    func manageAudioPermissions(completion: @escaping (MethodChannelResponse) -> Void) {
         let audioPermission = AVAudioSession.sharedInstance().recordPermission
         switch audioPermission {
         case .undetermined:
-            if self.requestAudioPermission() {
-                return MethodChannelResponse(result: true, arguments: Response.audio_authorized.rawValue)
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                completion(granted
+                    ? MethodChannelResponse(result: true, arguments: Response.audio_authorized.rawValue)
+                    : MethodChannelResponse(result: false, arguments: Response.audio_auth_not_granted.rawValue, code: "permission_denied"))
             }
-            return MethodChannelResponse(result: false, arguments: Response.audio_auth_not_granted.rawValue)
         case .granted:
-            return MethodChannelResponse(result: true, arguments: Response.audio_authorized.rawValue)
+            completion(MethodChannelResponse(result: true, arguments: Response.audio_authorized.rawValue))
         case .denied:
-            return MethodChannelResponse(result: false, arguments: Response.audio_auth_not_granted.rawValue)
+            completion(MethodChannelResponse(result: false, arguments: Response.audio_auth_not_granted.rawValue, code: "permission_denied"))
         @unknown default:
-            return MethodChannelResponse(result: false, arguments: Response.unknown_audio_authorization_status.rawValue)
+            completion(MethodChannelResponse(result: false, arguments: Response.unknown_audio_authorization_status.rawValue, code: "permission_denied"))
         }
     }
     
-    func manageVideoPermissions() -> MethodChannelResponse {
+    func manageVideoPermissions(completion: @escaping (MethodChannelResponse) -> Void) {
         let videoPermission: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
         switch videoPermission {
         case .notDetermined:
-            if self.requestVideoPermission() {
-                return MethodChannelResponse(result: true, arguments: Response.video_authorized.rawValue)
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                completion(granted
+                    ? MethodChannelResponse(result: true, arguments: Response.video_authorized.rawValue)
+                    : MethodChannelResponse(result: false, arguments: Response.video_auth_not_granted.rawValue, code: "permission_denied"))
             }
-            return MethodChannelResponse(result: false, arguments: Response.video_auth_not_granted.rawValue)
         case .authorized:
-            return MethodChannelResponse(result: true, arguments: Response.video_authorized.rawValue)
+            completion(MethodChannelResponse(result: true, arguments: Response.video_authorized.rawValue))
         case .denied:
-            return MethodChannelResponse(result: false, arguments: Response.video_auth_not_granted.rawValue)
+            completion(MethodChannelResponse(result: false, arguments: Response.video_auth_not_granted.rawValue, code: "permission_denied"))
         case .restricted:
-            return MethodChannelResponse(result: false, arguments: Response.video_restricted.rawValue)
+            completion(MethodChannelResponse(result: false, arguments: Response.video_restricted.rawValue, code: "permission_denied"))
         @unknown default:
-            return MethodChannelResponse(result: false, arguments: Response.unknown_video_authorization_status.rawValue)
+            completion(MethodChannelResponse(result: false, arguments: Response.unknown_video_authorization_status.rawValue, code: "permission_denied"))
         }
     }
     
     func join(call: FlutterMethodCall) -> MethodChannelResponse {
         guard let json = call.arguments as? [String: String] else {
-            return MethodChannelResponse(result: false, arguments: Response.create_meeting_failed)
+            return MethodChannelResponse(result: false, arguments: Response.create_meeting_failed.rawValue, code: "invalid_join_info")
         }
         
         // TODO: zmauricv: add a Json Decoder
         guard let meetingId = json["MeetingId"], let externalMeetingId = json["ExternalMeetingId"], let mediaRegion = json["MediaRegion"], let audioHostUrl = json["AudioHostUrl"], let audioFallbackUrl = json["AudioFallbackUrl"], let signalingUrl = json["SignalingUrl"], let turnControlUrl = json["TurnControlUrl"], let externalUserId = json["ExternalUserId"], let attendeeId = json["AttendeeId"], let joinToken = json["JoinToken"]
         else {
-            return MethodChannelResponse(result: false, arguments: Response.incorrect_join_response_params.rawValue)
+            return MethodChannelResponse(result: false, arguments: Response.incorrect_join_response_params.rawValue, code: "invalid_join_info")
+        }
+
+        guard MeetingSession.shared.meetingSession == nil else {
+            return MethodChannelResponse(result: false, arguments: "A Chime meeting session is already active.", code: "meeting_already_active")
         }
         
         let meetingResponse = CreateMeetingResponse(meeting: Meeting(externalMeetingId: externalMeetingId, mediaPlacement: MediaPlacement(audioFallbackUrl: audioFallbackUrl, audioHostUrl: audioHostUrl, signalingUrl: signalingUrl, turnControlUrl: turnControlUrl), mediaRegion: mediaRegion, meetingId: meetingId))
@@ -155,11 +171,20 @@ class MethodChannelCoordinator {
         
         self.setupAudioVideoFacadeObservers()
         let meetingStartResponse = MeetingSession.shared.startMeetingAudio()
+        if !meetingStartResponse.result {
+            stopAudioVideoFacadeObservers()
+            MeetingSession.shared.meetingSession = nil
+            MeetingSession.shared.cameraPosition = "front"
+        }
         return meetingStartResponse
     }
     
     func stop() -> MethodChannelResponse {
-        MeetingSession.shared.meetingSession?.audioVideo.stop()
+        guard let session = MeetingSession.shared.meetingSession else {
+            return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
+        }
+        stopAudioVideoFacadeObservers()
+        session.audioVideo.stop()
         MeetingSession.shared.meetingSession = nil
         MeetingSession.shared.cameraPosition = "front"
         return MethodChannelResponse(result: true, arguments: Response.meeting_stopped_successfully.rawValue)
@@ -177,7 +202,10 @@ class MethodChannelCoordinator {
     }
     
     func mute() -> MethodChannelResponse {
-        let muted = MeetingSession.shared.meetingSession?.audioVideo.realtimeLocalMute() ?? false
+        guard let session = MeetingSession.shared.meetingSession else {
+            return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
+        }
+        let muted = session.audioVideo.realtimeLocalMute()
         if muted {
             return MethodChannelResponse(result: true, arguments: Response.mute_successful.rawValue)
         } else {
@@ -186,7 +214,10 @@ class MethodChannelCoordinator {
     }
     
     func unmute() -> MethodChannelResponse {
-        let unmuted = MeetingSession.shared.meetingSession?.audioVideo.realtimeLocalUnmute() ?? false
+        guard let session = MeetingSession.shared.meetingSession else {
+            return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
+        }
+        let unmuted = session.audioVideo.realtimeLocalUnmute()
         
         if unmuted {
             return MethodChannelResponse(result: true, arguments: Response.unmute_successful.rawValue)
@@ -196,63 +227,70 @@ class MethodChannelCoordinator {
     }
     
     func startLocalVideo() -> MethodChannelResponse {
+        guard let session = MeetingSession.shared.meetingSession else {
+            return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
+        }
         do {
-            try MeetingSession.shared.meetingSession?.audioVideo.startLocalVideo()
+            try session.audioVideo.startLocalVideo()
             return MethodChannelResponse(result: true, arguments: Response.local_video_on_success.rawValue)
         } catch {
-            MeetingSession.shared.meetingSession?.logger.error(msg: "Error configuring AVAudioSession: \(error.localizedDescription)")
+            session.logger.error(msg: "Error configuring AVAudioSession: \(error.localizedDescription)")
             return MethodChannelResponse(result: false, arguments: Response.local_video_on_failed.rawValue)
         }
     }
     
     func stopLocalVideo() -> MethodChannelResponse {
-        MeetingSession.shared.meetingSession?.audioVideo.stopLocalVideo()
+        guard let session = MeetingSession.shared.meetingSession else {
+            return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
+        }
+        session.audioVideo.stopLocalVideo()
         return MethodChannelResponse(result: true, arguments: Response.local_video_off_success.rawValue)
     }
     
     func initialAudioSelection() -> MethodChannelResponse {
-        if let initialAudioDevice = MeetingSession.shared.meetingSession?.audioVideo.getActiveAudioDevice() {
+        guard let session = MeetingSession.shared.meetingSession else {
+            return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
+        }
+        if let initialAudioDevice = session.audioVideo.getActiveAudioDevice() {
             return MethodChannelResponse(result: true, arguments: initialAudioDevice.label)
         }
         return MethodChannelResponse(result: false, arguments: Response.failed_to_get_initial_audio_device.rawValue)
     }
     
     func listAudioDevices() -> MethodChannelResponse {
-        guard let audioDevices = MeetingSession.shared.meetingSession?.audioVideo.listAudioDevices() else {
-            return MethodChannelResponse(result: false, arguments: Response.failed_to_list_audio_devices.rawValue)
+        guard let session = MeetingSession.shared.meetingSession else {
+            return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
         }
-        
+        let audioDevices = session.audioVideo.listAudioDevices()
         return MethodChannelResponse(result: true, arguments: audioDevices.map { $0.label })
     }
     
     func updateAudioDevice(call: FlutterMethodCall) -> MethodChannelResponse {
         guard let device = call.arguments as? String else {
-            return MethodChannelResponse(result: false, arguments: Response.audio_device_update_failed.rawValue)
+            return MethodChannelResponse(result: false, arguments: Response.audio_device_update_failed.rawValue, code: "invalid_argument")
         }
-        
-        guard let audioDevices = MeetingSession.shared.meetingSession?.audioVideo.listAudioDevices() else {
-            MeetingSession.shared.meetingSession?.logger.error(msg: Response.failed_to_list_audio_devices.rawValue)
-            return MethodChannelResponse(result: false, arguments: Response.failed_to_list_audio_devices.rawValue)
+        guard let session = MeetingSession.shared.meetingSession else {
+            return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
         }
-        
+        let audioDevices = session.audioVideo.listAudioDevices()
         for dev in audioDevices {
             if device == dev.label {
-                MeetingSession.shared.meetingSession?.audioVideo.chooseAudioDevice(mediaDevice: dev)
+                session.audioVideo.chooseAudioDevice(mediaDevice: dev)
                 return MethodChannelResponse(result: true, arguments: Response.audio_device_updated.rawValue)
             }
         }
         
-        return MethodChannelResponse(result: false, arguments: Response.audio_device_update_failed.rawValue)
+        return MethodChannelResponse(result: false, arguments: Response.audio_device_update_failed.rawValue, code: "invalid_argument")
     }
 
     func setCameraPosition(call: FlutterMethodCall) -> MethodChannelResponse {
         guard let arguments = call.arguments as? [String: Any],
               let position = arguments["position"] as? String,
               position == "front" || position == "back" else {
-            return MethodChannelResponse(result: false, arguments: "Unsupported camera position.")
+        return MethodChannelResponse(result: false, arguments: "Unsupported camera position.", code: "invalid_argument")
         }
         guard let session = MeetingSession.shared.meetingSession else {
-            return MethodChannelResponse(result: false, arguments: Response.create_meeting_failed.rawValue)
+            return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
         }
         if position != MeetingSession.shared.cameraPosition {
             session.audioVideo.switchCamera()
@@ -266,9 +304,17 @@ class MethodChannelCoordinator {
             guard let json = call.arguments as? [String: Any],
                   let topic = json["topic"] as? String,
                   let message = json["message"] as? String else {
-                return MethodChannelResponse(result: false, arguments: Response.message_payload_error.rawValue)
+                return MethodChannelResponse(result: false, arguments: Response.message_payload_error.rawValue, code: "invalid_argument")
             }
-            try MeetingSession.shared.meetingSession?.audioVideo.realtimeSendDataMessage(topic: topic, data: message.data(using: .utf8), lifetimeMs: json["lifetimeMs"] as? Int32 ?? 300_000)
+            guard let session = MeetingSession.shared.meetingSession else {
+                return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
+            }
+            let requestedLifetime = (json["lifetimeMs"] as? NSNumber)?.intValue ?? 300_000
+            try session.audioVideo.realtimeSendDataMessage(
+                topic: topic,
+                data: message.data(using: .utf8),
+                lifetimeMs: Int32(clamping: requestedLifetime)
+            )
         }catch {
             return MethodChannelResponse(result: false, arguments: "\(Response.message_sent_failed.rawValue) \(error.localizedDescription)")
         }
@@ -280,36 +326,6 @@ class MethodChannelCoordinator {
     //
     // ————————————————————————————————— Helper Functions —————————————————————————————————
     //
-    
-    private func requestAudioPermission() -> Bool {
-        var result = false
-        
-        let group = DispatchGroup()
-        group.enter()
-        DispatchQueue.global(qos: .default).async {
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                result = granted
-                group.leave()
-            }
-        }
-        group.wait()
-        return result
-    }
-    
-    private func requestVideoPermission() -> Bool {
-        var result = false
-        
-        let group = DispatchGroup()
-        group.enter()
-        DispatchQueue.global(qos: .default).async {
-            AVCaptureDevice.requestAccess(for: .video) { granted in
-                result = granted
-                group.leave()
-            }
-        }
-        group.wait()
-        return result
-    }
     
     private func setupAudioVideoFacadeObservers() {
         self.realtimeObserver = MyRealtimeObserver(withMethodChannel: self)
