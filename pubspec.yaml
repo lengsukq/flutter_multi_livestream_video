@@ -1,7 +1,9 @@
 name: flutter_aws_chime
 description: An iOS and Android Flutter client for Amazon Chime SDK meetings.
 version: 3.0.0
-homepage: https://github.com/likeconan/flutter_aws_chime
+homepage: https://github.com/lengsukq/flutter_multi_livestream_video
+repository: https://github.com/lengsukq/flutter_multi_livestream_video
+issue_tracker: https://github.com/lengsukq/flutter_multi_livestream_video/issues
 
 environment:
   sdk: ^3.12.0

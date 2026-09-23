@@ -1,3 +1,19 @@
+buildscript {
+    ext.kotlin_version = '2.4.0'
+
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+
+    dependencies {
+        // Upgrades AGP's built-in Kotlin runtime. The app intentionally does
+        // not apply org.jetbrains.kotlin.android.
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
 allprojects {
     repositories {
         google()

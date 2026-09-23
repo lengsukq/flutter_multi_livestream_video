@@ -18,6 +18,9 @@ pluginManagement {
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
     id "com.android.application" version "9.2.1" apply false
+    // Declared only so Flutter can validate the Kotlin toolchain version.
+    // The application module does not apply this plugin; AGP built-in Kotlin
+    // compiles the Kotlin sources.
     id "org.jetbrains.kotlin.android" version "2.4.0" apply false
 }
 

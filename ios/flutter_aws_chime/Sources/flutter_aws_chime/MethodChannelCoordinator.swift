@@ -191,7 +191,7 @@ class MethodChannelCoordinator {
     }
     
     func toggleVolume(off:Bool) -> MethodChannelResponse {
-        var slider = (MPVolumeView().subviews.filter{ NSStringFromClass($0.classForCoder) == "MPVolumeSlider" }.first as? UISlider);
+        let slider = (MPVolumeView().subviews.filter{ NSStringFromClass($0.classForCoder) == "MPVolumeSlider" }.first as? UISlider);
         if(off){
             currentVolumeValue = AVAudioSession.sharedInstance().outputVolume;
             slider?.setValue(0, animated: false)
@@ -309,10 +309,13 @@ class MethodChannelCoordinator {
             guard let session = MeetingSession.shared.meetingSession else {
                 return MethodChannelResponse(result: false, arguments: "No Chime meeting session is active.", code: "session_not_found")
             }
+            guard let messageData = message.data(using: .utf8) else {
+                return MethodChannelResponse(result: false, arguments: Response.message_payload_error.rawValue, code: "invalid_argument")
+            }
             let requestedLifetime = (json["lifetimeMs"] as? NSNumber)?.intValue ?? 300_000
             try session.audioVideo.realtimeSendDataMessage(
                 topic: topic,
-                data: message.data(using: .utf8),
+                data: messageData,
                 lifetimeMs: Int32(clamping: requestedLifetime)
             )
         }catch {
@@ -374,7 +377,7 @@ class MethodChannelCoordinator {
         do {
             if audioSession.category != .playAndRecord {
                 try audioSession.setCategory(AVAudioSession.Category.playAndRecord,
-                                             options: AVAudioSession.CategoryOptions.allowBluetooth)
+                                             options: AVAudioSession.CategoryOptions.allowBluetoothHFP)
                 try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
             }
             if audioSession.mode != .voiceChat {

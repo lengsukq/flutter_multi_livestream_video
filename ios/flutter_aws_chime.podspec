@@ -9,11 +9,11 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
 A Flutter client package for Amazon Chime SDK meetings. Meeting creation and attendee credentials are provided by the application backend.
                        DESC
-  s.homepage         = 'https://github.com/likeconan/flutter_aws_chime'
-  s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'liyijia428@gmail.com' }
-  s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  s.homepage         = 'https://github.com/lengsukq/flutter_multi_livestream_video'
+  s.license          = { :type => 'MIT', :file => '../LICENSE' }
+  s.author           = { 'lengsukq' => 'liyijia428@gmail.com' }
+  s.source           = { :git => 'https://github.com/lengsukq/flutter_multi_livestream_video.git', :tag => s.version.to_s }
+  s.source_files = 'flutter_aws_chime/Sources/flutter_aws_chime/**/*.swift'
   s.dependency 'Flutter'
   s.platform = :ios, '15.0'
   s.static_framework = true

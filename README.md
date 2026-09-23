@@ -17,7 +17,7 @@ The application backend creates the Chime meeting and attendee and returns short
 | Linux | Not supported | No meeting implementation in v3 |
 | Web | Not supported | No meeting implementation in v3 |
 
-Requires Flutter 3.47.0+ and Dart 3.12.0+. The iOS plugin uses Swift 5.0. Desktop and Web are not declared as plugin platforms; meeting API calls there throw `ChimeException` with `ChimeErrorCode.unsupportedPlatform`.
+Requires Flutter 3.47.0+ and Dart 3.12.0+. Android uses AGP 9 built-in Kotlin with a JVM 17 target. The iOS plugin uses Swift 5.0 and supports both CocoaPods and Swift Package Manager. For the Flutter 3.47 local-path SwiftPM checkout-name limitation, see [`DEVELOPMENT.md`](DEVELOPMENT.md). Desktop and Web are not declared as plugin platforms; meeting API calls there throw `ChimeException` with `ChimeErrorCode.unsupportedPlatform`.
 
 ## Features
 
@@ -71,7 +71,7 @@ If either runtime permission is denied, `join()` fails with a typed `ChimeExcept
 
 Your backend must create the meeting and attendee for the authenticated app user, then return the meeting, media placement, attendee ID, external user ID, and short-lived `JoinToken` to the app over an authenticated connection. Keep AWS access keys and secret keys on the server. Never embed them in the Flutter app or send them to this package.
 
-See the [AWS Chime SDK guide to creating meetings](https://docs.aws.amazon.com/chime-sdk/latest/dg/create-mtgs.html) and [`demo-server/README.md`](demo-server/README.md) for the response shape. This package does not call `CreateMeeting` or `CreateAttendee` and does not store AWS credentials.
+See the [AWS Chime SDK guide to creating meetings](https://docs.aws.amazon.com/chime-sdk/latest/dg/create-mtgs.html) and the [demo-server README](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/demo-server/README.md) for the response shape. This package does not call `CreateMeeting` or `CreateAttendee` and does not store AWS credentials.
 
 ```json
 {
@@ -287,7 +287,7 @@ See [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md) for the d
 | Linux | 不支持 | v3 暂无会议实现 |
 | Web | 不支持 | v3 暂无会议实现 |
 
-本包要求 Flutter 3.47.0+、Dart 3.12.0+；iOS 插件使用 Swift 5.0。桌面和 Web 未声明为插件支持平台；在这些平台调用会议 API 会抛出 `ChimeException`，错误码为 `ChimeErrorCode.unsupportedPlatform`。
+本包要求 Flutter 3.47.0+、Dart 3.12.0+；Android 使用 AGP 9 Built-in Kotlin，JVM target 为 17；iOS 插件使用 Swift 5.0，同时支持 CocoaPods 与 Swift Package Manager。Flutter 3.47 本地 path 插件的 SwiftPM checkout 目录名限制见 [`DEVELOPMENT.md`](DEVELOPMENT.md)。桌面和 Web 未声明为插件支持平台；在这些平台调用会议 API 会抛出 `ChimeException`，错误码为 `ChimeErrorCode.unsupportedPlatform`。
 
 ## 功能
 
@@ -341,7 +341,7 @@ dependencies:
 
 应用后端需要为已认证的用户创建会议和 attendee，然后通过经过身份验证的连接向应用返回 meeting、media placement、attendee ID、external user ID 和短期 `JoinToken`。AWS access key 和 secret key 必须保存在服务端；不要将它们写入 Flutter 应用或传给本包。
 
-参见 [AWS Chime SDK 创建会议指南](https://docs.aws.amazon.com/chime-sdk/latest/dg/create-mtgs.html) 和 [`demo-server/README.md`](demo-server/README.md) 中的响应格式。本包不会调用 `CreateMeeting` 或 `CreateAttendee`，也不会保存 AWS 凭证。
+参见 [AWS Chime SDK 创建会议指南](https://docs.aws.amazon.com/chime-sdk/latest/dg/create-mtgs.html) 和 [demo-server README](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/demo-server/README.md) 中的响应格式。本包不会调用 `CreateMeeting` 或 `CreateAttendee`，也不会保存 AWS 凭证。
 
 ```json
 {

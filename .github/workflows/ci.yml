@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality-and-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_aws_chime
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: flutter_aws_chime
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Resolve package dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: dart format --output=none --set-exit-if-changed lib test example/lib example/integration_test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Unit tests
+        run: flutter test
+
+      - name: Pub.dev dry run
+        run: flutter pub publish --dry-run
+
+      - name: Resolve example dependencies
+        working-directory: flutter_aws_chime/example
+        run: flutter pub get
+
+      - name: Build Android example with built-in Kotlin
+        working-directory: flutter_aws_chime/example
+        run: flutter build apk --debug
+
+  ios:
+    runs-on: macos-15
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+    defaults:
+      run:
+        working-directory: flutter_aws_chime
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Flutter currently derives local SwiftPM package identity from the
+          # checkout directory. Keep it equal to the pub package name until
+          # flutter/flutter#186881 is fixed.
+          path: flutter_aws_chime
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Resolve package dependencies
+        run: flutter pub get
+
+      - name: Enable Swift Package Manager
+        run: flutter config --enable-swift-package-manager
+
+      - name: Build iOS example with Swift Package Manager
+        working-directory: flutter_aws_chime/example
+        run: |
+          flutter pub get
+          flutter build ios --simulator
+
+      - name: Validate CocoaPods podspec
+        run: >-
+          pod lib lint ios/flutter_aws_chime.podspec
+          --configuration=Debug
+          --skip-tests
+          --allow-warnings

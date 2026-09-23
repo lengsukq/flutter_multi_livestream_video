@@ -109,7 +109,7 @@ class MyRealtimeObserver: RealtimeObserver {
             "senderExternalUserId": dataMessage.senderExternalUserId,
             "topic":dataMessage.topic,
             "timestampMs":dataMessage.timestampMs,
-            "message":  String(data: dataMessage.data, encoding: .utf8),
+            "message": String(data: dataMessage.data, encoding: .utf8) ?? "",
             "throttled": dataMessage.throttled,
         ]
     }

@@ -1,0 +1,23 @@
+# Internal development and planning files.
+AGENTS.md
+.github/
+.coding-tools/
+
+# Reference backend is useful in the repository but is not required by the
+# Flutter package at runtime.
+demo-server/
+
+# Unsupported legacy platform scaffolding. The public plugin declares only
+# Android and iOS in pubspec.yaml.
+linux/
+macos/
+windows/
+
+# Repository-only preview assets.
+previews/
+
+# Local/generated files.
+.build/
+.swiftpm/
+**/.dart_tool/
+**/build/
