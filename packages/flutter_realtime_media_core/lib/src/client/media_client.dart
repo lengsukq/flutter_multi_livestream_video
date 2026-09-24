@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../model/media_error.dart';
+import '../model/media_identity.dart';
 import '../model/media_role.dart';
 import '../session/media_join_info.dart';
 import '../session/media_credential_refresh.dart';
@@ -70,6 +71,40 @@ class MediaClient {
       deviceId: deviceId,
     );
     return _joinResponse(response);
+  }
+
+  Future<MediaRoomSession> joinRoomIdentity({
+    required String roomCode,
+    required MediaIdentity identity,
+    MediaRole role = MediaRole.participant,
+  }) async {
+    final value = identity.normalized();
+    return _joinResponse(
+      await backend.joinRoomWithIdentity(
+        role: role,
+        roomCode: roomCode,
+        userId: value.userId,
+        displayName: value.displayName,
+        deviceId: value.deviceId,
+      ),
+    );
+  }
+
+  Future<MediaRoomSession> createRoomAndJoinIdentity({
+    required MediaIdentity identity,
+    MediaRole role = MediaRole.participant,
+    String? roomCode,
+  }) async {
+    final value = identity.normalized();
+    return _joinResponse(
+      await backend.createRoomWithIdentity(
+        role: role,
+        roomCode: roomCode,
+        userId: value.userId,
+        displayName: value.displayName,
+        deviceId: value.deviceId,
+      ),
+    );
   }
 
   /// Joins an existing room as [nickname].
@@ -239,7 +274,4 @@ class MediaClient {
 }
 
 /// Whether the current platform can run device media sessions.
-bool get isMediaPlatformSupported =>
-    !kIsWeb &&
-    (defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.android);
+bool get isMediaPlatformSupported => !kIsWeb;

@@ -62,6 +62,9 @@ class MediaBackendClient {
   /// Whether this client owns (and will close) its transport.
   bool get ownsTransport => _ownsTransport;
 
+  /// Reads the provider-neutral backend health endpoint without creating a room.
+  Future<Map<String, dynamic>> health() => _request('GET', '/health');
+
   Future<MediaRoomJoinResponse> createRoom({
     required MediaRole role,
     String? roomCode,
@@ -82,6 +85,44 @@ class MediaBackendClient {
     }
     final data = await _post('/rooms', body);
     return _parseJoinResponse(data, role: role);
+  }
+
+  Future<MediaRoomJoinResponse> joinRoomWithIdentity({
+    required MediaRole role,
+    required String roomCode,
+    required String userId,
+    required String displayName,
+    String? deviceId,
+  }) async {
+    final code = _required(roomCode, 'roomCode');
+    final data = await _post('/rooms/${Uri.encodeComponent(code)}/join', {
+      'userId': _required(userId, 'userId'),
+      'displayName': _required(displayName, 'displayName'),
+      'role': role.wireName,
+      if (deviceId != null && deviceId.trim().isNotEmpty)
+        'deviceId': deviceId.trim(),
+    });
+    return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
+  }
+
+  Future<MediaRoomJoinResponse> createRoomWithIdentity({
+    required MediaRole role,
+    String? roomCode,
+    required String userId,
+    required String displayName,
+    String? deviceId,
+  }) async {
+    final body = <String, Object?>{
+      'userId': _required(userId, 'userId'),
+      'displayName': _required(displayName, 'displayName'),
+      'nickname': displayName.trim(),
+      'role': role.wireName,
+      if (deviceId != null && deviceId.trim().isNotEmpty)
+        'deviceId': deviceId.trim(),
+      if (roomCode != null && roomCode.trim().isNotEmpty)
+        'roomCode': roomCode.trim(),
+    };
+    return _parseJoinResponse(await _post('/rooms', body), role: role);
   }
 
   Future<MediaRoomJoinResponse> joinRoom({
