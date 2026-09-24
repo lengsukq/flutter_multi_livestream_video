@@ -22,7 +22,8 @@ class AgoraSessionFactory implements MediaSessionFactory {
   bool get isPlatformSupported =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.iOS ||
-          defaultTargetPlatform == TargetPlatform.android);
+          defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
   @override
   AgoraJoinInfo parseJoinInfo(Map<String, dynamic> json) =>

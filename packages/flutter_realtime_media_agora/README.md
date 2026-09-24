@@ -2,6 +2,11 @@
 
 Agora adapter for flutter_realtime_media_core.
 
+Supported client platforms in this adapter are Android, iOS, and macOS.
+macOS uses Agora's native desktop bridge for join/leave, microphone, camera,
+video rendering, subscriptions, and RTC data messages. Front/back camera
+switching remains mobile-only because Agora exposes that API on Android/iOS.
+
 The application backend owns the Agora App Certificate and returns a short-lived
 AccessToken2 join payload. Flutter receives only the App ID, channel name,
 numeric UID, and token.
@@ -17,7 +22,8 @@ Supported roles:
 - viewer: subscribe only. RTC data sending is intentionally disabled because
   Agora live-audience data streams can promote a viewer to broadcaster.
 
-Screen sharing is intentionally deferred in the current SDK roadmap.
+Screen sharing and explicit desktop audio-device selection are intentionally
+deferred in the current SDK roadmap.
 
 ## Android build note
 

@@ -1,8 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_agora/flutter_realtime_media_agora.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   group('AgoraJoinInfo', () {
     test('parses the provider block and numeric UID', () {
       final info = AgoraJoinInfo.fromBackendResponse({
@@ -133,9 +138,10 @@ void main() {
     });
 
     test('creates role-specific session surfaces', () async {
-      final participant = factory.createSession(
-        joinInfo(MediaRole.participant),
-      );
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final participant =
+          factory.createSession(joinInfo(MediaRole.participant))
+              as InteractiveMediaSession;
       final host = factory.createSession(joinInfo(MediaRole.host));
       final viewer = factory.createSession(joinInfo(MediaRole.viewer));
 
@@ -158,6 +164,39 @@ void main() {
       await participant.dispose();
       await host.dispose();
       await viewer.dispose();
+    });
+
+    test('supports macOS with desktop-appropriate capabilities', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+
+      expect(factory.isPlatformSupported, isTrue);
+
+      final participant =
+          factory.createSession(joinInfo(MediaRole.participant))
+              as InteractiveMediaSession;
+      expect(participant.capabilities.canPublishAudio, isTrue);
+      expect(participant.capabilities.canPublishVideo, isTrue);
+      expect(participant.capabilities.canSubscribeVideo, isTrue);
+      expect(participant.capabilities.canSendData, isTrue);
+      expect(participant.capabilities.canSwitchCamera, isFalse);
+
+      await expectLater(
+        participant.switchCamera(MediaCameraPosition.back),
+        throwsA(
+          isA<MediaError>().having(
+            (error) => error.code,
+            'code',
+            MediaErrorCode.unsupportedFeature,
+          ),
+        ),
+      );
+
+      await participant.dispose();
+    });
+
+    test('does not advertise unsupported desktop platforms', () {
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      expect(factory.isPlatformSupported, isFalse);
     });
 
     test('rejects generic join info', () {

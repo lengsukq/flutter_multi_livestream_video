@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart' as agora;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'agora_join_info.dart';
@@ -14,10 +16,14 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
   if (role == MediaRole.viewer) {
     return const MediaCapabilities(canSubscribeVideo: true, canSendData: false);
   }
-  return const MediaCapabilities(
+  final canSwitchCamera =
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android);
+  return MediaCapabilities(
     canPublishAudio: true,
     canPublishVideo: true,
-    canSwitchCamera: true,
+    canSwitchCamera: canSwitchCamera,
     canScreenShare: false,
     canSendData: true,
     canSubscribeVideo: true,
@@ -567,6 +573,15 @@ abstract class _AgoraMediaSession implements MediaSession, MediaDataMessenger {
   }
 
   Future<void> switchCameraInternal(MediaCameraPosition position) async {
+    if (!capabilities.canSwitchCamera) {
+      throw const MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message:
+            'Agora front/back camera switching is available on Android and '
+            'iOS only. macOS uses the current desktop camera.',
+        providerId: _agoraProviderId,
+      );
+    }
     _ensurePublisherActive('camera switching');
     if (position == _cameraPosition) return;
     try {
@@ -588,7 +603,7 @@ abstract class _AgoraMediaSession implements MediaSession, MediaDataMessenger {
   Future<List<MediaAudioDevice>> listAudioDevicesInternal() {
     throw const MediaError(
       code: MediaErrorCode.unsupportedFeature,
-      message: 'Agora mobile audio-device enumeration is not exposed yet.',
+      message: 'Agora audio-device enumeration is not exposed yet.',
       providerId: _agoraProviderId,
     );
   }
@@ -596,7 +611,7 @@ abstract class _AgoraMediaSession implements MediaSession, MediaDataMessenger {
   Future<void> selectAudioDeviceInternal(MediaAudioDevice device) {
     throw const MediaError(
       code: MediaErrorCode.unsupportedFeature,
-      message: 'Agora mobile audio-device selection is not exposed yet.',
+      message: 'Agora audio-device selection is not exposed yet.',
       providerId: _agoraProviderId,
     );
   }

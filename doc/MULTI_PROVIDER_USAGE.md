@@ -84,9 +84,11 @@ Render LiveKit tracks using `LiveKitTrackRenderer` with Core `MediaTrackView`.
 ## Agora adapter
 
 Agora participant and host sessions publish/subscribe audio and video, support
-mute, camera enable/disable, front/back camera switching, RTC data messages,
-participant/event mapping, and `AgoraTrackRenderer`. The adapter deliberately
-advertises `canScreenShare=false` while screen sharing remains deferred.
+mute, camera enable/disable, RTC data messages, participant/event mapping, and
+`AgoraTrackRenderer` on Android, iOS, and macOS. Front/back camera switching
+is advertised on Android/iOS only; macOS uses the current desktop camera. The
+adapter deliberately advertises `canScreenShare=false` while screen sharing
+remains deferred.
 
 `AgoraViewerSession` is subscribe-only at the Core API and Agora audience-role
 layers. Viewer RTC data sending is disabled because Agora live-broadcast data

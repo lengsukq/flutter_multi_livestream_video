@@ -109,7 +109,9 @@ uses the provider returned by the backend to resolve the renderer/session.
 Agora uses numeric UIDs so `participantId` is the decimal UID string. The
 Agora adapter supports participant/host RTC media, viewer subscribe-only
 media, RTC data messages for participant/host, and provider-neutral video
-rendering. Screen sharing stays deferred. Viewer data sending is currently
+rendering on Android, iOS, and macOS. Front/back camera switching is available
+on Android/iOS; macOS uses the current desktop camera. Screen sharing stays
+deferred. Viewer data sending is currently
 disabled rather than implicitly promoting an Agora audience client to host.
 
 The TRTC adapter maps `participant` to the video-call scene and `host`/`viewer`

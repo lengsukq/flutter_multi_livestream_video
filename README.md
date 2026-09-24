@@ -31,7 +31,9 @@ Provider SDKs are dependencies of their own adapters, never of Core. Application
 add and register only the adapters they need. Optional SDKs are downloaded only
 when their adapter is added. ARTC 7.11.0 supports Android and iOS device builds;
 its iOS CocoaPod does not link into simulator builds. Provider choice remains
-with the backend.
+with the backend. The Agora adapter supports Android, iOS, and macOS; desktop
+camera rendering and media control use Agora's native macOS bridge, while
+front/back camera switching remains Android/iOS-only.
 
 ## Provider status
 
@@ -380,6 +382,8 @@ Flutter App 统一依赖 Core 接口，房间实际使用哪一家媒体服务�
 
 Core 不直接依赖任何供应商 SDK，供应商依赖仅存在于各自 Adapter 中。应用只添加并注册
 自己要用的适配包。ARTC 7.11.0 支持 Android 和 iOS 真机；当前 iOS CocoaPod 不支持模拟器链接。
+Agora Adapter 支持 Android、iOS 和 macOS；macOS 通过 Agora 原生桌面桥接完成音视频与渲染，
+前后摄像头切换仍仅在 Android/iOS 开放。
 
 ## Provider 状态
 

@@ -36,6 +36,14 @@ const CONTRACT_VERSION = 1;
 const MEDIA_CONTRACT_HEADER = 'X-Media-Backend-Contract';
 const LEGACY_CHIME_CONTRACT_HEADER = 'X-Chime-Backend-Contract';
 const DEMO_BEARER_TOKEN = process.env.DEMO_BEARER_TOKEN?.trim() || null;
+const MEDIA_ADMIN_PASSWORD = process.env.MEDIA_ADMIN_PASSWORD?.trim() || '';
+const ADMIN_SESSION_COOKIE = 'media_admin_session';
+const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
+const IS_VERCEL = process.env.VERCEL === '1';
+const MEDIA_CONNECTIONS_ENABLED = parseBoolean(
+  process.env.MEDIA_CONNECTIONS_ENABLED,
+  !IS_VERCEL,
+);
 const INITIAL_PROVIDER = String(process.env.MEDIA_DEFAULT_PROVIDER ?? 'chime').trim().toLowerCase();
 const STARTED_AT = Date.now();
 const EMPTY_CLOSE_AFTER_MS = Number(process.env.EMPTY_CLOSE_AFTER_MS ?? 90_000);
@@ -45,8 +53,102 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROVIDER_STATE_PATH = process.env.MEDIA_PROVIDER_STATE_PATH ?? path.join(__dirname, '.provider-state.json');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json({ limit: '64kb' }));
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value == null || value.trim() === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
+function getCookie(req: Request, name: string): string | null {
+  const header = req.get('Cookie');
+  if (!header) return null;
+  for (const pair of header.split(';')) {
+    const separator = pair.indexOf('=');
+    if (separator < 0 || pair.slice(0, separator).trim() !== name) continue;
+    return decodeURIComponent(pair.slice(separator + 1).trim());
+  }
+  return null;
+}
+
+function adminSessionSignature(expiresAtSeconds: string): string {
+  return crypto.createHmac('sha256', MEDIA_ADMIN_PASSWORD).update(expiresAtSeconds).digest('base64url');
+}
+
+function hasAdminSession(req: Request): boolean {
+  if (!MEDIA_ADMIN_PASSWORD) return false;
+  const token = getCookie(req, ADMIN_SESSION_COOKIE);
+  if (!token) return false;
+  const [expiresAtSeconds, signature, ...extra] = token.split('.');
+  if (extra.length || !expiresAtSeconds || !/^\d{10}$/.test(expiresAtSeconds) || !signature) return false;
+  if (Number(expiresAtSeconds) <= Math.floor(Date.now() / 1000)) return false;
+  const supplied = Buffer.from(signature, 'base64url');
+  const expected = Buffer.from(adminSessionSignature(expiresAtSeconds), 'base64url');
+  return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+}
+
+function setAdminCookie(res: Response, req: Request): void {
+  const expiresAtSeconds = String(Math.floor(Date.now() / 1000) + ADMIN_SESSION_TTL_SECONDS);
+  const secure = IS_VERCEL || req.secure;
+  res.setHeader(
+    'Set-Cookie',
+    `${ADMIN_SESSION_COOKIE}=${expiresAtSeconds}.${adminSessionSignature(expiresAtSeconds)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${ADMIN_SESSION_TTL_SECONDS}${secure ? '; Secure' : ''}`,
+  );
+}
+
+function clearAdminCookie(res: Response, req: Request): void {
+  const secure = IS_VERCEL || req.secure;
+  res.setHeader(
+    'Set-Cookie',
+    `${ADMIN_SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}`,
+  );
+}
+
+function requireSameOrigin(req: Request, res: Response, next: NextFunction): Response | void {
+  const origin = req.get('Origin');
+  if (!origin) return next();
+  const protocol = req.get('x-forwarded-proto')?.split(',')[0]?.trim() || req.protocol;
+  const expectedOrigin = `${protocol}://${req.get('host')}`;
+  try {
+    if (new URL(origin).origin === expectedOrigin) return next();
+  } catch (_) {
+    // Invalid Origin headers are rejected below.
+  }
+  return contractError(res, 403, 'cross-origin-request', 'Admin actions must come from this site.');
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction): Response | void {
+  res.set('Cache-Control', 'no-store');
+  if (!MEDIA_ADMIN_PASSWORD && !IS_VERCEL && process.env.NODE_ENV !== 'production') return next();
+  if (!MEDIA_ADMIN_PASSWORD) {
+    return contractError(res, 503, 'admin-not-configured', 'Set MEDIA_ADMIN_PASSWORD before using admin routes.');
+  }
+  if (!hasAdminSession(req)) {
+    return contractError(res, 401, 'admin-auth-required', 'Sign in to manage this service.');
+  }
+  next();
+}
+
+function requireConnectionsEnabled(_req: Request, res: Response, next: NextFunction): Response | void {
+  if (MEDIA_CONNECTIONS_ENABLED) return next();
+  return contractError(res, 503, 'service-paused', 'The media connection service is paused.');
+}
+
+function requireLegacyConnectionAccess(req: Request, res: Response, next: NextFunction): Response | void {
+  if (!MEDIA_CONNECTIONS_ENABLED) {
+    return contractError(res, 503, 'service-paused', 'The media connection service is paused.');
+  }
+  if (
+    DEMO_BEARER_TOKEN &&
+    req.get('Authorization') !== `Bearer ${DEMO_BEARER_TOKEN}` &&
+    !hasAdminSession(req)
+  ) {
+    return contractError(res, 401, 'unauthorized', 'A valid demo bearer token is required.');
+  }
+  next();
+}
 
 function normalizeRoomCode(raw: unknown): string | null {
   if (raw == null) return null;
@@ -129,13 +231,43 @@ function requireRoomContract(req: Request, res: Response, next: NextFunction): R
       `This demo server supports backend contract v${CONTRACT_VERSION}.`,
     );
   }
-  if (DEMO_BEARER_TOKEN && req.get('Authorization') !== `Bearer ${DEMO_BEARER_TOKEN}`) {
+  if (
+    DEMO_BEARER_TOKEN &&
+    req.get('Authorization') !== `Bearer ${DEMO_BEARER_TOKEN}` &&
+    !hasAdminSession(req)
+  ) {
     return contractError(res, 401, 'unauthorized', 'A valid demo bearer token is required.');
   }
   next();
 }
 
-app.use('/rooms', requireRoomContract);
+app.use('/rooms', requireConnectionsEnabled, requireRoomContract);
+app.use(['/meetings', '/join'], requireLegacyConnectionAccess);
+
+app.post('/api/admin/login', requireSameOrigin, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!MEDIA_ADMIN_PASSWORD) {
+    return contractError(res, 503, 'admin-not-configured', 'Admin login is not configured.');
+  }
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const supplied = crypto.createHash('sha256').update(password).digest();
+  const expected = crypto.createHash('sha256').update(MEDIA_ADMIN_PASSWORD).digest();
+  if (!crypto.timingSafeEqual(supplied, expected)) {
+    return contractError(res, 401, 'invalid-admin-password', 'The management password is incorrect.');
+  }
+  setAdminCookie(res, req);
+  res.json({ ok: true, expiresInSeconds: ADMIN_SESSION_TTL_SECONDS });
+});
+
+app.post('/api/admin/logout', requireSameOrigin, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  clearAdminCookie(res, req);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/session', requireAdmin, (_req, res) => {
+  res.json({ authenticated: true, connectionsEnabled: MEDIA_CONNECTIONS_ENABLED });
+});
 
 function generateRoomCode(): string {
   for (let i = 0; i < 50; i++) {
@@ -231,16 +363,18 @@ function summarizeRoom(entry: RoomEntry, req?: Request): RoomSummary {
   return provider.summarizeRoom(entry, { host });
 }
 
-setInterval(() => {
-  const now = Date.now();
-  for (const entry of roomDirectory.entries()) {
-    if (now - (entry.lastHeartbeatMs ?? 0) <= EMPTY_CLOSE_AFTER_MS) continue;
-    const idleSec = Math.round((now - entry.lastHeartbeatMs) / 1000);
-    closeRoom(entry, `idle ${idleSec}s, no heartbeat`).catch((error) =>
-      console.error('auto-close failed', entry.roomCode, error),
-    );
-  }
-}, SWEEP_INTERVAL_MS);
+if (!IS_VERCEL) {
+  setInterval(() => {
+    const now = Date.now();
+    for (const entry of roomDirectory.entries()) {
+      if (now - (entry.lastHeartbeatMs ?? 0) <= EMPTY_CLOSE_AFTER_MS) continue;
+      const idleSec = Math.round((now - entry.lastHeartbeatMs) / 1000);
+      closeRoom(entry, `idle ${idleSec}s, no heartbeat`).catch((error) =>
+        console.error('auto-close failed', entry.roomCode, error),
+      );
+    }
+  }, SWEEP_INTERVAL_MS);
+}
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -251,6 +385,7 @@ app.get('/health', (_req, res) => {
   const providerList = providerRegistry.metadata();
   res.json({
     ok: current.isConfigured(),
+    connectionsEnabled: MEDIA_CONNECTIONS_ENABLED,
     contractVersion: CONTRACT_VERSION,
     activeProvider,
     controlRegion: CONTROL_REGION,
@@ -260,7 +395,15 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.post('/api/provider', (req, res) => {
+app.post('/api/provider', requireSameOrigin, requireAdmin, (req, res) => {
+  if (IS_VERCEL && req.body?.provider !== activeProvider) {
+    return contractError(
+      res,
+      409,
+      'provider-selection-is-deployment-config',
+      'Set MEDIA_DEFAULT_PROVIDER in Vercel and redeploy to change the default provider.',
+    );
+  }
   try {
     const provider = providerRegistry.requireConfigured(req.body?.provider);
     if (provider.id !== activeProvider) {
@@ -275,11 +418,13 @@ app.post('/api/provider', (req, res) => {
   }
 });
 
-app.get('/api/overview', (req, res) => {
+app.get('/api/overview', requireAdmin, (req, res) => {
   const allRooms = roomDirectory.entries();
   const providerList = providerRegistry.metadata();
   res.json({
     ok: true,
+    connectionsEnabled: MEDIA_CONNECTIONS_ENABLED,
+    providerSelectionEnabled: !IS_VERCEL,
     activeProvider,
     providers: Object.fromEntries(providerList.map((item) => [item.id, item])),
     providerList,
@@ -294,7 +439,7 @@ app.get('/api/overview', (req, res) => {
   });
 });
 
-app.get('/rooms', (req, res) => {
+app.get('/rooms', requireAdmin, (req, res) => {
   res.json({
     contractVersion: CONTRACT_VERSION,
     rooms: roomDirectory.entries().map((entry) => summarizeRoom(entry, req)),
@@ -420,7 +565,7 @@ app.post('/rooms/:code/leave', async (req, res) => {
   }
 });
 
-app.delete('/rooms/:code', async (req, res) => {
+app.delete('/rooms/:code', requireSameOrigin, requireAdmin, async (req, res) => {
   try {
     const entry = await resolveRoom(req.params.code);
     if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
@@ -499,7 +644,7 @@ app.get('/meetings/:id', async (req, res) => {
   }
 });
 
-app.delete('/meetings/:id', async (req, res) => {
+app.delete('/meetings/:id', requireSameOrigin, requireAdmin, async (req, res) => {
   try {
     await chimeProvider.deleteLegacyMeeting(req.params.id);
     const entry = roomDirectory.get(req.params.id);
@@ -513,16 +658,21 @@ app.delete('/meetings/:id', async (req, res) => {
   }
 });
 
-const port = Number(process.env.PORT ?? 3000);
-const server = app.listen(port, '0.0.0.0', () => {
-  const address = server.address();
-  const listeningPort = address && typeof address === 'object' ? address.port : port;
-  console.log(`media-demo-server on :${listeningPort} (control=${CONTROL_REGION} media=${MEDIA_REGION})`);
-  console.log(`active provider: ${activeProvider}`);
-  for (const provider of providerRegistry.metadata()) {
-    console.log(`${provider.displayName} configured: ${provider.configured ? 'yes' : 'no'}`);
-  }
-  console.log(`dashboard: http://127.0.0.1:${listeningPort}/`);
-});
+let server: ReturnType<typeof app.listen> | null = null;
+if (!IS_VERCEL) {
+  const port = Number(process.env.PORT ?? 3000);
+  server = app.listen(port, '0.0.0.0', () => {
+    const address = server?.address();
+    const listeningPort = address && typeof address === 'object' ? address.port : port;
+    console.log(`media-demo-server on :${listeningPort} (control=${CONTROL_REGION} media=${MEDIA_REGION})`);
+    console.log(`active provider: ${activeProvider}`);
+    for (const provider of providerRegistry.metadata()) {
+      console.log(`${provider.displayName} configured: ${provider.configured ? 'yes' : 'no'}`);
+    }
+    console.log(`connections enabled: ${MEDIA_CONNECTIONS_ENABLED ? 'yes' : 'no'}`);
+    console.log(`dashboard: http://127.0.0.1:${listeningPort}/`);
+  });
+}
 
 export { app, server, providerRegistry, roomDirectory };
+export default app;

@@ -71,6 +71,48 @@
       padding: 28px 24px;
     }
 
+    .container.auth-hidden { display: none; }
+
+    .auth-overlay {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .auth-overlay.hidden { display: none; }
+
+    .auth-card {
+      width: min(100%, 420px);
+      padding: 32px;
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-card);
+    }
+
+    .auth-card h1 { font-size: 22px; margin-bottom: 8px; }
+    .auth-card p { color: var(--text-muted); line-height: 1.5; margin-bottom: 20px; }
+    .auth-card form { display: grid; gap: 12px; }
+    .auth-error { min-height: 20px; color: var(--rose-color) !important; font-size: 13px; margin: 0 !important; }
+
+    .connection-banner {
+      padding: 14px 18px;
+      margin: 0 0 20px;
+      border: 1px solid var(--amber-border);
+      border-radius: var(--radius-lg);
+      background: var(--amber-bg);
+      color: var(--amber-color);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .connection-banner.enabled {
+      border-color: var(--emerald-border);
+      background: var(--emerald-bg);
+      color: var(--emerald-color);
+    }
+
     /* Cards */
     .card {
       background: var(--surface-card);
@@ -148,6 +190,17 @@
       color: var(--emerald-color);
       font-size: 12px;
       font-weight: 600;
+    }
+
+    .status-badge.paused {
+      background: var(--rose-bg);
+      border-color: var(--rose-border);
+      color: var(--rose-color);
+    }
+
+    .status-badge.paused .pulse-dot {
+      background-color: var(--rose-color);
+      animation: none;
     }
 
     .pulse-dot {
@@ -908,6 +961,21 @@
 <body>
   <div id="toast-container"></div>
 
+  <section class="auth-overlay" id="admin-login" aria-labelledby="login-title">
+    <div class="auth-card">
+      <div class="brand-logo" style="margin-bottom:18px">
+        <svg viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <h1 id="login-title">管理台登录</h1>
+      <p>输入服务端配置的管理密码。登录成功后会签发仅供本机管理台使用的安全 Cookie。</p>
+      <form id="login-form" onsubmit="login(event)">
+        <input class="input-field" id="admin-password" type="password" autocomplete="current-password" placeholder="管理密码" required />
+        <p class="auth-error" id="login-error" role="alert"></p>
+        <button class="btn btn-primary" type="submit" id="login-button">登录</button>
+      </form>
+    </div>
+  </section>
+
   <!-- Custom Confirmation Modal -->
   <div class="modal-overlay" id="confirm-modal">
     <div class="modal-box">
@@ -925,7 +993,7 @@
     </div>
   </div>
 
-  <div class="container">
+  <div class="container auth-hidden" id="dashboard-root">
     <!-- Header -->
     <header class="card">
       <div class="brand">
@@ -937,7 +1005,7 @@
         <div class="brand-info">
           <h1>Media Live Console</h1>
           <p>
-            <span class="status-badge"><span class="pulse-dot"></span>服务就绪</span>
+            <span class="status-badge" id="service-status"><span class="pulse-dot"></span>检查中</span>
             <span id="header-meta">正在拉取节点拓扑...</span>
           </p>
         </div>
@@ -948,8 +1016,13 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
           刷新
         </button>
+        <button class="btn btn-subtle btn-sm" onclick="logout()" id="logout-btn">退出</button>
       </div>
     </header>
+
+    <div class="connection-banner" id="connection-banner" role="status">
+      正在读取连接服务状态…
+    </div>
 
     <!-- Provider Switcher -->
     <div class="card provider-panel">

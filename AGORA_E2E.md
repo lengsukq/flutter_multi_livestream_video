@@ -31,7 +31,9 @@ For a physical phone, use the Mac/server LAN address instead of
 
 ## Single-device lifecycle
 
-This checks join/leave, microphone, camera and camera switching:
+This checks join/leave, microphone, and camera. On Android/iOS it also checks
+front/back camera switching. On macOS the adapter intentionally reports
+`canSwitchCamera=false` because Agora exposes `switchCamera` only on mobile.
 
 ```bash
 cd example
@@ -42,6 +44,9 @@ flutter test integration_test/agora_device_e2e_test.dart -d <device-id> \
 ```
 
 Without `AGORA_E2E_BACKEND_URL`, the integration test skips safely.
+
+The same test can run with `-d macos`. When the backend is on the same Mac,
+use `http://127.0.0.1:3000` for `AGORA_E2E_BACKEND_URL`.
 
 ## Two-device host + viewer
 

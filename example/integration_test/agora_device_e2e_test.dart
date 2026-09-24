@@ -43,7 +43,7 @@ void main() {
     (tester) async {
       expect(
         defaultTargetPlatform,
-        anyOf(TargetPlatform.android, TargetPlatform.iOS),
+        anyOf(TargetPlatform.android, TargetPlatform.iOS, TargetPlatform.macOS),
       );
 
       final role = MediaRole.tryParse(_roleName);
@@ -111,12 +111,14 @@ void main() {
               .setVideoEnabled(true)
               .timeout(const Duration(seconds: 15));
           expect(session.snapshot.localVideoEnabled, isTrue);
-          await interactive
-              .switchCamera(MediaCameraPosition.back)
-              .timeout(const Duration(seconds: 15));
-          await interactive
-              .switchCamera(MediaCameraPosition.front)
-              .timeout(const Duration(seconds: 15));
+          if (session.capabilities.canSwitchCamera) {
+            await interactive
+                .switchCamera(MediaCameraPosition.back)
+                .timeout(const Duration(seconds: 15));
+            await interactive
+                .switchCamera(MediaCameraPosition.front)
+                .timeout(const Duration(seconds: 15));
+          }
         }
       }
 
