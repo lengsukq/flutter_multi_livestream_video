@@ -20,6 +20,7 @@ existing Chime-only applications and is kept backward compatible.
 | Package | Purpose | Status |
 | --- | --- | --- |
 | `flutter_realtime_media_core` | Provider-neutral session, capability, event, backend and rendering contracts | Implemented |
+| `flutter_realtime_media_ui` | Provider-neutral ready-to-use meeting UI driven by Core capabilities | Implemented |
 | `flutter_realtime_media_livekit` | LiveKit RTC + host/viewer adapter | Implemented |
 | `flutter_realtime_media_agora` | Agora RTC + host/viewer adapter | Implemented; real-service E2E optional |
 | `flutter_realtime_media_chime` | AWS Chime adapter for Core | Implemented |

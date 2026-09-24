@@ -1,0 +1,18 @@
+name: flutter_realtime_media_ui
+description: Ready-to-use provider-neutral meeting UI for Flutter Realtime Media.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+  flutter: '>=3.47.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_realtime_media_core:
+    path: ../flutter_realtime_media_core
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  uses-material-design: true

@@ -24,6 +24,8 @@ dependencies:
     path: ../packages/flutter_realtime_media_agora
   flutter_realtime_media_core:
     path: ../packages/flutter_realtime_media_core
+  flutter_realtime_media_ui:
+    path: ../packages/flutter_realtime_media_ui
   flutter_realtime_media_livekit:
     path: ../packages/flutter_realtime_media_livekit
   flutter_realtime_media_chime:

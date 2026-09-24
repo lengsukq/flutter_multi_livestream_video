@@ -9,6 +9,7 @@ import 'package:flutter_realtime_media_artc/flutter_realtime_media_artc.dart';
 import 'package:flutter_realtime_media_agora/flutter_realtime_media_agora.dart';
 import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_realtime_media_livekit/flutter_realtime_media_livekit.dart';
 import 'package:flutter_realtime_media_trtc/flutter_realtime_media_trtc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -248,12 +249,16 @@ class _JoinScreenState extends State<JoinScreen>
     }
     final client = _newClient();
     final deviceId = await _deviceIdFuture;
+    final displayName = _nickname(_createNameController);
     await _run(() async {
-      final room = await client.createRoomAndJoin(
+      final room = await client.createRoomAndJoinIdentity(
         roomCode: requestedCode.isEmpty ? null : requestedCode,
-        nickname: _nickname(_createNameController),
+        identity: MediaIdentity(
+          userId: deviceId,
+          displayName: displayName,
+          deviceId: deviceId,
+        ),
         role: MediaRole.participant,
-        deviceId: deviceId,
       );
       await _openMeeting(client, room);
     }, client);
@@ -271,12 +276,16 @@ class _JoinScreenState extends State<JoinScreen>
     }
     final client = _newClient();
     final deviceId = await _deviceIdFuture;
+    final displayName = _nickname(_joinNameController);
     await _run(() async {
-      final room = await client.joinRoom(
+      final room = await client.joinRoomIdentity(
         roomCode: code,
-        nickname: _nickname(_joinNameController),
+        identity: MediaIdentity(
+          userId: deviceId,
+          displayName: displayName,
+          deviceId: deviceId,
+        ),
         role: MediaRole.participant,
-        deviceId: deviceId,
       );
       await _openMeeting(client, room);
     }, client);
@@ -320,7 +329,7 @@ class _JoinScreenState extends State<JoinScreen>
     try {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (_) => MeetingRoomPage(room: room, renderer: renderer),
+          builder: (_) => MediaRoomView(room: room, renderer: renderer),
         ),
       );
     } finally {

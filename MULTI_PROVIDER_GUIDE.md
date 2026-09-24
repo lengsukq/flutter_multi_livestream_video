@@ -8,6 +8,7 @@ use Core without choosing a provider per room.
 
 ```text
 flutter_realtime_media_core
+  ├─ flutter_realtime_media_ui      -> ready-to-use provider-neutral UI
   ├─ flutter_realtime_media_livekit -> livekit_client
   ├─ flutter_realtime_media_agora   -> agora_rtc_engine
   ├─ flutter_realtime_media_trtc    -> tencent_rtc_sdk
@@ -40,9 +41,13 @@ final client = MediaClient(
   tokenProvider: () async => applicationToken,
 );
 
-final room = await client.createRoomAndJoin(
+final room = await client.createRoomAndJoinIdentity(
   role: MediaRole.participant,
-  nickname: 'Leo',
+  identity: const MediaIdentity(
+    userId: 'account-123',
+    displayName: 'Leo',
+    deviceId: 'install-abc',
+  ),
 );
 ```
 
