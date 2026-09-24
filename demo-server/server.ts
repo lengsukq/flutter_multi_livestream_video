@@ -73,6 +73,28 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
 }
 
+function bindLogicalIdentity(
+  entry: RoomEntry,
+  participantId: string,
+  userId: string,
+  displayName: string,
+  deviceId: string | null,
+): void {
+  const current = entry.attendees.find(
+    (attendee) => attendee.attendeeId === participantId,
+  );
+  if (!current) return;
+  current.userId = userId;
+  current.displayName = displayName;
+  current.externalUserId = displayName;
+  if (deviceId) current.deviceId = deviceId;
+  entry.attendees = entry.attendees.filter(
+    (attendee) =>
+      attendee.attendeeId === participantId ||
+      (attendee.userId !== userId && (!deviceId || attendee.deviceId !== deviceId)),
+  );
+}
+
 function getCookie(req: Request, name: string): string | null {
   const header = req.get('Cookie');
   if (!header) return null;
@@ -528,11 +550,12 @@ app.post('/rooms', async (req, res) => {
     created.entry.lastHeartbeatMs = Date.now();
     logEvent('create', `room ${roomCode} created with ${provider.displayName}`);
 
-    const rawNickname = req.body?.nickname?.trim() || null;
+    const rawNickname = req.body?.displayName?.trim() || req.body?.nickname?.trim() || null;
     if (!rawNickname) return res.json(created.response);
 
     const response = await provider.joinRoom({ entry: created.entry, rawName: rawNickname, role });
-    bindDevicePresence(created.entry, response.participantId, deviceId);
+    const userId = normalizeUserId(req.body?.userId ?? deviceId ?? rawNickname);
+    bindLogicalIdentity(created.entry, response.participantId, userId, rawNickname, deviceId);
     logEvent('join', `${response.displayName} created+joined room ${roomCode} via ${provider.displayName}`);
     res.json(response);
   } catch (error) {
@@ -566,8 +589,15 @@ app.post('/rooms/:code/join', async (req, res) => {
         'deviceId must be 8-128 letters, digits, dots, underscores, colons, or hyphens.',
       );
     }
-    const response = await provider.joinRoom({ entry, rawName: req.body?.userId, role });
-    bindDevicePresence(entry, response.participantId, deviceId);
+    const displayName = normalizeDisplayName(
+      req.body?.displayName ?? req.body?.nickname ?? req.body?.userId,
+    );
+    if (!displayName) {
+      return contractError(res, 400, 'invalid-argument', 'displayName or userId is required.');
+    }
+    const userId = normalizeUserId(req.body?.userId ?? deviceId ?? displayName);
+    const response = await provider.joinRoom({ entry, rawName: displayName, role });
+    bindLogicalIdentity(entry, response.participantId, userId, displayName, deviceId);
     logEvent('join', `${response.displayName} joined room ${entry.roomCode} via ${provider.displayName}`);
     res.json(response);
   } catch (error) {

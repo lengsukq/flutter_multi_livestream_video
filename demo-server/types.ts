@@ -3,6 +3,8 @@ export type MediaRole = 'participant' | 'host' | 'viewer';
 export interface RoomAttendee {
   attendeeId: string;
   externalUserId: string;
+  userId?: string;
+  displayName?: string;
   joinedAt: string;
   role?: MediaRole;
   deviceId?: string;

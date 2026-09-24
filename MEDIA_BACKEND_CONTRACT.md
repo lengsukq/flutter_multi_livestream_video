@@ -70,7 +70,8 @@ Create a room and an attendee/participant for the caller.
 
 ```json
 {
-  "nickname": "Host A",
+  "userId": "account-123",
+  "displayName": "Host A",
   "roomCode": "482913",
   "role": "host",
   "deviceId": "b8ae2e3f-3e30-4f66-8f69-fd63cc0cc8a5"
@@ -80,6 +81,10 @@ Create a room and an attendee/participant for the caller.
 `roomCode` is optional (the server may generate one). Success returns a
 [join response](#join-response). Recommended errors: `bad-room-code` (`400`),
 `room-exists` (`409`).
+
+`userId` is the stable logical application identity and `displayName` is
+mutable presentation text. For backward compatibility, v1 servers may continue
+to accept `nickname` when the newer pair is absent.
 
 `deviceId` is optional and opaque. Demo applications may persist a random
 install-scoped id and send it on create/join so the backend can treat repeated
@@ -92,7 +97,8 @@ Create an attendee/participant in an existing room.
 
 ```json
 {
-  "userId": "Guest",
+  "userId": "account-456",
+  "displayName": "Guest",
   "role": "viewer",
   "deviceId": "b8ae2e3f-3e30-4f66-8f69-fd63cc0cc8a5"
 }
@@ -100,10 +106,11 @@ Create an attendee/participant in an existing room.
 
 Missing room returns `room-not-found` (`404`).
 
-When `deviceId` is supplied, the reference demo backend keeps only the latest
-participant record for that device in a room. `participantId` remains the
-provider/session identity and may change every time the device reconnects;
-`userId`/`nickname` remains display text and may also change.
+The reference demo backend keeps only the latest participant record for a
+stable `userId` in a room and also collapses repeated joins from the same
+`deviceId` when supplied. `participantId` remains the provider/session
+identity and may change on reconnect; `displayName` may change without
+creating a second logical user.
 
 ### `POST /rooms/{roomCode}/credentials/refresh` (optional)
 
