@@ -6,27 +6,54 @@
   <title>Media Live Console · 智能直播控制台</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-dark: #090d16;
-      --card-bg: rgba(255, 255, 255, 0.04);
-      --card-bg-hover: rgba(255, 255, 255, 0.07);
-      --card-border: rgba(255, 255, 255, 0.1);
-      --card-border-glow: rgba(99, 102, 241, 0.35);
-      --text-main: #f1f5f9;
-      --text-muted: #94a3b8;
-      --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
-      --primary-hover: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #c026d3 100%);
-      --accent-cyan: #06b6d4;
-      --accent-emerald: #10b981;
-      --accent-rose: #f43f5e;
-      --glass-blur: blur(20px);
-      --radius-xl: 24px;
-      --radius-lg: 18px;
-      --radius-md: 12px;
-      --radius-sm: 8px;
+      --bg-base: #f8fafc;
+      --surface-card: #ffffff;
+      --surface-card-hover: #fbfcfe;
+      --surface-subtle: #f1f5f9;
+      --border-subtle: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-tertiary: #94a3b8;
+
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-subtle: #eef2ff;
+      --primary-border: #c7d2fe;
+
+      --livekit-color: #0284c7;
+      --livekit-bg: #f0f9ff;
+      --livekit-border: #bae6fd;
+
+      --chime-color: #ea580c;
+      --chime-bg: #fff7ed;
+      --chime-border: #fed7aa;
+
+      --emerald-color: #059669;
+      --emerald-bg: #ecfdf5;
+      --emerald-border: #a7f3d0;
+
+      --amber-color: #d97706;
+      --amber-bg: #fffbeb;
+      --amber-border: #fde68a;
+
+      --rose-color: #e11d48;
+      --rose-bg: #fff1f2;
+      --rose-border: #fecdd3;
+
+      --radius-xl: 20px;
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --radius-sm: 6px;
       --radius-pill: 9999px;
+
+      --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+      --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 10px 24px -8px rgba(15, 23, 42, 0.06);
+      --shadow-hover: 0 10px 30px -4px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+      --shadow-modal: 0 20px 40px -10px rgba(15, 23, 42, 0.16), 0 8px 16px -4px rgba(15, 23, 42, 0.08);
     }
 
     * {
@@ -37,85 +64,44 @@
     }
 
     body {
-      background-color: var(--bg-dark);
+      background-color: var(--bg-base);
+      background-image: radial-gradient(#cbd5e1 0.75px, transparent 0.75px);
+      background-size: 20px 20px;
       color: var(--text-main);
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
       min-height: 100vh;
-      position: relative;
-      overflow-x: hidden;
-      padding-bottom: 60px;
-    }
-
-    /* Ambient Lighting Background */
-    .ambient-glow {
-      position: fixed;
-      pointer-events: none;
-      z-index: 0;
-      border-radius: 50%;
-      filter: blur(120px);
-      opacity: 0.35;
-      transition: all 1s ease;
-    }
-    .glow-1 {
-      width: 500px;
-      height: 500px;
-      background: radial-gradient(circle, #6366f1 0%, rgba(99, 102, 241, 0) 70%);
-      top: -150px;
-      left: -100px;
-    }
-    .glow-2 {
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, #d946ef 0%, rgba(217, 70, 239, 0) 70%);
-      bottom: -150px;
-      right: -100px;
-    }
-    .glow-3 {
-      width: 450px;
-      height: 450px;
-      background: radial-gradient(circle, #06b6d4 0%, rgba(6, 182, 212, 0) 70%);
-      top: 40%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      opacity: 0.2;
+      padding-bottom: 80px;
     }
 
     .container {
-      max-width: 1160px;
+      max-width: 1200px;
       margin: 0 auto;
-      padding: 32px 24px;
-      position: relative;
-      z-index: 1;
+      padding: 28px 24px;
     }
 
-    /* Glass Panels */
-    .glass {
-      background: var(--card-bg);
-      backdrop-filter: var(--glass-blur);
-      -webkit-backdrop-filter: var(--glass-blur);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-lg);
-      box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Cards */
+    .card {
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-card);
+      transition: box-shadow 0.25s ease, border-color 0.25s ease;
     }
 
-    .glass-card {
-      padding: 24px;
-      margin-bottom: 24px;
+    .card:hover {
+      border-color: #d1d5db;
     }
 
-    .glass:hover {
-      border-color: rgba(255, 255, 255, 0.18);
-    }
-
-    /* Header Bar */
-    header {
+    /* Top Navigation Header */
+    header.card {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 18px 28px;
-      margin-bottom: 32px;
-      border-radius: var(--radius-xl);
+      margin-bottom: 24px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
 
     .brand {
@@ -125,29 +111,29 @@
     }
 
     .brand-logo {
-      width: 46px;
-      height: 46px;
-      border-radius: 14px;
-      background: var(--primary-gradient);
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.28);
     }
 
     .brand-logo svg {
-      width: 24px;
-      height: 24px;
-      fill: #fff;
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: currentColor;
     }
 
     .brand-info h1 {
-      font-size: 20px;
+      font-size: 19px;
       font-weight: 800;
       letter-spacing: -0.02em;
-      background: linear-gradient(135deg, #ffffff 40%, #94a3b8 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: var(--text-main);
     }
 
     .brand-info p {
@@ -155,7 +141,7 @@
       color: var(--text-muted);
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       margin-top: 2px;
     }
 
@@ -163,11 +149,11 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 12px;
+      padding: 3px 10px;
       border-radius: var(--radius-pill);
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.25);
-      color: #34d399;
+      background: var(--emerald-bg);
+      border: 1px solid var(--emerald-border);
+      color: var(--emerald-color);
       font-size: 12px;
       font-weight: 600;
     }
@@ -176,15 +162,15 @@
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background-color: #10b981;
-      box-shadow: 0 0 10px #10b981;
+      background-color: var(--emerald-color);
+      box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.4);
       animation: pulse 2s infinite;
     }
 
     @keyframes pulse {
-      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-      70% { transform: scale(1); box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
-      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.4); }
+      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(5, 150, 105, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
     }
 
     .header-actions {
@@ -194,124 +180,222 @@
     }
 
     .region-chip {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: var(--surface-subtle);
+      border: 1px solid var(--border-subtle);
       padding: 6px 14px;
       border-radius: var(--radius-pill);
       font-size: 12px;
       font-family: 'JetBrains Mono', monospace;
-      color: #cbd5e1;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* Provider Selector Card */
+    .provider-panel {
+      padding: 20px 28px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+    }
+
+    .provider-panel-info {
+      max-width: 580px;
+    }
+
+    .provider-panel-info .panel-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      border-radius: var(--radius-pill);
+      background: var(--primary-subtle);
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .provider-panel-info h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+
+    .provider-panel-info p {
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .provider-switcher {
+      display: inline-flex;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border-subtle);
+      padding: 4px;
+      border-radius: var(--radius-pill);
+      gap: 4px;
+    }
+
+    .provider-opt {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 18px;
+      border-radius: var(--radius-pill);
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .provider-opt:hover:not(:disabled) {
+      color: var(--text-main);
+    }
+
+    .provider-opt.active {
+      background: #ffffff;
+      color: var(--text-main);
+      border-color: var(--border-subtle);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    }
+
+    .provider-opt.active.livekit-active {
+      color: var(--livekit-color);
+      border-color: var(--livekit-border);
+    }
+
+    .provider-opt.active.chime-active {
+      color: var(--chime-color);
+      border-color: var(--chime-border);
+    }
+
+    .provider-opt:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .opt-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #cbd5e1;
+    }
+
+    .provider-opt.active .opt-dot {
+      background: #10b981;
     }
 
     /* KPI Stats Grid */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 20px;
-      margin-bottom: 32px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+      margin-bottom: 24px;
     }
 
     .stat-card {
+      padding: 20px 24px;
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
       position: relative;
       overflow: hidden;
-      padding: 24px;
-      border-radius: var(--radius-lg);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
 
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: var(--stat-accent, var(--primary-gradient));
-      opacity: 0.8;
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-card);
     }
 
     .stat-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
 
     .stat-title {
       font-size: 13px;
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
       color: var(--text-muted);
     }
 
     .stat-icon {
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
       border-radius: var(--radius-md);
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--stat-color, #a855f7);
+      color: var(--stat-color, #4f46e5);
+      background: var(--stat-bg, #eef2ff);
     }
 
     .stat-value {
-      font-size: 36px;
+      font-size: 32px;
       font-weight: 800;
       letter-spacing: -0.03em;
-      line-height: 1;
-      margin-bottom: 8px;
-      background: linear-gradient(180deg, #ffffff 40%, rgba(255, 255, 255, 0.7) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: var(--text-main);
+      line-height: 1.1;
+      margin-bottom: 6px;
     }
 
     .stat-subtitle {
       font-size: 12px;
-      color: var(--text-muted);
+      color: var(--text-tertiary);
     }
 
-    /* Control Toolbar */
-    .toolbar {
+    /* Actions Toolbar */
+    .toolbar.card {
+      padding: 18px 24px;
+      margin-bottom: 24px;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
       gap: 16px;
       flex-wrap: wrap;
-      padding: 16px 20px;
-      border-radius: var(--radius-lg);
-      margin-bottom: 32px;
     }
 
     .create-group {
       display: flex;
+      align-items: center;
       gap: 10px;
       flex: 1;
-      min-width: 320px;
+      max-width: 680px;
     }
 
-    .input-glass {
-      background: rgba(15, 23, 42, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+    .input-field {
+      background: #ffffff;
+      border: 1px solid var(--border-strong);
       border-radius: var(--radius-pill);
-      padding: 12px 20px;
+      padding: 11px 18px;
       font-size: 14px;
-      color: #fff;
+      color: var(--text-main);
       font-family: inherit;
       outline: none;
-      transition: all 0.25s ease;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
       flex: 1;
     }
 
-    .input-glass:focus {
-      border-color: #818cf8;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
-      background: rgba(15, 23, 42, 0.7);
+    .input-field:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
     }
 
-    .input-glass::placeholder {
-      color: #64748b;
+    .input-field::placeholder {
+      color: var(--text-tertiary);
     }
 
     /* Buttons */
@@ -320,167 +404,156 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 600;
       font-family: inherit;
-      padding: 12px 22px;
+      padding: 10.5px 20px;
       border-radius: var(--radius-pill);
       border: 1px solid transparent;
       cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       text-decoration: none;
       white-space: nowrap;
     }
 
     .btn:active {
-      transform: scale(0.97);
+      transform: scale(0.98);
     }
 
     .btn-primary {
-      background: var(--primary-gradient);
-      color: #fff;
-      box-shadow: 0 8px 24px -4px rgba(99, 102, 241, 0.45);
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
     }
 
     .btn-primary:hover {
-      box-shadow: 0 12px 28px -2px rgba(99, 102, 241, 0.6);
-      transform: translateY(-1px);
+      background: var(--primary-hover);
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
     }
 
-    .btn-glass {
-      background: rgba(255, 255, 255, 0.06);
-      border-color: rgba(255, 255, 255, 0.12);
-      color: #e2e8f0;
+    .btn-secondary {
+      background: #ffffff;
+      border-color: var(--border-strong);
+      color: var(--text-main);
     }
 
-    .btn-glass:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.2);
+    .btn-secondary:hover {
+      background: var(--surface-subtle);
+      border-color: #94a3b8;
     }
 
-    .btn-danger-glass {
-      background: rgba(244, 63, 94, 0.12);
-      border-color: rgba(244, 63, 94, 0.3);
-      color: #fb7185;
-      padding: 8px 16px;
-      font-size: 13px;
+    .btn-subtle {
+      background: var(--surface-subtle);
+      border-color: var(--border-subtle);
+      color: var(--text-muted);
     }
 
-    .btn-danger-glass:hover {
-      background: rgba(244, 63, 94, 0.22);
-      border-color: rgba(244, 63, 94, 0.5);
-      color: #fff;
+    .btn-subtle:hover {
+      background: #e2e8f0;
+      color: var(--text-main);
+    }
+
+    .btn-danger-subtle {
+      background: var(--rose-bg);
+      border-color: var(--rose-border);
+      color: var(--rose-color);
+      padding: 6px 14px;
+      font-size: 12.5px;
+    }
+
+    .btn-danger-subtle:hover {
+      background: #ffe4e6;
+      border-color: #fda4af;
+      color: #be123c;
     }
 
     .btn-sm {
-      padding: 8px 16px;
-      font-size: 13px;
+      padding: 6px 14px;
+      font-size: 12.5px;
     }
 
-    .provider-panel {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 18px;
-      margin-bottom: 24px;
-      padding: 18px 22px;
-    }
-
-    .provider-panel-info h2 {
-      font-size: 15px;
-      margin-bottom: 4px;
-    }
-
-    .provider-panel-info p {
-      color: var(--text-muted);
+    .sync-status {
       font-size: 12px;
-    }
-
-    .provider-choice {
+      color: var(--text-tertiary);
       display: flex;
-      gap: 10px;
-    }
-
-    .provider-btn {
-      min-width: 132px;
-      background: rgba(255, 255, 255, 0.05);
-      border-color: rgba(255, 255, 255, 0.12);
-      color: #cbd5e1;
-    }
-
-    .provider-btn.active {
-      color: #fff;
-      border-color: rgba(99, 102, 241, 0.8);
-      background: rgba(99, 102, 241, 0.2);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-    }
-
-    .provider-btn:disabled {
-      opacity: 0.42;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .provider-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #64748b;
-    }
-
-    .provider-btn.active .provider-dot {
-      background: #34d399;
-      box-shadow: 0 0 10px rgba(52, 211, 153, 0.75);
-    }
-
-    .provider-chip {
-      display: inline-flex;
       align-items: center;
-      gap: 5px;
-      margin-top: 5px;
-      padding: 3px 8px;
-      border-radius: var(--radius-pill);
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      background: rgba(99, 102, 241, 0.13);
-      color: #a5b4fc;
-      border: 1px solid rgba(99, 102, 241, 0.24);
+      gap: 8px;
     }
 
-    /* Section Headers */
-    .section-title-bar {
+    .sync-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--primary);
+    }
+
+    /* Section Bar */
+    .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
       padding: 0 4px;
     }
 
     .section-title {
-      font-size: 17px;
+      font-size: 16px;
       font-weight: 700;
-      letter-spacing: -0.01em;
+      color: var(--text-main);
       display: flex;
       align-items: center;
       gap: 10px;
     }
 
     .badge-count {
-      background: rgba(99, 102, 241, 0.2);
-      color: #a5b4fc;
-      border: 1px solid rgba(99, 102, 241, 0.35);
+      background: var(--surface-subtle);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
       font-size: 12px;
-      padding: 2px 10px;
+      padding: 2px 9px;
       border-radius: var(--radius-pill);
       font-weight: 700;
     }
 
-    /* Modern Table & Room Cards */
+    .search-box {
+      width: 240px;
+      position: relative;
+    }
+
+    .search-box input {
+      width: 100%;
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-pill);
+      padding: 7px 14px 7px 34px;
+      font-size: 12.5px;
+      color: var(--text-main);
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .search-box input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-tertiary);
+      pointer-events: none;
+    }
+
+    /* Modern Table */
+    .table-container.card {
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+
     .table-responsive {
       overflow-x: auto;
-      border-radius: var(--radius-lg);
     }
 
     table {
@@ -493,46 +566,70 @@
       font-size: 12px;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       color: var(--text-muted);
-      padding: 16px 20px;
-      background: rgba(255, 255, 255, 0.02);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 20px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
     }
 
     td {
-      padding: 18px 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      font-size: 14px;
+      padding: 16px 20px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 13.5px;
       vertical-align: middle;
+      color: var(--text-main);
     }
 
     tbody tr {
-      transition: background-color 0.2s ease;
+      transition: background-color 0.15s ease;
     }
 
     tbody tr:hover {
-      background-color: rgba(255, 255, 255, 0.03);
+      background-color: #f8fafc;
     }
 
-    .room-badge {
-      display: inline-flex;
-      align-items: baseline;
-      gap: 8px;
+    tbody tr:last-child td {
+      border-bottom: none;
     }
 
-    .room-code-num {
+    .room-code-tag {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 700;
-      color: #fff;
-      letter-spacing: 0.04em;
+      color: var(--text-main);
+      letter-spacing: 0.02em;
     }
 
     .meeting-id-sub {
       font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
-      color: #64748b;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+    }
+
+    .provider-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .provider-pill.livekit {
+      background: var(--livekit-bg);
+      color: var(--livekit-color);
+      border: 1px solid var(--livekit-border);
+    }
+
+    .provider-pill.chime {
+      background: var(--chime-bg);
+      color: var(--chime-color);
+      border: 1px solid var(--chime-border);
     }
 
     .attendee-chips {
@@ -546,19 +643,26 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(99, 102, 241, 0.12);
-      border: 1px solid rgba(99, 102, 241, 0.25);
-      padding: 4px 10px;
+      background: var(--surface-subtle);
+      border: 1px solid var(--border-subtle);
+      padding: 3px 9px;
       border-radius: var(--radius-pill);
       font-size: 12px;
-      color: #c7d2fe;
+      color: var(--text-main);
+      font-weight: 500;
     }
 
-    .user-chip-dot {
-      width: 6px;
-      height: 6px;
+    .user-chip-avatar {
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
-      background: #818cf8;
+      background: #c7d2fe;
+      color: #3730a3;
+      font-size: 9px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .action-cell {
@@ -568,32 +672,66 @@
     }
 
     /* Event Console */
+    .console-card.card {
+      padding: 18px 24px;
+    }
+
+    .console-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 6px;
+    }
+
+    .filter-tab {
+      padding: 4px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border-subtle);
+      background: #ffffff;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .filter-tab.active {
+      background: var(--text-main);
+      color: #ffffff;
+      border-color: var(--text-main);
+    }
+
     .console-box {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 12.5px;
+      font-size: 12px;
       line-height: 1.6;
-      max-height: 300px;
+      max-height: 280px;
       overflow-y: auto;
-      padding: 16px 20px;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 18px;
+      background: #f8fafc;
+      border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
     }
 
     .console-box::-webkit-scrollbar {
-      width: 6px;
+      width: 5px;
     }
     .console-box::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 3px;
+      background: #cbd5e1;
+      border-radius: 4px;
     }
 
     .event-line {
       display: flex;
       align-items: baseline;
       gap: 12px;
-      padding: 6px 0;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      padding: 5px 0;
+      border-bottom: 1px solid #edf2f7;
     }
 
     .event-line:last-child {
@@ -601,28 +739,97 @@
     }
 
     .event-ts {
-      color: #64748b;
+      color: var(--text-tertiary);
       font-size: 11px;
       flex-shrink: 0;
     }
 
     .event-tag {
-      padding: 1px 8px;
+      padding: 2px 7px;
       border-radius: 4px;
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 600;
       flex-shrink: 0;
     }
 
-    .tag-room-create { background: rgba(16, 185, 129, 0.15); color: #34d399; }
-    .tag-attendee-join { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
-    .tag-room-close, .tag-room-close-force { background: rgba(244, 63, 94, 0.15); color: #fb7185; }
-    .tag-room-close-idle { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
-    .tag-default { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+    .tag-room-create, .tag-create { background: var(--emerald-bg); color: var(--emerald-color); border: 1px solid var(--emerald-border); }
+    .tag-attendee-join, .tag-join { background: var(--primary-subtle); color: var(--primary); border: 1px solid var(--primary-border); }
+    .tag-leave { background: var(--amber-bg); color: var(--amber-color); border: 1px solid var(--amber-border); }
+    .tag-delete, .tag-room-close, .tag-room-close-force { background: var(--rose-bg); color: var(--rose-color); border: 1px solid var(--rose-border); }
+    .tag-default { background: var(--surface-subtle); color: var(--text-muted); border: 1px solid var(--border-subtle); }
 
     .event-msg {
-      color: #e2e8f0;
+      color: var(--text-main);
       word-break: break-all;
+    }
+
+    /* Modal Confirmation Dialog */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 440px;
+      background: #ffffff;
+      border-radius: var(--radius-xl);
+      padding: 28px;
+      box-shadow: var(--shadow-modal);
+      border: 1px solid var(--border-subtle);
+      transform: scale(0.96);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-overlay.open .modal-box {
+      transform: scale(1);
+    }
+
+    .modal-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--rose-bg);
+      color: var(--rose-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .modal-desc {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
     }
 
     /* Toast Notification */
@@ -639,50 +846,61 @@
 
     .toast {
       pointer-events: auto;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      background: #ffffff;
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-modal);
       border-radius: var(--radius-pill);
-      padding: 12px 22px;
-      color: #fff;
-      font-size: 14px;
+      padding: 10px 18px;
+      color: var(--text-main);
+      font-size: 13.5px;
       font-weight: 500;
       display: flex;
       align-items: center;
       gap: 10px;
-      transform: translateX(100px);
+      transform: translateY(-16px);
       opacity: 0;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .toast.show {
-      transform: translateX(0);
+      transform: translateY(0);
       opacity: 1;
     }
 
-    .toast.success { border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; }
-    .toast.error { border-color: rgba(244, 63, 94, 0.4); color: #fda4af; }
+    .toast.success { border-color: var(--emerald-border); color: #065f46; background: #f0fdf4; }
+    .toast.error { border-color: var(--rose-border); color: #9f1239; background: #fff1f2; }
 
     /* Empty state */
     .empty-state {
       text-align: center;
       padding: 48px 20px;
-      color: var(--text-muted);
+      color: var(--text-tertiary);
     }
+
     .empty-state svg {
-      width: 48px;
-      height: 48px;
-      stroke: #475569;
+      width: 44px;
+      height: 44px;
+      stroke: #cbd5e1;
       margin-bottom: 12px;
     }
 
+    .empty-state p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
     @media (max-width: 768px) {
-      header {
+      header.card {
         flex-direction: column;
         align-items: flex-start;
-        gap: 16px;
+        gap: 14px;
       }
       .header-actions {
         width: 100%;
@@ -692,38 +910,58 @@
         flex-direction: column;
         align-items: stretch;
       }
-      .provider-choice {
+      .provider-switcher {
         width: 100%;
       }
-      .provider-btn {
+      .provider-opt {
         flex: 1;
-        min-width: 0;
+        justify-content: center;
       }
-      .toolbar {
+      .toolbar.card {
         flex-direction: column;
         align-items: stretch;
       }
       .create-group {
         flex-direction: column;
+        max-width: 100%;
+      }
+      .create-group .input-field,
+      .create-group .btn {
+        width: 100%;
+      }
+      .stats-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
 </head>
 <body>
-  <!-- Ambient background glow elements -->
-  <div class="ambient-glow glow-1"></div>
-  <div class="ambient-glow glow-2"></div>
-  <div class="ambient-glow glow-3"></div>
-
   <div id="toast-container"></div>
+
+  <!-- Custom Confirmation Modal -->
+  <div class="modal-overlay" id="confirm-modal">
+    <div class="modal-box">
+      <div class="modal-icon">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+      </div>
+      <h3 class="modal-title" id="modal-title">确认强制关闭房间？</h3>
+      <p class="modal-desc" id="modal-desc">此操作会立即断开所有在线成员连接，销毁云端推拉流通道并停止计费。</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick="closeConfirmModal()">取消</button>
+        <button class="btn btn-primary btn-sm" style="background: var(--rose-color);" id="modal-confirm-btn">确认关闭</button>
+      </div>
+    </div>
+  </div>
 
   <div class="container">
     <!-- Header -->
-    <header class="glass">
+    <header class="card">
       <div class="brand">
         <div class="brand-logo">
           <svg viewBox="0 0 24 24">
-            <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
         <div class="brand-info">
@@ -736,60 +974,72 @@
       </div>
       <div class="header-actions">
         <div class="region-chip" id="region-tags">Region: us-east-1 / ap-southeast-1</div>
-        <button class="btn btn-glass btn-sm" onclick="refresh()" id="refresh-btn">
+        <button class="btn btn-subtle btn-sm" onclick="refresh()" id="refresh-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
           刷新
         </button>
       </div>
     </header>
 
-    <!-- Server-side Provider Switch -->
-    <div class="glass provider-panel">
+    <!-- Provider Switcher -->
+    <div class="card provider-panel">
       <div class="provider-panel-info">
-        <h2>新房间媒体 Provider</h2>
-        <p>仅影响之后创建的新房间；已有房间始终沿用创建时绑定的 Provider。</p>
+        <div class="panel-badge">Media Provider Routing</div>
+        <h2>新房间媒体引擎调度</h2>
+        <p>控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。</p>
       </div>
-      <div class="provider-choice">
-        <button id="provider-livekit" class="btn provider-btn" onclick="switchProvider('livekit')">
-          <span class="provider-dot"></span>
-          LiveKit
+      <div class="provider-switcher">
+        <button id="provider-livekit" class="provider-opt" onclick="switchProvider('livekit')">
+          <span class="opt-dot"></span>
+          LiveKit WebRTC
         </button>
-        <button id="provider-chime" class="btn provider-btn" onclick="switchProvider('chime')">
-          <span class="provider-dot"></span>
-          AWS Chime
+        <button id="provider-chime" class="provider-opt" onclick="switchProvider('chime')">
+          <span class="opt-dot"></span>
+          Amazon Chime SDK
         </button>
       </div>
     </div>
 
     <!-- KPI Metric Cards -->
     <div class="stats-grid">
-      <div class="glass stat-card" style="--stat-accent: linear-gradient(90deg, #06b6d4, #3b82f6); --stat-color: #06b6d4;">
+      <div class="stat-card" style="--stat-bg: #ecfdf5; --stat-color: #059669;">
         <div class="stat-header">
-          <span class="stat-title">活跃房间数</span>
+          <span class="stat-title">活跃房间总数</span>
           <div class="stat-icon">
-            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
           </div>
         </div>
         <div class="stat-value" id="c-rooms">–</div>
-        <div class="stat-subtitle">当前正在推流或保持心跳的房间</div>
+        <div class="stat-subtitle">当前维持心跳连接中的会议室</div>
       </div>
 
-      <div class="glass stat-card" style="--stat-accent: linear-gradient(90deg, #8b5cf6, #d946ef); --stat-color: #a855f7;">
+      <div class="stat-card" style="--stat-bg: #eef2ff; --stat-color: #4f46e5;">
         <div class="stat-header">
-          <span class="stat-title">加入人次（累计）</span>
+          <span class="stat-title">当前参会人次</span>
           <div class="stat-icon">
-            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
           </div>
         </div>
         <div class="stat-value" id="c-att">–</div>
-        <div class="stat-subtitle">当前服务端签发的参与者记录</div>
+        <div class="stat-subtitle">已签发且在线的流媒体参与者</div>
       </div>
 
-      <div class="glass stat-card" style="--stat-accent: linear-gradient(90deg, #10b981, #14b8a6); --stat-color: #10b981;">
+      <div class="stat-card" style="--stat-bg: #f0f9ff; --stat-color: #0284c7;">
         <div class="stat-header">
-          <span class="stat-title">后端运行时间</span>
+          <span class="stat-title">默认接入通道</span>
           <div class="stat-icon">
-            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+        </div>
+        <div class="stat-value" id="c-provider" style="font-size: 26px;">–</div>
+        <div class="stat-subtitle" id="c-provider-sub">随控制台无缝切流</div>
+      </div>
+
+      <div class="stat-card" style="--stat-bg: #fdf2f8; --stat-color: #db2777;">
+        <div class="stat-header">
+          <span class="stat-title">服务持续运行</span>
+          <div class="stat-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           </div>
         </div>
         <div class="stat-value" id="c-up">–</div>
@@ -798,71 +1048,89 @@
     </div>
 
     <!-- Quick Action Bar -->
-    <div class="glass toolbar">
+    <div class="card toolbar">
       <div class="create-group">
-        <input id="new-code" class="input-glass" placeholder="房间号（4-12位数字/字母，不填则系统自动分配）" autocomplete="off" />
+        <input id="new-code" class="input-field" placeholder="房间号（4-12位数字/字母，留空系统随机分配）" autocomplete="off" />
+        <button class="btn btn-secondary" onclick="generateRandomCode()" title="随机生成一个房间号">
+          🎲 随机
+        </button>
         <button class="btn btn-primary" onclick="createRoom()">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
           创建房间
         </button>
       </div>
-      <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
-        <span>5 秒自动同步</span>
-        <div style="width: 8px; height: 8px; border-radius: 50%; background: #6366f1;"></div>
+      <div class="sync-status">
+        <span class="sync-dot"></span>
+        <span>5 秒自动同步监控状态</span>
       </div>
     </div>
 
-    <!-- Room List Table -->
-    <div class="section-title-bar">
+    <!-- Room List Section -->
+    <div class="section-header">
       <div class="section-title">
-        <span>实时房间列表</span>
+        <span>实时房间会话</span>
         <span class="badge-count" id="room-badge-count">0</span>
       </div>
-    </div>
-
-    <div class="glass table-responsive glass-card" style="padding: 0; margin-bottom: 32px;">
-      <table>
-        <thead>
-          <tr>
-            <th>房间号 / 标识</th>
-            <th>Provider</th>
-            <th>在线人数</th>
-            <th>参会成员</th>
-            <th>空闲时长</th>
-            <th>创建时间</th>
-            <th>管理操作</th>
-          </tr>
-        </thead>
-        <tbody id="rooms">
-          <tr>
-            <td colspan="7">
-              <div class="empty-state">
-                <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-                <p>当前暂无活跃房间，可通过上方快速创建</p>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Realtime Events Console -->
-    <div class="section-title-bar">
-      <div class="section-title">
-        <span>实时系统事件日志</span>
+      <div class="search-box">
+        <svg class="search-icon" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" id="room-search" placeholder="搜索房间号 / 成员..." oninput="renderRoomsTable()" />
       </div>
-      <div style="font-size: 12px; color: var(--text-muted);">保留最近 100 条</div>
     </div>
 
-    <div class="glass glass-card" style="padding: 16px;">
+    <div class="card table-container">
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>房间号 / 标识</th>
+              <th>通道 Provider</th>
+              <th>在线人数</th>
+              <th>参会成员</th>
+              <th>心跳 / 状态</th>
+              <th>创建时间</th>
+              <th>管理操作</th>
+            </tr>
+          </thead>
+          <tbody id="rooms">
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                  <p>当前暂无活跃房间，可通过上方快速创建</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Realtime Event Logs -->
+    <div class="section-header">
+      <div class="section-title">
+        <span>系统事件审计流</span>
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-tab active" onclick="setEventFilter('all', this)">全部</button>
+        <button class="filter-tab" onclick="setEventFilter('create', this)">创建</button>
+        <button class="filter-tab" onclick="setEventFilter('join', this)">加入</button>
+        <button class="filter-tab" onclick="setEventFilter('leave', this)">离开</button>
+        <button class="filter-tab" onclick="setEventFilter('delete', this)">关闭</button>
+      </div>
+    </div>
+
+    <div class="card console-card">
       <div class="console-box" id="events">
-        <div class="event-line"><span class="event-msg" style="color: #64748b;">日志初始化中...</span></div>
+        <div class="event-line"><span class="event-msg" style="color: var(--text-tertiary);">日志数据初始化中...</span></div>
       </div>
     </div>
   </div>
 
   <script>
     let timer = null;
+    let cachedRooms = [];
+    let cachedEvents = [];
+    let currentEventFilter = 'all';
 
     function toast(text, type = 'info') {
       const c = document.getElementById('toast-container');
@@ -884,20 +1152,6 @@
       return d;
     }
 
-    async function switchProvider(provider) {
-      try {
-        const d = await api('/api/provider', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ provider })
-        });
-        await refresh();
-        toast(`新房间已切换到 <b>${d.activeProvider === 'livekit' ? 'LiveKit' : 'AWS Chime'}</b>`, 'success');
-      } catch (e) {
-        toast('Provider 切换失败: ' + e.message, 'error');
-      }
-    }
-
     function esc(s) {
       return String(s ?? '').replace(/[&<>"]/g, c => ({
         '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'
@@ -914,15 +1168,157 @@
       }
     }
 
+    function generateRandomCode() {
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      document.getElementById('new-code').value = code;
+    }
+
+    async function switchProvider(provider) {
+      try {
+        const d = await api('/api/provider', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider })
+        });
+        await refresh();
+        const label = d.activeProvider === 'livekit' ? 'LiveKit WebRTC' : 'AWS Chime SDK';
+        toast(`新房间媒体通道已切换为 <b>${label}</b>`, 'success');
+      } catch (e) {
+        toast('Provider 切换失败: ' + e.message, 'error');
+      }
+    }
+
     function eventTagClass(type) {
       switch (type) {
-        case 'room-create': return 'tag-room-create';
-        case 'attendee-join': return 'tag-attendee-join';
+        case 'room-create':
+        case 'create':
+          return 'tag-room-create';
+        case 'attendee-join':
+        case 'join':
+          return 'tag-attendee-join';
+        case 'leave':
+          return 'tag-leave';
+        case 'delete':
         case 'room-close':
-        case 'room-close-force': return 'tag-room-close';
-        case 'room-close-idle': return 'tag-room-close-idle';
-        default: return 'tag-default';
+        case 'room-close-force':
+          return 'tag-delete';
+        default:
+          return 'tag-default';
       }
+    }
+
+    function setEventFilter(category, btn) {
+      currentEventFilter = category;
+      document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderEvents();
+    }
+
+    function renderEvents() {
+      const ev = document.getElementById('events');
+      let filtered = cachedEvents;
+      if (currentEventFilter !== 'all') {
+        filtered = cachedEvents.filter(e => {
+          const type = (e.type || '').toLowerCase();
+          return type.includes(currentEventFilter);
+        });
+      }
+
+      if (filtered && filtered.length) {
+        ev.innerHTML = filtered.map(e => `
+          <div class="event-line">
+            <span class="event-ts">${formatTime(e.ts)}</span>
+            <span class="event-tag ${eventTagClass(e.type)}">${esc(e.type)}</span>
+            <span class="event-msg">${esc(e.message)}</span>
+          </div>
+        `).join('');
+      } else {
+        ev.innerHTML = '<div class="event-line"><span class="event-msg" style="color: var(--text-tertiary);">暂无对应事件流记录</span></div>';
+      }
+    }
+
+    function renderRoomsTable() {
+      const query = (document.getElementById('room-search')?.value || '').trim().toLowerCase();
+      const tb = document.getElementById('rooms');
+
+      let list = cachedRooms;
+      if (query) {
+        list = list.filter(r => {
+          if (r.roomCode && r.roomCode.toLowerCase().includes(query)) return true;
+          if (r.provider && r.provider.toLowerCase().includes(query)) return true;
+          if (r.attendees && r.attendees.some(a => (a.externalUserId || '').toLowerCase().includes(query))) return true;
+          return false;
+        });
+      }
+
+      if (!list || !list.length) {
+        tb.innerHTML = `<tr><td colspan="7">
+          <div class="empty-state">
+            <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            <p>${query ? '没有找到符合条件的房间' : '当前暂无活跃房间，可通过上方快速创建'}</p>
+          </div>
+        </td></tr>`;
+        return;
+      }
+
+      tb.innerHTML = list.map(r => {
+        const isLiveKit = r.provider === 'livekit';
+        const idleText = r.idleSec > 0 ? `${r.idleSec}s 前心跳` : '🟢 活跃在线';
+        const attendeesHtml = r.attendees && r.attendees.length
+          ? `<div class="attendee-chips">` + r.attendees.map(a => {
+              const name = a.externalUserId || 'Guest';
+              const initial = name.charAt(0).toUpperCase();
+              return `
+                <span class="user-chip" title="加入时间: ${esc(a.joinedAt)}">
+                  <span class="user-chip-avatar">${esc(initial)}</span>
+                  ${esc(name)}
+                </span>
+              `;
+            }).join('') + `</div>`
+          : `<span style="color: var(--text-tertiary); font-size: 13px;">无在线成员</span>`;
+
+        return `<tr>
+          <td>
+            <div class="room-code-tag">${esc(r.roomCode)}</div>
+            <div class="meeting-id-sub">${esc((r.meetingId || '').slice(0, 18))}${(r.meetingId || '').length > 18 ? '…' : ''}</div>
+          </td>
+          <td>
+            <span class="provider-pill ${isLiveKit ? 'livekit' : 'chime'}">
+              ${isLiveKit ? 'LiveKit' : 'AWS Chime'}
+            </span>
+          </td>
+          <td>
+            <span style="font-weight: 700; font-size: 15px; color: ${r.attendeeCount > 0 ? 'var(--emerald-color)' : 'var(--text-tertiary)'}">
+              ${r.attendeeCount}
+            </span>
+          </td>
+          <td>${attendeesHtml}</td>
+          <td>
+            <span style="font-size: 13px; color: ${r.idleSec > 60 ? 'var(--amber-color)' : 'var(--text-muted)'};">
+              ${idleText}
+            </span>
+          </td>
+          <td style="font-size: 13px; color: var(--text-tertiary);">
+            ${formatTime(r.createdAt)}
+          </td>
+          <td>
+            <div class="action-cell">
+              <button class="btn btn-subtle btn-sm" onclick="copyRoom('${esc(r.roomCode)}')">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                复制房号
+              </button>
+              ${r.shareLink ? `
+              <button class="btn btn-subtle btn-sm" onclick="copyLink('${esc(r.shareLink)}')">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                分享链接
+              </button>` : ''}
+              <button class="btn btn-danger-subtle" onclick="promptCloseRoom('${esc(r.roomCode)}')">
+                关闭
+              </button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
     }
 
     async function refresh() {
@@ -930,20 +1326,28 @@
       refreshBtn.style.opacity = '0.6';
       try {
         const d = await api('/api/overview');
+        const isLiveKit = d.activeProvider === 'livekit';
         document.getElementById('header-meta').textContent =
-          `当前新房间：${d.activeProvider === 'livekit' ? 'LiveKit' : 'AWS Chime'}`;
+          `当前通道：${isLiveKit ? 'LiveKit' : 'AWS Chime'}`;
         document.getElementById('region-tags').textContent =
           `${d.controlRegion} / ${d.mediaRegion}`;
+
         const livekitButton = document.getElementById('provider-livekit');
         const chimeButton = document.getElementById('provider-chime');
-        livekitButton.classList.toggle('active', d.activeProvider === 'livekit');
-        chimeButton.classList.toggle('active', d.activeProvider === 'chime');
+        livekitButton.classList.toggle('active', isLiveKit);
+        livekitButton.classList.toggle('livekit-active', isLiveKit);
+        chimeButton.classList.toggle('active', !isLiveKit);
+        chimeButton.classList.toggle('chime-active', !isLiveKit);
+
         livekitButton.disabled = !d.providers?.livekit?.configured;
         livekitButton.title = d.providers?.livekit?.configured
           ? '新房间使用 LiveKit'
-          : 'LiveKit 未配置：需要 LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET';
+          : 'LiveKit 未配置：需要环境变量 LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET';
+
         document.getElementById('c-rooms').textContent = d.roomCount;
         document.getElementById('c-att').textContent = d.attendeeCount;
+        document.getElementById('c-provider').textContent = isLiveKit ? 'LiveKit' : 'AWS Chime';
+        document.getElementById('c-provider-sub').textContent = isLiveKit ? 'WebRTC 原生流集群' : 'Amazon Chime 媒体面';
         document.getElementById('room-badge-count').textContent = d.roomCount;
 
         const mins = Math.floor(d.uptimeSec / 60);
@@ -953,75 +1357,11 @@
         document.getElementById('c-started').textContent =
           `启动于 ${formatTime(d.startedAt)}`;
 
-        const tb = document.getElementById('rooms');
-        if (!d.rooms || !d.rooms.length) {
-          tb.innerHTML = `<tr><td colspan="7">
-            <div class="empty-state">
-              <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-              <p>当前暂无活跃房间，可通过上方快速创建</p>
-            </div>
-          </td></tr>`;
-        } else {
-          tb.innerHTML = d.rooms.map(r => {
-            const idleText = r.idleSec > 0 ? `${r.idleSec}s 前心跳` : '活跃中';
-            const attendeesHtml = r.attendees && r.attendees.length
-              ? `<div class="attendee-chips">` + r.attendees.map(a => `
-                  <span class="user-chip" title="加入时间: ${esc(a.joinedAt)}">
-                    <span class="user-chip-dot"></span>
-                    ${esc(a.externalUserId)}
-                  </span>
-                `).join('') + `</div>`
-              : `<span style="color: var(--text-muted); font-size: 13px;">无在线成员</span>`;
+        cachedRooms = d.rooms || [];
+        cachedEvents = d.events || [];
 
-            return `<tr>
-              <td>
-                <div class="room-badge">
-                  <span class="room-code-num">${esc(r.roomCode)}</span>
-                </div>
-                <div class="meeting-id-sub">${esc((r.meetingId || '').slice(0, 18))}${(r.meetingId || '').length > 18 ? '…' : ''}</div>
-              </td>
-              <td><span class="provider-chip">${r.provider === 'livekit' ? 'LiveKit' : 'AWS Chime'}</span></td>
-              <td>
-                <span style="font-weight: 700; font-size: 16px; color: ${r.attendeeCount > 0 ? '#34d399' : '#94a3b8'}">
-                  ${r.attendeeCount}
-                </span>
-              </td>
-              <td>${attendeesHtml}</td>
-              <td>
-                <span style="font-size: 13px; color: ${r.idleSec > 60 ? '#fbbf24' : '#94a3b8'};">
-                  ${idleText}
-                </span>
-              </td>
-              <td style="font-size: 13px; color: var(--text-muted);">
-                ${formatTime(r.createdAt)}
-              </td>
-              <td>
-                <div class="action-cell">
-                  <button class="btn btn-glass btn-sm" onclick="copyRoom('${esc(r.roomCode)}')">
-                    <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
-                    复制房号
-                  </button>
-                  <button class="btn btn-danger-glass" onclick="closeRoom('${esc(r.roomCode)}')">
-                    强制关闭
-                  </button>
-                </div>
-              </td>
-            </tr>`;
-          }).join('');
-        }
-
-        const ev = document.getElementById('events');
-        if (d.events && d.events.length) {
-          ev.innerHTML = d.events.map(e => `
-            <div class="event-line">
-              <span class="event-ts">${formatTime(e.ts)}</span>
-              <span class="event-tag ${eventTagClass(e.type)}">${esc(e.type)}</span>
-              <span class="event-msg">${esc(e.message)}</span>
-            </div>
-          `).join('');
-        } else {
-          ev.innerHTML = '<div class="event-line"><span class="event-msg" style="color: #64748b;">暂无事件记录</span></div>';
-        }
+        renderRoomsTable();
+        renderEvents();
       } catch (e) {
         toast('刷新数据失败: ' + e.message, 'error');
       } finally {
@@ -1046,8 +1386,25 @@
       }
     }
 
-    async function closeRoom(code) {
-      if (!confirm(`强制关闭房间 ${code}？\n此操作会立即断开所有在线成员连接并停止计费。`)) return;
+    let targetCloseRoomCode = null;
+
+    function promptCloseRoom(code) {
+      targetCloseRoomCode = code;
+      document.getElementById('modal-title').textContent = `强制关闭房间 ${code}？`;
+      document.getElementById('modal-desc').textContent = `确认关闭房间 ${code}？此操作将立即断开所有在线成员的音视频连接并清理云端会话。`;
+      document.getElementById('modal-confirm-btn').onclick = executeCloseRoom;
+      document.getElementById('confirm-modal').classList.add('open');
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirm-modal').classList.remove('open');
+      targetCloseRoomCode = null;
+    }
+
+    async function executeCloseRoom() {
+      if (!targetCloseRoomCode) return;
+      const code = targetCloseRoomCode;
+      closeConfirmModal();
       try {
         await api('/rooms/' + encodeURIComponent(code), { method: 'DELETE' });
         await refresh();
@@ -1062,6 +1419,14 @@
         toast(`已复制房间号 <b>${code}</b> 到剪贴板`, 'success');
       }).catch(() => {
         toast(`房间号: ${code}`);
+      });
+    }
+
+    function copyLink(link) {
+      navigator.clipboard.writeText(link).then(() => {
+        toast(`已复制入会深度链接到剪贴板`, 'success');
+      }).catch(() => {
+        toast(`链接: ${link}`);
       });
     }
 

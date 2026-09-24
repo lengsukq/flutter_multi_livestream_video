@@ -6,11 +6,11 @@ The repository now has three layers:
 Flutter application
        |
        v
-flutter_multi_livestream_video_core
+flutter_realtime_media_core
        |
-       +-- flutter_multi_livestream_video_livekit
+       +-- flutter_realtime_media_livekit
        |
-       +-- flutter_multi_livestream_video_chime
+       +-- flutter_realtime_media_chime
 ```
 
 Core contains no provider SDK dependency. Applications register the adapters

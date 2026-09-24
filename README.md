@@ -1,12 +1,82 @@
-# flutter_aws_chime
+# Flutter Realtime Media
 
 **English** | [简体中文](#简体中文)
 
-`flutter_aws_chime` is a Flutter client package for joining Amazon Chime SDK meetings from iOS and Android apps. It provides a Dart session API, typed meeting state and events, media controls, data messages, remote video and screen-share rendering, and an optional ready-to-use meeting view.
+Flutter Realtime Media is a provider-neutral Flutter media SDK architecture
+for real-time audio/video communication and one-to-many live sessions.
 
-The application backend creates the Chime meeting and attendee and returns short-lived join information. This package only connects the client to the meeting media session; it does not create AWS meetings or handle AWS long-term credentials.
+The Flutter application works against one Core API while the application backend
+decides which media provider a room uses. Provider-specific SDKs live in optional
+adapter packages, so applications can add or remove providers without coupling
+business UI to a specific vendor.
 
-## v3 platform support
+The repository currently supports **AWS Chime** and **LiveKit**. The original
+`flutter_aws_chime` v3 package remains available at the repository root for
+existing Chime-only applications and is kept backward compatible.
+
+## Packages
+
+| Package | Purpose | Status |
+| --- | --- | --- |
+| `flutter_realtime_media_core` | Provider-neutral session, capability, event, backend and rendering contracts | Implemented |
+| `flutter_realtime_media_livekit` | LiveKit RTC + host/viewer adapter | Implemented |
+| `flutter_realtime_media_chime` | AWS Chime adapter for Core | Implemented |
+| `flutter_aws_chime` | Existing standalone Chime v3 Flutter plugin | Maintained for compatibility |
+
+Provider SDKs are dependencies of their own adapters, never of Core.
+
+## Provider status
+
+| Provider | Real-time audio/video | One-to-many live | Status |
+| --- | --- | --- | --- |
+| AWS Chime | Yes | — | Implemented |
+| LiveKit | Yes | Yes, host/viewer | Implemented |
+| Agora | Planned | Planned | Future adapter |
+| Tencent TRTC | Planned | Planned | Future adapter |
+| Alibaba Cloud ARTC | Planned | Planned | Future adapter |
+| Amazon IVS | — | Planned | Future live adapter |
+
+See [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md) for the unified API and
+backend-selected provider flow.
+
+## Backend-selected provider flow
+
+The app sends room/user intent only. The backend returns the selected provider
+plus short-lived join credentials, and Core resolves the matching adapter.
+Long-lived provider credentials stay on the backend.
+
+```text
+Flutter app
+   │ room / user / role
+   ▼
+Application backend
+   │ selects provider
+   ├── LiveKit
+   ├── AWS Chime
+   └── future adapters
+   │
+   ▼
+Core → matching provider adapter
+```
+
+The included `demo-server` exposes provider selection in its server UI. The
+Flutter demo itself does not need a provider selector.
+
+---
+
+## Chime v3 compatibility package
+
+`flutter_aws_chime` is the original Flutter client package for joining Amazon
+Chime SDK meetings from iOS and Android apps. It provides a Dart session API,
+typed meeting state and events, media controls, data messages, remote video and
+screen-share rendering, and an optional ready-to-use meeting view.
+
+The application backend creates the Chime meeting and attendee and returns
+short-lived join information. The package connects the client to the meeting
+media session; it does not create AWS meetings or handle AWS long-term
+credentials.
+
+## Chime v3 platform support
 
 | Platform | Meeting support | Minimum / build requirement |
 | --- | --- | --- |
@@ -19,7 +89,7 @@ The application backend creates the Chime meeting and attendee and returns short
 
 Requires Flutter 3.47.0+ and Dart 3.12.0+. Android uses AGP 9 built-in Kotlin with a JVM 17 target. The iOS plugin uses Swift 5.0 and supports both CocoaPods and Swift Package Manager. For the Flutter 3.47 local-path SwiftPM checkout-name limitation, see [`DEVELOPMENT.md`](DEVELOPMENT.md). Desktop and Web are not declared as plugin platforms; meeting API calls there throw `ChimeException` with `ChimeErrorCode.unsupportedPlatform`.
 
-## Features
+## Chime v3 features
 
 - Join and leave an existing Chime SDK meeting.
 - Microphone mute/unmute, local camera start/stop, and front/back camera switching.
@@ -31,7 +101,7 @@ Requires Flutter 3.47.0+ and Dart 3.12.0+. Android uses AGP 9 built-in Kotlin wi
 
 Only one active Chime session is allowed at a time by the native implementation. Removing `ChimeMeetingView` does not release the meeting; the code that created the session owns its lifecycle and must call `leave()` or `dispose()`.
 
-## Installation
+## Chime-only installation
 
 After v3 is published, add it to your app:
 
@@ -276,11 +346,72 @@ for the broader roadmap.
 
 # 简体中文
 
-`flutter_aws_chime` 是面向 Flutter 应用开发者的 Amazon Chime SDK 客户端包，支持在 iOS 和 Android 应用中加入 Chime 会议。包提供 Dart 会话 API、类型化的会议状态与事件、音视频控制、数据消息、远端视频和屏幕共享画面渲染，也提供可选的 `ChimeMeetingView` 会议界面。
+Flutter Realtime Media 是一个面向 Flutter 的多 Provider 实时音视频 SDK
+架构，用于多人实时音视频通信和一对多直播。
 
-应用后端负责创建 Chime 会议和 attendee，并向客户端返回短期加入信息。本包只负责连接会议媒体会话；不创建 AWS 会议，也不处理 AWS 长期凭证。
+Flutter App 统一依赖 Core 接口，房间实际使用哪一家媒体服务由业务后端决定。
+各供应商 SDK 通过独立 Adapter 接入，因此业务 UI 不需要绑定 LiveKit、Chime
+或未来其他供应商的具体实现。
 
-## v3 平台支持
+当前仓库已经支持 **AWS Chime** 和 **LiveKit**。原有根目录
+`flutter_aws_chime` v3 包继续保留，供已有 Chime-only 项目兼容使用。
+
+## 包结构
+
+| 包 | 用途 | 状态 |
+| --- | --- | --- |
+| `flutter_realtime_media_core` | Provider 无关的会话、能力、事件、后端与渲染契约 | 已实现 |
+| `flutter_realtime_media_livekit` | LiveKit RTC + Host/Viewer Adapter | 已实现 |
+| `flutter_realtime_media_chime` | AWS Chime Core Adapter | 已实现 |
+| `flutter_aws_chime` | 原有独立 Chime v3 Flutter 插件 | 兼容维护 |
+
+Core 不直接依赖任何供应商 SDK，供应商依赖仅存在于各自 Adapter 中。
+
+## Provider 状态
+
+| Provider | 实时音视频 | 一对多直播 | 状态 |
+| --- | --- | --- | --- |
+| AWS Chime | 支持 | — | 已实现 |
+| LiveKit | 支持 | 支持 Host/Viewer | 已实现 |
+| Agora 声网 | 计划支持 | 计划支持 | 后续 Adapter |
+| 腾讯云 TRTC | 计划支持 | 计划支持 | 后续 Adapter |
+| 阿里云 ARTC | 计划支持 | 计划支持 | 后续 Adapter |
+| Amazon IVS | — | 计划支持 | 后续直播 Adapter |
+
+统一 API 与后端选择 Provider 的完整说明见
+[`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md)。
+
+## 后端选择 Provider
+
+App 只提交房间、用户和角色等业务意图。后端决定实际 Provider，并返回短期
+加入凭证；Core 自动解析对应 Adapter。供应商长期密钥始终只保存在服务端。
+
+```text
+Flutter App
+   │ 房间 / 用户 / 角色
+   ▼
+业务后端
+   │ 选择 Provider
+   ├── LiveKit
+   ├── AWS Chime
+   └── 后续 Adapter
+   │
+   ▼
+Core → 对应 Provider Adapter
+```
+
+---
+
+## Chime v3 兼容包
+
+`flutter_aws_chime` 是原有的 Amazon Chime SDK Flutter 客户端包，支持在
+iOS 和 Android 应用中加入 Chime 会议。它继续保留原有 Dart 会话 API、
+类型化状态与事件、音视频控制、数据消息、远端视频与屏幕共享画面渲染。
+
+应用后端负责创建 Chime meeting/attendee 并返回短期加入信息；
+`flutter_aws_chime` 不创建 AWS meeting，也不持有 AWS 长期凭证。
+
+## Chime v3 平台支持
 
 | 平台 | 会议支持 | 最低版本 / 构建要求 |
 | --- | --- | --- |
@@ -293,7 +424,7 @@ for the broader roadmap.
 
 本包要求 Flutter 3.47.0+、Dart 3.12.0+；Android 使用 AGP 9 Built-in Kotlin，JVM target 为 17；iOS 插件使用 Swift 5.0，同时支持 CocoaPods 与 Swift Package Manager。Flutter 3.47 本地 path 插件的 SwiftPM checkout 目录名限制见 [`DEVELOPMENT.md`](DEVELOPMENT.md)。桌面和 Web 未声明为插件支持平台；在这些平台调用会议 API 会抛出 `ChimeException`，错误码为 `ChimeErrorCode.unsupportedPlatform`。
 
-## 功能
+## Chime v3 功能
 
 - 加入和离开已由后端创建的 Chime SDK 会议。
 - 麦克风静音/取消静音、本地摄像头开关、前后摄像头切换。
@@ -305,7 +436,7 @@ for the broader roadmap.
 
 原生实现同一时间只允许一个活动 Chime 会话。移除 `ChimeMeetingView` 不会释放会议；创建会话的业务代码负责生命周期，必须调用 `leave()` 或 `dispose()`。
 
-## 安装
+## Chime-only 安装
 
 v3 发布后，在应用的 `pubspec.yaml` 添加：
 

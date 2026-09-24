@@ -7,9 +7,9 @@ use Core without choosing a provider per room.
 ## Package layout
 
 ```text
-flutter_multi_livestream_video_core
-  ├─ flutter_multi_livestream_video_livekit -> livekit_client
-  └─ flutter_multi_livestream_video_chime   -> flutter_aws_chime
+flutter_realtime_media_core
+  ├─ flutter_realtime_media_livekit -> livekit_client
+  └─ flutter_realtime_media_chime   -> flutter_aws_chime
 ```
 
 Provider SDKs never become dependencies of Core.

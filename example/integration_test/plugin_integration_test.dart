@@ -9,8 +9,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:flutter_multi_livestream_video_chime/flutter_multi_livestream_video_chime.dart';
-import 'package:flutter_multi_livestream_video_core/flutter_multi_livestream_video_core.dart';
+import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
+import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

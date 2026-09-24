@@ -7,7 +7,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_aws_chime_example/main.dart';
+import 'package:flutter_realtime_media_example/main.dart';
 
 void main() {
   testWidgets('Verify JoinScreen loads with tabs', (WidgetTester tester) async {

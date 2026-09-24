@@ -9,11 +9,11 @@ adding a provider-neutral media layer.
 application
     |
     v
-flutter_multi_livestream_video_core
+flutter_realtime_media_core
     |
-    +--> flutter_multi_livestream_video_livekit --> livekit_client
+    +--> flutter_realtime_media_livekit --> livekit_client
     |
-    +--> flutter_multi_livestream_video_chime --> flutter_aws_chime
+    +--> flutter_realtime_media_chime --> flutter_aws_chime
 ```
 
 The core package never imports a provider SDK. Adapter packages implement the

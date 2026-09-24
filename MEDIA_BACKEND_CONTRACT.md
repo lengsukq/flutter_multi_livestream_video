@@ -2,7 +2,7 @@
 
 This document defines the provider-neutral HTTP contract used by
 `MediaClient` / `MediaBackendClient` in
-[`flutter_multi_livestream_video_core`](packages/flutter_multi_livestream_video_core).
+[`flutter_realtime_media_core`](packages/flutter_realtime_media_core).
 It is language-neutral: a backend may be implemented in Node.js, Java, Python,
 Go, .NET, or any other stack.
 

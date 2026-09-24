@@ -210,24 +210,24 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.0"
-  flutter_multi_livestream_video_chime:
+  flutter_realtime_media_chime:
     dependency: "direct main"
     description:
-      path: "../packages/flutter_multi_livestream_video_chime"
+      path: "../packages/flutter_realtime_media_chime"
       relative: true
     source: path
     version: "0.1.0"
-  flutter_multi_livestream_video_core:
+  flutter_realtime_media_core:
     dependency: "direct main"
     description:
-      path: "../packages/flutter_multi_livestream_video_core"
+      path: "../packages/flutter_realtime_media_core"
       relative: true
     source: path
     version: "0.1.0"
-  flutter_multi_livestream_video_livekit:
+  flutter_realtime_media_livekit:
     dependency: "direct main"
     description:
-      path: "../packages/flutter_multi_livestream_video_livekit"
+      path: "../packages/flutter_realtime_media_livekit"
       relative: true
     source: path
     version: "0.1.0"

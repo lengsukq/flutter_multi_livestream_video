@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter_multi_livestream_video_core/flutter_multi_livestream_video_core.dart';
-import 'package:flutter_multi_livestream_video_livekit/flutter_multi_livestream_video_livekit.dart';
+import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
+import 'package:flutter_realtime_media_livekit/flutter_realtime_media_livekit.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 

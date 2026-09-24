@@ -1,5 +1,5 @@
-name: flutter_aws_chime_example
-description: Demonstrates how to use the flutter_aws_chime plugin.
+name: flutter_realtime_media_example
+description: Demonstrates the provider-neutral Flutter Realtime Media SDK.
 version: 1.0.0+1
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -18,12 +18,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_multi_livestream_video_core:
-    path: ../packages/flutter_multi_livestream_video_core
-  flutter_multi_livestream_video_livekit:
-    path: ../packages/flutter_multi_livestream_video_livekit
-  flutter_multi_livestream_video_chime:
-    path: ../packages/flutter_multi_livestream_video_chime
+  flutter_realtime_media_core:
+    path: ../packages/flutter_realtime_media_core
+  flutter_realtime_media_livekit:
+    path: ../packages/flutter_realtime_media_livekit
+  flutter_realtime_media_chime:
+    path: ../packages/flutter_realtime_media_chime
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

@@ -18,13 +18,13 @@
 - 应用后端负责提供 LiveKit 服务地址和短期 participant token；本仓库不实现 token 签发、房间管理服务，也不保存服务端密钥。token 的 room、identity 和权限由签发端设置。
 - 同一时刻只允许一个媒体会话运行。切换 Chime/LiveKit 前须完整断开并释放当前会话。
 - 保持 `flutter_aws_chime` 包名。v3 已将 Chime API 重设计为 `ChimeMeetingSession`，不提供 v2 `MeetingModel` / `MeetingView` 兼容层。未来新增服务商无关 API 时，以 v3 会话为 Chime 适配器基础，不恢复已移除的 v2 接口。
-- 将供应商 SDK 依赖设为可选：新建 `flutter_multi_livestream_video_core` 公共核心包和 `flutter_multi_livestream_video_livekit` LiveKit 适配包；现有 `flutter_aws_chime` 保留原生 Chime 实现，并通过兼容适配层接入公共接口、重新导出公共类型。
+- 将供应商 SDK 依赖设为可选：新建 `flutter_realtime_media_core` 公共核心包和 `flutter_realtime_media_livekit` LiveKit 适配包；现有 `flutter_aws_chime` 保留原生 Chime 实现，并通过兼容适配层接入公共接口、重新导出公共类型。
 
 ## 架构与公共接口
 
 ### 核心包
 
-`flutter_multi_livestream_video_core` 不依赖任何供应商 RTC SDK，定义：
+`flutter_realtime_media_core` 不依赖任何供应商 RTC SDK，定义：
 
 - `MediaSession`：会话连接、断开、生命周期状态和事件流。
 - `InteractiveMediaSession`：实时会议的麦克风、摄像头、前后摄像头切换等控制。
@@ -36,8 +36,8 @@
 
 ### 适配包与兼容性
 
-- `flutter_multi_livestream_video_livekit` 依赖 LiveKit 官方 Flutter 客户端 SDK，将 LiveKit room、participant、track 和状态映射到核心接口。
-- `flutter_multi_livestream_video_chime` 已将现有 `flutter_aws_chime` v3 `ChimeMeetingSession` / 原生渲染桥适配到公共 Core；原 `flutter_aws_chime` API 保持兼容，不要求已有 Chime-only 应用迁移。
+- `flutter_realtime_media_livekit` 依赖 LiveKit 官方 Flutter 客户端 SDK，将 LiveKit room、participant、track 和状态映射到核心接口。
+- `flutter_realtime_media_chime` 已将现有 `flutter_aws_chime` v3 `ChimeMeetingSession` / 原生渲染桥适配到公共 Core；原 `flutter_aws_chime` API 保持兼容，不要求已有 Chime-only 应用迁移。
 - 每个新增供应商以后以独立可选适配包接入，避免 Chime-only 应用被迫解析 LiveKit、Agora 等 SDK 依赖。
 - 同一 `example/` Chime Live 应用已经同时接入 Chime 与 LiveKit Adapter，并通过 Android 构建、iOS Simulator 构建以及 LiveKit 双客户端信令/Data E2E；真设备媒体采集仍保留显式 E2E 开关验证。
 

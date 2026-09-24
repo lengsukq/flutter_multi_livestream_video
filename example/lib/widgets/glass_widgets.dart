@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-/// Reusable Glassmorphism Container with BackdropFilter and subtle borders.
+/// Reusable clean glass/card container with subtle border and elevation.
 class GlassContainer extends StatelessWidget {
   final Widget child;
   final double borderRadius;
@@ -16,9 +16,9 @@ class GlassContainer extends StatelessWidget {
   const GlassContainer({
     super.key,
     required this.child,
-    this.borderRadius = 20,
-    this.blur = 16,
-    this.opacity = 0.06,
+    this.borderRadius = 18,
+    this.blur = 12,
+    this.opacity = 0.95,
     this.padding,
     this.margin,
     this.borderColor,
@@ -34,14 +34,19 @@ class GlassContainer extends StatelessWidget {
         color: fillColor ?? Colors.white.withValues(alpha: opacity),
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(
-          color: borderColor ?? Colors.white.withValues(alpha: 0.14),
+          color: borderColor ?? const Color(0xFFE2E8F0),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.28),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: const Color(0xFF0F172A).withValues(alpha: 0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -73,7 +78,7 @@ class GlassContainer extends StatelessWidget {
   }
 }
 
-/// Ambient mesh glow background for elegant modern pages.
+/// Ambient soft light mesh background for clean white aesthetic.
 class AmbientBackground extends StatelessWidget {
   final Widget child;
 
@@ -82,12 +87,12 @@ class AmbientBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF090D16),
+      color: const Color(0xFFF8FAFC),
       child: Stack(
         children: [
-          // Top-left purple glow
+          // Top-left soft indigo ambient glow
           Positioned(
-            top: -120,
+            top: -100,
             left: -80,
             child: Container(
               width: 320,
@@ -96,16 +101,16 @@ class AmbientBackground extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF6366F1).withValues(alpha: 0.3),
-                    const Color(0xFF6366F1).withValues(alpha: 0),
+                    const Color(0xFFE0E7FF).withValues(alpha: 0.7),
+                    const Color(0xFFE0E7FF).withValues(alpha: 0),
                   ],
                 ),
               ),
             ),
           ),
-          // Bottom-right magenta glow
+          // Bottom-right soft sky ambient glow
           Positioned(
-            bottom: -100,
+            bottom: -80,
             right: -80,
             child: Container(
               width: 340,
@@ -114,17 +119,17 @@ class AmbientBackground extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFFD946EF).withValues(alpha: 0.25),
-                    const Color(0xFFD946EF).withValues(alpha: 0),
+                    const Color(0xFFE0F2FE).withValues(alpha: 0.6),
+                    const Color(0xFFE0F2FE).withValues(alpha: 0),
                   ],
                 ),
               ),
             ),
           ),
-          // Center cyan subtle ambient glow
+          // Center-left gentle lavender tint
           Positioned(
-            top: 280,
-            left: 100,
+            top: 260,
+            left: 20,
             child: Container(
               width: 260,
               height: 260,
@@ -132,8 +137,8 @@ class AmbientBackground extends StatelessWidget {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF06B6D4).withValues(alpha: 0.15),
-                    const Color(0xFF06B6D4).withValues(alpha: 0),
+                    const Color(0xFFEDE9FE).withValues(alpha: 0.45),
+                    const Color(0xFFEDE9FE).withValues(alpha: 0),
                   ],
                 ),
               ),
@@ -147,7 +152,7 @@ class AmbientBackground extends StatelessWidget {
   }
 }
 
-/// Glass Input Field with rounded pill styling and glowing focus
+/// Clean input field with rounded corners, subtle border, and high contrast.
 class GlassTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
@@ -155,6 +160,7 @@ class GlassTextField extends StatelessWidget {
   final IconData? prefixIcon;
   final TextInputType keyboardType;
   final TextCapitalization textCapitalization;
+  final ValueChanged<String>? onChanged;
 
   const GlassTextField({
     super.key,
@@ -164,16 +170,17 @@ class GlassTextField extends StatelessWidget {
     this.prefixIcon,
     this.keyboardType = TextInputType.text,
     this.textCapitalization = TextCapitalization.none,
+    this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.12),
+          color: const Color(0xFFE2E8F0),
           width: 1,
         ),
       ),
@@ -182,24 +189,26 @@ class GlassTextField extends StatelessWidget {
         controller: controller,
         keyboardType: keyboardType,
         textCapitalization: textCapitalization,
+        onChanged: onChanged,
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 15,
+          color: Color(0xFF0F172A),
+          fontSize: 14.5,
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(
-            color: Colors.white.withValues(alpha: 0.6),
+          labelStyle: const TextStyle(
+            color: Color(0xFF64748B),
             fontSize: 13,
+            fontWeight: FontWeight.w500,
           ),
           hintText: hintText,
-          hintStyle: TextStyle(
-            color: Colors.white.withValues(alpha: 0.3),
-            fontSize: 14,
+          hintStyle: const TextStyle(
+            color: Color(0xFF94A3B8),
+            fontSize: 13.5,
           ),
           prefixIcon: prefixIcon != null
-              ? Icon(prefixIcon, color: const Color(0xFF818CF8), size: 20)
+              ? Icon(prefixIcon, color: const Color(0xFF4F46E5), size: 19)
               : null,
           border: InputBorder.none,
           isDense: true,
@@ -210,7 +219,7 @@ class GlassTextField extends StatelessWidget {
   }
 }
 
-/// Modern Gradient Glass Button with soft glow
+/// Modern Primary Button with clean indigo gradient and crisp text.
 class GlassGradientButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Widget child;
@@ -229,31 +238,30 @@ class GlassGradientButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !isLoading;
     return Container(
-      height: 50,
+      height: 48,
       decoration: BoxDecoration(
         gradient: enabled
             ? const LinearGradient(
                 colors: [
+                  Color(0xFF4F46E5),
                   Color(0xFF6366F1),
-                  Color(0xFF8B5CF6),
-                  Color(0xFFD946EF),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               )
-            : LinearGradient(
+            : const LinearGradient(
                 colors: [
-                  const Color(0xFF6366F1).withValues(alpha: 0.4),
-                  const Color(0xFF8B5CF6).withValues(alpha: 0.4),
+                  Color(0xFFE2E8F0),
+                  Color(0xFFE2E8F0),
                 ],
               ),
-        borderRadius: BorderRadius.circular(25),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: enabled
             ? [
                 BoxShadow(
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.45),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
+                  color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
                 ),
               ]
             : [],
@@ -261,13 +269,13 @@ class GlassGradientButton extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(14),
           onTap: enabled ? onPressed : null,
           child: Center(
             child: isLoading
                 ? const SizedBox(
-                    width: 22,
-                    height: 22,
+                    width: 20,
+                    height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.2,
                       color: Colors.white,
@@ -277,14 +285,18 @@ class GlassGradientButton extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       if (icon != null) ...[
-                        Icon(icon, color: Colors.white, size: 20),
+                        Icon(
+                          icon,
+                          color: enabled ? Colors.white : const Color(0xFF94A3B8),
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                       ],
                       DefaultTextStyle(
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                        style: TextStyle(
+                          color: enabled ? Colors.white : const Color(0xFF94A3B8),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
                           letterSpacing: 0.2,
                         ),
                         child: child,
