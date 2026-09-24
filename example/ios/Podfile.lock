@@ -66,6 +66,23 @@ PODS:
     - Flutter
     - flutter_webrtc
     - WebRTC-SDK (= 150.7871.01)
+  - super_player (13.5.0):
+    - Flutter
+    - super_player/bare (= 13.5.0)
+  - super_player/bare (13.5.0):
+    - Flutter
+  - super_player/professional (13.5.0):
+    - Flutter
+    - TXLiteAVSDK_Professional
+  - tencent_rtc_sdk (0.0.1):
+    - Flutter
+    - super_player/professional
+    - TXCustomBeautyProcesserPlugin (= 1.0.2)
+    - TXLiteAVSDK_Professional (= 13.5.21355)
+  - TXCustomBeautyProcesserPlugin (1.0.2)
+  - TXLiteAVSDK_Professional (13.5.21355):
+    - TXLiteAVSDK_Professional/Professional (= 13.5.21355)
+  - TXLiteAVSDK_Professional/Professional (13.5.21355)
   - WebRTC-SDK (150.7871.01)
 
 DEPENDENCIES:
@@ -78,6 +95,8 @@ DEPENDENCIES:
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - iris_method_channel (from `.symlinks/plugins/iris_method_channel/ios`)
   - livekit_client (from `.symlinks/plugins/livekit_client/ios`)
+  - super_player (from `.symlinks/plugins/super_player/ios`)
+  - tencent_rtc_sdk (from `.symlinks/plugins/tencent_rtc_sdk/ios`)
 
 SPEC REPOS:
   trunk:
@@ -87,6 +106,8 @@ SPEC REPOS:
     - AmazonChimeSDK
     - AmazonChimeSDKMachineLearning
     - AmazonChimeSDKMedia
+    - TXCustomBeautyProcesserPlugin
+    - TXLiteAVSDK_Professional
     - WebRTC-SDK
 
 EXTERNAL SOURCES:
@@ -108,6 +129,10 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/iris_method_channel/ios"
   livekit_client:
     :path: ".symlinks/plugins/livekit_client/ios"
+  super_player:
+    :path: ".symlinks/plugins/super_player/ios"
+  tencent_rtc_sdk:
+    :path: ".symlinks/plugins/tencent_rtc_sdk/ios"
 
 SPEC CHECKSUMS:
   agora_rtc_engine: 2c4d8824b042f37d58cc334d5128cd87bc8915f5
@@ -125,6 +150,10 @@ SPEC CHECKSUMS:
   integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
   iris_method_channel: 7d661cf3259b3009ae423508470dbeb9374446ee
   livekit_client: 55f2f6afa597719985fa4913f6e889eb2b7eacd8
+  super_player: 5080d7232ba3c0536ae341e6980fc17bcc5cd47b
+  tencent_rtc_sdk: 3932e0b18093c31c0f605aa3a5890830fe9f9d1b
+  TXCustomBeautyProcesserPlugin: 099393b941cb40eda12b3a80bf6c0319957b1cfd
+  TXLiteAVSDK_Professional: 914aa2e59545c8cdff80ab70c1bc8191c683ecfc
   WebRTC-SDK: 7dc931c64c00c735a614382f1a59cf65019c3c17
 
 PODFILE CHECKSUM: 9c46fd01abff66081b39f5fa5767b3f1d0b11d76

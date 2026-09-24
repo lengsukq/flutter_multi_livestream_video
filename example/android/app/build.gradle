@@ -47,3 +47,11 @@ android {
 flutter {
     source '../..'
 }
+
+dependencies {
+    // Tencent's TRTC SDK pulls AndroidX VectorDrawable 1.0.0, whose two AARs
+    // declare the same manifest namespace. Keep them on the compatible 1.1.0
+    // releases so the example builds with the repository's AGP 9 toolchain.
+    implementation 'androidx.vectordrawable:vectordrawable:1.1.0'
+    implementation 'androidx.vectordrawable:vectordrawable-animated:1.1.0'
+}

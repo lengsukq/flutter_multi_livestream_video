@@ -8,6 +8,7 @@ import 'package:flutter_realtime_media_agora/flutter_realtime_media_agora.dart';
 import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_livekit/flutter_realtime_media_livekit.dart';
+import 'package:flutter_realtime_media_trtc/flutter_realtime_media_trtc.dart';
 
 import 'widgets/glass_widgets.dart';
 
@@ -29,12 +30,14 @@ final MediaRegistry _mediaRegistry = MediaRegistry([
   const AgoraSessionFactory(),
   const LiveKitSessionFactory(),
   ChimeSessionFactory(),
+  const TrtcSessionFactory(),
 ]);
 
 final Map<String, MediaTrackRenderer> _mediaRenderers = {
   'agora': const AgoraTrackRenderer(),
   'livekit': const LiveKitTrackRenderer(),
   'chime': const ChimeTrackRenderer(),
+  'trtc': const TrtcTrackRenderer(),
 };
 
 const String _defaultBackendUrl = String.fromEnvironment(
@@ -847,21 +850,25 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
     final providerLabel = switch (providerId) {
       'livekit' => 'LiveKit',
       'agora' => 'Agora',
+      'trtc' => 'Tencent TRTC',
       _ => 'Chime',
     };
     final providerBackground = switch (providerId) {
       'livekit' => const Color(0xFFF0F9FF),
       'agora' => const Color(0xFFF5F3FF),
+      'trtc' => const Color(0xFFFFF1F0),
       _ => const Color(0xFFFFF7ED),
     };
     final providerBorder = switch (providerId) {
       'livekit' => const Color(0xFFBAE6FD),
       'agora' => const Color(0xFFDDD6FE),
+      'trtc' => const Color(0xFFFECACA),
       _ => const Color(0xFFFED7AA),
     };
     final providerColor = switch (providerId) {
       'livekit' => const Color(0xFF0284C7),
       'agora' => const Color(0xFF7C3AED),
+      'trtc' => const Color(0xFFD94645),
       _ => const Color(0xFFEA580C),
     };
 

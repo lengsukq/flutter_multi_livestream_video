@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   buildAgoraRtcToken,
   normalizeAgoraTokenTtl,
-} from '../agora-token.mjs';
+} from '../agora-token.ts';
 
 test('Agora token TTL is bounded and has a safe default', () => {
   assert.equal(normalizeAgoraTokenTtl(undefined), 600);

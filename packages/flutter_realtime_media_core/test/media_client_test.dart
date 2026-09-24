@@ -33,6 +33,148 @@ void main() {
   });
 
   group('createRoomAndJoin', () {
+    test(
+      'refreshes credentials once for concurrent adapter requests',
+      () async {
+        final refreshResponse = Completer<MediaBackendTransportResponse>();
+        var refreshRequests = 0;
+        final client = clientFor((request) {
+          if (request.uri.path.endsWith('/credentials/refresh')) {
+            refreshRequests++;
+            return refreshResponse.future;
+          }
+          return jsonResponse(
+            liveKitJoinPayload(
+              provider: 'fake',
+              participantId: 'participant-1',
+              role: 'host',
+            ),
+          );
+        }, heartbeatInterval: Duration.zero);
+
+        final room = await client.createRoomAndJoin(
+          nickname: 'Host',
+          role: MediaRole.host,
+        );
+        final session = factory.createdSessions.single;
+        final current = MediaJoinInfo(
+          providerId: 'fake',
+          roomCode: room.roomCode,
+          participantId: room.participantId,
+          role: MediaRole.host,
+        );
+
+        final first = session.refreshCredentials(current);
+        final second = session.refreshCredentials(current);
+        await Future<void>.delayed(Duration.zero);
+        expect(refreshRequests, 1);
+        refreshResponse.complete(
+          jsonResponse(
+            liveKitJoinPayload(
+              provider: 'fake',
+              participantId: 'participant-1',
+              role: 'host',
+            ),
+          ),
+        );
+        final refreshed = await Future.wait([first, second]);
+
+        expect(refreshed, hasLength(2));
+        expect(refreshed.first.participantId, 'participant-1');
+        expect(identical(refreshed.first, refreshed.last), isTrue);
+        await room.dispose();
+        client.dispose();
+      },
+    );
+
+    test(
+      'rejects refreshed credentials that change participant identity',
+      () async {
+        final client = clientFor((request) {
+          final participantId =
+              request.uri.path.endsWith('/credentials/refresh')
+              ? 'different-participant'
+              : 'participant-1';
+          return jsonResponse(
+            liveKitJoinPayload(
+              provider: 'fake',
+              participantId: participantId,
+              role: 'host',
+            ),
+          );
+        }, heartbeatInterval: Duration.zero);
+        final room = await client.createRoomAndJoin(
+          nickname: 'Host',
+          role: MediaRole.host,
+        );
+        final current = MediaJoinInfo(
+          providerId: 'fake',
+          roomCode: room.roomCode,
+          participantId: room.participantId,
+          role: MediaRole.host,
+        );
+
+        await expectLater(
+          factory.createdSessions.single.refreshCredentials(current),
+          throwsA(
+            isA<MediaError>().having(
+              (error) => error.code,
+              'code',
+              MediaErrorCode.invalidJoinInfo,
+            ),
+          ),
+        );
+        await room.dispose();
+        client.dispose();
+      },
+    );
+
+    test(
+      'rejects refreshed credentials that change provider, room, or role',
+      () async {
+        final mismatches = <(String, Map<String, Object?>)>[
+          ('provider', liveKitJoinPayload(provider: 'other-provider')),
+          ('room', liveKitJoinPayload(provider: 'fake', roomCode: 'new-room')),
+          ('role', liveKitJoinPayload(provider: 'fake', role: 'participant')),
+        ];
+
+        for (final mismatch in mismatches) {
+          final client = clientFor((request) {
+            if (request.uri.path.endsWith('/credentials/refresh')) {
+              return jsonResponse(mismatch.$2);
+            }
+            return jsonResponse(
+              liveKitJoinPayload(provider: 'fake', role: 'host'),
+            );
+          }, heartbeatInterval: Duration.zero);
+          final room = await client.createRoomAndJoin(
+            nickname: 'Host',
+            role: MediaRole.host,
+          );
+          final current = MediaJoinInfo(
+            providerId: 'fake',
+            roomCode: room.roomCode,
+            participantId: room.participantId,
+            role: MediaRole.host,
+          );
+
+          await expectLater(
+            factory.createdSessions.last.refreshCredentials(current),
+            throwsA(
+              isA<MediaError>().having(
+                (error) => error.code,
+                'code',
+                MediaErrorCode.invalidJoinInfo,
+              ),
+            ),
+            reason: 'refresh response changed its ${mismatch.$1}',
+          );
+          await room.dispose();
+          client.dispose();
+        }
+      },
+    );
+
     test('preserves requested role when backend omits role', () async {
       final transport = FakeTransport(
         (_) => jsonResponse({

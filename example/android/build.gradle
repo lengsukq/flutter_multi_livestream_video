@@ -26,11 +26,11 @@ subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 subprojects { subproject ->
-    // Agora 6.6.4 and its iris_method_channel bridge still declare
-    // compileSdk 31 internally while their current AndroidX dependency graph
-    // requires API 34+. Keep this workaround scoped to the Agora plugin
-    // modules; minSdk/targetSdk are not changed.
-    if (subproject.name in ['agora_rtc_engine', 'iris_method_channel']) {
+    // Agora's bridge and Tencent's TRTC plugin declare compileSdk 31 even
+    // though their current AndroidX dependency graphs require API 34+. Keep
+    // this workaround scoped to the affected plugin modules; app minSdk and
+    // targetSdk are not changed.
+    if (subproject.name in ['agora_rtc_engine', 'iris_method_channel', 'tencent_rtc_sdk']) {
         subproject.afterEvaluate {
             subproject.android.compileSdkVersion 37
         }

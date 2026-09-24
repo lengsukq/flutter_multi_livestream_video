@@ -15,6 +15,8 @@ flutter_realtime_media_core
     |
     +--> flutter_realtime_media_agora --> agora_rtc_engine
     |
+    +--> flutter_realtime_media_trtc --> tencent_rtc_sdk
+    |
     +--> flutter_realtime_media_chime --> flutter_aws_chime
 ```
 
@@ -33,8 +35,11 @@ tracks, events and failures into stable core models.
    publishing methods and its backend-issued provider credential must deny
    media publishing.
 5. Heartbeat and leave-notification failures are backend-presence failures and
-   do not terminate otherwise healthy media.
-6. Demo servers and local LiveKit tooling are development/reference assets,
+do not terminate otherwise healthy media.
+6. TRTC and every other provider remain optional adapter dependencies; Core does
+   not select a default provider, and each application registers only the
+   providers it supports.
+7. Demo servers and local LiveKit tooling are development/reference assets,
    not runtime dependencies of published Flutter packages.
 
 ## Core responsibilities
@@ -79,9 +84,22 @@ npm start
 ```
 
 For Agora, add `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` to the same
-server environment. Open `http://127.0.0.1:3000/` and switch new rooms between
-LiveKit, Agora, and AWS Chime directly in the existing server UI. Flutter never
-sends a provider.
+server environment. For TRTC, set `TRTC_SDK_APP_ID` and
+`TRTC_SDK_SECRET_KEY`, then enable Advanced Permission Control in the Tencent
+RTC project. Open `http://127.0.0.1:3000/` and select a provider for new rooms
+in the reference server UI. Flutter never sends a provider; the backend returns
+the selected provider and only the matching registered adapter is resolved.
 Existing rooms keep their original room-to-provider binding, so switching the
 UI affects only rooms created afterwards.
 
+### Demo backend provider adapters
+
+The reference `demo-server` mirrors the Flutter adapter architecture. Its HTTP
+routes are provider-neutral and dispatch through a `ProviderRegistry`; each RTC
+implementation lives under `demo-server/providers/`. A shared `RoomDirectory`
+stores the room-code-to-provider binding and optional provider-native aliases.
+
+Adding another demo provider should normally require only a new provider module
+plus one registry registration. The room create/join/heartbeat/leave/close
+routes and dashboard provider switcher must not gain a new provider-specific
+branch. The dashboard consumes provider metadata returned by `/api/overview`.

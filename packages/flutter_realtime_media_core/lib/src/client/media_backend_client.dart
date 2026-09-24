@@ -92,6 +92,23 @@ class MediaBackendClient {
     return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
   }
 
+  /// Requests replacement provider credentials for an existing participant.
+  ///
+  /// The backend must preserve the room, provider, participant id, and role.
+  Future<MediaRoomJoinResponse> refreshCredentials({
+    required String roomCode,
+    required String participantId,
+    required MediaRole role,
+  }) async {
+    final code = _required(roomCode, 'roomCode');
+    final data =
+        await _post('/rooms/${Uri.encodeComponent(code)}/credentials/refresh', {
+          'participantId': _required(participantId, 'participantId'),
+          'role': role.wireName,
+        });
+    return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
+  }
+
   Future<void> heartbeat(String roomCode) async {
     final code = _required(roomCode, 'roomCode');
     await _post('/rooms/${Uri.encodeComponent(code)}/heartbeat', const {});

@@ -10,6 +10,8 @@ flutter_realtime_media_core
        |
        +-- flutter_realtime_media_agora
        |
+       +-- flutter_realtime_media_trtc
+       |
        +-- flutter_realtime_media_livekit
        |
        +-- flutter_realtime_media_chime
@@ -23,6 +25,7 @@ they want and then use one `MediaClient` API.
 ```dart
 final registry = MediaRegistry([
   const AgoraSessionFactory(),
+  const TrtcSessionFactory(),
   const LiveKitSessionFactory(),
   ChimeSessionFactory(),
 ]);
@@ -56,6 +59,11 @@ final room = await client.joinRoom(
 The backend returns `provider` in the join response. `MediaClient` uses that
 value internally to resolve the registered adapter; application business logic
 does not choose LiveKit/Agora/Chime.
+
+TRTC is available in the separate `flutter_realtime_media_trtc` package. Add
+and register it only in applications that need TRTC; Core itself has no vendor
+SDK dependency or default provider. The demo registers several optional adapters
+to demonstrate backend selection, but production apps can include any subset.
 
 Chime currently advertises `MediaRole.participant` only. Existing Chime
 meeting credentials are symmetric, so the adapter does not claim secure
@@ -98,6 +106,20 @@ Outgoing Chime screen share remains `unsupportedFeature`, matching the existing
 plugin. Existing `ChimeClient`, `ChimeMeetingSession`, `JoinInfo`, and
 `ChimeMeetingView` remain valid direct APIs.
 
+## Tencent TRTC adapter
+
+`TrtcSessionFactory` supports participant, host, and subscribe-only viewer
+sessions. Participant rooms use TRTC's video-call scene; host/viewer rooms use
+the live-streaming scene, and the reference backend rejects attempts to join a
+room with a role from the other scene. Host and participant can publish audio
+and video and send custom messages. Viewers cannot publish or send messages.
+Screen sharing and audio-device enumeration are not supported in this adapter.
+
+The backend signs short-lived UserSig and room-scoped PrivateMapKey credentials.
+Viewer keys have no media-publish rights. When an app uses the optional Core
+credential-refresh route, the adapter renews credentials before expiry and
+re-enters with the same room and participant identity.
+
 ## Unified local backend
 
 `demo-server` is the only application backend entry point. For local LiveKit
@@ -115,10 +137,11 @@ Default ports:
 - application backend/dashboard: `3000`;
 - local LiveKit server: `7880`.
 
-Set `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` on `demo-server` to enable
-Agora. Open `http://127.0.0.1:3000/` and switch LiveKit / Agora / AWS Chime
-directly in the existing server UI; the selection affects new rooms only. The Flutter app does
-not receive this configuration.
+Set `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` to enable Agora. Set
+`TRTC_SDK_APP_ID` and `TRTC_SDK_SECRET_KEY` to enable TRTC. Open
+`http://127.0.0.1:3000/` and select the provider for new rooms in the reference
+server UI; the selection affects new rooms only. The Flutter app does not
+receive signing secrets.
 
 For a simulator, use `http://127.0.0.1:3000`. For a physical phone, use the
 Mac's LAN address with port `3000`.
@@ -131,8 +154,8 @@ snapshot, and renderer abstractions.
 
 Provider API secrets never belong in Flutter. The Flutter app sends an optional
 application bearer token to your backend and receives only short-lived join
-credentials. LiveKit signing secrets, the Agora App Certificate, and AWS
-credentials remain server-side.
+credentials. LiveKit signing secrets, the Agora App Certificate, Tencent TRTC
+secret key, and AWS credentials remain server-side.
 
 The local scripts are development references, not production authentication,
 authorization, persistence, rate limiting, or deployment templates.

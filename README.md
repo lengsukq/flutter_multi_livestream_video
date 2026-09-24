@@ -10,7 +10,8 @@ decides which media provider a room uses. Provider-specific SDKs live in optiona
 adapter packages, so applications can add or remove providers without coupling
 business UI to a specific vendor.
 
-The repository currently supports **AWS Chime**, **LiveKit**, and **Agora**. The original
+The repository currently supports **AWS Chime**, **LiveKit**, **Agora**, and
+**Tencent TRTC**. The original
 `flutter_aws_chime` v3 package remains available at the repository root for
 existing Chime-only applications and is kept backward compatible.
 
@@ -22,9 +23,12 @@ existing Chime-only applications and is kept backward compatible.
 | `flutter_realtime_media_livekit` | LiveKit RTC + host/viewer adapter | Implemented |
 | `flutter_realtime_media_agora` | Agora RTC + host/viewer adapter | Implemented; real-service E2E optional |
 | `flutter_realtime_media_chime` | AWS Chime adapter for Core | Implemented |
+| `flutter_realtime_media_trtc` | Optional Tencent TRTC RTC + host/viewer adapter | Implemented; real-device E2E optional |
 | `flutter_aws_chime` | Existing standalone Chime v3 Flutter plugin | Maintained for compatibility |
 
-Provider SDKs are dependencies of their own adapters, never of Core.
+Provider SDKs are dependencies of their own adapters, never of Core. Applications
+add and register only the adapters they need. TRTC is not a Core default and does
+not change which provider the backend chooses for a room.
 
 ## Provider status
 
@@ -33,7 +37,7 @@ Provider SDKs are dependencies of their own adapters, never of Core.
 | AWS Chime | Yes | — | Implemented |
 | LiveKit | Yes | Yes, host/viewer | Implemented |
 | Agora | Yes | Yes, host/viewer | Adapter implemented |
-| Tencent TRTC | Planned | Planned | Future adapter |
+| Tencent TRTC | Yes | Yes, host/viewer | Optional adapter implemented |
 | Alibaba Cloud ARTC | Planned | Planned | Future adapter |
 | Amazon IVS | — | Planned | Future live adapter |
 
@@ -55,7 +59,7 @@ Application backend
    ├── LiveKit
    ├── Agora
    ├── AWS Chime
-   └── future adapters
+   └── Tencent TRTC (optional)
    │
    ▼
 Core → matching provider adapter
@@ -330,15 +334,15 @@ Create the session in the screen or controller that owns the call. Subscribe to 
 ## Roadmap
 
 The repository now includes an optional provider-neutral Core plus LiveKit,
-Agora, and AWS Chime adapters. The original `flutter_aws_chime` v3 API remains
+Agora, AWS Chime, and Tencent TRTC adapters. The original `flutter_aws_chime` v3 API remains
 available unchanged for Chime-only applications.
 
 | # | Item | Status |
 |---:|---|---|
 | 1 | Upgrade Flutter and AWS Chime SDK to the latest versions | Complete in 2.0.0 |
 | 2 | Support more APIs from the latest Chime SDK | Complete in 2.0.0 |
-| 3 | Add video/audio communication backends besides Chime | LiveKit and Agora implemented via optional adapters; TRTC/ARTC remain future work |
-| 4 | Add one-to-many livestreaming | LiveKit and Agora host/viewer implemented; IVS/TRTC/ARTC remain future work |
+| 3 | Add video/audio communication backends besides Chime | LiveKit, Agora, and TRTC implemented via optional adapters; ARTC remains future work |
+| 4 | Add one-to-many livestreaming | LiveKit, Agora, and TRTC host/viewer implemented; IVS/ARTC remain future work |
 
 See [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md) for the current
 multi-provider architecture and [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)
@@ -355,7 +359,7 @@ Flutter App 统一依赖 Core 接口，房间实际使用哪一家媒体服务�
 各供应商 SDK 通过独立 Adapter 接入，因此业务 UI 不需要绑定 LiveKit、Chime
 或未来其他供应商的具体实现。
 
-当前仓库已经支持 **AWS Chime**、**LiveKit** 和 **Agora**。原有根目录
+当前仓库已经支持 **AWS Chime**、**LiveKit**、**Agora** 和 **腾讯云 TRTC**。原有根目录
 `flutter_aws_chime` v3 包继续保留，供已有 Chime-only 项目兼容使用。
 
 ## 包结构
@@ -366,9 +370,11 @@ Flutter App 统一依赖 Core 接口，房间实际使用哪一家媒体服务�
 | `flutter_realtime_media_livekit` | LiveKit RTC + Host/Viewer Adapter | 已实现 |
 | `flutter_realtime_media_agora` | Agora RTC + Host/Viewer Adapter | 已实现；真实服务 E2E 可选 |
 | `flutter_realtime_media_chime` | AWS Chime Core Adapter | 已实现 |
+| `flutter_realtime_media_trtc` | 可选的腾讯云 TRTC RTC + Host/Viewer Adapter | 已实现；真实设备 E2E 可选 |
 | `flutter_aws_chime` | 原有独立 Chime v3 Flutter 插件 | 兼容维护 |
 
-Core 不直接依赖任何供应商 SDK，供应商依赖仅存在于各自 Adapter 中。
+Core 不直接依赖任何供应商 SDK，供应商依赖仅存在于各自 Adapter 中。应用只添加并注册
+自己要用的适配包；TRTC 不会成为 Core 默认 Provider，也不会改变后端按房间选择 Provider 的方式。
 
 ## Provider 状态
 
@@ -377,7 +383,7 @@ Core 不直接依赖任何供应商 SDK，供应商依赖仅存在于各自 Adap
 | AWS Chime | 支持 | — | 已实现 |
 | LiveKit | 支持 | 支持 Host/Viewer | 已实现 |
 | Agora 声网 | 支持 | 支持 Host/Viewer | Adapter 已实现 |
-| 腾讯云 TRTC | 计划支持 | 计划支持 | 后续 Adapter |
+| 腾讯云 TRTC | 支持 | 支持 Host/Viewer | 可选 Adapter 已实现 |
 | 阿里云 ARTC | 计划支持 | 计划支持 | 后续 Adapter |
 | Amazon IVS | — | 计划支持 | 后续直播 Adapter |
 
@@ -398,7 +404,7 @@ Flutter App
    ├── LiveKit
    ├── Agora
    ├── AWS Chime
-   └── 后续 Adapter
+   └── 腾讯云 TRTC（可选）
    │
    ▼
 Core → 对应 Provider Adapter
@@ -662,15 +668,15 @@ await session.dispose();
 
 ## 路线图
 
-当前仓库已经包含可选的 Provider-neutral Core，以及 LiveKit / Agora / AWS Chime
+当前仓库已经包含可选的 Provider-neutral Core，以及 LiveKit / Agora / AWS Chime / 腾讯云 TRTC
 适配包。原有 `flutter_aws_chime` v3 API 保持不变，纯 Chime 应用无需迁移。
 
 | # | 项目 | 状态 |
 |---:|---|---|
 | 1 | 升级 Flutter 和 AWS Chime SDK | Complete in 2.0.0 |
 | 2 | 支持更多新版 Chime SDK API | Complete in 2.0.0 |
-| 3 | 增加 Chime 以外的音视频通信后端 | LiveKit、Agora 已通过可选 Adapter 实现；TRTC/ARTC 为后续计划 |
-| 4 | 增加一对多直播 | LiveKit、Agora host/viewer 已实现；IVS/TRTC/ARTC 为后续计划 |
+| 3 | 增加 Chime 以外的音视频通信后端 | LiveKit、Agora、TRTC 已通过可选 Adapter 实现；ARTC 为后续计划 |
+| 4 | 增加一对多直播 | LiveKit、Agora、TRTC host/viewer 已实现；IVS/ARTC 为后续计划 |
 
 当前多 Provider 使用方式见 [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md)，
 更完整的后续路线见 [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)。

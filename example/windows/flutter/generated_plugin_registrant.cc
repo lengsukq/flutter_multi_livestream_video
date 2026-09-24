@@ -11,6 +11,7 @@
 #include <flutter_webrtc/flutter_web_r_t_c_plugin.h>
 #include <iris_method_channel/iris_method_channel_plugin_c_api.h>
 #include <livekit_client/live_kit_plugin.h>
+#include <tencent_rtc_sdk/trtc_plugin_c_api.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
   AgoraRtcEnginePluginRegisterWithRegistrar(
@@ -23,4 +24,6 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("IrisMethodChannelPluginCApi"));
   LiveKitPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("LiveKitPlugin"));
+  TrtcPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("TrtcPluginCApi"));
 }

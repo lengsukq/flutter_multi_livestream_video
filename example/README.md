@@ -1,7 +1,7 @@
 # Realtime Media example
 
 This is the repository's single Flutter demo app. It uses the provider-neutral
-Core plus the Agora, LiveKit, and AWS Chime adapters. The app does **not** choose a
+Core plus the Agora, LiveKit, AWS Chime, and Tencent TRTC adapters. The app does **not** choose a
 provider: it sends only backend URL, room code, nickname, and role. The
 `demo-server` selects the provider for newly-created rooms and returns
 short-lived join information.
@@ -9,7 +9,7 @@ short-lived join information.
 ## Run the example
 
 1. Start the backend by following [`../demo-server/README.md`](../demo-server/README.md).
-2. Open the backend dashboard and select Agora, LiveKit, or AWS Chime for new rooms.
+2. Open the backend dashboard and select Agora, LiveKit, AWS Chime, or Tencent TRTC for new rooms.
 3. Set `MEDIA_BACKEND_URL` (or enter the backend URL in the app) to an address reachable from the test device.
 4. Run the app on iOS 15+ or Android API 24+ and create or join a room.
 5. Allow microphone and camera access when prompted.
@@ -24,3 +24,9 @@ do not require applications to disable SwiftPM.
 
 Agora's optional real-service device E2E flow is documented in
 [`../AGORA_E2E.md`](../AGORA_E2E.md).
+
+TRTC is an optional adapter package. This reference example registers it to
+demonstrate backend-selected providers; applications that do not use TRTC can
+omit both `flutter_realtime_media_trtc` and the Tencent SDK dependency. Core
+remains vendor-neutral and does not select a default provider. TRTC device E2E
+instructions are in [`../TRTC_E2E.md`](../TRTC_E2E.md).

@@ -9,8 +9,8 @@ cd demo-server
 npm start
 ```
 
-Open `http://127.0.0.1:3000/` to switch the provider used for newly created
-rooms. `/health` reports the active provider and whether LiveKit is configured.
+Open `http://127.0.0.1:3000/` to select the provider used for newly created
+rooms. `/health` reports the active provider and configuration status.
 
 ## Flutter demo
 
@@ -41,3 +41,11 @@ flutter test integration_test/livekit_local_e2e_test.dart \
 Without `MEDIA_E2E_BACKEND_URL`, the test skips safely. Real microphone/camera
 behavior depends on simulator/device capabilities; the repository's automated
 unit/contract suites do not require a real cloud deployment.
+
+## Optional Tencent TRTC integration test
+
+See [`../TRTC_E2E.md`](../TRTC_E2E.md) for the backend setup, one-device media
+and rendering test, host plus two-viewer checks, server-enforced viewer
+permissions, and short-lived credential renewal test. These checks require a
+Tencent RTC project and physical Android/iOS devices; the offline suites use a
+fake TRTC engine.

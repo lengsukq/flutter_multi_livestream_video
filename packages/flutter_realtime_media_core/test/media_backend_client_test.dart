@@ -175,6 +175,32 @@ void main() {
   });
 
   group('presence endpoints', () {
+    test('refresh credentials posts the stable participant and role', () async {
+      final client = clientFor(
+        (_) => jsonResponse(
+          liveKitJoinPayload(participantId: 'participant-1', role: 'host'),
+        ),
+      );
+
+      final response = await client.refreshCredentials(
+        roomCode: '482913',
+        participantId: 'participant-1',
+        role: MediaRole.host,
+      );
+
+      expect(
+        transport.requests.single.uri.path,
+        '/rooms/482913/credentials/refresh',
+      );
+      expect(transport.requests.single.json, {
+        'participantId': 'participant-1',
+        'role': 'host',
+      });
+      expect(response.providerId, 'livekit');
+      expect(response.roomCode, '482913');
+      expect(response.role, MediaRole.host);
+    });
+
     test('heartbeat, leave, and closeRoom hit the contract paths', () async {
       final client = clientFor((_) => jsonResponse({'ok': true}));
 

@@ -2,9 +2,12 @@
 
 `npm start` is the **single application-backend entry point** for the demo. It
 serves the Flutter room API and the browser dashboard used to switch newly
-created rooms between AWS Chime, LiveKit, and Agora at runtime.
+created rooms between AWS Chime, LiveKit, Agora, and Tencent TRTC at runtime.
 
 ## Run
+
+The demo server uses Node's native erasable-TypeScript support and requires
+Node.js 22.18 or newer. No transpile/build step is required for local use.
 
 ```bash
 cd demo-server
@@ -15,6 +18,15 @@ AWS_PROFILE=chime-demo npm start
 
 `npm start` loads an optional local `.env` file. Keep that file out of version
 control; the repository ignore rule already excludes it.
+
+Static type checking and tests:
+
+```bash
+npm run typecheck
+npm test
+# or both
+npm run check
+```
 
 Optional demo authentication:
 
@@ -40,6 +52,59 @@ http://localhost:3000/
 
 Switching the dashboard provider affects **new rooms only**. Existing room
 codes stay bound to the provider that originally created them.
+
+## Provider adapter architecture
+
+The demo server now follows the same plugin-style boundary as the Flutter SDK:
+
+```text
+server.ts
+   |
+   +--> ProviderRegistry
+   |       +--> providers/chime.ts
+   |       +--> providers/livekit.ts
+   |       +--> providers/agora.ts
+   |       `--> providers/trtc.ts
+   |
+   `--> RoomDirectory
+```
+
+`server.ts` owns HTTP contract handling, authentication hooks, provider
+selection, room lifecycle orchestration, logging, and the dashboard. Provider
+modules own SDK calls, credential signing, role rules, join payloads, cleanup,
+and provider-specific room summaries.
+
+Shared contracts live in `types.ts`. `ProviderRegistry` accepts only objects
+that satisfy `ProviderAdapter`, so missing create/join/close/summary behavior
+or incompatible join responses fail during `npm run typecheck`.
+
+The `RoomDirectory` stores the application room-code-to-provider binding, so a
+runtime provider switch only changes newly-created rooms. Chime may additionally
+register its native meeting id as an alias for the legacy endpoints.
+
+### Add another RTC provider
+
+To add a fifth provider, create one module under `providers/` implementing the
+adapter contract and register it once in `server.ts`:
+
+```ts
+const provider: ProviderAdapter = {
+  id: 'vendor',
+  displayName: 'Vendor RTC',
+  isConfigured: () => true,
+  supportsRole: () => true,
+  async createRoom({ roomCode, role }) { /* ... */ },
+  async joinRoom({ entry, rawName, role }) { /* ... */ },
+  async closeRoom({ entry, reason }) { /* ... */ },
+  summarizeRoom(entry, { host }) { /* ... */ },
+}
+```
+
+Optional hooks include `metadata`, `aliases`, `removeAttendee`,
+`refreshCredentials`, and `resolveExternalRoom`. The main create/join/close
+routes do not require provider-specific `if`/`switch` branches. The dashboard
+renders provider buttons and room labels from `/api/overview.providerList`, so
+new adapters do not need a dedicated dashboard button.
 
 ## Room flow used by the example app
 
@@ -72,6 +137,9 @@ compatibility, but new Flutter integrations should use the room contract.
 | `AGORA_APP_ID` | unset | public Agora App ID returned in Agora join payloads |
 | `AGORA_APP_CERTIFICATE` | unset | server-only Agora signing secret; never return it to Flutter |
 | `AGORA_TOKEN_TTL_SECONDS` | `600` | AccessToken2 lifetime in seconds, clamped to 60–86400 |
+| `TRTC_SDK_APP_ID` | unset | public TRTC SDKAppID returned in join payloads |
+| `TRTC_SDK_SECRET_KEY` | unset | server-only UserSig/PrivateMapKey signing secret; never return it to Flutter |
+| `TRTC_TOKEN_TTL_SECONDS` | `600` | UserSig and PrivateMapKey lifetime; accepted range is 60 seconds–90 days |
 
 For local LiveKit Server testing:
 
@@ -94,6 +162,18 @@ privileges and joins the Flutter SDK as an audience client. Agora only
 server-enforces those fine-grained publish privileges when co-host
 authentication is enabled for the Agora project, so production use must verify
 that project capability before relying on it as a security boundary.
+
+For TRTC, put `TRTC_SDK_APP_ID` and `TRTC_SDK_SECRET_KEY` in the ignored
+`.env` or server environment. Enable **Advanced Permission Control** for that
+SDKAppID in the Tencent RTC console; without it, TRTC will not enforce the
+PrivateMapKey grant. `participant` rooms use the video-call scene, while
+`host`/`viewer` rooms use the live scene. Scene choice is fixed when the room
+is created, so the backend rejects cross-scene joins. Viewer PrivateMapKeys
+allow room entry and receiving main-stream audio/video, but omit audio/video
+publish and screen-share rights. The optional
+`POST /rooms/{roomCode}/credentials/refresh` route only renews credentials for
+an existing attendee with the same identity and role. The Flutter adapter
+renews before ticket expiry and rejoins with the same user id.
 
 ## Scope
 

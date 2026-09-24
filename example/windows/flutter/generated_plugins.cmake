@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_webrtc
   iris_method_channel
   livekit_client
+  tencent_rtc_sdk
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

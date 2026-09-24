@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../model/media_error.dart';
 import '../model/media_role.dart';
 import '../session/media_join_info.dart';
+import '../session/media_credential_refresh.dart';
 import '../session/media_room_session.dart';
 import '../session/media_session_factory.dart';
 import 'media_backend_client.dart';
@@ -140,6 +141,23 @@ class MediaClient {
     }
 
     final session = factory.createSession(joinInfo);
+    if (session case final MediaCredentialRefreshable refreshable) {
+      Future<MediaJoinInfo>? refreshInFlight;
+      refreshable.setCredentialRefreshCallback((currentJoinInfo) {
+        final current = refreshInFlight;
+        if (current != null) return current;
+        late final Future<MediaJoinInfo> future;
+        future =
+            _refreshCredentials(
+              factory: factory,
+              currentJoinInfo: currentJoinInfo,
+            ).whenComplete(() {
+              if (identical(refreshInFlight, future)) refreshInFlight = null;
+            });
+        refreshInFlight = future;
+        return future;
+      });
+    }
     try {
       await session.join(joinInfo);
       return MediaRoomSession.attach(
@@ -161,6 +179,66 @@ class MediaClient {
         // best effort and must not replace it.
       }
       rethrow;
+    }
+  }
+
+  Future<MediaJoinInfo> _refreshCredentials({
+    required MediaSessionFactory factory,
+    required MediaJoinInfo currentJoinInfo,
+  }) async {
+    try {
+      final response = await backend.refreshCredentials(
+        roomCode: currentJoinInfo.roomCode,
+        participantId: currentJoinInfo.participantId,
+        role: currentJoinInfo.role,
+      );
+      final adapterJson = Map<String, dynamic>.from(response.json)
+        ..putIfAbsent('provider', () => response.providerId)
+        ..putIfAbsent('role', () => response.role.wireName)
+        ..putIfAbsent('roomCode', () => response.roomCode);
+      final refreshed = factory.parseJoinInfo(adapterJson);
+      final responseRole = response.json['role'];
+      if (responseRole != null && MediaRole.tryParse(responseRole) == null) {
+        throw MediaError(
+          code: MediaErrorCode.invalidJoinInfo,
+          message:
+              'The backend returned an invalid role during credential refresh.',
+          providerId: currentJoinInfo.providerId,
+        );
+      }
+      if (response.providerId != currentJoinInfo.providerId ||
+          response.roomCode != currentJoinInfo.roomCode ||
+          response.role != currentJoinInfo.role ||
+          refreshed.providerId.trim().toLowerCase() !=
+              currentJoinInfo.providerId ||
+          refreshed.roomCode != currentJoinInfo.roomCode ||
+          refreshed.participantId != currentJoinInfo.participantId ||
+          refreshed.role != currentJoinInfo.role) {
+        throw MediaError(
+          code: MediaErrorCode.invalidJoinInfo,
+          message:
+              'The backend changed the provider, room, participant, or role '
+              'during credential refresh.',
+          providerId: currentJoinInfo.providerId,
+        );
+      }
+      return refreshed;
+    } on MediaError {
+      rethrow;
+    } on MediaBackendError catch (error) {
+      throw MediaError(
+        code: MediaErrorCode.nativeError,
+        message: 'Unable to refresh media credentials.',
+        details: error,
+        providerId: currentJoinInfo.providerId,
+      );
+    } catch (error) {
+      throw MediaError(
+        code: MediaErrorCode.invalidJoinInfo,
+        message: 'Unable to parse refreshed media credentials.',
+        details: error,
+        providerId: currentJoinInfo.providerId,
+      );
     }
   }
 }

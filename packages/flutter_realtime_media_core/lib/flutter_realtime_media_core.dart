@@ -22,6 +22,7 @@ export 'src/model/media_snapshot.dart';
 export 'src/model/media_state.dart';
 export 'src/model/media_track.dart';
 export 'src/session/broadcast_sessions.dart';
+export 'src/session/media_credential_refresh.dart';
 export 'src/session/interactive_media_session.dart';
 export 'src/session/media_join_info.dart';
 export 'src/session/media_room_session.dart';

@@ -90,6 +90,22 @@ Create an attendee/participant in an existing room.
 
 Missing room returns `room-not-found` (`404`).
 
+### `POST /rooms/{roomCode}/credentials/refresh` (optional)
+
+Refresh short-lived credentials for an already admitted participant. Adapters
+that support renewal call this endpoint; existing adapters and compatible
+backends that do not use expiring credentials are unaffected.
+
+```json
+{ "participantId": "u-123", "role": "host" }
+```
+
+Success returns the standard [join response](#join-response). The backend must
+keep `provider`, `roomCode`, `participantId`, and `role` identical to the
+original session, and must authorize the caller as that application user. A
+refresh response that changes any of those fields is rejected by Core. Return
+`forbidden` (`403`) when the user is not authorized to refresh that participant.
+
 ### `POST /rooms/{roomCode}/heartbeat`
 
 Best-effort presence signal, called once after joining and then every
@@ -215,6 +231,53 @@ The current Agora adapter intentionally reports `canSendData=false` for
 `viewer`. Agora RTC data streams in live-broadcast mode are host-oriented;
 viewer chat would require a separate safe messaging design (for example RTM)
 before it can match the Core viewer contract without weakening publish roles.
+
+### Tencent TRTC provider block
+
+```json
+{
+  "contractVersion": 1,
+  "provider": "trtc",
+  "role": "host",
+  "roomCode": "482913",
+  "participantId": "u-123",
+  "displayName": "Host A",
+  "trtc": {
+    "sdkAppId": 1400000000,
+    "strRoomId": "media-482913",
+    "userId": "u-123",
+    "userSig": "<short-lived-user-sig>",
+    "privateMapKey": "<room-scoped-permission-ticket>",
+    "expiresAtMs": 1780000000000
+  }
+}
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `trtc.sdkAppId` | yes | Public TRTC SDKAppID. |
+| `trtc.strRoomId` | yes | Provider room mapped from the application room code. The adapter uses string room IDs consistently. |
+| `trtc.userId` | yes | TRTC identity; it must exactly equal `participantId`. |
+| `trtc.userSig` | yes | Short-lived UserSig signed by the backend. |
+| `trtc.privateMapKey` | yes | Room-scoped permissions signed by the backend. Enable TRTC advanced permission control for the SDKAppID so the service enforces this grant. |
+| `trtc.expiresAtMs` | recommended | UserSig and PrivateMapKey expiry as Unix milliseconds. Core adapters renew before this time and re-enter with the same room and identity. |
+
+The TRTC adapter uses the `videoCall` scene for `participant`, and the `live`
+scene for `host` and `viewer`. A room's scene is fixed when the reference
+backend creates it; a role from the other scene receives `unsupported-role`.
+Publisher grants include room create/join and main-stream audio/video
+send/receive permissions. Viewer grants include room create/join and audio/video
+receive only; they must not include audio, video, or substream publish bits.
+The Flutter viewer surface also has no publish controls and reports
+`canSendData=false`. Participant/host custom messages are supported. Screen
+sharing, viewer messages, and audio-device enumeration are not supported by
+this adapter version.
+
+The TRTC adapter implements the optional Core credential-refresh capability.
+It renews credentials before `expiresAtMs` and rejoins the same room as the same
+TRTC user. The backend must verify the caller's application identity and role
+before signing replacement values. Long-lived `TRTC_SDK_SECRET_KEY` values
+never belong in Flutter.
 
 ### Chime compatibility
 

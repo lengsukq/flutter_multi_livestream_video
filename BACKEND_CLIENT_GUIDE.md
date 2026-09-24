@@ -157,7 +157,7 @@ contract's `meeting` and `attendee` payloads.
 
 ## Demo server
 
-`demo-server/server.mjs` is a local/reference implementation of contract v1.
+`demo-server/server.ts` is a local/reference TypeScript implementation of contract v1.
 It includes room codes, heartbeat, idle cleanup, a dashboard, and an optional
 `DEMO_BEARER_TOKEN` hook for exercising `tokenProvider`.
 

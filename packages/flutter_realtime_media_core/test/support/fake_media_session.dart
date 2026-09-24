@@ -76,7 +76,8 @@ class FakeMediaSessionFactory implements MediaSessionFactory {
 /// A viewer-only surface is intentionally *not* implemented here: the role
 /// contract test proves that `BroadcastViewerSession` alone is implementable
 /// without any publish method.
-class FakeMediaSession implements BroadcastHostSession {
+class FakeMediaSession
+    implements BroadcastHostSession, MediaCredentialRefreshable {
   FakeMediaSession({
     required this.providerId,
     required this.role,
@@ -108,6 +109,20 @@ class FakeMediaSession implements BroadcastHostSession {
   int leaveCount = 0;
   int disposeCount = 0;
   final List<String> actions = [];
+  MediaCredentialRefreshCallback? credentialRefreshCallback;
+
+  @override
+  void setCredentialRefreshCallback(MediaCredentialRefreshCallback? callback) {
+    credentialRefreshCallback = callback;
+  }
+
+  Future<MediaJoinInfo> refreshCredentials(MediaJoinInfo current) {
+    final callback = credentialRefreshCallback;
+    if (callback == null) {
+      throw StateError('No refresh callback was installed.');
+    }
+    return callback(current);
+  }
 
   @override
   MediaSessionState get state => _snapshot.state;
