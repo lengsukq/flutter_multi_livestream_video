@@ -37,9 +37,10 @@
 ### 适配包与兼容性
 
 - `flutter_realtime_media_livekit` 依赖 LiveKit 官方 Flutter 客户端 SDK，将 LiveKit room、participant、track 和状态映射到核心接口。
+- `flutter_realtime_media_agora` 依赖 Agora 官方 `agora_rtc_engine`，已接入 participant/host/viewer、音视频控制、远端渲染、事件映射和 RTC data stream；屏幕共享继续暂缓，viewer data 发送暂不开放。
 - `flutter_realtime_media_chime` 已将现有 `flutter_aws_chime` v3 `ChimeMeetingSession` / 原生渲染桥适配到公共 Core；原 `flutter_aws_chime` API 保持兼容，不要求已有 Chime-only 应用迁移。
-- 每个新增供应商以后以独立可选适配包接入，避免 Chime-only 应用被迫解析 LiveKit、Agora 等 SDK 依赖。
-- 同一 `example/` Chime Live 应用已经同时接入 Chime 与 LiveKit Adapter，并通过 Android 构建、iOS Simulator 构建以及 LiveKit 双客户端信令/Data E2E；真设备媒体采集仍保留显式 E2E 开关验证。
+- 每个新增供应商均以独立可选适配包接入，避免 Chime-only 应用被迫解析 LiveKit、Agora 等 SDK 依赖。
+- 同一 `example/` 已注册 Chime、LiveKit 与 Agora Adapter；App 不选择 Provider，由 `demo-server` 返回 Provider。LiveKit 已有真实服务 E2E；Agora 已完成真实项目单会话 join/leave E2E，双设备 host/viewer 与 co-host authentication 强约束仍保留显式 E2E 验证。
 
 ### 通用组件
 
@@ -47,19 +48,20 @@
 
 ## 实施阶段
 
-1. **依赖与互操作验证 — 已完成基础门禁**：单一 Chime Live 示例同时解析 Chime 与 LiveKit；Android/iOS Simulator 构建通过，资源释放和 provider 切换由统一 Core/后端契约覆盖。
+1. **依赖与互操作验证 — 已完成基础门禁**：单一统一示例同时解析 Chime、LiveKit 与 Agora；Android/iOS Simulator 构建通过，资源释放和 provider 切换由统一 Core/后端契约覆盖。
 2. **提取核心接口 — 已完成**：公共 Core、Chime Adapter、LiveKit Adapter 已落地；原 Chime API 保持兼容。
 3. **实现 LiveKit 实时会议 — 已完成**：连接、加入/离开、麦克风、摄像头、摄像头切换、参与者/轨道事件和 Android/iOS 渲染已接入。
 4. **实现 LiveKit 一对多直播 — 已完成核心能力**：host/viewer 角色、viewer 禁止发布、数据消息和订阅能力已实现；真实设备媒体 E2E 按需运行。
-5. **通用 UI、示例与发布准备 — 已完成当前仓库范围**：复用现有 `example/` Chime Live，App 不选择 Provider；`demo-server` UI 决定新房间使用 Chime 或 LiveKit；相关契约与接入文档已补齐。
-6. **后续供应商适配**：按路线图顺序，RTC 增加 Agora、TRTC、ARTC；直播增加 IVS、Agora、TRTC、ARTC。每个适配包均实现核心会话、能力声明、事件映射和该供应商必要的渲染适配。
+5. **通用 UI、示例与发布准备 — 已完成当前仓库范围**：复用现有 `example/`，App 不选择 Provider；`demo-server` UI 决定新房间使用 Chime、LiveKit 或 Agora；相关契约与接入文档已补齐。
+6. **Agora 适配 — 已完成代码与真实单会话门禁**：独立 Adapter、RTC/host/viewer 角色、媒体控制、渲染、RTC data stream、AccessToken2、demo-server 三 Provider 路由均已接入；真实 Agora 项目 join/leave E2E 已通过，双设备 host/viewer 与 co-host authentication 强约束验证按凭证显式运行。
+7. **后续供应商适配**：RTC 下一步增加 TRTC、ARTC；直播后续增加 IVS、TRTC、ARTC。每个适配包均实现核心会话、能力声明、事件映射和该供应商必要的渲染适配。
 
 ## 测试与验收
 
 - **核心单测**：使用 fake adapter 验证连接/断开、状态转换、事件映射、媒体能力、类型化错误及重复释放安全性。
 - **角色单测**：验证主播可发布、观众 API 无发布方法；并确认观众 token 的服务端权限为只订阅。客户端限制不能替代服务端 token 授权。
 - **组件测试**：验证会议、主播和观众视图，以及加载、权限拒绝、断线重连和错误状态。
-- **平台构建**：公共包、Chime 包、LiveKit 包和示例均通过 Android/iOS 构建，保持当前部署下限；确认相机/麦克风权限配置完整。
+- **平台构建**：公共包、Chime、LiveKit、Agora 和示例应通过 Android/iOS 构建，保持当前部署下限；确认相机/麦克风权限配置完整。
 - **服务集成验收**：在不把凭证提交进仓库的测试环境中，验证多人实时会议，以及一位主播加至少两位观众的直播；覆盖无效/过期 token、拒绝相机或麦克风权限、网络中断恢复、主播离开、观众离开及两种后端顺序切换。
 - **回归**：Chime v3 会话 API、Chime 示例及相关测试继续通过；不要求一次性复制 Chime 的聊天、屏幕共享等供应商特有功能到公共 API，也不要求恢复 v2 兼容 API。
 

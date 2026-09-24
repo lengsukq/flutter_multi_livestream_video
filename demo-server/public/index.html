@@ -28,6 +28,10 @@
       --livekit-bg: #f0f9ff;
       --livekit-border: #bae6fd;
 
+      --agora-color: #7c3aed;
+      --agora-bg: #f5f3ff;
+      --agora-border: #ddd6fe;
+
       --chime-color: #ea580c;
       --chime-bg: #fff7ed;
       --chime-border: #fed7aa;
@@ -272,6 +276,11 @@
     .provider-opt.active.livekit-active {
       color: var(--livekit-color);
       border-color: var(--livekit-border);
+    }
+
+    .provider-opt.active.agora-active {
+      color: var(--agora-color);
+      border-color: var(--agora-border);
     }
 
     .provider-opt.active.chime-active {
@@ -624,6 +633,12 @@
       background: var(--livekit-bg);
       color: var(--livekit-color);
       border: 1px solid var(--livekit-border);
+    }
+
+    .provider-pill.agora {
+      background: var(--agora-bg);
+      color: var(--agora-color);
+      border: 1px solid var(--agora-border);
     }
 
     .provider-pill.chime {
@@ -993,6 +1008,10 @@
           <span class="opt-dot"></span>
           LiveKit WebRTC
         </button>
+        <button id="provider-agora" class="provider-opt" onclick="switchProvider('agora')">
+          <span class="opt-dot"></span>
+          Agora RTC
+        </button>
         <button id="provider-chime" class="provider-opt" onclick="switchProvider('chime')">
           <span class="opt-dot"></span>
           Amazon Chime SDK
@@ -1181,7 +1200,11 @@
           body: JSON.stringify({ provider })
         });
         await refresh();
-        const label = d.activeProvider === 'livekit' ? 'LiveKit WebRTC' : 'AWS Chime SDK';
+        const label = d.activeProvider === 'livekit'
+          ? 'LiveKit WebRTC'
+          : d.activeProvider === 'agora'
+            ? 'Agora RTC'
+            : 'AWS Chime SDK';
         toast(`新房间媒体通道已切换为 <b>${label}</b>`, 'success');
       } catch (e) {
         toast('Provider 切换失败: ' + e.message, 'error');
@@ -1263,6 +1286,9 @@
 
       tb.innerHTML = list.map(r => {
         const isLiveKit = r.provider === 'livekit';
+        const isAgora = r.provider === 'agora';
+        const providerClass = isLiveKit ? 'livekit' : isAgora ? 'agora' : 'chime';
+        const providerLabel = isLiveKit ? 'LiveKit' : isAgora ? 'Agora' : 'AWS Chime';
         const idleText = r.idleSec > 0 ? `${r.idleSec}s 前心跳` : '🟢 活跃在线';
         const attendeesHtml = r.attendees && r.attendees.length
           ? `<div class="attendee-chips">` + r.attendees.map(a => {
@@ -1283,8 +1309,8 @@
             <div class="meeting-id-sub">${esc((r.meetingId || '').slice(0, 18))}${(r.meetingId || '').length > 18 ? '…' : ''}</div>
           </td>
           <td>
-            <span class="provider-pill ${isLiveKit ? 'livekit' : 'chime'}">
-              ${isLiveKit ? 'LiveKit' : 'AWS Chime'}
+            <span class="provider-pill ${providerClass}">
+              ${providerLabel}
             </span>
           </td>
           <td>
@@ -1327,27 +1353,41 @@
       try {
         const d = await api('/api/overview');
         const isLiveKit = d.activeProvider === 'livekit';
+        const isAgora = d.activeProvider === 'agora';
+        const isChime = d.activeProvider === 'chime';
+        const providerLabel = isLiveKit ? 'LiveKit' : isAgora ? 'Agora' : 'AWS Chime';
         document.getElementById('header-meta').textContent =
-          `当前通道：${isLiveKit ? 'LiveKit' : 'AWS Chime'}`;
+          `当前通道：${providerLabel}`;
         document.getElementById('region-tags').textContent =
           `${d.controlRegion} / ${d.mediaRegion}`;
 
         const livekitButton = document.getElementById('provider-livekit');
+        const agoraButton = document.getElementById('provider-agora');
         const chimeButton = document.getElementById('provider-chime');
         livekitButton.classList.toggle('active', isLiveKit);
         livekitButton.classList.toggle('livekit-active', isLiveKit);
-        chimeButton.classList.toggle('active', !isLiveKit);
-        chimeButton.classList.toggle('chime-active', !isLiveKit);
+        agoraButton.classList.toggle('active', isAgora);
+        agoraButton.classList.toggle('agora-active', isAgora);
+        chimeButton.classList.toggle('active', isChime);
+        chimeButton.classList.toggle('chime-active', isChime);
 
         livekitButton.disabled = !d.providers?.livekit?.configured;
         livekitButton.title = d.providers?.livekit?.configured
           ? '新房间使用 LiveKit'
           : 'LiveKit 未配置：需要环境变量 LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET';
+        agoraButton.disabled = !d.providers?.agora?.configured;
+        agoraButton.title = d.providers?.agora?.configured
+          ? '新房间使用 Agora'
+          : 'Agora 未配置：需要环境变量 AGORA_APP_ID / AGORA_APP_CERTIFICATE';
 
         document.getElementById('c-rooms').textContent = d.roomCount;
         document.getElementById('c-att').textContent = d.attendeeCount;
-        document.getElementById('c-provider').textContent = isLiveKit ? 'LiveKit' : 'AWS Chime';
-        document.getElementById('c-provider-sub').textContent = isLiveKit ? 'WebRTC 原生流集群' : 'Amazon Chime 媒体面';
+        document.getElementById('c-provider').textContent = providerLabel;
+        document.getElementById('c-provider-sub').textContent = isLiveKit
+          ? 'WebRTC 原生流集群'
+          : isAgora
+            ? 'Agora RTC 全球实时网络'
+            : 'Amazon Chime 媒体面';
         document.getElementById('room-badge-count').textContent = d.roomCount;
 
         const mins = Math.floor(d.uptimeSec / 60);

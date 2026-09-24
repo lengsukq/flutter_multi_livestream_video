@@ -9,6 +9,7 @@ use Core without choosing a provider per room.
 ```text
 flutter_realtime_media_core
   ├─ flutter_realtime_media_livekit -> livekit_client
+  ├─ flutter_realtime_media_agora   -> agora_rtc_engine
   └─ flutter_realtime_media_chime   -> flutter_aws_chime
 ```
 
@@ -18,6 +19,7 @@ Provider SDKs never become dependencies of Core.
 
 ```dart
 final registry = MediaRegistry([
+  const AgoraSessionFactory(),
   const LiveKitSessionFactory(),
   ChimeSessionFactory(),
 ]);
@@ -72,17 +74,26 @@ cd demo-server
 npm start
 ```
 
+To enable Agora in the same server, also set `AGORA_APP_ID` and
+`AGORA_APP_CERTIFICATE` (normally in the ignored `demo-server/.env`).
+
 The public URL is `http://127.0.0.1:3000`. Open the existing dashboard and
-switch new rooms between LiveKit and AWS Chime directly in the server UI.
+switch new rooms between LiveKit, Agora, and AWS Chime directly in the server UI.
 
 The LiveKit server itself is managed by `bash scripts/livekit-dev.sh` and can remain
 running between tests.
 
 ## Unified demo
 
-`example` (the existing Chime Live app) exposes no provider selector. It registers both
-adapters once, sends only the backend URL, room/user information and role, and
+`example` exposes no provider selector. It registers all three adapters once,
+sends only the backend URL, room/user information and role, and
 uses the provider returned by the backend to resolve the renderer/session.
+
+Agora uses numeric UIDs so `participantId` is the decimal UID string. The
+Agora adapter supports participant/host RTC media, viewer subscribe-only
+media, RTC data messages for participant/host, and provider-neutral video
+rendering. Screen sharing stays deferred. Viewer data sending is currently
+disabled rather than implicitly promoting an Agora audience client to host.
 
 ```bash
 cd example

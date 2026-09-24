@@ -1,7 +1,7 @@
 // Multi-provider demo backend — provider credentials stay server-side.
 //
 // `npm start` is the single backend entry point. The dashboard lets developers
-// switch NEW rooms between AWS Chime and LiveKit at runtime. Existing rooms
+// switch NEW rooms between AWS Chime, LiveKit, and Agora at runtime. Existing rooms
 // remain bound to the provider that created them, so Flutter only needs a room
 // code and never sends a provider selection.
 //
@@ -29,8 +29,10 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildAgoraRtcToken } from './agora-token.mjs';
 import {
   ChimeSDKMeetingsClient,
   CreateMeetingCommand,
@@ -49,6 +51,9 @@ const LIVEKIT_URL = process.env.LIVEKIT_URL?.trim() || null;
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY?.trim() || null;
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET?.trim() || null;
 const LIVEKIT_TOKEN_TTL_SECONDS = Number(process.env.LIVEKIT_TOKEN_TTL_SECONDS ?? 600);
+const AGORA_APP_ID = process.env.AGORA_APP_ID?.trim() || null;
+const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE?.trim() || null;
+const AGORA_TOKEN_TTL_SECONDS = Number(process.env.AGORA_TOKEN_TTL_SECONDS ?? 600);
 const INITIAL_PROVIDER = String(process.env.MEDIA_DEFAULT_PROVIDER ?? 'chime').trim().toLowerCase();
 const STARTED_AT = Date.now();
 // Empty-room auto close: sweep every 30s, close rooms with no heartbeat for 90s.
@@ -57,19 +62,22 @@ const EMPTY_CLOSE_AFTER_MS = Number(process.env.EMPTY_CLOSE_AFTER_MS ?? 90_000);
 const SWEEP_INTERVAL_MS = 30_000;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROVIDER_STATE_PATH = path.join(__dirname, '.provider-state.json');
 
 const client = new ChimeSDKMeetingsClient({ region: CONTROL_REGION });
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '64kb' }));
 
-if (!['chime', 'livekit'].includes(INITIAL_PROVIDER)) {
-  throw new Error('MEDIA_DEFAULT_PROVIDER must be chime or livekit.');
+if (!['chime', 'livekit', 'agora'].includes(INITIAL_PROVIDER)) {
+  throw new Error('MEDIA_DEFAULT_PROVIDER must be chime, livekit, or agora.');
 }
 
 async function resolveRoom(ref) {
   const key = String(ref ?? '').trim();
   if (!key) return null;
+  const agora = agoraRooms.get(key);
+  if (agora) return agora;
   const livekit = livekitRooms.get(key);
   if (livekit) return livekit;
   return resolveEntry(key);
@@ -79,7 +87,11 @@ function closeLiveKitEntry(entry, reason) {
   livekitRooms.delete(entry.roomCode);
   logEvent('delete', `room ${entry.roomCode} closed (${reason}) — LiveKit directory entry removed`);
 }
-let activeProvider = INITIAL_PROVIDER;
+
+function closeAgoraEntry(entry, reason) {
+  agoraRooms.delete(entry.roomCode);
+  logEvent('delete', `room ${entry.roomCode} closed (${reason}) — Agora directory entry removed`);
+}
 
 function contractError(res, status, code, message, details = undefined) {
   return res.status(status).json({
@@ -118,6 +130,7 @@ app.use('/rooms', requireRoomContract);
 const meetings = new Map();
 const rooms = new Map();
 const livekitRooms = new Map();
+const agoraRooms = new Map();
 const events = [];
 function logEvent(type, message) {
   events.unshift({ ts: new Date().toISOString(), type, message });
@@ -148,7 +161,7 @@ function pickAttendee(raw) {
 function generateRoomCode() {
   for (let i = 0; i < 50; i++) {
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    if (!rooms.has(code) && !livekitRooms.has(code)) return code;
+    if (!rooms.has(code) && !livekitRooms.has(code) && !agoraRooms.has(code)) return code;
   }
   return String(Date.now()).slice(-6);
 }
@@ -253,6 +266,104 @@ function createLiveKitJoin(entry, rawName, role) {
   };
 }
 
+function agoraConfigured() {
+  return Boolean(AGORA_APP_ID && AGORA_APP_CERTIFICATE);
+}
+
+function providerConfigured(provider) {
+  if (provider === 'chime') return true;
+  if (provider === 'livekit') return liveKitConfigured();
+  if (provider === 'agora') return agoraConfigured();
+  return false;
+}
+
+function loadPersistedProvider() {
+  try {
+    const parsed = JSON.parse(readFileSync(PROVIDER_STATE_PATH, 'utf8'));
+    const provider = String(parsed?.provider ?? '').trim().toLowerCase();
+    if (['chime', 'livekit', 'agora'].includes(provider) && providerConfigured(provider)) {
+      return provider;
+    }
+  } catch (_) {
+    // Missing/corrupt runtime state falls back to MEDIA_DEFAULT_PROVIDER.
+  }
+  return providerConfigured(INITIAL_PROVIDER) ? INITIAL_PROVIDER : 'chime';
+}
+
+function persistActiveProvider(provider) {
+  try {
+    writeFileSync(
+      PROVIDER_STATE_PATH,
+      JSON.stringify({ provider, updatedAt: new Date().toISOString() }, null, 2) + '\n',
+      'utf8',
+    );
+  } catch (error) {
+    console.warn(`Unable to persist media provider selection: ${error?.message ?? error}`);
+  }
+}
+
+let activeProvider = loadPersistedProvider();
+
+function createAgoraEntry(roomCode) {
+  const entry = {
+    provider: 'agora',
+    roomCode,
+    providerRoomName: 'media-' + roomCode,
+    createdAt: new Date().toISOString(),
+    attendees: [],
+    lastHeartbeatMs: Date.now(),
+  };
+  agoraRooms.set(roomCode, entry);
+  return entry;
+}
+
+function generateAgoraUid(entry) {
+  for (let i = 0; i < 50; i++) {
+    // Agora AccessToken2 documents integer UIDs as signed 32-bit values.
+    // Keep generated UIDs in 1..2^31-1 so the token and native SDK agree
+    // across Node, Dart, iOS, and Android.
+    const uid = crypto.randomInt(1, 0x80000000);
+    if (!entry.attendees.some((item) => item.attendeeId === String(uid))) return uid;
+  }
+  throw new Error('Unable to allocate a unique Agora uid.');
+}
+
+function signAgoraToken({ channelName, uid, role }) {
+  return buildAgoraRtcToken({
+    appId: AGORA_APP_ID,
+    appCertificate: AGORA_APP_CERTIFICATE,
+    channelName,
+    uid,
+    role,
+    ttlSeconds: AGORA_TOKEN_TTL_SECONDS,
+  });
+}
+
+function createAgoraJoin(entry, rawName, role) {
+  const uid = generateAgoraUid(entry);
+  const displayName = normalizeDisplayName(rawName) || String(uid);
+  entry.attendees.push({
+    attendeeId: String(uid),
+    externalUserId: displayName,
+    joinedAt: new Date().toISOString(),
+  });
+  touchHeartbeat(entry);
+  return {
+    contractVersion: CONTRACT_VERSION,
+    provider: 'agora',
+    role,
+    roomCode: entry.roomCode,
+    participantId: String(uid),
+    displayName,
+    agora: {
+      appId: AGORA_APP_ID,
+      channelName: entry.providerRoomName,
+      token: signAgoraToken({ channelName: entry.providerRoomName, uid, role }),
+      uid,
+    },
+  };
+}
+
 function getOrCacheEntry(meeting, roomCode = null) {
   let entry = meetings.get(meeting.MeetingId);
   if (!entry) {
@@ -313,6 +424,12 @@ setInterval(() => {
       closeLiveKitEntry(entry, `idle ${idleSec}s, no heartbeat`);
     }
   }
+  for (const entry of [...agoraRooms.values()]) {
+    if (now - (entry.lastHeartbeatMs ?? 0) > EMPTY_CLOSE_AFTER_MS) {
+      const idleSec = Math.round((now - entry.lastHeartbeatMs) / 1000);
+      closeAgoraEntry(entry, `idle ${idleSec}s, no heartbeat`);
+    }
+  }
 }, SWEEP_INTERVAL_MS);
 
 /// Accepts a room code ("123456") or a raw meetingId (uuid). Returns the entry or null.
@@ -362,6 +479,22 @@ function chimeJoinResponse(entry, attendee, role = 'participant') {
 
 function roomSummary(entry, req) {
   const host = req ? `${req.protocol}://${req.get('host')}` : '';
+  if (entry.provider === 'agora') {
+    return {
+      provider: 'agora',
+      roomCode: entry.roomCode,
+      meetingId: entry.providerRoomName,
+      externalMeetingId: entry.providerRoomName,
+      mediaRegion: 'Agora',
+      createdAt: entry.createdAt,
+      lastHeartbeat: new Date(entry.lastHeartbeatMs ?? Date.now()).toISOString(),
+      idleSec: Math.max(0, Math.round((Date.now() - (entry.lastHeartbeatMs ?? Date.now())) / 1000)),
+      attendeeCount: entry.attendees.length,
+      attendees: entry.attendees,
+      shareText: entry.roomCode,
+      shareLink: `multimedia://join?roomCode=${entry.roomCode}&server=${host}`,
+    };
+  }
   if (entry.provider === 'livekit') {
     return {
       provider: 'livekit',
@@ -401,7 +534,12 @@ app.get('/', (_req, res) => {
 
 app.get('/health', (_req, res) => {
   res.json({
-    ok: activeProvider !== 'livekit' || liveKitConfigured(),
+    ok:
+      activeProvider === 'livekit'
+        ? liveKitConfigured()
+        : activeProvider === 'agora'
+          ? agoraConfigured()
+          : true,
     contractVersion: CONTRACT_VERSION,
     activeProvider,
     controlRegion: CONTROL_REGION,
@@ -409,14 +547,20 @@ app.get('/health', (_req, res) => {
     providers: {
       chime: { enabled: true, configured: true },
       livekit: { enabled: true, configured: liveKitConfigured(), url: LIVEKIT_URL },
+      agora: { enabled: true, configured: agoraConfigured() },
     },
   });
 });
 
 app.post('/api/provider', (req, res) => {
   const provider = String(req.body?.provider ?? '').trim().toLowerCase();
-  if (!['chime', 'livekit'].includes(provider)) {
-    return contractError(res, 400, 'unsupported-provider', 'provider must be chime or livekit.');
+  if (!['chime', 'livekit', 'agora'].includes(provider)) {
+    return contractError(
+      res,
+      400,
+      'unsupported-provider',
+      'provider must be chime, livekit, or agora.',
+    );
   }
   if (provider === 'livekit' && !liveKitConfigured()) {
     return contractError(
@@ -426,22 +570,33 @@ app.post('/api/provider', (req, res) => {
       'LiveKit is not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET.',
     );
   }
+  if (provider === 'agora' && !agoraConfigured()) {
+    return contractError(
+      res,
+      503,
+      'provider-not-configured',
+      'Agora is not configured. Set AGORA_APP_ID and AGORA_APP_CERTIFICATE.',
+    );
+  }
   if (provider === activeProvider) {
+    persistActiveProvider(provider);
     return res.json({ ok: true, activeProvider });
   }
   activeProvider = provider;
+  persistActiveProvider(provider);
   logEvent('provider-switch', `new rooms will use ${provider}`);
   res.json({ ok: true, activeProvider });
 });
 
 app.get('/api/overview', (req, res) => {
-  const allRooms = [...meetings.values(), ...livekitRooms.values()];
+  const allRooms = [...meetings.values(), ...livekitRooms.values(), ...agoraRooms.values()];
   res.json({
     ok: true,
     activeProvider,
     providers: {
       chime: { enabled: true, configured: true },
       livekit: { enabled: true, configured: liveKitConfigured(), url: LIVEKIT_URL },
+      agora: { enabled: true, configured: agoraConfigured() },
     },
     controlRegion: CONTROL_REGION,
     mediaRegion: MEDIA_REGION,
@@ -457,7 +612,9 @@ app.get('/api/overview', (req, res) => {
 app.get('/rooms', (req, res) => {
   res.json({
     contractVersion: CONTRACT_VERSION,
-    rooms: [...meetings.values(), ...livekitRooms.values()].map((e) => roomSummary(e, req)),
+    rooms: [...meetings.values(), ...livekitRooms.values(), ...agoraRooms.values()].map((e) =>
+      roomSummary(e, req),
+    ),
   });
 });
 
@@ -476,7 +633,7 @@ app.post('/rooms', async (req, res) => {
         'roomCode must be 4-12 letters/digits.',
       );
     }
-    if (code && (rooms.has(code) || livekitRooms.has(code))) {
+    if (code && (rooms.has(code) || livekitRooms.has(code) || agoraRooms.has(code))) {
       return contractError(
         res,
         409,
@@ -490,6 +647,29 @@ app.post('/rooms', async (req, res) => {
       return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
     }
     const rawNickname = req.body?.nickname?.trim() || null;
+    if (activeProvider === 'agora') {
+      if (!agoraConfigured()) {
+        return contractError(
+          res,
+          503,
+          'provider-not-configured',
+          'Agora is not configured on this demo server.',
+        );
+      }
+      const entry = createAgoraEntry(code);
+      logEvent('create', `room ${code} created with Agora`);
+      if (rawNickname) {
+        const response = createAgoraJoin(entry, rawNickname, role);
+        logEvent('join', `${response.displayName} created+joined room ${code} via Agora`);
+        return res.json(response);
+      }
+      return res.json({
+        contractVersion: CONTRACT_VERSION,
+        provider: 'agora',
+        role,
+        roomCode: code,
+      });
+    }
     if (activeProvider === 'livekit') {
       if (!liveKitConfigured()) {
         return contractError(
@@ -566,6 +746,14 @@ app.post('/rooms/:code/join', async (req, res) => {
     if (!role) {
       return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
     }
+    if (entry.provider === 'agora') {
+      if (!agoraConfigured()) {
+        return contractError(res, 503, 'provider-not-configured', 'Agora is not configured.');
+      }
+      const response = createAgoraJoin(entry, req.body?.userId, role);
+      logEvent('join', `${response.displayName} joined room ${entry.roomCode} via Agora`);
+      return res.json(response);
+    }
     if (entry.provider === 'livekit') {
       if (!liveKitConfigured()) {
         return contractError(res, 503, 'provider-not-configured', 'LiveKit is not configured.');
@@ -612,6 +800,22 @@ app.post('/rooms/:code/leave', async (req, res) => {
   const entry = await resolveRoom(req.params.code);
   if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
   const who = req.body?.attendeeId ?? req.body?.userId ?? 'someone';
+  if (entry.provider === 'agora' && Array.isArray(entry.attendees)) {
+    entry.attendees = entry.attendees.filter(
+      (attendee) =>
+        attendee.attendeeId !== String(who) &&
+        attendee.externalUserId !== String(who),
+    );
+    if (entry.attendees.length === 0) {
+      closeAgoraEntry(entry, 'last attendee left');
+      return res.json({
+        contractVersion: CONTRACT_VERSION,
+        ok: true,
+        roomCode: entry.roomCode,
+        closed: true,
+      });
+    }
+  }
   logEvent('leave', `${who} left room ${entry.roomCode} (auto-close in ~90s if empty)`);
   res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode });
 });
@@ -620,6 +824,15 @@ app.post('/rooms/:code/leave', async (req, res) => {
 app.delete('/rooms/:code', async (req, res) => {
   try {
     const key = String(req.params.code ?? '').trim();
+    const agora = agoraRooms.get(key);
+    if (agora) {
+      closeAgoraEntry(agora, 'force close');
+      return res.json({
+        contractVersion: CONTRACT_VERSION,
+        deleted: true,
+        roomCode: key,
+      });
+    }
     const livekit = livekitRooms.get(key);
     if (livekit) {
       closeLiveKitEntry(livekit, 'force close');
@@ -744,5 +957,6 @@ app.listen(port, '0.0.0.0', () => {
   console.log(`media-demo-server on :${port} (control=${CONTROL_REGION} media=${MEDIA_REGION})`);
   console.log(`active provider: ${activeProvider}`);
   console.log(`LiveKit configured: ${liveKitConfigured() ? 'yes' : 'no'}`);
+  console.log(`Agora configured: ${agoraConfigured() ? 'yes' : 'no'}`);
   console.log(`dashboard: http://127.0.0.1:${port}/`);
 });

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_realtime_media_agora/flutter_realtime_media_agora.dart';
 import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_livekit/flutter_realtime_media_livekit.dart';
@@ -25,11 +26,13 @@ void main() {
 }
 
 final MediaRegistry _mediaRegistry = MediaRegistry([
+  const AgoraSessionFactory(),
   const LiveKitSessionFactory(),
   ChimeSessionFactory(),
 ]);
 
 final Map<String, MediaTrackRenderer> _mediaRenderers = {
+  'agora': const AgoraTrackRenderer(),
   'livekit': const LiveKitTrackRenderer(),
   'chime': const ChimeTrackRenderer(),
 };
@@ -45,7 +48,7 @@ class ChimeExampleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Chime Live',
+    title: 'Realtime Media',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       brightness: Brightness.light,
@@ -335,7 +338,7 @@ class _JoinScreenState extends State<JoinScreen>
       ),
       const SizedBox(height: 12),
       const Text(
-        'Chime Live',
+        'Realtime Media',
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 24,
@@ -740,6 +743,7 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
     builder: (context, snapshot) {
       final value = snapshot.data ?? session.snapshot;
       final isLiveKit = widget.room.providerId == 'livekit';
+      final isAgora = widget.room.providerId == 'agora';
 
       return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
@@ -783,18 +787,34 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: isLiveKit ? const Color(0xFFF0F9FF) : const Color(0xFFFFF7ED),
+                  color: isLiveKit
+                      ? const Color(0xFFF0F9FF)
+                      : isAgora
+                      ? const Color(0xFFF5F3FF)
+                      : const Color(0xFFFFF7ED),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: isLiveKit ? const Color(0xFFBAE6FD) : const Color(0xFFFED7AA),
+                    color: isLiveKit
+                        ? const Color(0xFFBAE6FD)
+                        : isAgora
+                        ? const Color(0xFFDDD6FE)
+                        : const Color(0xFFFED7AA),
                   ),
                 ),
                 child: Text(
-                  isLiveKit ? 'LiveKit' : 'Chime',
+                  isLiveKit
+                      ? 'LiveKit'
+                      : isAgora
+                      ? 'Agora'
+                      : 'Chime',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: isLiveKit ? const Color(0xFF0284C7) : const Color(0xFFEA580C),
+                    color: isLiveKit
+                        ? const Color(0xFF0284C7)
+                        : isAgora
+                        ? const Color(0xFF7C3AED)
+                        : const Color(0xFFEA580C),
                   ),
                 ),
               ),

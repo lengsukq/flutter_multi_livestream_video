@@ -12,6 +12,7 @@ Provider support is added by adapter packages that register a
 | Provider | Adapter package | Status |
 | --- | --- | --- |
 | LiveKit | `flutter_realtime_media_livekit` | Implemented |
+| Agora | `flutter_realtime_media_agora` | Implemented |
 | AWS Chime | `flutter_realtime_media_chime` (wrapping `flutter_aws_chime`) | Implemented |
 
 ## Why a separate core

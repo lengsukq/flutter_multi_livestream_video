@@ -173,6 +173,49 @@ Token requirements:
   viewers;
 - `ttl` short (minutes), not the SDK default of six hours.
 
+### Agora provider block
+
+```json
+{
+  "contractVersion": 1,
+  "provider": "agora",
+  "role": "host",
+  "roomCode": "482913",
+  "participantId": "123456789",
+  "displayName": "Host A",
+  "agora": {
+    "appId": "<agora-app-id>",
+    "channelName": "media-482913",
+    "token": "<short-lived-access-token-2>",
+    "uid": 123456789
+  }
+}
+```
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `agora.appId` | yes | Public Agora App ID. The App Certificate is **never** returned to Flutter. |
+| `agora.channelName` | yes | Provider channel mapped from the application room code. |
+| `agora.token` | yes | Short-lived Agora AccessToken2 minted by the backend. |
+| `agora.uid` | yes | Positive signed 32-bit Agora UID (`1..2147483647`). Its decimal string must equal `participantId`. |
+
+The reference backend grants join/audio/video/data privileges to `participant`
+and `host`. A `viewer` receives join permission but no publish-audio,
+publish-video, or publish-data privilege, and the Flutter adapter joins as an
+Agora audience client with all local publishing disabled.
+
+Agora's fine-grained publish privileges are enforced by the service only when
+the Agora project has the corresponding **co-host authentication** capability
+enabled. Without it, the SDK still enforces the viewer role locally, but the
+backend must not claim that a modified client is server-side prevented from
+publishing. Production integrations that depend on this security boundary must
+enable the Agora feature and verify it with a real-project E2E test.
+
+The current Agora adapter intentionally reports `canSendData=false` for
+`viewer`. Agora RTC data streams in live-broadcast mode are host-oriented;
+viewer chat would require a separate safe messaging design (for example RTM)
+before it can match the Core viewer contract without weakening publish roles.
+
 ### Chime compatibility
 
 A Chime-only backend may omit `provider`, `role`, and `participantId` and
@@ -219,13 +262,18 @@ npm start
 ```
 
 The server listens on `http://127.0.0.1:3000` by default. Open its existing
-dashboard at `/` to switch the provider used for **new rooms** between LiveKit
-and AWS Chime without restarting Flutter. Existing rooms remain bound to their
+dashboard at `/` to switch the provider used for **new rooms** between LiveKit,
+Agora, and AWS Chime without restarting Flutter. Existing rooms remain bound to their
 original provider. Join/heartbeat/leave/delete resolve only by room code.
 
 For local LiveKit testing, run `bash scripts/livekit-dev.sh start`, then source
 `eval "$(bash scripts/livekit-dev.sh env)"` before `npm start`. No second backend or
 gateway process is required.
+
+For Agora, set `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` on `demo-server`.
+`AGORA_TOKEN_TTL_SECONDS` defaults to 600 seconds. The server uses AccessToken2
+and never exposes the App Certificate. No Agora credential belongs in Flutter
+or in `--dart-define` values.
 
 The current Chime adapter guarantees `participant` rooms only. If the server UI
 is switched to Chime and the client requests `host` or `viewer`, the reference

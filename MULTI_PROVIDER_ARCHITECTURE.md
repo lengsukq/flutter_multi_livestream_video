@@ -13,6 +13,8 @@ flutter_realtime_media_core
     |
     +--> flutter_realtime_media_livekit --> livekit_client
     |
+    +--> flutter_realtime_media_agora --> agora_rtc_engine
+    |
     +--> flutter_realtime_media_chime --> flutter_aws_chime
 ```
 
@@ -76,8 +78,10 @@ cd demo-server
 npm start
 ```
 
-Open `http://127.0.0.1:3000/` and switch new rooms between LiveKit and AWS
-Chime directly in the existing server UI. Flutter never sends a provider.
+For Agora, add `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` to the same
+server environment. Open `http://127.0.0.1:3000/` and switch new rooms between
+LiveKit, Agora, and AWS Chime directly in the existing server UI. Flutter never
+sends a provider.
 Existing rooms keep their original room-to-provider binding, so switching the
 UI affects only rooms created afterwards.
 

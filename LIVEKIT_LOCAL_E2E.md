@@ -18,7 +18,7 @@ Flutter then uses the provider-neutral backend at:
 http://127.0.0.1:3000
 ```
 
-Both LiveKit and AWS Chime are available through the same `demo-server`
+LiveKit, Agora, and AWS Chime are available through the same `demo-server`
 process. Open `http://127.0.0.1:3000/` and select LiveKit before this E2E. The
 Flutter request itself never contains a provider.
 

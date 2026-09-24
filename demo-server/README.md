@@ -2,7 +2,7 @@
 
 `npm start` is the **single application-backend entry point** for the demo. It
 serves the Flutter room API and the browser dashboard used to switch newly
-created rooms between AWS Chime and LiveKit at runtime.
+created rooms between AWS Chime, LiveKit, and Agora at runtime.
 
 ## Run
 
@@ -68,6 +68,10 @@ compatibility, but new Flutter integrations should use the room contract.
 | `LIVEKIT_URL` | unset | LiveKit Cloud/server WebSocket URL |
 | `LIVEKIT_API_KEY` | unset | server-side LiveKit API key |
 | `LIVEKIT_API_SECRET` | unset | server-side signing secret; keep it in the ignored `.env` |
+| `LIVEKIT_TOKEN_TTL_SECONDS` | `600` | short-lived LiveKit token lifetime |
+| `AGORA_APP_ID` | unset | public Agora App ID returned in Agora join payloads |
+| `AGORA_APP_CERTIFICATE` | unset | server-only Agora signing secret; never return it to Flutter |
+| `AGORA_TOKEN_TTL_SECONDS` | `600` | AccessToken2 lifetime in seconds, clamped to 60–86400 |
 
 For local LiveKit Server testing:
 
@@ -76,6 +80,20 @@ bash ../scripts/livekit-dev.sh start
 eval "$(bash ../scripts/livekit-dev.sh env)"
 AWS_PROFILE=chime-demo npm start
 ```
+
+For Agora testing, put the App ID and App Certificate in the ignored `.env`
+or the server process environment:
+
+```bash
+AGORA_APP_ID=... AGORA_APP_CERTIFICATE=... npm start
+```
+
+The server signs Agora AccessToken2 credentials. `participant` and `host`
+receive publish privileges; `viewer` is issued no audio/video/data publish
+privileges and joins the Flutter SDK as an audience client. Agora only
+server-enforces those fine-grained publish privileges when co-host
+authentication is enabled for the Agora project, so production use must verify
+that project capability before relying on it as a security boundary.
 
 ## Scope
 
