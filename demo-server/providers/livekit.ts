@@ -97,8 +97,15 @@ export function createLiveKitProvider({
       };
     },
     async closeRoom() {},
-    removeAttendee() {
-      return { removed: false, closeWhenEmpty: false };
+    removeAttendee(entry, who) {
+      const before = entry.attendees.length;
+      entry.attendees = entry.attendees.filter(
+        (attendee) => attendee.attendeeId !== String(who),
+      );
+      return {
+        removed: entry.attendees.length !== before,
+        closeWhenEmpty: false,
+      };
     },
     summarizeRoom(entry, { host }) {
       const room = entry as NamedRoomEntry;

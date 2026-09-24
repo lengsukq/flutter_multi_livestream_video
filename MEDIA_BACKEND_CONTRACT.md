@@ -72,7 +72,8 @@ Create a room and an attendee/participant for the caller.
 {
   "nickname": "Host A",
   "roomCode": "482913",
-  "role": "host"
+  "role": "host",
+  "deviceId": "b8ae2e3f-3e30-4f66-8f69-fd63cc0cc8a5"
 }
 ```
 
@@ -80,15 +81,29 @@ Create a room and an attendee/participant for the caller.
 [join response](#join-response). Recommended errors: `bad-room-code` (`400`),
 `room-exists` (`409`).
 
+`deviceId` is optional and opaque. Demo applications may persist a random
+install-scoped id and send it on create/join so the backend can treat repeated
+joins from the same app installation as one logical device presence. It is not
+a hardware identifier and must not contain provider credentials.
+
 ### `POST /rooms/{roomCode}/join`
 
 Create an attendee/participant in an existing room.
 
 ```json
-{ "userId": "Guest", "role": "viewer" }
+{
+  "userId": "Guest",
+  "role": "viewer",
+  "deviceId": "b8ae2e3f-3e30-4f66-8f69-fd63cc0cc8a5"
+}
 ```
 
 Missing room returns `room-not-found` (`404`).
+
+When `deviceId` is supplied, the reference demo backend keeps only the latest
+participant record for that device in a room. `participantId` remains the
+provider/session identity and may change every time the device reconnects;
+`userId`/`nickname` remains display text and may also change.
 
 ### `POST /rooms/{roomCode}/credentials/refresh` (optional)
 

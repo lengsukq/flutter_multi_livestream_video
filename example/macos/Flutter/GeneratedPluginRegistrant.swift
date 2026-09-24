@@ -11,6 +11,7 @@ import device_info_plus
 import flutter_webrtc
 import iris_method_channel
 import livekit_client
+import shared_preferences_foundation
 import tencent_rtc_sdk
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
@@ -20,5 +21,6 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FlutterWebRTCPlugin.register(with: registry.registrar(forPlugin: "FlutterWebRTCPlugin"))
   IrisMethodChannelPlugin.register(with: registry.registrar(forPlugin: "IrisMethodChannelPlugin"))
   LiveKitPlugin.register(with: registry.registrar(forPlugin: "LiveKitPlugin"))
+  SharedPreferencesPlugin.register(with: registry.registrar(forPlugin: "SharedPreferencesPlugin"))
   TencentRTCCloud.register(with: registry.registrar(forPlugin: "TencentRTCCloud"))
 }

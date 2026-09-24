@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'trtc_join_info.dart';
@@ -22,12 +21,6 @@ class TrtcSessionFactory implements MediaSessionFactory {
     MediaRole.host,
     MediaRole.viewer,
   };
-
-  @override
-  bool get isPlatformSupported =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.iOS ||
-          defaultTargetPlatform == TargetPlatform.android);
 
   @override
   TrtcJoinInfo parseJoinInfo(Map<String, dynamic> json) =>

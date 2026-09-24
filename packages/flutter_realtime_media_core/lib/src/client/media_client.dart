@@ -61,11 +61,13 @@ class MediaClient {
     required String nickname,
     MediaRole role = MediaRole.participant,
     String? roomCode,
+    String? deviceId,
   }) async {
     final response = await backend.createRoom(
       role: role,
       roomCode: roomCode,
       nickname: nickname,
+      deviceId: deviceId,
     );
     return _joinResponse(response);
   }
@@ -78,11 +80,13 @@ class MediaClient {
     required String roomCode,
     required String nickname,
     MediaRole role = MediaRole.participant,
+    String? deviceId,
   }) async {
     final response = await backend.joinRoom(
       role: role,
       roomCode: roomCode,
       nickname: nickname,
+      deviceId: deviceId,
     );
     return _joinResponse(response);
   }
@@ -92,15 +96,6 @@ class MediaClient {
 
   Future<MediaRoomSession> _joinResponse(MediaRoomJoinResponse response) async {
     final factory = registry.require(response.providerId);
-    if (!factory.isPlatformSupported) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedPlatform,
-        message:
-            'The ${response.providerId} adapter is not available on this '
-            'platform.',
-        providerId: response.providerId,
-      );
-    }
     if (!factory.supportedRoles.contains(response.role)) {
       throw MediaError(
         code: MediaErrorCode.unsupportedFeature,

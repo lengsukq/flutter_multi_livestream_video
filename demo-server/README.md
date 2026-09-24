@@ -35,9 +35,9 @@ Optional demo authentication:
 DEMO_BEARER_TOKEN=my-local-token AWS_PROFILE=chime-demo npm start
 ```
 
-When `DEMO_BEARER_TOKEN` is set, `/rooms` endpoints require
+When `DEMO_BEARER_TOKEN` is set, room connection endpoints require
 `Authorization: Bearer <token>`. This is only a reference hook for exercising
-`MediaClient.tokenProvider`; it is not a production authentication system.
+`MediaClient.tokenProvider`; it is not a production identity system.
 
 Health check:
 
@@ -123,6 +123,30 @@ uses the language-neutral contract documented in
 Legacy `/meetings` and `/join` endpoints remain in the demo server for
 compatibility, but new Flutter integrations should use the room contract.
 
+## Public Vercel deployment
+
+The server can be deployed from this directory as an Express Vercel Function.
+The dashboard HTML lives in `public/index.html` and is bundled with the
+function. Set the Vercel project root to `demo-server`.
+
+Before a public deployment, configure a strong `MEDIA_ADMIN_PASSWORD`. The
+dashboard requires this password, then uses an HttpOnly, Secure, SameSite
+admin cookie. Management endpoints are same-origin only. The media API enables
+CORS by default and allows the contract and Authorization headers, so a Flutter
+app hosted on another origin can call it. Browser admin cookies are deliberately
+not enabled for cross-origin requests.
+
+`MEDIA_CONNECTIONS_ENABLED=false` makes room creation, joining, credential
+refresh, leave, heartbeat, and legacy connection endpoints return HTTP 503.
+On Vercel, environment changes apply to a new deployment, so pausing or
+resuming through this setting requires redeploying. Deploy publicly with this
+setting `false`, then set it to `true` only when ready to accept connections.
+
+This demo server keeps room bindings and activity logs in process memory. Vercel
+Functions can run on different instances, so keep public connections paused
+until `RoomDirectory` is backed by shared persistent storage. The admin
+dashboard remains available while connections are paused.
+
 ## Env
 
 | var | default | note |
@@ -132,6 +156,9 @@ compatibility, but new Flutter integrations should use the room contract.
 | `CHIME_MEDIA_REGION` | `ap-southeast-1` | media region near CN |
 | `PORT` | `3000` | — |
 | `DEMO_BEARER_TOKEN` | unset | optional bearer token for room API demos |
+| `MEDIA_ADMIN_PASSWORD` | unset | required on Vercel; protects the management dashboard and admin endpoints |
+| `MEDIA_CONNECTIONS_ENABLED` | `true` locally, `false` on Vercel | set `false` to reject room connection requests; Vercel requires a redeploy after changes |
+| `MEDIA_DEFAULT_PROVIDER` | `chime` | default provider for new rooms; on Vercel set this in the project environment |
 | `LIVEKIT_URL` | unset | LiveKit Cloud/server WebSocket URL |
 | `LIVEKIT_API_KEY` | unset | server-side LiveKit API key |
 | `LIVEKIT_API_SECRET` | unset | server-side signing secret; keep it in the ignored `.env` |
@@ -192,10 +219,7 @@ security boundary against a modified client.
 
 ## Scope
 
-This server is a local/reference implementation for running the example and
-validating backend contract v1. It intentionally uses in-memory room state.
-Restarting the process clears that directory.
-
-It is **not** a production deployment template. Production authentication,
-authorization, persistence, rate limiting, monitoring, AWS IAM configuration,
-and infrastructure deployment are responsibilities of the application owner.
+This server is a reference implementation for running the example and
+validating backend contract v1. It intentionally uses in-memory room state;
+restarting the process clears that directory. A public Vercel deployment must
+remain paused until shared room persistence and production monitoring are added.

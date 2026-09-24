@@ -5,6 +5,7 @@ export interface RoomAttendee {
   externalUserId: string;
   joinedAt: string;
   role?: MediaRole;
+  deviceId?: string;
 }
 
 export interface ChimeMeeting {

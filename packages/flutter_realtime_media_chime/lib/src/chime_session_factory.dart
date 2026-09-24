@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_aws_chime/flutter_aws_chime.dart' as chime;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
@@ -19,12 +18,6 @@ class ChimeSessionFactory implements MediaSessionFactory {
 
   @override
   Set<MediaRole> get supportedRoles => const {MediaRole.participant};
-
-  @override
-  bool get isPlatformSupported =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.iOS ||
-          defaultTargetPlatform == TargetPlatform.android);
 
   @override
   ChimeJoinInfo parseJoinInfo(Map<String, dynamic> json) =>

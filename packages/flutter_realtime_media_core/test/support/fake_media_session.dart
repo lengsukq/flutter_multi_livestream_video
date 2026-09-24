@@ -14,7 +14,6 @@ class FakeMediaSessionFactory implements MediaSessionFactory {
       MediaRole.host,
       MediaRole.viewer,
     },
-    this.isPlatformSupported = true,
     this.joinError,
   });
 
@@ -23,9 +22,6 @@ class FakeMediaSessionFactory implements MediaSessionFactory {
 
   @override
   final Set<MediaRole> supportedRoles;
-
-  @override
-  final bool isPlatformSupported;
 
   /// When set, `join` fails with this error instead of connecting.
   final MediaError? joinError;

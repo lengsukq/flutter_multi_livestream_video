@@ -1,3 +1,5 @@
+/// <reference path="./types/vendor.d.ts" />
+
 import tlsSigApiV2 from 'tls-sig-api-v2';
 import type { MediaRole } from './types.ts';
 

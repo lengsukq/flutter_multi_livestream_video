@@ -14,12 +14,6 @@ abstract class MediaSessionFactory {
   /// Roles this adapter can create sessions for.
   Set<MediaRole> get supportedRoles;
 
-  /// Whether this adapter runs on the current platform.
-  ///
-  /// Adapters usually check iOS/Android here so callers get
-  /// `unsupportedPlatform` before any native call.
-  bool get isPlatformSupported;
-
   /// Parses the backend join response into provider-neutral join information.
   ///
   /// Throws `MediaError` with `invalidJoinInfo` when required fields are

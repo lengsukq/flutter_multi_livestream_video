@@ -76,3 +76,4 @@ node_modules/
 /demo-server/.env.*
 !/demo-server/.env.example
 /demo-server/.provider-state.json
+.vercel

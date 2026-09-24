@@ -54,7 +54,18 @@ const PROVIDER_STATE_PATH = process.env.MEDIA_PROVIDER_STATE_PATH ?? path.join(_
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(cors());
+app.use(cors({
+  origin: true,
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Authorization',
+    'Content-Type',
+    'X-Media-Backend-Contract',
+    'X-Chime-Backend-Contract',
+  ],
+  exposedHeaders: [MEDIA_CONTRACT_HEADER],
+  maxAge: 600,
+}));
 app.use(express.json({ limit: '64kb' }));
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -68,7 +79,8 @@ function getCookie(req: Request, name: string): string | null {
   for (const pair of header.split(';')) {
     const separator = pair.indexOf('=');
     if (separator < 0 || pair.slice(0, separator).trim() !== name) continue;
-    return decodeURIComponent(pair.slice(separator + 1).trim());
+    const value = pair.slice(separator + 1).trim();
+    try { return decodeURIComponent(value); } catch (_) { return value; }
   }
   return null;
 }
@@ -137,6 +149,8 @@ function requireConnectionsEnabled(_req: Request, res: Response, next: NextFunct
 }
 
 function requireLegacyConnectionAccess(req: Request, res: Response, next: NextFunction): Response | void {
+  // Keep administrator cleanup available while the public connection API is paused.
+  if (req.method === 'DELETE' && /^\/[^/]+$/.test(req.path)) return next();
   if (!MEDIA_CONNECTIONS_ENABLED) {
     return contractError(res, 503, 'service-paused', 'The media connection service is paused.');
   }
@@ -169,6 +183,30 @@ function normalizeUserId(raw: unknown): string {
 
 function normalizeDisplayName(raw: unknown): string {
   return String(raw ?? '').trim().slice(0, 64);
+}
+
+function normalizeDeviceId(raw: unknown): string | null {
+  if (raw == null) return null;
+  const value = String(raw).trim();
+  if (!value) return null;
+  return /^[A-Za-z0-9._:-]{8,128}$/.test(value) ? value : null;
+}
+
+function bindDevicePresence(
+  entry: RoomEntry,
+  participantId: string,
+  deviceId: string | null,
+): void {
+  if (!deviceId) return;
+  const current = entry.attendees.find(
+    (attendee) => attendee.attendeeId === participantId,
+  );
+  if (!current) return;
+  current.deviceId = deviceId;
+  entry.attendees = entry.attendees.filter(
+    (attendee) =>
+      attendee.attendeeId === participantId || attendee.deviceId !== deviceId,
+  );
 }
 
 function parseRole(raw: unknown): MediaRole | null {
@@ -241,7 +279,12 @@ function requireRoomContract(req: Request, res: Response, next: NextFunction): R
   next();
 }
 
-app.use('/rooms', requireConnectionsEnabled, requireRoomContract);
+app.use('/rooms', (req, res, next) => {
+  const isRoomList = req.method === 'GET' && req.path === '/';
+  const isRoomCleanup = req.method === 'DELETE' && /^\/[^/]+$/.test(req.path);
+  if (isRoomList || isRoomCleanup) return requireRoomContract(req, res, next);
+  return requireConnectionsEnabled(req, res, () => requireRoomContract(req, res, next));
+});
 app.use(['/meetings', '/join'], requireLegacyConnectionAccess);
 
 app.post('/api/admin/login', requireSameOrigin, (req, res) => {
@@ -298,6 +341,12 @@ function assertRole(
 }
 
 function loadPersistedProvider(): string {
+  // Vercel instances are ephemeral and may run concurrently. Deployment config
+  // is the only reliable source for its default provider.
+  if (IS_VERCEL) {
+    const initial = providerRegistry.require(INITIAL_PROVIDER);
+    return initial.isConfigured() ? initial.id : 'chime';
+  }
   try {
     const parsed = JSON.parse(readFileSync(PROVIDER_STATE_PATH, 'utf8')) as {
       provider?: unknown;
@@ -312,6 +361,7 @@ function loadPersistedProvider(): string {
 }
 
 function persistActiveProvider(provider: string): void {
+  if (IS_VERCEL) return;
   try {
     writeFileSync(
       PROVIDER_STATE_PATH,
@@ -461,6 +511,15 @@ app.post('/rooms', async (req, res) => {
     if (!role) {
       return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
     }
+    const deviceId = normalizeDeviceId(req.body?.deviceId);
+    if (req.body?.deviceId != null && !deviceId) {
+      return contractError(
+        res,
+        400,
+        'invalid-argument',
+        'deviceId must be 8-128 letters, digits, dots, underscores, colons, or hyphens.',
+      );
+    }
 
     const provider = providerRegistry.requireConfigured(activeProvider);
     assertRole(provider, role);
@@ -473,6 +532,7 @@ app.post('/rooms', async (req, res) => {
     if (!rawNickname) return res.json(created.response);
 
     const response = await provider.joinRoom({ entry: created.entry, rawName: rawNickname, role });
+    bindDevicePresence(created.entry, response.participantId, deviceId);
     logEvent('join', `${response.displayName} created+joined room ${roomCode} via ${provider.displayName}`);
     res.json(response);
   } catch (error) {
@@ -497,7 +557,17 @@ app.post('/rooms/:code/join', async (req, res) => {
     }
     const provider = providerRegistry.requireConfigured(entry.provider);
     assertRole(provider, role, entry);
+    const deviceId = normalizeDeviceId(req.body?.deviceId);
+    if (req.body?.deviceId != null && !deviceId) {
+      return contractError(
+        res,
+        400,
+        'invalid-argument',
+        'deviceId must be 8-128 letters, digits, dots, underscores, colons, or hyphens.',
+      );
+    }
     const response = await provider.joinRoom({ entry, rawName: req.body?.userId, role });
+    bindDevicePresence(entry, response.participantId, deviceId);
     logEvent('join', `${response.displayName} joined room ${entry.roomCode} via ${provider.displayName}`);
     res.json(response);
   } catch (error) {
@@ -646,8 +716,10 @@ app.get('/meetings/:id', async (req, res) => {
 
 app.delete('/meetings/:id', requireSameOrigin, requireAdmin, async (req, res) => {
   try {
-    await chimeProvider.deleteLegacyMeeting(req.params.id);
-    const entry = roomDirectory.get(req.params.id);
+    const meetingId = req.params.id;
+    if (!meetingId) return res.status(404).json({ error: 'meeting-not-found' });
+    await chimeProvider.deleteLegacyMeeting(meetingId);
+    const entry = roomDirectory.get(meetingId);
     if (entry?.provider === 'chime') {
       roomDirectory.remove(entry);
       logEvent('delete', `room ${entry.roomCode} force-closed`);

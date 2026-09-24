@@ -20,6 +20,11 @@ flutter_realtime_media_core
 Core contains no provider SDK dependency. Applications register the adapters
 they want and then use one `MediaClient` API.
 
+Registered adapters are not pre-filtered by operating system. Core attempts the
+adapter on the current Flutter target and leaves genuine platform support to the
+provider/native SDK. Individual media features are still gated through
+`MediaCapabilities` where needed.
+
 ## Register providers
 
 ```dart

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_livekit/flutter_realtime_media_livekit.dart';
 import 'package:flutter_realtime_media_trtc/flutter_realtime_media_trtc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'widgets/glass_widgets.dart';
 
@@ -95,7 +97,10 @@ class JoinScreen extends StatefulWidget {
 
 class _JoinScreenState extends State<JoinScreen>
     with SingleTickerProviderStateMixin {
+  static const _deviceIdPreferenceKey = 'realtime_media_demo_device_id';
+
   late final TabController _tabs;
+  late final Future<String> _deviceIdFuture;
   final _serverController = TextEditingController();
   final _createCodeController = TextEditingController();
   final _createNameController = TextEditingController();
@@ -109,17 +114,24 @@ class _JoinScreenState extends State<JoinScreen>
   bool? _serverOnline;
   String? _serverProviderInfo;
   bool _testingServer = false;
+  bool _serverStatusRequestInFlight = false;
+  Timer? _serverStatusTimer;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    _deviceIdFuture = _loadOrCreateDeviceId();
     _serverController.text = _defaultBackendUrl;
-    _testConnection();
+    unawaited(_testConnection());
+    _serverStatusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_testConnection(silent: true));
+    });
   }
 
   @override
   void dispose() {
+    _serverStatusTimer?.cancel();
     _tabs.dispose();
     _serverController.dispose();
     _createCodeController.dispose();
@@ -136,34 +148,66 @@ class _JoinScreenState extends State<JoinScreen>
       ? 'user-${DateTime.now().millisecondsSinceEpoch % 100000}'
       : controller.text.trim();
 
-  Future<void> _testConnection() async {
+  Future<String> _loadOrCreateDeviceId() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final existing = preferences.getString(_deviceIdPreferenceKey)?.trim();
+      if (existing != null && existing.isNotEmpty) return existing;
+      final created = _generateDeviceId();
+      await preferences.setString(_deviceIdPreferenceKey, created);
+      return created;
+    } catch (_) {
+      return _generateDeviceId();
+    }
+  }
+
+  String _generateDeviceId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes
+        .map((value) => value.toRadixString(16).padLeft(2, '0'))
+        .join();
+    return '${hex.substring(0, 8)}-'
+        '${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-'
+        '${hex.substring(16, 20)}-'
+        '${hex.substring(20)}';
+  }
+
+  Future<void> _testConnection({bool silent = false}) async {
+    if (_serverStatusRequestInFlight) return;
     final url = _server;
     if (url.isEmpty) {
-      setState(() {
-        _serverOnline = false;
-        _serverProviderInfo = 'No URL specified';
-      });
+      if (mounted) {
+        setState(() {
+          _serverOnline = false;
+          _serverProviderInfo = 'No URL specified';
+        });
+      }
       return;
     }
-    setState(() => _testingServer = true);
+    _serverStatusRequestInFlight = true;
+    if (!silent && mounted) setState(() => _testingServer = true);
+    HttpClient? client;
     try {
       final uri = Uri.parse(url.endsWith('/') ? '${url}health' : '$url/health');
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 3);
+      client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
       final req = await client.getUrl(uri);
       final resp = await req.close();
       if (resp.statusCode == 200) {
         final body = await resp.transform(utf8.decoder).join();
         final json = jsonDecode(body) as Map<String, dynamic>;
         final active = json['activeProvider'] as String? ?? 'ready';
-        if (mounted) {
+        if (mounted && _server == url) {
           setState(() {
             _serverOnline = true;
-            _serverProviderInfo = 'Engine: $active';
+            _serverProviderInfo = 'Default: $active';
           });
         }
       } else {
-        if (mounted) {
+        if (mounted && _server == url) {
           setState(() {
             _serverOnline = false;
             _serverProviderInfo = 'HTTP ${resp.statusCode}';
@@ -171,14 +215,16 @@ class _JoinScreenState extends State<JoinScreen>
         }
       }
     } catch (_) {
-      if (mounted) {
+      if (mounted && _server == url) {
         setState(() {
           _serverOnline = false;
           _serverProviderInfo = 'Unreachable';
         });
       }
     } finally {
-      if (mounted) setState(() => _testingServer = false);
+      client?.close(force: true);
+      _serverStatusRequestInFlight = false;
+      if (!silent && mounted) setState(() => _testingServer = false);
     }
   }
 
@@ -201,11 +247,13 @@ class _JoinScreenState extends State<JoinScreen>
       return;
     }
     final client = _newClient();
+    final deviceId = await _deviceIdFuture;
     await _run(() async {
       final room = await client.createRoomAndJoin(
         roomCode: requestedCode.isEmpty ? null : requestedCode,
         nickname: _nickname(_createNameController),
         role: MediaRole.participant,
+        deviceId: deviceId,
       );
       await _openMeeting(client, room);
     }, client);
@@ -222,11 +270,13 @@ class _JoinScreenState extends State<JoinScreen>
       return;
     }
     final client = _newClient();
+    final deviceId = await _deviceIdFuture;
     await _run(() async {
       final room = await client.joinRoom(
         roomCode: code,
         nickname: _nickname(_joinNameController),
         role: MediaRole.participant,
+        deviceId: deviceId,
       );
       await _openMeeting(client, room);
     }, client);

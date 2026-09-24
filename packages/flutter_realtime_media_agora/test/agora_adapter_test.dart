@@ -169,8 +169,6 @@ void main() {
     test('supports macOS with desktop-appropriate capabilities', () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
 
-      expect(factory.isPlatformSupported, isTrue);
-
       final participant =
           factory.createSession(joinInfo(MediaRole.participant))
               as InteractiveMediaSession;
@@ -192,11 +190,6 @@ void main() {
       );
 
       await participant.dispose();
-    });
-
-    test('does not advertise unsupported desktop platforms', () {
-      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
-      expect(factory.isPlatformSupported, isFalse);
     });
 
     test('rejects generic join info', () {

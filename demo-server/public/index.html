@@ -1029,7 +1029,7 @@
       <div class="provider-panel-info">
         <div class="panel-badge">Media Provider Routing</div>
         <h2>新房间媒体引擎调度</h2>
-        <p>控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。</p>
+        <p id="provider-panel-note">控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。</p>
       </div>
       <div class="provider-switcher" id="provider-switcher"></div>
     </div>
@@ -1166,6 +1166,7 @@
     let cachedProviders = new Map();
     let cachedEvents = [];
     let currentEventFilter = 'all';
+    let providerSelectionEnabled = true;
 
     function toast(text, type = 'info') {
       const c = document.getElementById('toast-container');
@@ -1183,8 +1184,68 @@
     async function api(path, opts) {
       const r = await fetch(path, opts);
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error?.message || d.message || ('HTTP ' + r.status));
+      if (!r.ok) {
+        const error = new Error(d.error?.message || d.message || ('HTTP ' + r.status));
+        error.status = r.status;
+        throw error;
+      }
       return d;
+    }
+
+    function showLogin(message = '') {
+      if (timer) clearInterval(timer);
+      timer = null;
+      document.getElementById('dashboard-root').classList.add('auth-hidden');
+      document.getElementById('admin-login').classList.remove('hidden');
+      document.getElementById('login-error').textContent = message;
+      document.getElementById('admin-password').focus();
+    }
+
+    function showDashboard() {
+      document.getElementById('admin-login').classList.add('hidden');
+      document.getElementById('dashboard-root').classList.remove('auth-hidden');
+      document.getElementById('login-error').textContent = '';
+    }
+
+    async function login(event) {
+      event.preventDefault();
+      const button = document.getElementById('login-button');
+      const password = document.getElementById('admin-password').value;
+      button.disabled = true;
+      document.getElementById('login-error').textContent = '';
+      try {
+        await api('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        document.getElementById('admin-password').value = '';
+        showDashboard();
+        await refresh();
+        timer = setInterval(refresh, 5000);
+      } catch (error) {
+        document.getElementById('login-error').textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    async function logout() {
+      try { await api('/api/admin/logout', { method: 'POST' }); } catch (_) { }
+      showLogin('已退出登录');
+    }
+
+    async function initialize() {
+      try {
+        await api('/api/admin/session');
+        showDashboard();
+        await refresh();
+        timer = setInterval(refresh, 5000);
+      } catch (error) {
+        showLogin(error.status === 503
+          ? '管理登录尚未配置，请在服务端设置 MEDIA_ADMIN_PASSWORD。'
+          : '请输入管理密码登录。');
+      }
     }
 
     function esc(s) {
@@ -1252,15 +1313,17 @@
       switcher.innerHTML = providers.map(provider => {
         const active = provider.id === activeProvider;
         const accent = `hsl(${providerHue(provider.id)} 65% 45%)`;
-        const title = provider.configured
-          ? `新房间使用 ${provider.displayName}`
-          : `${provider.displayName} 尚未完成服务端配置`;
+        const title = !provider.configured
+          ? `${provider.displayName} 尚未完成服务端配置`
+          : (!providerSelectionEnabled && !active
+            ? '线上 Provider 由 MEDIA_DEFAULT_PROVIDER 环境变量配置'
+            : `新房间使用 ${provider.displayName}`);
         return `<button class="provider-opt${active ? ' active' : ''}"
           data-provider="${esc(provider.id)}"
           onclick="switchProvider(this.dataset.provider)"
           style="--provider-accent:${accent}"
           title="${esc(title)}"
-          ${provider.configured ? '' : 'disabled'}>
+          ${provider.configured && (providerSelectionEnabled || active) ? '' : 'disabled'}>
           <span class="opt-dot" style="background:${accent}"></span>
           ${esc(provider.label || provider.displayName || provider.id)}
         </button>`;
@@ -1350,8 +1413,11 @@
           ? `<div class="attendee-chips">` + r.attendees.map(a => {
               const name = a.externalUserId || 'Guest';
               const initial = name.charAt(0).toUpperCase();
+              const deviceHint = a.deviceId
+                ? ` · 设备: ${esc(a.deviceId.slice(0, 8))}…`
+                : '';
               return `
-                <span class="user-chip" title="加入时间: ${esc(a.joinedAt)}">
+                <span class="user-chip" title="加入时间: ${esc(a.joinedAt)}${deviceHint}">
                   <span class="user-chip-avatar">${esc(initial)}</span>
                   ${esc(name)}
                 </span>
@@ -1408,12 +1474,24 @@
       refreshBtn.style.opacity = '0.6';
       try {
         const d = await api('/api/overview');
+        providerSelectionEnabled = d.providerSelectionEnabled !== false;
         const providerList = d.providerList || Object.values(d.providers || {});
         cachedProviders = new Map(providerList.map(provider => [provider.id, provider]));
         const currentProvider = providerInfo(d.activeProvider);
         const providerName = currentProvider.displayName || currentProvider.label || d.activeProvider;
         document.getElementById('header-meta').textContent =
           `当前通道：${providerName}`;
+        const status = document.getElementById('service-status');
+        const banner = document.getElementById('connection-banner');
+        status.classList.toggle('paused', !d.connectionsEnabled);
+        status.innerHTML = `<span class="pulse-dot"></span>${d.connectionsEnabled ? '连接服务开启' : '连接服务已暂停'}`;
+        banner.classList.toggle('enabled', Boolean(d.connectionsEnabled));
+        banner.innerHTML = d.connectionsEnabled
+          ? '<strong>连接服务已开启。</strong> 如需暂停公网入会，请在 Vercel 项目环境变量中将 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>false</code> 并重新部署。'
+          : '<strong>连接服务已暂停。</strong> 房间创建、加入、续期和心跳请求都会返回 503。恢复时将 Vercel 环境变量 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>true</code> 并重新部署。';
+        document.getElementById('provider-panel-note').textContent = providerSelectionEnabled
+          ? '控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。'
+          : '线上默认通道由 Vercel 的 MEDIA_DEFAULT_PROVIDER 环境变量决定；修改后需重新部署。';
         document.getElementById('region-tags').textContent =
           `${d.controlRegion} / ${d.mediaRegion}`;
         renderProviderSwitcher(d.activeProvider);
@@ -1437,6 +1515,7 @@
         renderRoomsTable();
         renderEvents();
       } catch (e) {
+        if (e.status === 401) return showLogin('登录已过期，请重新登录。');
         toast('刷新数据失败: ' + e.message, 'error');
       } finally {
         refreshBtn.style.opacity = '1';
@@ -1509,8 +1588,7 @@
       if (e.key === 'Enter') createRoom();
     });
 
-    refresh();
-    timer = setInterval(refresh, 5000);
+    initialize();
   </script>
 </body>
 </html>

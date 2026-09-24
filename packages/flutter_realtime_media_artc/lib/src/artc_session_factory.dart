@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'artc_engine.dart';
@@ -21,12 +20,6 @@ class ArtcSessionFactory implements MediaSessionFactory {
     MediaRole.host,
     MediaRole.viewer,
   };
-
-  @override
-  bool get isPlatformSupported =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.iOS ||
-          defaultTargetPlatform == TargetPlatform.android);
 
   @override
   ArtcJoinInfo parseJoinInfo(Map<String, dynamic> json) =>

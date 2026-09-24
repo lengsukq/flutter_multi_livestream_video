@@ -17,6 +17,12 @@ flutter_realtime_media_core
 
 Provider SDKs never become dependencies of Core.
 
+Core does not maintain a platform whitelist for registered adapters. If an app
+registers an adapter, Core will attempt to use it on the current Flutter target
+instead of rejecting the room up front. Provider/native SDKs remain responsible
+for reporting genuinely unsupported targets, while feature-level differences
+continue to be exposed through `MediaCapabilities`.
+
 ## One Flutter API, multiple providers
 
 ```dart

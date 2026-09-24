@@ -66,11 +66,16 @@ class MediaBackendClient {
     required MediaRole role,
     String? roomCode,
     required String nickname,
+    String? deviceId,
   }) async {
     final body = <String, Object?>{
       'nickname': _required(nickname, 'nickname'),
       'role': role.wireName,
     };
+    final normalizedDeviceId = deviceId?.trim();
+    if (normalizedDeviceId != null && normalizedDeviceId.isNotEmpty) {
+      body['deviceId'] = normalizedDeviceId;
+    }
     final normalizedCode = roomCode?.trim();
     if (normalizedCode != null && normalizedCode.isNotEmpty) {
       body['roomCode'] = normalizedCode;
@@ -83,11 +88,14 @@ class MediaBackendClient {
     required MediaRole role,
     required String roomCode,
     required String nickname,
+    String? deviceId,
   }) async {
     final code = _required(roomCode, 'roomCode');
     final data = await _post('/rooms/${Uri.encodeComponent(code)}/join', {
       'userId': _required(nickname, 'nickname'),
       'role': role.wireName,
+      if (deviceId != null && deviceId.trim().isNotEmpty)
+        'deviceId': deviceId.trim(),
     });
     return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
   }

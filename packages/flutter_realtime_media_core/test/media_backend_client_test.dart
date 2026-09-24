@@ -41,6 +41,7 @@ void main() {
           role: MediaRole.host,
           roomCode: '482913',
           nickname: 'Host A',
+          deviceId: 'device-demo-1',
         );
 
         final request = transport.requests.single;
@@ -50,6 +51,7 @@ void main() {
           'nickname': 'Host A',
           'role': 'host',
           'roomCode': '482913',
+          'deviceId': 'device-demo-1',
         });
         expect(request.headers['Authorization'], 'Bearer app-token');
         expect(request.headers['X-App'], 'demo');
@@ -100,11 +102,16 @@ void main() {
           role: MediaRole.viewer,
           roomCode: '482913',
           nickname: 'Viewer 1',
+          deviceId: 'device-demo-2',
         );
 
         final request = transport.requests.single;
         expect(request.uri.path, '/rooms/482913/join');
-        expect(request.json, {'userId': 'Viewer 1', 'role': 'viewer'});
+        expect(request.json, {
+          'userId': 'Viewer 1',
+          'role': 'viewer',
+          'deviceId': 'device-demo-2',
+        });
         expect(response.role, MediaRole.viewer);
       },
     );

@@ -316,27 +316,6 @@ void main() {
       client.dispose();
     });
 
-    test('unsupported platform fails with a typed error', () async {
-      final unsupported = FakeMediaSessionFactory(isPlatformSupported: false);
-      final client = clientFor(
-        (_) => jsonResponse(liveKitJoinPayload(provider: 'fake')),
-        withRegistry: MediaRegistry([unsupported]),
-      );
-
-      await expectLater(
-        client.createRoomAndJoin(nickname: 'Leo'),
-        throwsA(
-          isA<MediaError>().having(
-            (error) => error.code,
-            'code',
-            MediaErrorCode.unsupportedPlatform,
-          ),
-        ),
-      );
-      expect(unsupported.createdSessions, isEmpty);
-      client.dispose();
-    });
-
     test('role the adapter rejects fails with unsupportedFeature', () async {
       final hostOnly = FakeMediaSessionFactory(
         supportedRoles: const {MediaRole.host},

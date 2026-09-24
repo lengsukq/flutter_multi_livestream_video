@@ -150,8 +150,17 @@ export function createChimeProvider({
         if (!(error instanceof Error) || error.name !== 'NotFoundException') throw error;
       }
     },
-    removeAttendee() {
-      return { removed: false, closeWhenEmpty: false };
+    removeAttendee(entry, who) {
+      const before = entry.attendees.length;
+      entry.attendees = entry.attendees.filter(
+        (attendee) =>
+          attendee.attendeeId !== String(who) &&
+          attendee.externalUserId !== String(who),
+      );
+      return {
+        removed: entry.attendees.length !== before,
+        closeWhenEmpty: false,
+      };
     },
     summarizeRoom(entry, { host }) {
       const room = entry as ChimeRoomEntry;
