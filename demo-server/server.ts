@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createAgoraProvider } from './providers/agora.ts';
+import { createArtcProvider } from './providers/artc.ts';
 import { createChimeProvider } from './providers/chime.ts';
 import { createLiveKitProvider } from './providers/livekit.ts';
 import { ProviderOperationError, ProviderRegistry } from './providers/provider-registry.ts';
@@ -84,6 +85,7 @@ const providerRegistry = new ProviderRegistry([
   createLiveKitProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
   createAgoraProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
   createTrtcProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
+  createArtcProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
 ]);
 const roomDirectory = new RoomDirectory();
 const events: Array<{ ts: string; type: string; message: string }> = [];

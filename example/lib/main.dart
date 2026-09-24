@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_realtime_media_artc/flutter_realtime_media_artc.dart';
 import 'package:flutter_realtime_media_agora/flutter_realtime_media_agora.dart';
 import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
@@ -27,6 +28,7 @@ void main() {
 }
 
 final MediaRegistry _mediaRegistry = MediaRegistry([
+  const ArtcSessionFactory(),
   const AgoraSessionFactory(),
   const LiveKitSessionFactory(),
   ChimeSessionFactory(),
@@ -34,6 +36,7 @@ final MediaRegistry _mediaRegistry = MediaRegistry([
 ]);
 
 final Map<String, MediaTrackRenderer> _mediaRenderers = {
+  'artc': const ArtcTrackRenderer(),
   'agora': const AgoraTrackRenderer(),
   'livekit': const LiveKitTrackRenderer(),
   'chime': const ChimeTrackRenderer(),
@@ -848,24 +851,28 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
 
   Widget _buildTopBar(MediaSnapshot value, String providerId) {
     final providerLabel = switch (providerId) {
+      'artc' => 'Alibaba Cloud ARTC',
       'livekit' => 'LiveKit',
       'agora' => 'Agora',
       'trtc' => 'Tencent TRTC',
       _ => 'Chime',
     };
     final providerBackground = switch (providerId) {
+      'artc' => const Color(0xFFF0FDF4),
       'livekit' => const Color(0xFFF0F9FF),
       'agora' => const Color(0xFFF5F3FF),
       'trtc' => const Color(0xFFFFF1F0),
       _ => const Color(0xFFFFF7ED),
     };
     final providerBorder = switch (providerId) {
+      'artc' => const Color(0xFFBBF7D0),
       'livekit' => const Color(0xFFBAE6FD),
       'agora' => const Color(0xFFDDD6FE),
       'trtc' => const Color(0xFFFECACA),
       _ => const Color(0xFFFED7AA),
     };
     final providerColor = switch (providerId) {
+      'artc' => const Color(0xFF16A34A),
       'livekit' => const Color(0xFF0284C7),
       'agora' => const Color(0xFF7C3AED),
       'trtc' => const Color(0xFFD94645),

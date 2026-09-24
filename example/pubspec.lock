@@ -225,6 +225,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_media_artc:
+    dependency: "direct main"
+    description:
+      path: "../packages/flutter_realtime_media_artc"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_media_chime:
     dependency: "direct main"
     description:

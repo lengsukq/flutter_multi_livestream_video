@@ -11,6 +11,7 @@ flutter_realtime_media_core
   ├─ flutter_realtime_media_livekit -> livekit_client
   ├─ flutter_realtime_media_agora   -> agora_rtc_engine
   ├─ flutter_realtime_media_trtc    -> tencent_rtc_sdk
+  ├─ flutter_realtime_media_artc    -> native AliVCSDK_ARTC (Android/iOS)
   └─ flutter_realtime_media_chime   -> flutter_aws_chime
 ```
 
@@ -23,6 +24,7 @@ final registry = MediaRegistry([
   const AgoraSessionFactory(),
   const LiveKitSessionFactory(),
   const TrtcSessionFactory(),
+  const ArtcSessionFactory(),
   ChimeSessionFactory(),
 ]);
 
@@ -42,11 +44,13 @@ The backend returns the actual provider with the join credentials. Core resolves
 the matching adapter automatically. Business UI only needs room/user intent;
 provider choice does not appear in create/join calls.
 
-TRTC is an optional adapter package. Applications that do not use it do not add
-`flutter_realtime_media_trtc` and do not download `tencent_rtc_sdk`; Core has no
-Tencent dependency and no default provider. The reference demo registers TRTC
-alongside its other adapters, while each application's backend remains the
-source of provider selection for every room.
+TRTC and ARTC are optional adapter packages. Applications that do not use them
+do not add their packages or SDK dependencies; Core has no Tencent or Alibaba
+dependency and no default provider. The reference demo registers both alongside
+its other adapters, while each application's backend remains the source of
+provider selection for every room. ARTC requires Alibaba Maven repositories in
+Android dependency resolution and uses CocoaPods on iOS; its 7.11.0 iOS pod is
+device-only and does not support simulator linking.
 
 ## Backend requirements
 
@@ -87,8 +91,8 @@ To enable Agora in the same server, also set `AGORA_APP_ID` and
 `AGORA_APP_CERTIFICATE` (normally in the ignored `demo-server/.env`).
 
 The public URL is `http://127.0.0.1:3000`. Open the existing dashboard and
-switch new rooms between LiveKit, Agora, AWS Chime, and Tencent TRTC directly in
-the server UI. TRTC signing requires `TRTC_SDK_APP_ID` and
+switch new rooms between LiveKit, Agora, AWS Chime, Tencent TRTC, and Alibaba
+ARTC directly in the server UI. TRTC signing requires `TRTC_SDK_APP_ID` and
 `TRTC_SDK_SECRET_KEY` on the server; enable Advanced Permission Control in the
 Tencent RTC project. The Flutter package receives short-lived UserSig and room
 PrivateMapKey values only.
@@ -114,6 +118,15 @@ when it is created. Viewers use the Core subscribe-only interface and receive a
 PrivateMapKey without media-publish privileges. Participant/host custom messages
 are supported; viewer messaging, screen share, and audio-device enumeration are
 not part of this adapter's first release.
+
+The ARTC adapter maps `participant` to communication mode and `host`/`viewer`
+to interactive live mode. The backend locks each room to its creation mode.
+ARTC's viewer role is selected by the client SDK; its token authenticates the
+application, channel, user, and expiry but does not enforce viewer publishing
+rights server-side. The Core viewer surface exposes no publish methods, but
+applications must not treat this as protection against a modified client.
+Viewer custom messages are receive-only; screen share and audio-device
+enumeration are not advertised by the first release.
 
 ```bash
 cd example

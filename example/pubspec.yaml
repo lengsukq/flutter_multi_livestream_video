@@ -18,6 +18,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_realtime_media_artc:
+    path: ../packages/flutter_realtime_media_artc
   flutter_realtime_media_agora:
     path: ../packages/flutter_realtime_media_agora
   flutter_realtime_media_core:

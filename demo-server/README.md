@@ -2,7 +2,8 @@
 
 `npm start` is the **single application-backend entry point** for the demo. It
 serves the Flutter room API and the browser dashboard used to switch newly
-created rooms between AWS Chime, LiveKit, Agora, and Tencent TRTC at runtime.
+created rooms between AWS Chime, LiveKit, Agora, Tencent TRTC, and Alibaba ARTC
+at runtime.
 
 ## Run
 
@@ -64,7 +65,8 @@ server.ts
    |       +--> providers/chime.ts
    |       +--> providers/livekit.ts
    |       +--> providers/agora.ts
-   |       `--> providers/trtc.ts
+   |       +--> providers/trtc.ts
+   |       `--> providers/artc.ts
    |
    `--> RoomDirectory
 ```
@@ -140,6 +142,9 @@ compatibility, but new Flutter integrations should use the room contract.
 | `TRTC_SDK_APP_ID` | unset | public TRTC SDKAppID returned in join payloads |
 | `TRTC_SDK_SECRET_KEY` | unset | server-only UserSig/PrivateMapKey signing secret; never return it to Flutter |
 | `TRTC_TOKEN_TTL_SECONDS` | `600` | UserSig and PrivateMapKey lifetime; accepted range is 60 seconds–90 days |
+| `ARTC_APP_ID` | unset | public ARTC AppID returned in join payloads |
+| `ARTC_APP_KEY` | unset | server-only ARTC token-signing key; never return it to Flutter |
+| `ARTC_TOKEN_TTL_SECONDS` | `600` | ARTC token lifetime; accepted range is 60–86400 seconds |
 
 For local LiveKit Server testing:
 
@@ -174,6 +179,16 @@ publish and screen-share rights. The optional
 `POST /rooms/{roomCode}/credentials/refresh` route only renews credentials for
 an existing attendee with the same identity and role. The Flutter adapter
 renews before ticket expiry and rejoins with the same user id.
+
+For ARTC, set `ARTC_APP_ID` and `ARTC_APP_KEY` in the ignored `.env` file or
+server environment. The server signs short-lived, single-parameter ARTC auth
+information; the AppKey is never returned to Flutter. `participant` rooms use
+communication mode, while `host`/`viewer` rooms use interactive live mode.
+The backend locks a room to its creation mode and authorizes credential refresh
+only for the same attendee and role. ARTC's signed token does not encode
+viewer-versus-streamer permissions: role is selected by the client SDK. The
+viewer adapter surface is subscribe-only, but this is not a server-enforced
+security boundary against a modified client.
 
 ## Scope
 

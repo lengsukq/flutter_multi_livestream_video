@@ -48,6 +48,16 @@ export interface TrtcRoomEntry extends NamedRoomEntry {
   attendees: TrtcRoomAttendee[];
 }
 
+export interface ArtcRoomAttendee extends RoomAttendee {
+  role: MediaRole;
+}
+
+export interface ArtcRoomEntry extends NamedRoomEntry {
+  provider: 'artc';
+  scene: 'meeting' | 'live';
+  attendees: ArtcRoomAttendee[];
+}
+
 export interface ChimeRoomEntry extends RoomEntry {
   provider: 'chime';
   meeting: ChimeMeeting;
