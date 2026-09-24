@@ -130,6 +130,17 @@ the same `deviceId` as the same logical device, so leaving/rejoining with a
 different display name does not accumulate stale copies of that device in the
 dashboard. Provider `participantId` values remain connection-specific.
 
+Room roles are backend-assigned. When creating a room the Flutter demo chooses
+only a product-level room type:
+
+- **Meeting** → creator and all joiners are `participant`.
+- **Live** → creator is `host`; other devices are `viewer`.
+
+Join requests do not choose their own role. A Live creator that reconnects with
+the same persisted device identity remains the host. Providers that cannot
+support both host and viewer roles (currently the Chime adapter) reject Live
+room creation.
+
 ## Public Vercel deployment
 
 The server can be deployed from this directory as an Express Vercel Function.

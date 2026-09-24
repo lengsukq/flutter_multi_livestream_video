@@ -110,6 +110,7 @@ class _JoinScreenState extends State<JoinScreen>
 
   bool _busy = false;
   String? _error;
+  MediaRoomMode _createRoomMode = MediaRoomMode.meeting;
 
   // Backend connection status: null = untested, true = online, false = offline
   bool? _serverOnline;
@@ -258,7 +259,7 @@ class _JoinScreenState extends State<JoinScreen>
           displayName: displayName,
           deviceId: deviceId,
         ),
-        role: MediaRole.participant,
+        roomMode: _createRoomMode,
       );
       await _openMeeting(client, room);
     }, client);
@@ -285,7 +286,6 @@ class _JoinScreenState extends State<JoinScreen>
           displayName: displayName,
           deviceId: deviceId,
         ),
-        role: MediaRole.participant,
       );
       await _openMeeting(client, room);
     }, client);
@@ -674,6 +674,50 @@ class _JoinScreenState extends State<JoinScreen>
         hintText: 'e.g. Alice / Bob',
         prefixIcon: Icons.person_outline_rounded,
       ),
+      if (isCreate) ...[
+        const SizedBox(height: 12),
+        const Text(
+          'Room type',
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SegmentedButton<MediaRoomMode>(
+          segments: const [
+            ButtonSegment(
+              value: MediaRoomMode.meeting,
+              icon: Icon(Icons.groups_2_outlined, size: 18),
+              label: Text('Meeting'),
+            ),
+            ButtonSegment(
+              value: MediaRoomMode.broadcast,
+              icon: Icon(Icons.podcasts_outlined, size: 18),
+              label: Text('Live'),
+            ),
+          ],
+          selected: {_createRoomMode},
+          onSelectionChanged: _busy
+              ? null
+              : (selection) {
+                  setState(() => _createRoomMode = selection.first);
+                },
+          showSelectedIcon: false,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _createRoomMode == MediaRoomMode.meeting
+              ? 'Everyone joins as a participant with publish controls.'
+              : 'The creator is the host; other devices join as viewers.',
+          style: const TextStyle(
+            fontSize: 11.5,
+            height: 1.35,
+            color: Color(0xFF64748B),
+          ),
+        ),
+      ],
       const SizedBox(height: 18),
       GlassGradientButton(
         onPressed: _busy ? null : action,
@@ -1020,6 +1064,23 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
                 fontSize: 10.5,
                 fontWeight: FontWeight.w700,
                 color: providerColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Text(
+              widget.room.role.wireName.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF475569),
               ),
             ),
           ),

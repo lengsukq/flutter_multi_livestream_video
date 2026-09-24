@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../model/media_error.dart';
 import '../model/media_identity.dart';
 import '../model/media_role.dart';
+import '../model/media_room_mode.dart';
 import '../session/media_join_info.dart';
 import '../session/media_credential_refresh.dart';
 import '../session/media_room_session.dart';
@@ -76,7 +77,7 @@ class MediaClient {
   Future<MediaRoomSession> joinRoomIdentity({
     required String roomCode,
     required MediaIdentity identity,
-    MediaRole role = MediaRole.participant,
+    MediaRole? role,
   }) async {
     final value = identity.normalized();
     return _joinResponse(
@@ -92,13 +93,15 @@ class MediaClient {
 
   Future<MediaRoomSession> createRoomAndJoinIdentity({
     required MediaIdentity identity,
-    MediaRole role = MediaRole.participant,
+    MediaRoomMode roomMode = MediaRoomMode.meeting,
+    MediaRole? role,
     String? roomCode,
   }) async {
     final value = identity.normalized();
     return _joinResponse(
       await backend.createRoomWithIdentity(
         role: role,
+        roomMode: roomMode,
         roomCode: roomCode,
         userId: value.userId,
         displayName: value.displayName,

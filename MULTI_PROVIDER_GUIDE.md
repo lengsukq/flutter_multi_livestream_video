@@ -24,6 +24,11 @@ instead of rejecting the room up front. Provider/native SDKs remain responsible
 for reporting genuinely unsupported targets, while feature-level differences
 continue to be exposed through `MediaCapabilities`.
 
+The reference backend also owns role assignment. New clients create either a
+`meeting` or `broadcast` room and do not choose a role when joining:
+`meeting` grants `participant` to everyone, while `broadcast` grants
+`host` to the creator device and `viewer` to other devices.
+
 ## One Flutter API, multiple providers
 
 ```dart

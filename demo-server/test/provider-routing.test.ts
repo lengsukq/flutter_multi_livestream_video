@@ -13,14 +13,18 @@ interface ApiBody {
   activeProvider?: string;
   provider?: string;
   roomCode?: string;
+  role?: string;
+  roomMode?: string;
   providerList?: Array<{ id: string }>;
   providers?: Record<string, { configured?: boolean }>;
   rooms?: Array<{
     roomCode?: string;
+    roomMode?: string;
     attendeeCount?: number;
     attendees?: Array<{
       externalUserId?: string;
       deviceId?: string;
+      role?: string;
     }>;
   }>;
   error?: { code?: string };
@@ -102,18 +106,20 @@ test('switching the active provider does not change an existing room provider', 
   const created = await post('/rooms', {
     roomCode: 'stickyRoom1',
     nickname: 'Host',
-    role: 'participant',
+    roomMode: 'meeting',
     deviceId: 'device-sticky-001',
   });
   assert.equal(created.status, 200);
   assert.equal(created.body.provider, 'livekit');
+  assert.equal(created.body.role, 'participant');
+  assert.equal(created.body.roomMode, 'meeting');
 
   const rejoinedSameDevice = await post('/rooms/stickyRoom1/join', {
     userId: 'Renamed Host',
-    role: 'participant',
     deviceId: 'device-sticky-001',
   });
   assert.equal(rejoinedSameDevice.status, 200);
+  assert.equal(rejoinedSameDevice.body.role, 'participant');
 
   const presenceResponse = await fetch(`${requireBaseUrl()}/api/overview`);
   const presence = await presenceResponse.json() as ApiBody;
@@ -122,13 +128,52 @@ test('switching the active provider does not change an existing room provider', 
   assert.equal(stickyRoom?.attendees?.[0]?.externalUserId, 'Renamed Host');
   assert.equal(stickyRoom?.attendees?.[0]?.deviceId, 'device-sticky-001');
 
+  const broadcast = await post('/rooms', {
+    roomCode: 'broadcast01',
+    displayName: 'Creator',
+    userId: 'creator-user',
+    roomMode: 'broadcast',
+    deviceId: 'device-creator-001',
+  });
+  assert.equal(broadcast.status, 200);
+  assert.equal(broadcast.body.role, 'host');
+  assert.equal(broadcast.body.roomMode, 'broadcast');
+
+  const viewer = await post('/rooms/broadcast01/join', {
+    userId: 'viewer-user',
+    displayName: 'Viewer',
+    deviceId: 'device-viewer-001',
+  });
+  assert.equal(viewer.status, 200);
+  assert.equal(viewer.body.role, 'viewer');
+
+  const creatorRejoin = await post('/rooms/broadcast01/join', {
+    userId: 'creator-user',
+    displayName: 'Creator again',
+    deviceId: 'device-creator-001',
+  });
+  assert.equal(creatorRejoin.status, 200);
+  assert.equal(creatorRejoin.body.role, 'host');
+
+  const broadcastOverviewResponse = await fetch(`${requireBaseUrl()}/api/overview`);
+  const broadcastOverview = await broadcastOverviewResponse.json() as ApiBody;
+  const broadcastRoom = broadcastOverview.rooms?.find((room) => room.roomCode === 'broadcast01');
+  assert.equal(broadcastRoom?.roomMode, 'broadcast');
+  assert.equal(
+    broadcastRoom?.attendees?.some((attendee) => attendee.role === 'host'),
+    true,
+  );
+  assert.equal(
+    broadcastRoom?.attendees?.some((attendee) => attendee.role === 'viewer'),
+    true,
+  );
+
   const switched = await post('/api/provider', { provider: 'chime' });
   assert.equal(switched.status, 200);
   assert.equal(switched.body.activeProvider, 'chime');
 
   const joined = await post('/rooms/stickyRoom1/join', {
     userId: 'Guest',
-    role: 'participant',
   });
   assert.equal(joined.status, 200);
   assert.equal(joined.body.provider, 'livekit');
@@ -137,7 +182,7 @@ test('switching the active provider does not change an existing room provider', 
   const chimeUnsupportedRole = await post('/rooms', {
     roomCode: 'chimeHost1',
     nickname: 'Host',
-    role: 'host',
+    roomMode: 'broadcast',
   });
   assert.equal(chimeUnsupportedRole.status, 400);
   assert.ok(chimeUnsupportedRole.body.error);

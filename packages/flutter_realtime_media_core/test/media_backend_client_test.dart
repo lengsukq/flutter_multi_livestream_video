@@ -88,6 +88,64 @@ void main() {
     });
   });
 
+  group('backend-assigned room roles', () {
+    test(
+      'create identity sends roomMode and accepts the granted host role',
+      () async {
+        final client = clientFor(
+          (_) => jsonResponse(
+            liveKitJoinPayload(participantId: 'host-1', role: 'host')
+              ..['roomMode'] = 'broadcast',
+          ),
+        );
+
+        final response = await client.createRoomWithIdentity(
+          roomCode: '482913',
+          userId: 'device-creator',
+          displayName: 'Creator',
+          deviceId: 'device-creator',
+          roomMode: MediaRoomMode.broadcast,
+        );
+
+        expect(transport.requests.single.json, {
+          'userId': 'device-creator',
+          'displayName': 'Creator',
+          'nickname': 'Creator',
+          'roomMode': 'broadcast',
+          'deviceId': 'device-creator',
+          'roomCode': '482913',
+        });
+        expect(response.role, MediaRole.host);
+      },
+    );
+
+    test(
+      'join identity omits role and accepts the backend viewer role',
+      () async {
+        final client = clientFor(
+          (_) => jsonResponse(
+            liveKitJoinPayload(participantId: 'viewer-1', role: 'viewer')
+              ..['roomMode'] = 'broadcast',
+          ),
+        );
+
+        final response = await client.joinRoomWithIdentity(
+          roomCode: '482913',
+          userId: 'device-viewer',
+          displayName: 'Viewer',
+          deviceId: 'device-viewer',
+        );
+
+        expect(transport.requests.single.json, {
+          'userId': 'device-viewer',
+          'displayName': 'Viewer',
+          'deviceId': 'device-viewer',
+        });
+        expect(response.role, MediaRole.viewer);
+      },
+    );
+  });
+
   group('joinRoom', () {
     test(
       'posts to the encoded room path and keeps the requested role',

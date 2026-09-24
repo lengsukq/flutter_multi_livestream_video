@@ -87,11 +87,11 @@ async function post(
   return { status: response.status, body: await response.json() as ArtcApiBody };
 }
 
-test('locks ARTC room mode, signs short-lived auth info, and refreshes the same identity', async () => {
+test('assigns ARTC broadcast roles, signs short-lived auth info, and refreshes the same identity', async () => {
   const created = await post('/rooms', {
     roomCode: 'artcHost01',
     nickname: 'Host',
-    role: 'host',
+    roomMode: 'broadcast',
   });
   assert.equal(created.status, 200);
   assert.equal(created.body.provider, 'artc');
@@ -110,16 +110,15 @@ test('locks ARTC room mode, signs short-lived auth info, and refreshes the same 
   assert.equal(auth.userid, created.body.participantId);
   assert.equal(typeof auth.token, 'string');
 
-  const crossMode = await post('/rooms/artcHost01/join', {
+  const forcedParticipant = await post('/rooms/artcHost01/join', {
     userId: 'Participant',
     role: 'participant',
   });
-  assert.equal(crossMode.status, 400);
-  assert.equal(crossMode.body.error?.code, 'unsupported-role');
+  assert.equal(forcedParticipant.status, 200);
+  assert.equal(forcedParticipant.body.role, 'viewer');
 
   const viewer = await post('/rooms/artcHost01/join', {
     userId: 'Viewer',
-    role: 'viewer',
   });
   assert.equal(viewer.status, 200);
   assert.equal(viewer.body.role, 'viewer');
@@ -146,17 +145,17 @@ test('locks ARTC room mode, signs short-lived auth info, and refreshes the same 
   assert.equal(JSON.stringify(overview).includes(appKey), false);
 });
 
-test('locks ARTC communication mode to participant rooms', async () => {
+test('assigns participant role to every ARTC meeting attendee', async () => {
   const created = await post('/rooms', {
     roomCode: 'artcMeet01',
     nickname: 'Participant',
-    role: 'participant',
+    roomMode: 'meeting',
   });
   assert.equal(created.status, 200);
-  const crossMode = await post('/rooms/artcMeet01/join', {
+  const forcedHost = await post('/rooms/artcMeet01/join', {
     userId: 'Host',
     role: 'host',
   });
-  assert.equal(crossMode.status, 400);
-  assert.equal(crossMode.body.error?.code, 'unsupported-role');
+  assert.equal(forcedHost.status, 200);
+  assert.equal(forcedHost.body.role, 'participant');
 });

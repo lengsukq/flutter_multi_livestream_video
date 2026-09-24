@@ -1,4 +1,5 @@
 export type MediaRole = 'participant' | 'host' | 'viewer';
+export type RoomMode = 'meeting' | 'broadcast';
 
 export interface RoomAttendee {
   attendeeId: string;
@@ -29,6 +30,9 @@ export interface ChimeAttendee {
 export interface RoomEntry {
   provider: string;
   roomCode: string;
+  roomMode?: RoomMode;
+  creatorUserId?: string;
+  creatorDeviceId?: string;
   createdAt: string;
   attendees: RoomAttendee[];
   lastHeartbeatMs: number;
@@ -82,6 +86,7 @@ export interface ProviderJoinResponse extends ProviderBaseResponse {
 export interface RoomSummary {
   provider: string;
   roomCode: string;
+  roomMode?: RoomMode;
   meetingId?: string;
   externalMeetingId?: string;
   mediaRegion?: string;

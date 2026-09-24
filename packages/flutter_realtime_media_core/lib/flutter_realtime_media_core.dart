@@ -21,6 +21,7 @@ export 'src/model/media_event.dart';
 export 'src/model/media_message.dart';
 export 'src/model/media_participant.dart';
 export 'src/model/media_role.dart';
+export 'src/model/media_room_mode.dart';
 export 'src/model/media_snapshot.dart';
 export 'src/model/media_state.dart';
 export 'src/model/media_track.dart';

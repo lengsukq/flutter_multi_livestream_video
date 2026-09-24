@@ -26,6 +26,7 @@ import type {
   ChimeRoomEntry,
   MediaRole,
   ProviderAdapter,
+  RoomMode,
   RoomEntry,
   RoomSummary,
 } from './types.ts';
@@ -79,6 +80,7 @@ function bindLogicalIdentity(
   userId: string,
   displayName: string,
   deviceId: string | null,
+  role: MediaRole,
 ): void {
   const current = entry.attendees.find(
     (attendee) => attendee.attendeeId === participantId,
@@ -87,6 +89,7 @@ function bindLogicalIdentity(
   current.userId = userId;
   current.displayName = displayName;
   current.externalUserId = displayName;
+  current.role = role;
   if (deviceId) current.deviceId = deviceId;
   entry.attendees = entry.attendees.filter(
     (attendee) =>
@@ -235,6 +238,30 @@ function parseRole(raw: unknown): MediaRole | null {
   const role = String(raw ?? 'participant').trim().toLowerCase();
   if (role === 'participant' || role === 'host' || role === 'viewer') return role;
   return null;
+}
+
+function parseRoomMode(raw: unknown): RoomMode | null {
+  if (raw == null || String(raw).trim() === '') return null;
+  const mode = String(raw).trim().toLowerCase();
+  return mode === 'meeting' || mode === 'broadcast' ? mode : null;
+}
+
+function creatorRoleForMode(mode: RoomMode): MediaRole {
+  return mode === 'broadcast' ? 'host' : 'participant';
+}
+
+function joinRoleForRoom(
+  entry: RoomEntry,
+  userId: string,
+  deviceId: string | null,
+): MediaRole {
+  if (entry.roomMode !== 'broadcast') return 'participant';
+  const isCreator =
+    (entry.creatorUserId != null && entry.creatorUserId === userId) ||
+    (deviceId != null &&
+      entry.creatorDeviceId != null &&
+      entry.creatorDeviceId === deviceId);
+  return isCreator ? 'host' : 'viewer';
 }
 
 const chimeProvider = createChimeProvider({
@@ -432,7 +459,10 @@ async function closeRoom(entry: RoomEntry, reason: string): Promise<void> {
 function summarizeRoom(entry: RoomEntry, req?: Request): RoomSummary {
   const provider = providerRegistry.require(entry.provider);
   const host = req ? `${req.protocol}://${req.get('host')}` : '';
-  return provider.summarizeRoom(entry, { host });
+  return {
+    ...provider.summarizeRoom(entry, { host }),
+    ...(entry.roomMode ? { roomMode: entry.roomMode } : {}),
+  };
 }
 
 if (!IS_VERCEL) {
@@ -529,10 +559,26 @@ app.post('/rooms', async (req, res) => {
     }
     roomCode ??= generateRoomCode();
 
-    const role = parseRole(req.body?.role);
-    if (!role) {
+    const requestedRole = req.body?.role == null ? null : parseRole(req.body.role);
+    if (req.body?.role != null && !requestedRole) {
       return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
     }
+    const requestedRoomMode = parseRoomMode(req.body?.roomMode);
+    if (req.body?.roomMode != null && !requestedRoomMode) {
+      return contractError(res, 400, 'invalid-argument', 'roomMode must be meeting or broadcast.');
+    }
+    const roomMode: RoomMode =
+      requestedRoomMode ?? (requestedRole === 'host' || requestedRole === 'viewer' ? 'broadcast' : 'meeting');
+    const derivedCreatorRole = creatorRoleForMode(roomMode);
+    if (requestedRoomMode && requestedRole && requestedRole !== derivedCreatorRole) {
+      return contractError(
+        res,
+        400,
+        'invalid-argument',
+        `role is assigned by roomMode; ${roomMode} rooms are created as ${derivedCreatorRole}.`,
+      );
+    }
+    const role = requestedRoomMode ? derivedCreatorRole : requestedRole ?? derivedCreatorRole;
     const deviceId = normalizeDeviceId(req.body?.deviceId);
     if (req.body?.deviceId != null && !deviceId) {
       return contractError(
@@ -545,17 +591,34 @@ app.post('/rooms', async (req, res) => {
 
     const provider = providerRegistry.requireConfigured(activeProvider);
     assertRole(provider, role);
+    if (roomMode === 'broadcast') {
+      assertRole(provider, 'viewer');
+    }
+    const rawNickname = req.body?.displayName?.trim() || req.body?.nickname?.trim() || null;
+    const suppliedUserId = req.body?.userId ?? deviceId ?? rawNickname;
+    const creatorUserId = suppliedUserId == null ? undefined : normalizeUserId(suppliedUserId);
     const created = await provider.createRoom({ roomCode, role });
+    created.entry.roomMode = roomMode;
+    created.entry.creatorUserId = creatorUserId;
+    if (deviceId) created.entry.creatorDeviceId = deviceId;
+    created.response.roomMode = roomMode;
     registerRoom(provider, created.entry);
     created.entry.lastHeartbeatMs = Date.now();
     logEvent('create', `room ${roomCode} created with ${provider.displayName}`);
 
-    const rawNickname = req.body?.displayName?.trim() || req.body?.nickname?.trim() || null;
     if (!rawNickname) return res.json(created.response);
 
     const response = await provider.joinRoom({ entry: created.entry, rawName: rawNickname, role });
-    const userId = normalizeUserId(req.body?.userId ?? deviceId ?? rawNickname);
-    bindLogicalIdentity(created.entry, response.participantId, userId, rawNickname, deviceId);
+    response.roomMode = roomMode;
+    const userId = creatorUserId ?? normalizeUserId(req.body?.userId ?? deviceId ?? rawNickname);
+    bindLogicalIdentity(
+      created.entry,
+      response.participantId,
+      userId,
+      rawNickname,
+      deviceId,
+      role,
+    );
     logEvent('join', `${response.displayName} created+joined room ${roomCode} via ${provider.displayName}`);
     res.json(response);
   } catch (error) {
@@ -574,12 +637,7 @@ app.post('/rooms/:code/join', async (req, res) => {
       logEvent('error', `join ${req.params.code} failed: not found`);
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
-    const role = parseRole(req.body?.role);
-    if (!role) {
-      return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
-    }
     const provider = providerRegistry.requireConfigured(entry.provider);
-    assertRole(provider, role, entry);
     const deviceId = normalizeDeviceId(req.body?.deviceId);
     if (req.body?.deviceId != null && !deviceId) {
       return contractError(
@@ -596,8 +654,24 @@ app.post('/rooms/:code/join', async (req, res) => {
       return contractError(res, 400, 'invalid-argument', 'displayName or userId is required.');
     }
     const userId = normalizeUserId(req.body?.userId ?? deviceId ?? displayName);
+    const requestedRole = req.body?.role == null ? null : parseRole(req.body.role);
+    if (req.body?.role != null && !requestedRole) {
+      return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
+    }
+    const role = entry.roomMode
+      ? joinRoleForRoom(entry, userId, deviceId)
+      : requestedRole ?? 'participant';
+    assertRole(provider, role, entry);
     const response = await provider.joinRoom({ entry, rawName: displayName, role });
-    bindLogicalIdentity(entry, response.participantId, userId, displayName, deviceId);
+    if (entry.roomMode) response.roomMode = entry.roomMode;
+    bindLogicalIdentity(
+      entry,
+      response.participantId,
+      userId,
+      displayName,
+      deviceId,
+      role,
+    );
     logEvent('join', `${response.displayName} joined room ${entry.roomCode} via ${provider.displayName}`);
     res.json(response);
   } catch (error) {

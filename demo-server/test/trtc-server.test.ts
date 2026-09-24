@@ -87,11 +87,11 @@ async function post(
   return { status: response.status, body: await response.json() as TrtcApiBody };
 }
 
-test('locks TRTC scenes by creation role and refreshes credentials for the same attendee', async () => {
+test('assigns TRTC broadcast roles and refreshes credentials for the same attendee', async () => {
   const created = await post('/rooms', {
     roomCode: 'trtcHost01',
     nickname: 'Host',
-    role: 'host',
+    roomMode: 'broadcast',
   });
   assert.equal(created.status, 200);
   assert.equal(created.body.provider, 'trtc');
@@ -104,17 +104,15 @@ test('locks TRTC scenes by creation role and refreshes credentials for the same 
   assert.equal(created.body.trtc.expiresAtMs - Date.now() > 0, true);
   assert.equal(JSON.stringify(created.body).includes(testSecret), false);
 
-  const crossScene = await post('/rooms/trtcHost01/join', {
+  const forcedParticipant = await post('/rooms/trtcHost01/join', {
     userId: 'Participant',
     role: 'participant',
   });
-  assert.equal(crossScene.status, 400);
-  assert.ok(crossScene.body.error);
-  assert.equal(crossScene.body.error.code, 'unsupported-role');
+  assert.equal(forcedParticipant.status, 200);
+  assert.equal(forcedParticipant.body.role, 'viewer');
 
   const viewer = await post('/rooms/trtcHost01/join', {
     userId: 'Viewer',
-    role: 'viewer',
   });
   assert.equal(viewer.status, 200);
   const refreshed = await post('/rooms/trtcHost01/credentials/refresh', {
@@ -149,18 +147,17 @@ test('locks TRTC scenes by creation role and refreshes credentials for the same 
   assert.equal(JSON.stringify(overview).includes('privateMapKey'), false);
 });
 
-test('locks meeting scene to participant role', async () => {
+test('assigns participant role to every TRTC meeting attendee', async () => {
   const created = await post('/rooms', {
     roomCode: 'trtcMeet01',
     nickname: 'Participant',
-    role: 'participant',
+    roomMode: 'meeting',
   });
   assert.equal(created.status, 200);
-  const crossScene = await post('/rooms/trtcMeet01/join', {
+  const forcedHost = await post('/rooms/trtcMeet01/join', {
     userId: 'Host',
     role: 'host',
   });
-  assert.equal(crossScene.status, 400);
-  assert.ok(crossScene.body.error);
-  assert.equal(crossScene.body.error.code, 'unsupported-role');
+  assert.equal(forcedHost.status, 200);
+  assert.equal(forcedHost.body.role, 'participant');
 });

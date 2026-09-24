@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../model/media_role.dart';
+import '../model/media_room_mode.dart';
 import 'media_backend_config.dart';
 import 'media_backend_error.dart';
 import 'media_backend_transport.dart';
@@ -88,17 +89,17 @@ class MediaBackendClient {
   }
 
   Future<MediaRoomJoinResponse> joinRoomWithIdentity({
-    required MediaRole role,
     required String roomCode,
     required String userId,
     required String displayName,
     String? deviceId,
+    MediaRole? role,
   }) async {
     final code = _required(roomCode, 'roomCode');
     final data = await _post('/rooms/${Uri.encodeComponent(code)}/join', {
       'userId': _required(userId, 'userId'),
       'displayName': _required(displayName, 'displayName'),
-      'role': role.wireName,
+      if (role != null) 'role': role.wireName,
       if (deviceId != null && deviceId.trim().isNotEmpty)
         'deviceId': deviceId.trim(),
     });
@@ -106,17 +107,19 @@ class MediaBackendClient {
   }
 
   Future<MediaRoomJoinResponse> createRoomWithIdentity({
-    required MediaRole role,
     String? roomCode,
     required String userId,
     required String displayName,
     String? deviceId,
+    MediaRoomMode roomMode = MediaRoomMode.meeting,
+    MediaRole? role,
   }) async {
     final body = <String, Object?>{
       'userId': _required(userId, 'userId'),
       'displayName': _required(displayName, 'displayName'),
       'nickname': displayName.trim(),
-      'role': role.wireName,
+      'roomMode': roomMode.wireName,
+      if (role != null) 'role': role.wireName,
       if (deviceId != null && deviceId.trim().isNotEmpty)
         'deviceId': deviceId.trim(),
       if (roomCode != null && roomCode.trim().isNotEmpty)
@@ -314,7 +317,7 @@ class MediaBackendClient {
 
   MediaRoomJoinResponse _parseJoinResponse(
     Map<String, dynamic> data, {
-    required MediaRole role,
+    MediaRole? role,
     String? fallbackRoomCode,
   }) {
     final roomCode = data['roomCode']?.toString().trim();
@@ -328,7 +331,8 @@ class MediaBackendClient {
       );
     }
     final providerId = data['provider']?.toString().trim().toLowerCase() ?? '';
-    final resolvedRole = MediaRole.tryParse(data['role']) ?? role;
+    final resolvedRole =
+        MediaRole.tryParse(data['role']) ?? role ?? MediaRole.participant;
     return MediaRoomJoinResponse(
       roomCode: resolvedRoomCode,
       providerId: providerId.isEmpty ? defaultMediaProviderId : providerId,
