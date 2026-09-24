@@ -8,7 +8,7 @@ import '../models/meeting_event.model.dart';
 import '../models/meeting_snapshot.dart';
 import 'video_tile.view.dart';
 
-/// Optional meeting surface with clean adaptive styling.
+/// Optional meeting surface with modern clean minimalist styling.
 /// The caller owns joining, leaving, and disposing [session]; removing this widget
 /// does not stop the native meeting.
 class ChimeMeetingView extends StatefulWidget {
@@ -32,16 +32,31 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
   int _page = 0;
   CameraPosition _cameraPosition = CameraPosition.front;
 
+  Timer? _durationTimer;
+  int _callSeconds = 0;
+
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _callSeconds++);
+    });
   }
 
   @override
   void dispose() {
+    _durationTimer?.cancel();
     _pageController.dispose();
     super.dispose();
+  }
+
+  String get _formattedDuration {
+    final mins = _callSeconds ~/ 60;
+    final secs = _callSeconds % 60;
+    final mStr = mins.toString().padLeft(2, '0');
+    final sStr = secs.toString().padLeft(2, '0');
+    return '$mStr:$sStr';
   }
 
   @override
@@ -81,13 +96,34 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
   );
 
   Widget _header(MeetingSnapshot snapshot) => Container(
-    padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
     decoration: const BoxDecoration(
       color: Colors.white,
       border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
     ),
     child: Row(
       children: [
+        // Back / Leave button
+        Tooltip(
+          message: 'Leave meeting',
+          child: InkWell(
+            onTap: _confirmLeave,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 15,
+                color: Color(0xFF0F172A),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -98,25 +134,47 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: Color(0xFF0F172A),
-                  fontSize: 16,
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 '${_stateLabel(snapshot.state)} · ${snapshot.attendees.length} participants',
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11.5),
               ),
             ],
           ),
         ),
-        IconButton(
-          tooltip: 'Leave meeting',
-          onPressed: _confirmLeave,
-          icon: const Icon(Icons.call_end_rounded, color: Colors.white, size: 18),
-          style: IconButton.styleFrom(
-            backgroundColor: const Color(0xFFDC2626),
-            padding: const EdgeInsets.all(10),
+        // Duration timer pill
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                _formattedDuration,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -128,13 +186,19 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Leave Meeting?', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
-        content: const Text('Are you sure you want to disconnect from this meeting?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Leave Meeting?',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: Color(0xFF0F172A)),
+        ),
+        content: const Text(
+          'Are you sure you want to disconnect from this meeting?',
+          style: TextStyle(fontSize: 13.5, color: Color(0xFF475569)),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -142,6 +206,7 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
               backgroundColor: const Color(0xFFDC2626),
               foregroundColor: Colors.white,
               elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Leave'),
           ),
@@ -162,7 +227,7 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
         MeetingState.failed => 'The meeting could not be joined.',
         MeetingState.ended => 'The meeting has ended.',
         MeetingState.leaving => 'Leaving meeting…',
-        MeetingState.connected => 'Waiting for participants…',
+        MeetingState.connected => 'Waiting for participants to join…',
         MeetingState.disposed => 'This meeting session was disposed.',
       };
       return Center(
@@ -172,15 +237,16 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color(0xFFEEF2FF),
+                  color: const Color(0xFFEEF2FF),
+                  border: Border.all(color: const Color(0xFFC7D2FE)),
                 ),
-                child: const Icon(Icons.sensors_rounded, color: Color(0xFF4F46E5), size: 28),
+                child: const Icon(Icons.wifi_tethering_rounded, color: Color(0xFF4F46E5), size: 28),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Text(
                 message,
                 textAlign: TextAlign.center,
@@ -282,7 +348,7 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: const [
           BoxShadow(
@@ -293,7 +359,7 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -304,11 +370,15 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
                 color: const Color(0xFFF8FAFC),
                 child: Center(
                   child: Container(
-                    width: 52,
-                    height: 52,
+                    width: 54,
+                    height: 54,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFFEEF2FF),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       border: Border.all(color: const Color(0xFFC7D2FE)),
                     ),
                     child: Center(
@@ -316,7 +386,7 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
                         initial,
                         style: const TextStyle(
                           color: Color(0xFF4F46E5),
-                          fontSize: 20,
+                          fontSize: 21,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -331,8 +401,8 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.92),
-                  borderRadius: BorderRadius.circular(8),
+                  color: Colors.white.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(9),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Row(
@@ -344,7 +414,7 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF0F172A),
-                          fontSize: 12,
+                          fontSize: 11.5,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -353,7 +423,7 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
                       const Icon(
                         Icons.mic_off_rounded,
                         color: Color(0xFFDC2626),
-                        size: 15,
+                        size: 14,
                       ),
                   ],
                 ),
@@ -372,14 +442,14 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
       children: List.generate(
         pageCount,
         (index) => Container(
-          width: index == currentPage ? 16 : 7,
-          height: 7,
+          width: index == currentPage ? 16 : 6,
+          height: 6,
           margin: const EdgeInsets.symmetric(horizontal: 3),
           decoration: BoxDecoration(
             color: index == currentPage
                 ? const Color(0xFF4F46E5)
                 : const Color(0xFFCBD5E1),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(6),
           ),
         ),
       ),
@@ -387,16 +457,16 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
   );
 
   Widget _controls(MeetingSnapshot snapshot) => Container(
-    margin: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+    margin: const EdgeInsets.fromLTRB(16, 6, 16, 12),
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(28),
       border: Border.all(color: const Color(0xFFE2E8F0)),
       boxShadow: const [
         BoxShadow(
-          color: Color(0x0A000000),
-          blurRadius: 14,
+          color: Color(0x0C000000),
+          blurRadius: 18,
           offset: Offset(0, 4),
         ),
       ],
@@ -407,7 +477,7 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _control(
-            icon: snapshot.localMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+            icon: snapshot.localMuted ? Icons.mic_off_outlined : Icons.mic_none_rounded,
             label: snapshot.localMuted ? 'Unmute' : 'Mute',
             isActive: !snapshot.localMuted,
             isDanger: snapshot.localMuted,
@@ -416,8 +486,8 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
           const SizedBox(width: 8),
           _control(
             icon: snapshot.localVideoEnabled
-                ? Icons.videocam_rounded
-                : Icons.videocam_off_rounded,
+                ? Icons.videocam_outlined
+                : Icons.videocam_off_outlined,
             label: snapshot.localVideoEnabled ? 'Stop video' : 'Start video',
             isActive: snapshot.localVideoEnabled,
             onPressed: () => _run(
@@ -426,13 +496,13 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
           ),
           const SizedBox(width: 8),
           _control(
-            icon: Icons.flip_camera_ios_rounded,
+            icon: Icons.flip_camera_ios_outlined,
             label: 'Switch camera',
             onPressed: () => _run(_switchCamera),
           ),
           const SizedBox(width: 8),
           _control(
-            icon: Icons.headphones_rounded,
+            icon: Icons.headphones_outlined,
             label: 'Audio devices',
             onPressed: _showAudioDevices,
           ),
@@ -441,6 +511,34 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
             icon: Icons.chat_bubble_outline_rounded,
             label: 'Messages',
             onPressed: _showMessages,
+          ),
+          const SizedBox(width: 10),
+          Tooltip(
+            message: 'Leave Meeting',
+            child: InkWell(
+              onTap: _confirmLeave,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDC2626),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFDC2626).withValues(alpha: 0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.call_end_rounded,
+                  color: Colors.white,
+                  size: 19,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -476,16 +574,16 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
       message: label,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           width: 42,
           height: 42,
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(color: border),
           ),
-          child: Icon(icon, color: fg, size: 20),
+          child: Icon(icon, color: fg, size: 19),
         ),
       ),
     );
@@ -646,7 +744,7 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
                     ),
                     const SizedBox(width: 8),
                     IconButton.filled(
-                      icon: const Icon(Icons.send_rounded, size: 18),
+                      icon: const Icon(Icons.arrow_upward_rounded, size: 18),
                       style: IconButton.styleFrom(
                         backgroundColor: const Color(0xFF4F46E5),
                         foregroundColor: Colors.white,

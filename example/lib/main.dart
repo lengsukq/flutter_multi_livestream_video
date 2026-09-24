@@ -68,7 +68,7 @@ class ChimeExampleApp extends StatelessWidget {
         scrolledUnderElevation: 0.5,
         surfaceTintColor: Colors.transparent,
         titleTextStyle: TextStyle(
-          fontSize: 17,
+          fontSize: 16,
           fontWeight: FontWeight.w700,
           color: Color(0xFF0F172A),
         ),
@@ -142,7 +142,8 @@ class _JoinScreenState extends State<JoinScreen>
     setState(() => _testingServer = true);
     try {
       final uri = Uri.parse(url.endsWith('/') ? '${url}health' : '$url/health');
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 3);
       final req = await client.getUrl(uri);
       final resp = await req.close();
       if (resp.statusCode == 200) {
@@ -278,7 +279,6 @@ class _JoinScreenState extends State<JoinScreen>
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Adaptive horizontal padding: wide screens center the card, small screens use responsive edges
             final isWide = constraints.maxWidth > 640;
             final contentWidth = isWide ? 560.0 : constraints.maxWidth;
 
@@ -405,7 +405,8 @@ class _JoinScreenState extends State<JoinScreen>
                       ),
                     const SizedBox(width: 6),
                     Text(
-                      _serverProviderInfo ?? (_testingServer ? 'Checking…' : 'Check'),
+                      _serverProviderInfo ??
+                          (_testingServer ? 'Checking…' : 'Check'),
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
@@ -427,7 +428,7 @@ class _JoinScreenState extends State<JoinScreen>
           controller: _serverController,
           label: 'Demo Backend URL',
           hintText: 'http://192.168.31.8:3000',
-          prefixIcon: Icons.dns_rounded,
+          prefixIcon: Icons.dns_outlined,
           keyboardType: TextInputType.url,
           onChanged: (_) {
             setState(() {
@@ -437,7 +438,6 @@ class _JoinScreenState extends State<JoinScreen>
           },
         ),
         const SizedBox(height: 10),
-        // Quick preset chips for rapid dev testing
         Wrap(
           spacing: 6,
           runSpacing: 6,
@@ -481,7 +481,6 @@ class _JoinScreenState extends State<JoinScreen>
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Pill-style segmented TabBar
         Container(
           decoration: BoxDecoration(
             color: const Color(0xFFF1F5F9),
@@ -520,7 +519,6 @@ class _JoinScreenState extends State<JoinScreen>
           ),
         ),
         const SizedBox(height: 16),
-        // Adaptive tab body without hardcoded 280px constraint
         AnimatedBuilder(
           animation: _tabs,
           builder: (context, _) {
@@ -590,7 +588,13 @@ class _JoinScreenState extends State<JoinScreen>
                   children: [
                     Icon(Icons.casino_outlined, size: 18),
                     SizedBox(width: 4),
-                    Text('Random', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    Text(
+                      'Random',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -603,13 +607,13 @@ class _JoinScreenState extends State<JoinScreen>
         controller: name,
         label: 'Display name (optional)',
         hintText: 'e.g. Alice / Bob',
-        prefixIcon: Icons.person_rounded,
+        prefixIcon: Icons.person_outline_rounded,
       ),
       const SizedBox(height: 18),
       GlassGradientButton(
         onPressed: _busy ? null : action,
         isLoading: _busy,
-        icon: isCreate ? Icons.add_circle_outline_rounded : Icons.login_rounded,
+        icon: isCreate ? Icons.add_rounded : Icons.arrow_forward_rounded,
         child: Text(actionLabel),
       ),
     ],
@@ -624,7 +628,11 @@ class _JoinScreenState extends State<JoinScreen>
     ),
     child: Row(
       children: [
-        const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 20),
+        const Icon(
+          Icons.error_outline_rounded,
+          color: Color(0xFFDC2626),
+          size: 20,
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
@@ -637,7 +645,11 @@ class _JoinScreenState extends State<JoinScreen>
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFFB91C1C)),
+          icon: const Icon(
+            Icons.close_rounded,
+            size: 16,
+            color: Color(0xFFB91C1C),
+          ),
           onPressed: () => setState(() => _error = null),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
@@ -647,7 +659,7 @@ class _JoinScreenState extends State<JoinScreen>
   );
 }
 
-/// Meeting Room Page with responsive adaptive grid and modern controls.
+/// Meeting Room Page with modern, clean, minimal floating aesthetics.
 class MeetingRoomPage extends StatefulWidget {
   const MeetingRoomPage({
     super.key,
@@ -665,12 +677,39 @@ class MeetingRoomPage extends StatefulWidget {
 class _MeetingRoomPageState extends State<MeetingRoomPage> {
   final _messageController = TextEditingController();
   bool _showChatPanel = false;
+  bool _codeCopiedRecently = false;
   String? _error;
+
+  Timer? _callDurationTimer;
+  int _callSeconds = 0;
 
   MediaSession get session => widget.room.session;
 
   @override
+  void initState() {
+    super.initState();
+    _startDurationTimer();
+  }
+
+  void _startDurationTimer() {
+    _callDurationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() => _callSeconds++);
+      }
+    });
+  }
+
+  String get _formattedDuration {
+    final mins = _callSeconds ~/ 60;
+    final secs = _callSeconds % 60;
+    final mStr = mins.toString().padLeft(2, '0');
+    final sStr = secs.toString().padLeft(2, '0');
+    return '$mStr:$sStr';
+  }
+
+  @override
   void dispose() {
+    _callDurationTimer?.cancel();
     _messageController.dispose();
     unawaited(widget.room.dispose());
     super.dispose();
@@ -694,16 +733,30 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           'Leave Meeting?',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 17,
+            color: Color(0xFF0F172A),
+          ),
         ),
         content: const Text(
-          'Are you sure you want to leave the room? Your camera and mic will be disconnected.',
-          style: TextStyle(fontSize: 14, color: Color(0xFF475569)),
+          'Are you sure you want to disconnect? Your audio and video stream will stop immediately.',
+          style: TextStyle(
+            fontSize: 13.5,
+            color: Color(0xFF475569),
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Color(0xFF64748B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -711,7 +764,9 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
               backgroundColor: const Color(0xFFDC2626),
               foregroundColor: Colors.white,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Leave'),
           ),
@@ -726,11 +781,25 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
 
   void _copyRoomCode() {
     Clipboard.setData(ClipboardData(text: widget.room.roomCode));
+    setState(() => _codeCopiedRecently = true);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _codeCopiedRecently = false);
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Room code ${widget.room.roomCode} copied to clipboard'),
+        content: Row(
+          children: [
+            const Icon(
+              Icons.check_circle_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text('Room code ${widget.room.roomCode} copied'),
+          ],
+        ),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -742,181 +811,28 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
     initialData: session.snapshot,
     builder: (context, snapshot) {
       final value = snapshot.data ?? session.snapshot;
-      final isLiveKit = widget.room.providerId == 'livekit';
-      final isAgora = widget.room.providerId == 'agora';
 
       return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          leading: IconButton(
-            tooltip: 'Leave',
-            onPressed: _confirmLeave,
-            icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0F172A)),
-          ),
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: InkWell(
-                  onTap: _copyRoomCode,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Room ${widget.room.roomCode}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(Icons.copy_rounded, size: 14, color: Color(0xFF64748B)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Provider Badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isLiveKit
-                      ? const Color(0xFFF0F9FF)
-                      : isAgora
-                      ? const Color(0xFFF5F3FF)
-                      : const Color(0xFFFFF7ED),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isLiveKit
-                        ? const Color(0xFFBAE6FD)
-                        : isAgora
-                        ? const Color(0xFFDDD6FE)
-                        : const Color(0xFFFED7AA),
-                  ),
-                ),
-                child: Text(
-                  isLiveKit
-                      ? 'LiveKit'
-                      : isAgora
-                      ? 'Agora'
-                      : 'Chime',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isLiveKit
-                        ? const Color(0xFF0284C7)
-                        : isAgora
-                        ? const Color(0xFF7C3AED)
-                        : const Color(0xFFEA580C),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            // Participants count chip
-            Container(
-              margin: const EdgeInsets.only(right: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.people_alt_rounded, size: 14, color: Color(0xFF475569)),
-                  const SizedBox(width: 5),
-                  Text(
-                    '${value.participants.length}',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
         body: SafeArea(
           child: Column(
             children: [
-              if (_error != null)
-                Container(
-                  margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFFECDD3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline, size: 16, color: Color(0xFFDC2626)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 12),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 14, color: Color(0xFFB91C1C)),
-                        onPressed: () => setState(() => _error = null),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
-                ),
-              // Main video / media area
+              _buildTopBar(value, widget.room.providerId),
+              if (_error != null) _buildInlineError(),
               Expanded(
                 child: value.participants.isEmpty
-                    ? _buildWaitingRoom(value)
+                    ? _buildModernWaitingRoom(value)
                     : _buildAdaptiveVideoGrid(value),
               ),
-              // Screen share preview if present
               if (value.contentShareTrack != null)
-                Container(
-                  margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                  height: 160,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x08000000),
-                        blurRadius: 10,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: MediaTrackView(
-                      renderer: widget.renderer,
-                      track: value.contentShareTrack,
-                    ),
-                  ),
-                ),
-              // Chat panel drawer if expanded
+                _buildScreenShareBanner(value),
               if (_showChatPanel) _buildChatDrawer(session),
-              // Bottom controls bar
-              _RoomControls(
+              _ModernDockControls(
                 session: session,
                 snapshot: value,
                 isChatOpen: _showChatPanel,
-                onToggleChat: () => setState(() => _showChatPanel = !_showChatPanel),
+                onToggleChat: () =>
+                    setState(() => _showChatPanel = !_showChatPanel),
                 onLeave: _confirmLeave,
                 run: _run,
               ),
@@ -927,62 +843,356 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
     },
   );
 
-  Widget _buildWaitingRoom(MediaSnapshot value) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(24),
-      child: GlassContainer(
-        borderRadius: 24,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 64,
-              height: 64,
+  Widget _buildTopBar(MediaSnapshot value, String providerId) {
+    final providerLabel = switch (providerId) {
+      'livekit' => 'LiveKit',
+      'agora' => 'Agora',
+      _ => 'Chime',
+    };
+    final providerBackground = switch (providerId) {
+      'livekit' => const Color(0xFFF0F9FF),
+      'agora' => const Color(0xFFF5F3FF),
+      _ => const Color(0xFFFFF7ED),
+    };
+    final providerBorder = switch (providerId) {
+      'livekit' => const Color(0xFFBAE6FD),
+      'agora' => const Color(0xFFDDD6FE),
+      _ => const Color(0xFFFED7AA),
+    };
+    final providerColor = switch (providerId) {
+      'livekit' => const Color(0xFF0284C7),
+      'agora' => const Color(0xFF7C3AED),
+      _ => const Color(0xFFEA580C),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Row(
+        children: [
+          // Clean Back button
+          Tooltip(
+            message: 'Leave Meeting',
+            child: InkWell(
+              onTap: _confirmLeave,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  size: 16,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Room Code Badge with Copy micro-interaction
+          InkWell(
+            onTap: _copyRoomCode,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFFEEF2FF),
-                border: Border.all(color: const Color(0xFFC7D2FE)),
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
-              child: const Icon(
-                Icons.sensors_rounded,
-                size: 32,
-                color: Color(0xFF4F46E5),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.room.roomCode,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0F172A),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    _codeCopiedRecently
+                        ? Icons.check_rounded
+                        : Icons.copy_rounded,
+                    size: 13,
+                    color: _codeCopiedRecently
+                        ? const Color(0xFF059669)
+                        : const Color(0xFF64748B),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Room is Ready',
+          ),
+          const SizedBox(width: 8),
+          // Provider Tag
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: providerBackground,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: providerBorder),
+            ),
+            child: Text(
+              providerLabel,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF0F172A),
+                color: providerColor,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Status: ${value.state.name}',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF64748B),
-              ),
+          ),
+          const Spacer(),
+          // Live Call Timer Pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: _copyRoomCode,
-              icon: const Icon(Icons.share_rounded, size: 16),
-              label: Text('Share Room Code (${widget.room.roomCode})'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4F46E5),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF10B981),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _formattedDuration,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
+          const SizedBox(width: 8),
+          // Participant Counter
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.people_outline_rounded,
+                  size: 14,
+                  color: Color(0xFF64748B),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${value.participants.length}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineError() => Container(
+    margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFEF2F2),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xFFFECDD3)),
+    ),
+    child: Row(
+      children: [
+        const Icon(
+          Icons.error_outline_rounded,
+          size: 16,
+          color: Color(0xFFDC2626),
         ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _error!,
+            style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 12),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(
+            Icons.close_rounded,
+            size: 14,
+            color: Color(0xFFB91C1C),
+          ),
+          onPressed: () => setState(() => _error = null),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+      ],
+    ),
+  );
+
+  Widget _buildModernWaitingRoom(MediaSnapshot value) => Center(
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Concentric animated pulsing circle
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFFEEF2FF).withValues(alpha: 0.6),
+                ),
+              ),
+              Container(
+                width: 84,
+                height: 84,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFEEF2FF),
+                ),
+              ),
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4F46E5), Color(0xFF6366F1)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.35),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.wifi_tethering_rounded,
+                  size: 26,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            "You're the only one here",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F172A),
+              letterSpacing: -0.01,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Share the room code or invite link to start streaming',
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w400,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Clean Room Code Card
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x06000000),
+                  blurRadius: 10,
+                  offset: Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ROOM CODE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.08,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                    Text(
+                      widget.room.roomCode,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 20),
+                ElevatedButton.icon(
+                  onPressed: _copyRoomCode,
+                  icon: Icon(
+                    _codeCopiedRecently
+                        ? Icons.check_rounded
+                        : Icons.copy_rounded,
+                    size: 15,
+                  ),
+                  label: Text(_codeCopiedRecently ? 'Copied' : 'Copy Code'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    textStyle: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     ),
   );
@@ -992,18 +1202,22 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
       final width = constraints.maxWidth;
       final count = value.participants.length;
 
-      // Smart adaptive column computation based on width and participant count
       int crossAxisCount;
       double aspectRatio;
 
       if (width > 900) {
-        crossAxisCount = count <= 2 ? 2 : count <= 4 ? 2 : count <= 6 ? 3 : 4;
+        crossAxisCount = count <= 2
+            ? 2
+            : count <= 4
+            ? 2
+            : count <= 6
+            ? 3
+            : 4;
         aspectRatio = 16 / 10;
       } else if (width > 600) {
         crossAxisCount = count <= 2 ? 2 : 3;
         aspectRatio = 4 / 3;
       } else {
-        // Mobile portrait or narrow screen
         crossAxisCount = count == 1 ? 1 : 2;
         aspectRatio = count == 1 ? 4 / 3 : 1.0;
       }
@@ -1025,22 +1239,78 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
     },
   );
 
+  Widget _buildScreenShareBanner(MediaSnapshot value) => Container(
+    margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+    height: 160,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFE2E8F0)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x06000000),
+          blurRadius: 10,
+          offset: Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: MediaTrackView(
+            renderer: widget.renderer,
+            track: value.contentShareTrack,
+          ),
+        ),
+        Positioned(
+          top: 8,
+          left: 8,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.screen_share_rounded, color: Colors.white, size: 14),
+                SizedBox(width: 4),
+                Text(
+                  'Screen Share',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
   Widget _buildChatDrawer(MediaSession session) {
-    final messenger = session is MediaDataMessenger ? session as MediaDataMessenger : null;
+    final messenger = session is MediaDataMessenger
+        ? session as MediaDataMessenger
+        : null;
     if (messenger == null) return const SizedBox.shrink();
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+            color: Color(0x08000000),
+            blurRadius: 12,
+            offset: Offset(0, 3),
           ),
         ],
       ),
@@ -1051,11 +1321,11 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
               controller: _messageController,
               style: const TextStyle(fontSize: 13.5, color: Color(0xFF0F172A)),
               decoration: const InputDecoration(
-                hintText: 'Send message to room…',
+                hintText: 'Type a message to participants…',
                 hintStyle: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
                 isDense: true,
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(vertical: 8),
+                contentPadding: EdgeInsets.symmetric(vertical: 6),
               ),
               onSubmitted: (_) => _sendDataMessage(messenger),
             ),
@@ -1063,7 +1333,15 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
           IconButton(
             tooltip: 'Send',
             onPressed: () => _sendDataMessage(messenger),
-            icon: const Icon(Icons.send_rounded, color: Color(0xFF4F46E5), size: 20),
+            icon: const Icon(
+              Icons.arrow_upward_rounded,
+              color: Color(0xFF4F46E5),
+              size: 18,
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFEEF2FF),
+              padding: const EdgeInsets.all(8),
+            ),
           ),
         ],
       ),
@@ -1077,9 +1355,13 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
       _messageController.clear();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Message sent'),
-          duration: Duration(milliseconds: 1500),
+        SnackBar(
+          content: const Text('Message sent'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          duration: const Duration(milliseconds: 1500),
         ),
       );
     });
@@ -1095,47 +1377,58 @@ class _ParticipantTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasVideo = participant.videoTrack != null;
-    final displayName = participant.displayName.isEmpty ? 'Participant' : participant.displayName;
+    final displayName = participant.displayName.isEmpty
+        ? 'Participant'
+        : participant.displayName;
     final initial = displayName.characters.first.toUpperCase();
+    final isSpeaking = participant.isSpeaking;
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: participant.isSpeaking ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
-          width: participant.isSpeaking ? 2 : 1,
+          color: isSpeaking ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+          width: isSpeaking ? 2.2 : 1,
         ),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 10,
-            offset: Offset(0, 3),
+            color: isSpeaking
+                ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                : const Color(0x06000000),
+            blurRadius: isSpeaking ? 12 : 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
+        borderRadius: BorderRadius.circular(16),
         child: Stack(
           fit: StackFit.expand,
           children: [
             if (hasVideo)
-              MediaTrackView(
-                renderer: renderer,
-                track: participant.videoTrack,
-              )
+              MediaTrackView(renderer: renderer, track: participant.videoTrack)
             else
-              // Clean light avatar placeholder
+              // Modern, minimalist avatar card
               Container(
                 color: const Color(0xFFF8FAFC),
                 child: Center(
                   child: Container(
-                    width: 54,
-                    height: 54,
+                    width: 58,
+                    height: 58,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFFEEF2FF),
-                      border: Border.all(color: const Color(0xFFC7D2FE)),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(
+                        color: isSpeaking
+                            ? const Color(0xFF10B981)
+                            : const Color(0xFFC7D2FE),
+                        width: isSpeaking ? 2 : 1,
+                      ),
                     ),
                     child: Center(
                       child: Text(
@@ -1143,27 +1436,30 @@ class _ParticipantTile extends StatelessWidget {
                         style: const TextStyle(
                           color: Color(0xFF4F46E5),
                           fontSize: 22,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            // Floating bottom info pill
+            // Floating Frosted Glass Name Badge
             Positioned(
               left: 8,
               bottom: 8,
               right: 8,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.92),
+                  color: Colors.white.withValues(alpha: 0.94),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                   boxShadow: const [
                     BoxShadow(
-                      color: Color(0x08000000),
+                      color: Color(0x06000000),
                       blurRadius: 4,
                       offset: Offset(0, 1),
                     ),
@@ -1182,15 +1478,15 @@ class _ParticipantTile extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Icon(
                       participant.isMuted
                           ? Icons.mic_off_rounded
                           : Icons.mic_rounded,
-                      size: 15,
+                      size: 14,
                       color: participant.isMuted
                           ? const Color(0xFFDC2626)
-                          : participant.isSpeaking
+                          : isSpeaking
                           ? const Color(0xFF10B981)
                           : const Color(0xFF64748B),
                     ),
@@ -1205,8 +1501,9 @@ class _ParticipantTile extends StatelessWidget {
   }
 }
 
-class _RoomControls extends StatelessWidget {
-  const _RoomControls({
+/// Floating Island Control Dock with sleek rounded modern pills.
+class _ModernDockControls extends StatelessWidget {
+  const _ModernDockControls({
     required this.session,
     required this.snapshot,
     required this.isChatOpen,
@@ -1227,19 +1524,20 @@ class _RoomControls extends StatelessWidget {
     final interactive = session is InteractiveMediaSession
         ? session as InteractiveMediaSession
         : null;
-    final canSendData = session is MediaDataMessenger && snapshot.capabilities.canSendData;
+    final canSendData =
+        session is MediaDataMessenger && snapshot.capabilities.canSendData;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+      margin: const EdgeInsets.fromLTRB(16, 6, 16, 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0C000000),
-            blurRadius: 16,
+            blurRadius: 18,
             offset: Offset(0, 4),
           ),
         ],
@@ -1251,68 +1549,78 @@ class _RoomControls extends StatelessWidget {
           children: [
             if (interactive != null) ...[
               // Audio Toggle (Mute / Unmute)
-              _controlButton(
-                tooltip: snapshot.localMuted ? 'Unmute' : 'Mute',
+              _dockButton(
+                tooltip: snapshot.localMuted
+                    ? 'Unmute microphone'
+                    : 'Mute microphone',
                 onPressed: () => run(interactive.toggleMute),
-                icon: snapshot.localMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                icon: snapshot.localMuted
+                    ? Icons.mic_off_outlined
+                    : Icons.mic_none_rounded,
                 isDanger: snapshot.localMuted,
                 isActive: !snapshot.localMuted,
               ),
               const SizedBox(width: 8),
               // Camera Toggle (Start / Stop)
-              _controlButton(
-                tooltip: snapshot.localVideoEnabled ? 'Stop camera' : 'Start camera',
+              _dockButton(
+                tooltip: snapshot.localVideoEnabled
+                    ? 'Turn off camera'
+                    : 'Turn on camera',
                 onPressed: () => run(
-                  () => interactive.setVideoEnabled(!snapshot.localVideoEnabled),
+                  () =>
+                      interactive.setVideoEnabled(!snapshot.localVideoEnabled),
                 ),
                 icon: snapshot.localVideoEnabled
-                    ? Icons.videocam_rounded
-                    : Icons.videocam_off_rounded,
+                    ? Icons.videocam_outlined
+                    : Icons.videocam_off_outlined,
                 isActive: snapshot.localVideoEnabled,
               ),
               if (snapshot.capabilities.canSwitchCamera) ...[
                 const SizedBox(width: 8),
-                _controlButton(
+                _dockButton(
                   tooltip: 'Switch camera',
                   onPressed: () => run(
                     () => interactive.switchCamera(MediaCameraPosition.back),
                   ),
-                  icon: Icons.cameraswitch_rounded,
+                  icon: Icons.cameraswitch_outlined,
                 ),
               ],
             ],
             if (canSendData) ...[
               const SizedBox(width: 8),
-              _controlButton(
-                tooltip: 'Chat messages',
+              _dockButton(
+                tooltip: 'Data message',
                 onPressed: onToggleChat,
                 icon: Icons.chat_bubble_outline_rounded,
                 isActive: isChatOpen,
               ),
             ],
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             // End call button
-            InkWell(
-              onTap: onLeave,
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDC2626),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFDC2626).withValues(alpha: 0.35),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.call_end_rounded,
-                  color: Colors.white,
-                  size: 20,
+            Tooltip(
+              message: 'Leave Meeting',
+              child: InkWell(
+                onTap: onLeave,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDC2626),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFDC2626).withValues(alpha: 0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.call_end_rounded,
+                    color: Colors.white,
+                    size: 19,
+                  ),
                 ),
               ),
             ),
@@ -1322,7 +1630,7 @@ class _RoomControls extends StatelessWidget {
     );
   }
 
-  Widget _controlButton({
+  Widget _dockButton({
     required String tooltip,
     required VoidCallback onPressed,
     required IconData icon,
@@ -1351,16 +1659,16 @@ class _RoomControls extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           width: 42,
           height: 42,
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(color: border),
           ),
-          child: Icon(icon, color: fg, size: 20),
+          child: Icon(icon, color: fg, size: 19),
         ),
       ),
     );
