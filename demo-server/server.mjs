@@ -1,12 +1,13 @@
-// Chime demo backend — keys stay server-side, never ship to Flutter.
-// Uses AWS_PROFILE=chime-demo (IAM least-privilege), control plane us-east-1.
-// Billing: creating meetings is free; attendee-minutes bill only when someone joins.
-// Room endpoints implement BACKEND_CONTRACT.md v1. Set DEMO_BEARER_TOKEN to
-// exercise ChimeClient tokenProvider locally; this remains a demo auth hook.
+// Multi-provider demo backend — provider credentials stay server-side.
+//
+// `npm start` is the single backend entry point. The dashboard lets developers
+// switch NEW rooms between AWS Chime and LiveKit at runtime. Existing rooms
+// remain bound to the provider that created them, so Flutter only needs a room
+// code and never sends a provider selection.
 //
 // Room model (user-facing):
-//   POST /rooms              { roomCode?, nickname? } -> { roomCode, meeting, attendee? }
-//   POST /rooms/:code/join   { userId }               -> { roomCode, meeting, attendee }
+//   POST /rooms              { roomCode?, nickname?, role? } -> provider join info
+//   POST /rooms/:code/join   { userId, role? }               -> provider join info
 //   GET  /rooms                                       -> { rooms: [...] }
 //   DELETE /rooms/:code                               -> { deleted: true } (force close)
 //
@@ -18,9 +19,10 @@
 //   DELETE /meetings/:id      -> { deleted: true }
 //
 // Monitor:
-//   GET  /                    -> dashboard (rooms, headcount, force close)
-//   GET  /health              -> { ok, controlRegion, mediaRegion }
+//   GET  /                    -> dashboard (provider switch, rooms, force close)
+//   GET  /health              -> provider/backend status
 //   GET  /api/overview        -> dashboard data
+//   POST /api/provider        -> switch provider for newly-created rooms
 //
 // Response shape matches JoinInfo.fromJson: { meeting: {...}, attendee: {...} }
 
@@ -40,8 +42,14 @@ import {
 const CONTROL_REGION = process.env.AWS_REGION ?? 'us-east-1';
 const MEDIA_REGION = process.env.CHIME_MEDIA_REGION ?? 'ap-southeast-1';
 const CONTRACT_VERSION = 1;
-const CONTRACT_HEADER = 'X-Chime-Backend-Contract';
+const MEDIA_CONTRACT_HEADER = 'X-Media-Backend-Contract';
+const LEGACY_CHIME_CONTRACT_HEADER = 'X-Chime-Backend-Contract';
 const DEMO_BEARER_TOKEN = process.env.DEMO_BEARER_TOKEN?.trim() || null;
+const LIVEKIT_URL = process.env.LIVEKIT_URL?.trim() || null;
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY?.trim() || null;
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET?.trim() || null;
+const LIVEKIT_TOKEN_TTL_SECONDS = Number(process.env.LIVEKIT_TOKEN_TTL_SECONDS ?? 600);
+const INITIAL_PROVIDER = String(process.env.MEDIA_DEFAULT_PROVIDER ?? 'chime').trim().toLowerCase();
 const STARTED_AT = Date.now();
 // Empty-room auto close: sweep every 30s, close rooms with no heartbeat for 90s.
 // Heartbeat comes from the app (see POST /rooms/:code/heartbeat).
@@ -55,6 +63,24 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '64kb' }));
 
+if (!['chime', 'livekit'].includes(INITIAL_PROVIDER)) {
+  throw new Error('MEDIA_DEFAULT_PROVIDER must be chime or livekit.');
+}
+
+async function resolveRoom(ref) {
+  const key = String(ref ?? '').trim();
+  if (!key) return null;
+  const livekit = livekitRooms.get(key);
+  if (livekit) return livekit;
+  return resolveEntry(key);
+}
+
+function closeLiveKitEntry(entry, reason) {
+  livekitRooms.delete(entry.roomCode);
+  logEvent('delete', `room ${entry.roomCode} closed (${reason}) — LiveKit directory entry removed`);
+}
+let activeProvider = INITIAL_PROVIDER;
+
 function contractError(res, status, code, message, details = undefined) {
   return res.status(status).json({
     contractVersion: CONTRACT_VERSION,
@@ -63,8 +89,9 @@ function contractError(res, status, code, message, details = undefined) {
 }
 
 function requireRoomContract(req, res, next) {
-  res.set(CONTRACT_HEADER, String(CONTRACT_VERSION));
-  const requestedVersion = req.get(CONTRACT_HEADER);
+  res.set(MEDIA_CONTRACT_HEADER, String(CONTRACT_VERSION));
+  const requestedVersion =
+    req.get(MEDIA_CONTRACT_HEADER) ?? req.get(LEGACY_CHIME_CONTRACT_HEADER);
   if (requestedVersion && requestedVersion !== String(CONTRACT_VERSION)) {
     return contractError(
       res,
@@ -85,10 +112,12 @@ function requireRoomContract(req, res, next) {
 app.use('/rooms', requireRoomContract);
 
 // ---- in-memory state (restart clears the room directory) ----
-// entries: meetingId -> { meeting, roomCode, createdAt, attendees: [{ attendeeId, externalUserId, joinedAt }] }
-// rooms: roomCode -> meetingId
+// Chime keeps the legacy meetingId index for backwards-compatible endpoints.
+// LiveKit rooms are application-level entries; LiveKit creates the actual room
+// lazily when the first signed participant token connects.
 const meetings = new Map();
 const rooms = new Map();
+const livekitRooms = new Map();
 const events = [];
 function logEvent(type, message) {
   events.unshift({ ts: new Date().toISOString(), type, message });
@@ -119,7 +148,7 @@ function pickAttendee(raw) {
 function generateRoomCode() {
   for (let i = 0; i < 50; i++) {
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    if (!rooms.has(code)) return code;
+    if (!rooms.has(code) && !livekitRooms.has(code)) return code;
   }
   return String(Date.now()).slice(-6);
 }
@@ -140,11 +169,96 @@ function normalizeUserId(raw) {
   return ascii || `user-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+function normalizeDisplayName(raw) {
+  return String(raw ?? '').trim().slice(0, 64);
+}
+
+function parseRole(raw) {
+  const role = String(raw ?? 'participant').trim().toLowerCase();
+  return ['participant', 'host', 'viewer'].includes(role) ? role : null;
+}
+
+function liveKitConfigured() {
+  return Boolean(LIVEKIT_URL && LIVEKIT_API_KEY && LIVEKIT_API_SECRET);
+}
+
+function base64Url(value) {
+  return Buffer.from(value).toString('base64url');
+}
+
+function signLiveKitToken({ identity, name, roomName, role }) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const payload = {
+    iss: LIVEKIT_API_KEY,
+    sub: identity,
+    nbf: now - 5,
+    exp: now + LIVEKIT_TOKEN_TTL_SECONDS,
+    ...(name ? { name } : {}),
+    video: {
+      roomJoin: true,
+      room: roomName,
+      canSubscribe: true,
+      canPublish: role !== 'viewer',
+      canPublishData: true,
+    },
+  };
+  const unsigned = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
+  const signature = crypto
+    .createHmac('sha256', LIVEKIT_API_SECRET)
+    .update(unsigned)
+    .digest('base64url');
+  return `${unsigned}.${signature}`;
+}
+
+function createLiveKitEntry(roomCode) {
+  const entry = {
+    provider: 'livekit',
+    roomCode,
+    providerRoomName: `media-${roomCode}`,
+    createdAt: new Date().toISOString(),
+    attendees: [],
+    lastHeartbeatMs: Date.now(),
+  };
+  livekitRooms.set(roomCode, entry);
+  return entry;
+}
+
+function createLiveKitJoin(entry, rawName, role) {
+  const identity = `p-${crypto.randomUUID()}`;
+  const displayName = normalizeDisplayName(rawName) || identity;
+  entry.attendees.push({
+    attendeeId: identity,
+    externalUserId: displayName,
+    joinedAt: new Date().toISOString(),
+  });
+  touchHeartbeat(entry);
+  return {
+    contractVersion: CONTRACT_VERSION,
+    provider: 'livekit',
+    role,
+    roomCode: entry.roomCode,
+    participantId: identity,
+    displayName,
+    livekit: {
+      url: LIVEKIT_URL,
+      token: signLiveKitToken({
+        identity,
+        name: displayName,
+        roomName: entry.providerRoomName,
+        role,
+      }),
+      identity,
+    },
+  };
+}
+
 function getOrCacheEntry(meeting, roomCode = null) {
   let entry = meetings.get(meeting.MeetingId);
   if (!entry) {
     const code = roomCode ?? generateRoomCode();
     entry = {
+      provider: 'chime',
       meeting,
       roomCode: code,
       createdAt: new Date().toISOString(),
@@ -193,6 +307,12 @@ setInterval(() => {
       );
     }
   }
+  for (const entry of [...livekitRooms.values()]) {
+    if (now - (entry.lastHeartbeatMs ?? 0) > EMPTY_CLOSE_AFTER_MS) {
+      const idleSec = Math.round((now - entry.lastHeartbeatMs) / 1000);
+      closeLiveKitEntry(entry, `idle ${idleSec}s, no heartbeat`);
+    }
+  }
 }, SWEEP_INTERVAL_MS);
 
 /// Accepts a room code ("123456") or a raw meetingId (uuid). Returns the entry or null.
@@ -227,9 +347,39 @@ async function createAttendeeIn(entry, userId) {
   return attendee;
 }
 
+function chimeJoinResponse(entry, attendee, role = 'participant') {
+  return {
+    contractVersion: CONTRACT_VERSION,
+    provider: 'chime',
+    role,
+    roomCode: entry.roomCode,
+    participantId: attendee.AttendeeId,
+    displayName: attendee.ExternalUserId,
+    meeting: entry.meeting,
+    attendee,
+  };
+}
+
 function roomSummary(entry, req) {
   const host = req ? `${req.protocol}://${req.get('host')}` : '';
+  if (entry.provider === 'livekit') {
+    return {
+      provider: 'livekit',
+      roomCode: entry.roomCode,
+      meetingId: entry.providerRoomName,
+      externalMeetingId: entry.providerRoomName,
+      mediaRegion: 'LiveKit',
+      createdAt: entry.createdAt,
+      lastHeartbeat: new Date(entry.lastHeartbeatMs ?? Date.now()).toISOString(),
+      idleSec: Math.max(0, Math.round((Date.now() - (entry.lastHeartbeatMs ?? Date.now())) / 1000)),
+      attendeeCount: entry.attendees.length,
+      attendees: entry.attendees,
+      shareText: entry.roomCode,
+      shareLink: `multimedia://join?roomCode=${entry.roomCode}&server=${host}`,
+    };
+  }
   return {
+    provider: 'chime',
     roomCode: entry.roomCode,
     meetingId: entry.meeting.MeetingId,
     externalMeetingId: entry.meeting.ExternalMeetingId,
@@ -250,19 +400,56 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, controlRegion: CONTROL_REGION, mediaRegion: MEDIA_REGION });
+  res.json({
+    ok: activeProvider !== 'livekit' || liveKitConfigured(),
+    contractVersion: CONTRACT_VERSION,
+    activeProvider,
+    controlRegion: CONTROL_REGION,
+    mediaRegion: MEDIA_REGION,
+    providers: {
+      chime: { enabled: true, configured: true },
+      livekit: { enabled: true, configured: liveKitConfigured(), url: LIVEKIT_URL },
+    },
+  });
+});
+
+app.post('/api/provider', (req, res) => {
+  const provider = String(req.body?.provider ?? '').trim().toLowerCase();
+  if (!['chime', 'livekit'].includes(provider)) {
+    return contractError(res, 400, 'unsupported-provider', 'provider must be chime or livekit.');
+  }
+  if (provider === 'livekit' && !liveKitConfigured()) {
+    return contractError(
+      res,
+      503,
+      'provider-not-configured',
+      'LiveKit is not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET.',
+    );
+  }
+  if (provider === activeProvider) {
+    return res.json({ ok: true, activeProvider });
+  }
+  activeProvider = provider;
+  logEvent('provider-switch', `new rooms will use ${provider}`);
+  res.json({ ok: true, activeProvider });
 });
 
 app.get('/api/overview', (req, res) => {
+  const allRooms = [...meetings.values(), ...livekitRooms.values()];
   res.json({
     ok: true,
+    activeProvider,
+    providers: {
+      chime: { enabled: true, configured: true },
+      livekit: { enabled: true, configured: liveKitConfigured(), url: LIVEKIT_URL },
+    },
     controlRegion: CONTROL_REGION,
     mediaRegion: MEDIA_REGION,
     uptimeSec: Math.floor((Date.now() - STARTED_AT) / 1000),
     startedAt: new Date(STARTED_AT).toISOString(),
-    roomCount: rooms.size,
-    attendeeCount: [...meetings.values()].reduce((n, e) => n + e.attendees.length, 0),
-    rooms: [...meetings.values()].map((e) => roomSummary(e, req)),
+    roomCount: allRooms.length,
+    attendeeCount: allRooms.reduce((n, e) => n + e.attendees.length, 0),
+    rooms: allRooms.map((e) => roomSummary(e, req)),
     events: events.slice(0, 100),
   });
 });
@@ -270,14 +457,14 @@ app.get('/api/overview', (req, res) => {
 app.get('/rooms', (req, res) => {
   res.json({
     contractVersion: CONTRACT_VERSION,
-    rooms: [...meetings.values()].map((e) => roomSummary(e, req)),
+    rooms: [...meetings.values(), ...livekitRooms.values()].map((e) => roomSummary(e, req)),
   });
 });
 
 // ---- room API (primary for the app) ----
 
-// Create a room. Body: { roomCode?, nickname? }.
-// If nickname is given the creator joins immediately and attendee is returned too.
+// Create a room. Body: { roomCode?, nickname?, role? }.
+// The server-side activeProvider decides which media backend owns the room.
 app.post('/rooms', async (req, res) => {
   try {
     let code = normalizeRoomCode(req.body?.roomCode);
@@ -289,7 +476,7 @@ app.post('/rooms', async (req, res) => {
         'roomCode must be 4-12 letters/digits.',
       );
     }
-    if (code && rooms.has(code)) {
+    if (code && (rooms.has(code) || livekitRooms.has(code))) {
       return contractError(
         res,
         409,
@@ -298,7 +485,43 @@ app.post('/rooms', async (req, res) => {
       );
     }
     code ??= generateRoomCode();
+    const role = parseRole(req.body?.role);
+    if (!role) {
+      return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
+    }
     const rawNickname = req.body?.nickname?.trim() || null;
+    if (activeProvider === 'livekit') {
+      if (!liveKitConfigured()) {
+        return contractError(
+          res,
+          503,
+          'provider-not-configured',
+          'LiveKit is not configured on this demo server.',
+        );
+      }
+      const entry = createLiveKitEntry(code);
+      logEvent('create', `room ${code} created with LiveKit`);
+      if (rawNickname) {
+        const response = createLiveKitJoin(entry, rawNickname, role);
+        logEvent('join', `${response.displayName} created+joined room ${code} via LiveKit`);
+        return res.json(response);
+      }
+      return res.json({
+        contractVersion: CONTRACT_VERSION,
+        provider: 'livekit',
+        role,
+        roomCode: code,
+      });
+    }
+
+    if (role !== 'participant') {
+      return contractError(
+        res,
+        400,
+        'unsupported-role',
+        'AWS Chime currently supports participant rooms only. Switch the server UI to LiveKit for host/viewer roles.',
+      );
+    }
     const nickname = rawNickname ? normalizeUserId(rawNickname) : null;
 
     const out = await client.send(
@@ -315,14 +538,15 @@ app.post('/rooms', async (req, res) => {
     if (nickname) {
       const attendee = await createAttendeeIn(entry, nickname);
       logEvent('join', `${nickname} created+joined room ${code}`);
-      return res.json({
-        contractVersion: CONTRACT_VERSION,
-        roomCode: code,
-        meeting: entry.meeting,
-        attendee,
-      });
+      return res.json(chimeJoinResponse(entry, attendee, role));
     }
-    res.json({ contractVersion: CONTRACT_VERSION, roomCode: code, meeting: entry.meeting });
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      provider: 'chime',
+      role,
+      roomCode: code,
+      meeting: entry.meeting,
+    });
   } catch (err) {
     console.error('create room failed', err);
     logEvent('error', `create room failed: ${err?.name ?? err}`);
@@ -330,25 +554,40 @@ app.post('/rooms', async (req, res) => {
   }
 });
 
-// Join a room by code (or raw meetingId). Body: { userId }.
+// Join a room by code. Body: { userId, role? }. Provider comes from the room.
 app.post('/rooms/:code/join', async (req, res) => {
   try {
-    const entry = await resolveEntry(req.params.code);
+    const entry = await resolveRoom(req.params.code);
     if (!entry) {
       logEvent('error', `join ${req.params.code} failed: not found`);
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+    }
+    const role = parseRole(req.body?.role);
+    if (!role) {
+      return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
+    }
+    if (entry.provider === 'livekit') {
+      if (!liveKitConfigured()) {
+        return contractError(res, 503, 'provider-not-configured', 'LiveKit is not configured.');
+      }
+      const response = createLiveKitJoin(entry, req.body?.userId, role);
+      logEvent('join', `${response.displayName} joined room ${entry.roomCode} via LiveKit`);
+      return res.json(response);
+    }
+    if (role !== 'participant') {
+      return contractError(
+        res,
+        400,
+        'unsupported-role',
+        'This room uses AWS Chime, which currently supports participant role only.',
+      );
     }
     const userId = req.body?.userId;
     const safeId = normalizeUserId(userId);
     const attendee = await createAttendeeIn(entry, safeId);
     touchHeartbeat(entry);
     logEvent('join', `${safeId} joined room ${entry.roomCode}`);
-    res.json({
-      contractVersion: CONTRACT_VERSION,
-      roomCode: entry.roomCode,
-      meeting: entry.meeting,
-      attendee,
-    });
+    res.json(chimeJoinResponse(entry, attendee, role));
   } catch (err) {
     console.error('room join failed', err);
     logEvent('error', `join room failed: ${err?.name ?? err}`);
@@ -359,7 +598,7 @@ app.post('/rooms/:code/join', async (req, res) => {
 // Proof-of-life from inside a room. Body: { attendeeId? }.
 // Any active client calls this every ~30s; rooms without it get auto-closed.
 app.post('/rooms/:code/heartbeat', async (req, res) => {
-  const entry = await resolveEntry(req.params.code);
+  const entry = await resolveRoom(req.params.code);
   if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
   touchHeartbeat(entry);
   res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode });
@@ -370,34 +609,36 @@ app.post('/rooms/:code/heartbeat', async (req, res) => {
 // attendee leaves AND no heartbeat arrives — here we just log it and let
 // the sweep handle the close to avoid kicking a second viewer.
 app.post('/rooms/:code/leave', async (req, res) => {
-  const entry = await resolveEntry(req.params.code);
+  const entry = await resolveRoom(req.params.code);
   if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
   const who = req.body?.attendeeId ?? req.body?.userId ?? 'someone';
   logEvent('leave', `${who} left room ${entry.roomCode} (auto-close in ~90s if empty)`);
   res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode });
 });
 
-// Force close a room. Deletes the Chime meeting (stops future joins/billing) and drops the directory entry.
+// Force close a room. Existing room/provider ownership determines cleanup.
 app.delete('/rooms/:code', async (req, res) => {
   try {
     const key = String(req.params.code ?? '').trim();
-    let meetingId = rooms.has(key) ? rooms.get(key) : key;
-    const entry = meetings.get(meetingId);
-    await client.send(new DeleteMeetingCommand({ MeetingId: meetingId }));
-    if (entry) {
-      rooms.delete(entry.roomCode);
-      meetings.delete(meetingId);
-      logEvent('delete', `room ${entry.roomCode} force-closed (${entry.attendees.length} attendee records)`);
+    const livekit = livekitRooms.get(key);
+    if (livekit) {
+      closeLiveKitEntry(livekit, 'force close');
       return res.json({
         contractVersion: CONTRACT_VERSION,
         deleted: true,
-        roomCode: entry.roomCode,
+        roomCode: key,
       });
     }
-    rooms.delete(key);
-    meetings.delete(meetingId);
-    logEvent('delete', `meeting ${String(meetingId).slice(0, 8)} force-closed`);
-    res.json({ contractVersion: CONTRACT_VERSION, deleted: true });
+    const entry = await resolveEntry(key);
+    if (!entry) {
+      return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+    }
+    await closeEntry(entry, 'force close');
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      deleted: true,
+      roomCode: entry.roomCode,
+    });
   } catch (err) {
     const notFound = err?.name === 'NotFoundException';
     if (notFound) {
@@ -500,6 +741,8 @@ app.delete('/meetings/:id', async (req, res) => {
 
 const port = Number(process.env.PORT ?? 3000);
 app.listen(port, '0.0.0.0', () => {
-  console.log(`chime-demo-server on :${port} (control=${CONTROL_REGION} media=${MEDIA_REGION})`);
-  console.log('dashboard: http://192.168.31.8:3000/');
+  console.log(`media-demo-server on :${port} (control=${CONTROL_REGION} media=${MEDIA_REGION})`);
+  console.log(`active provider: ${activeProvider}`);
+  console.log(`LiveKit configured: ${liveKitConfigured() ? 'yes' : 'no'}`);
+  console.log(`dashboard: http://127.0.0.1:${port}/`);
 });

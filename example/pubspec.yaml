@@ -18,13 +18,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_aws_chime:
-    # When depending on this package from a real application you should use:
-    #   flutter_aws_chime: ^x.y.z
-    # See https://dart.dev/tools/pub/dependencies#version-constraints
-    # The example app is bundled with the plugin so we use a path dependency on
-    # the parent directory to use the current plugin's version.
-    path: ../
+  flutter_multi_livestream_video_core:
+    path: ../packages/flutter_multi_livestream_video_core
+  flutter_multi_livestream_video_livekit:
+    path: ../packages/flutter_multi_livestream_video_livekit
+  flutter_multi_livestream_video_chime:
+    path: ../packages/flutter_multi_livestream_video_chime
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -48,6 +47,13 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  # The root plugin is a local path dependency whose package name
+  # (flutter_aws_chime) differs from this repository directory name. Flutter's
+  # generated SwiftPM package uses the path basename as identity, which makes
+  # that local monorepo layout ambiguous. The example already has CocoaPods
+  # integration, so keep SwiftPM disabled for this development app only.
+  config:
+    enable-swift-package-manager: false
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

@@ -257,16 +257,20 @@ Create the session in the screen or controller that owns the call. Subscribe to 
 
 ## Roadmap
 
-The following future work is not part of v3. The two multi-backend items remain **Planned**:
+The repository now includes an optional provider-neutral Core plus LiveKit and
+AWS Chime adapters. The original `flutter_aws_chime` v3 API remains available
+unchanged for Chime-only applications.
 
 | # | Item | Status |
 |---:|---|---|
 | 1 | Upgrade Flutter and AWS Chime SDK to the latest versions | Complete in 2.0.0 |
 | 2 | Support more APIs from the latest Chime SDK | Complete in 2.0.0 |
-| 3 | Add video/audio communication backends besides Chime: Agora, LiveKit, TRTC, ARTC | Planned |
-| 4 | Add one-to-many livestreaming: IVS, LiveKit, Agora, TRTC, ARTC | Planned |
+| 3 | Add video/audio communication backends besides Chime | LiveKit implemented via optional adapter; Agora/TRTC/ARTC remain future work |
+| 4 | Add one-to-many livestreaming | LiveKit host/viewer implemented; IVS/Agora/TRTC/ARTC remain future work |
 
-See [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md) for the detailed follow-up plan. The Planned items are not implemented or in progress.
+See [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md) for the current
+multi-provider architecture and [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)
+for the broader roadmap.
 
 ---
 
@@ -523,13 +527,15 @@ await session.dispose();
 
 ## 路线图
 
-以下是未来计划，不属于 v3 的已实现范围；多后端两项仍为 **Planned**：
+当前仓库已经包含可选的 Provider-neutral Core，以及 LiveKit / AWS Chime
+适配包。原有 `flutter_aws_chime` v3 API 保持不变，纯 Chime 应用无需迁移。
 
 | # | 项目 | 状态 |
 |---:|---|---|
 | 1 | 升级 Flutter 和 AWS Chime SDK | Complete in 2.0.0 |
 | 2 | 支持更多新版 Chime SDK API | Complete in 2.0.0 |
-| 3 | 增加 Chime 以外的音视频通信后端：Agora、LiveKit、TRTC、ARTC | Planned |
-| 4 | 增加一对多直播后端：IVS、LiveKit、Agora、TRTC、ARTC | Planned |
+| 3 | 增加 Chime 以外的音视频通信后端 | LiveKit 已通过可选 Adapter 实现；Agora/TRTC/ARTC 为后续计划 |
+| 4 | 增加一对多直播 | LiveKit host/viewer 已实现；IVS/Agora/TRTC/ARTC 为后续计划 |
 
-详细后续计划见 [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)。Planned 项目尚未实现，也未开始开发。
+当前多 Provider 使用方式见 [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md)，
+更完整的后续路线见 [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)。

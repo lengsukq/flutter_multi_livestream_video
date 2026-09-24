@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_multi_livestream_video_chime/flutter_multi_livestream_video_chime.dart';
+import 'package:flutter_multi_livestream_video_core/flutter_multi_livestream_video_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-
-import 'package:flutter_aws_chime/flutter_aws_chime.dart';
 
 const _backendUrl = String.fromEnvironment('CHIME_E2E_BACKEND_URL');
 const _token = String.fromEnvironment('CHIME_E2E_TOKEN');
@@ -46,11 +46,12 @@ void main() {
         );
       }
 
-      final client = ChimeClient(
+      final client = MediaClient(
         backendUrl: _backendUrl,
+        registry: MediaRegistry([ChimeSessionFactory()]),
         tokenProvider: _token.trim().isEmpty ? null : () => _token,
       );
-      ChimeRoomSession? room;
+      MediaRoomSession? room;
 
       addTearDown(() async {
         await room?.dispose();
@@ -61,43 +62,50 @@ void main() {
           ? await client.createRoomAndJoin(
               roomCode: _roomCode.trim().isEmpty ? null : _roomCode,
               nickname: _nickname,
+              role: MediaRole.participant,
             )
-          : await client.joinRoom(roomCode: _roomCode, nickname: _nickname);
+          : await client.joinRoom(
+              roomCode: _roomCode,
+              nickname: _nickname,
+              role: MediaRole.participant,
+            );
 
       final session = room.session;
+      expect(room.providerId, 'chime');
+      expect(session, isA<ChimeMediaSession>());
       await _waitForState(
         session,
-        MeetingState.connected,
+        MediaSessionState.connected,
         timeout: Duration(seconds: _connectTimeoutSeconds),
       );
 
-      expect(session.snapshot.localAttendee, isNotNull);
+      expect(session.snapshot.localParticipant, isNotNull);
+      final interactive = session as InteractiveMediaSession;
 
-      await session.setMuted(false);
+      await interactive.setMuted(false);
       expect(session.snapshot.localMuted, isFalse);
-      await session.setMuted(true);
+      await interactive.setMuted(true);
       expect(session.snapshot.localMuted, isTrue);
 
-      final audioDevices = await session.listAudioDevices();
+      final audioDevices = await interactive.listAudioDevices();
       if (audioDevices.isNotEmpty) {
         final preferred = audioDevices.firstWhere(
-          (device) => device.type == ChimeAudioDeviceType.speaker,
+          (device) => device.type == MediaAudioDeviceType.speaker,
           orElse: () => audioDevices.first,
         );
-        await session.selectAudioDevice(preferred);
-        expect(session.snapshot.selectedAudioDevice?.label, preferred.label);
+        await interactive.selectAudioDevice(preferred);
       }
 
-      await session.setVideoEnabled(true);
+      await interactive.setVideoEnabled(true);
       expect(session.snapshot.localVideoEnabled, isTrue);
 
       if (!_skipCameraSwitch) {
-        await session.switchCamera(CameraPosition.back);
-        await session.switchCamera(CameraPosition.front);
+        await interactive.switchCamera(MediaCameraPosition.back);
+        await interactive.switchCamera(MediaCameraPosition.front);
       }
 
       final message = 'device-e2e-${DateTime.now().millisecondsSinceEpoch}';
-      await session.sendMessage(message, topic: 'e2e');
+      await interactive.sendMessage(message, topic: 'e2e');
       expect(
         session.snapshot.messages.any(
           (item) => item.topic == 'e2e' && item.message == message,
@@ -106,7 +114,7 @@ void main() {
       );
 
       if (_expectRemoteAttendee) {
-        await _waitForRemoteAttendee(
+        await _waitForRemoteParticipant(
           session,
           timeout: Duration(seconds: _connectTimeoutSeconds),
         );
@@ -116,14 +124,14 @@ void main() {
         await Future<void>.delayed(Duration(seconds: _holdSeconds));
       }
 
-      await session.setVideoEnabled(false);
+      await interactive.setVideoEnabled(false);
       expect(session.snapshot.localVideoEnabled, isFalse);
 
       await room.leave();
-      expect(session.state, MeetingState.ended);
+      expect(session.state, MediaSessionState.ended);
 
       await room.dispose();
-      expect(session.state, MeetingState.disposed);
+      expect(session.state, MediaSessionState.disposed);
     },
     skip: _backendUrl.trim().isEmpty,
     timeout: const Timeout(Duration(minutes: 3)),
@@ -131,8 +139,8 @@ void main() {
 }
 
 Future<void> _waitForState(
-  ChimeMeetingSession session,
-  MeetingState expected, {
+  MediaSession session,
+  MediaSessionState expected, {
   required Duration timeout,
 }) async {
   if (session.state == expected) return;
@@ -141,9 +149,9 @@ Future<void> _waitForState(
       .firstWhere(
         (value) =>
             value == expected ||
-            value == MeetingState.failed ||
-            value == MeetingState.ended ||
-            value == MeetingState.disposed,
+            value == MediaSessionState.failed ||
+            value == MediaSessionState.ended ||
+            value == MediaSessionState.disposed,
       )
       .timeout(timeout);
 
@@ -152,12 +160,12 @@ Future<void> _waitForState(
   }
 }
 
-Future<void> _waitForRemoteAttendee(
-  ChimeMeetingSession session, {
+Future<void> _waitForRemoteParticipant(
+  MediaSession session, {
   required Duration timeout,
 }) async {
-  bool hasRemote(MeetingSnapshot snapshot) =>
-      snapshot.attendees.any((attendee) => !attendee.isLocal);
+  bool hasRemote(MediaSnapshot snapshot) =>
+      snapshot.remoteParticipants.isNotEmpty;
 
   if (hasRemote(session.snapshot)) return;
 

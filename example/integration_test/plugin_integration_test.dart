@@ -9,17 +9,18 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:flutter_aws_chime/flutter_aws_chime.dart';
+import 'package:flutter_multi_livestream_video_chime/flutter_multi_livestream_video_chime.dart';
+import 'package:flutter_multi_livestream_video_core/flutter_multi_livestream_video_core.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('v3 session API is available on the host device', (
+  testWidgets('Chime adapter session is available on the host device', (
     WidgetTester tester,
   ) async {
-    final session = ChimeMeetingSession();
-    expect(session.state, MeetingState.idle);
+    final session = ChimeMediaSession();
+    expect(session.state, MediaSessionState.idle);
     await session.dispose();
-    expect(session.state, MeetingState.disposed);
+    expect(session.state, MediaSessionState.disposed);
   });
 }

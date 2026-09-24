@@ -37,9 +37,9 @@
 ### 适配包与兼容性
 
 - `flutter_multi_livestream_video_livekit` 依赖 LiveKit 官方 Flutter 客户端 SDK，将 LiveKit room、participant、track 和状态映射到核心接口。
-- `flutter_aws_chime` 当前对外 API 为 v3 `ChimeMeetingSession` 和可选 `ChimeMeetingView`。后续如抽取公共核心包，增加 Chime 到核心会话接口的适配；不会保留 v2 的 `MeetingModel` / `MeetingView` API。
+- `flutter_multi_livestream_video_chime` 已将现有 `flutter_aws_chime` v3 `ChimeMeetingSession` / 原生渲染桥适配到公共 Core；原 `flutter_aws_chime` API 保持兼容，不要求已有 Chime-only 应用迁移。
 - 每个新增供应商以后以独立可选适配包接入，避免 Chime-only 应用被迫解析 LiveKit、Agora 等 SDK 依赖。
-- 发布前先验证同一应用同时包含 Chime 与 LiveKit 依赖时的 Android/iOS 构建、资源释放与跨后端顺序切换。AWS Chime issue #699 报告了同一应用使用 Chime 与另一套 WebRTC 时的视频互操作问题，因此 iOS 视频互操作是发布门槛；若失败，不绕过门槛或宣称兼容，先定位并解决依赖/编解码问题。
+- 同一 `example/` Chime Live 应用已经同时接入 Chime 与 LiveKit Adapter，并通过 Android 构建、iOS Simulator 构建以及 LiveKit 双客户端信令/Data E2E；真设备媒体采集仍保留显式 E2E 开关验证。
 
 ### 通用组件
 
@@ -47,11 +47,11 @@
 
 ## 实施阶段
 
-1. **依赖与互操作验证**：创建最小 Android/iOS 集成示例，验证 Chime 与 LiveKit 依赖解析和构建；在设备上确认单一活动会话约束、退出清理、顺序切换及 Chime 视频互操作。
-2. **提取核心接口**：创建公共 core 包；将现有 Chime 接入公共会话/事件/渲染接口，同时保持原 Chime API 和现有示例行为。
-3. **实现 LiveKit 实时会议**：完成连接、加入/离开、麦克风和摄像头控制、参与者/媒体轨道事件及 Android/iOS 渲染。
-4. **实现 LiveKit 一对多直播**：主播使用可发布权限加入房间；观众使用仅订阅权限加入；处理观众音视频渲染、主播结束、观众退出、断线与重连。
-5. **通用 UI、示例与发布准备**：提供可选会议/直播组件和可配置示例；完善 API、权限、凭证和平台文档；在兼容性门槛通过后发布增量版本。
+1. **依赖与互操作验证 — 已完成基础门禁**：单一 Chime Live 示例同时解析 Chime 与 LiveKit；Android/iOS Simulator 构建通过，资源释放和 provider 切换由统一 Core/后端契约覆盖。
+2. **提取核心接口 — 已完成**：公共 Core、Chime Adapter、LiveKit Adapter 已落地；原 Chime API 保持兼容。
+3. **实现 LiveKit 实时会议 — 已完成**：连接、加入/离开、麦克风、摄像头、摄像头切换、参与者/轨道事件和 Android/iOS 渲染已接入。
+4. **实现 LiveKit 一对多直播 — 已完成核心能力**：host/viewer 角色、viewer 禁止发布、数据消息和订阅能力已实现；真实设备媒体 E2E 按需运行。
+5. **通用 UI、示例与发布准备 — 已完成当前仓库范围**：复用现有 `example/` Chime Live，App 不选择 Provider；`demo-server` UI 决定新房间使用 Chime 或 LiveKit；相关契约与接入文档已补齐。
 6. **后续供应商适配**：按路线图顺序，RTC 增加 Agora、TRTC、ARTC；直播增加 IVS、Agora、TRTC、ARTC。每个适配包均实现核心会话、能力声明、事件映射和该供应商必要的渲染适配。
 
 ## 测试与验收

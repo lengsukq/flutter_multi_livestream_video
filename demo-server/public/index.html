@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Chime Live Console · 智能直播控制台</title>
+  <title>Media Live Console · 智能直播控制台</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -377,6 +377,78 @@
       font-size: 13px;
     }
 
+    .provider-panel {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 24px;
+      padding: 18px 22px;
+    }
+
+    .provider-panel-info h2 {
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .provider-panel-info p {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .provider-choice {
+      display: flex;
+      gap: 10px;
+    }
+
+    .provider-btn {
+      min-width: 132px;
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.12);
+      color: #cbd5e1;
+    }
+
+    .provider-btn.active {
+      color: #fff;
+      border-color: rgba(99, 102, 241, 0.8);
+      background: rgba(99, 102, 241, 0.2);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    }
+
+    .provider-btn:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .provider-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #64748b;
+    }
+
+    .provider-btn.active .provider-dot {
+      background: #34d399;
+      box-shadow: 0 0 10px rgba(52, 211, 153, 0.75);
+    }
+
+    .provider-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 5px;
+      padding: 3px 8px;
+      border-radius: var(--radius-pill);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: rgba(99, 102, 241, 0.13);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.24);
+    }
+
     /* Section Headers */
     .section-title-bar {
       display: flex;
@@ -616,6 +688,17 @@
         width: 100%;
         justify-content: space-between;
       }
+      .provider-panel {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .provider-choice {
+        width: 100%;
+      }
+      .provider-btn {
+        flex: 1;
+        min-width: 0;
+      }
       .toolbar {
         flex-direction: column;
         align-items: stretch;
@@ -644,7 +727,7 @@
           </svg>
         </div>
         <div class="brand-info">
-          <h1>Chime Live Console</h1>
+          <h1>Media Live Console</h1>
           <p>
             <span class="status-badge"><span class="pulse-dot"></span>服务就绪</span>
             <span id="header-meta">正在拉取节点拓扑...</span>
@@ -659,6 +742,24 @@
         </button>
       </div>
     </header>
+
+    <!-- Server-side Provider Switch -->
+    <div class="glass provider-panel">
+      <div class="provider-panel-info">
+        <h2>新房间媒体 Provider</h2>
+        <p>仅影响之后创建的新房间；已有房间始终沿用创建时绑定的 Provider。</p>
+      </div>
+      <div class="provider-choice">
+        <button id="provider-livekit" class="btn provider-btn" onclick="switchProvider('livekit')">
+          <span class="provider-dot"></span>
+          LiveKit
+        </button>
+        <button id="provider-chime" class="btn provider-btn" onclick="switchProvider('chime')">
+          <span class="provider-dot"></span>
+          AWS Chime
+        </button>
+      </div>
+    </div>
 
     <!-- KPI Metric Cards -->
     <div class="stats-grid">
@@ -681,7 +782,7 @@
           </div>
         </div>
         <div class="stat-value" id="c-att">–</div>
-        <div class="stat-subtitle">计费以真人进入产生的 attendee-minute 为准</div>
+        <div class="stat-subtitle">当前服务端签发的参与者记录</div>
       </div>
 
       <div class="glass stat-card" style="--stat-accent: linear-gradient(90deg, #10b981, #14b8a6); --stat-color: #10b981;">
@@ -724,6 +825,7 @@
         <thead>
           <tr>
             <th>房间号 / 标识</th>
+            <th>Provider</th>
             <th>在线人数</th>
             <th>参会成员</th>
             <th>空闲时长</th>
@@ -733,7 +835,7 @@
         </thead>
         <tbody id="rooms">
           <tr>
-            <td colspan="6">
+            <td colspan="7">
               <div class="empty-state">
                 <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
                 <p>当前暂无活跃房间，可通过上方快速创建</p>
@@ -778,8 +880,22 @@
     async function api(path, opts) {
       const r = await fetch(path, opts);
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      if (!r.ok) throw new Error(d.error?.message || d.message || ('HTTP ' + r.status));
       return d;
+    }
+
+    async function switchProvider(provider) {
+      try {
+        const d = await api('/api/provider', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider })
+        });
+        await refresh();
+        toast(`新房间已切换到 <b>${d.activeProvider === 'livekit' ? 'LiveKit' : 'AWS Chime'}</b>`, 'success');
+      } catch (e) {
+        toast('Provider 切换失败: ' + e.message, 'error');
+      }
     }
 
     function esc(s) {
@@ -815,9 +931,17 @@
       try {
         const d = await api('/api/overview');
         document.getElementById('header-meta').textContent =
-          `控制区：${d.controlRegion} · 媒体区：${d.mediaRegion}`;
+          `当前新房间：${d.activeProvider === 'livekit' ? 'LiveKit' : 'AWS Chime'}`;
         document.getElementById('region-tags').textContent =
           `${d.controlRegion} / ${d.mediaRegion}`;
+        const livekitButton = document.getElementById('provider-livekit');
+        const chimeButton = document.getElementById('provider-chime');
+        livekitButton.classList.toggle('active', d.activeProvider === 'livekit');
+        chimeButton.classList.toggle('active', d.activeProvider === 'chime');
+        livekitButton.disabled = !d.providers?.livekit?.configured;
+        livekitButton.title = d.providers?.livekit?.configured
+          ? '新房间使用 LiveKit'
+          : 'LiveKit 未配置：需要 LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET';
         document.getElementById('c-rooms').textContent = d.roomCount;
         document.getElementById('c-att').textContent = d.attendeeCount;
         document.getElementById('room-badge-count').textContent = d.roomCount;
@@ -831,7 +955,7 @@
 
         const tb = document.getElementById('rooms');
         if (!d.rooms || !d.rooms.length) {
-          tb.innerHTML = `<tr><td colspan="6">
+          tb.innerHTML = `<tr><td colspan="7">
             <div class="empty-state">
               <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
               <p>当前暂无活跃房间，可通过上方快速创建</p>
@@ -854,8 +978,9 @@
                 <div class="room-badge">
                   <span class="room-code-num">${esc(r.roomCode)}</span>
                 </div>
-                <div class="meeting-id-sub">Chime: ${esc((r.meetingId || '').slice(0, 8))}…</div>
+                <div class="meeting-id-sub">${esc((r.meetingId || '').slice(0, 18))}${(r.meetingId || '').length > 18 ? '…' : ''}</div>
               </td>
+              <td><span class="provider-chip">${r.provider === 'livekit' ? 'LiveKit' : 'AWS Chime'}</span></td>
               <td>
                 <span style="font-weight: 700; font-size: 16px; color: ${r.attendeeCount > 0 ? '#34d399' : '#94a3b8'}">
                   ${r.attendeeCount}

@@ -7,6 +7,22 @@ AGENTS.md
 # Flutter package at runtime.
 demo-server/
 
+# Sibling packages, demo apps, and repo tooling for the generic multi-backend
+# SDK work. Developed here, but not part of the published flutter_aws_chime
+# package.
+packages/
+examples/
+scripts/
+example/
+doc/
+LIVEKIT_LOCAL_E2E.md
+MEDIA_BACKEND_CONTRACT.md
+MULTI_PROVIDER_ARCHITECTURE.md
+MULTI_PROVIDER_GUIDE.md
+
+# Local-only toolchains and runtime state (livekit-server, Go caches, pid/log).
+.local/
+
 # Unsupported legacy platform scaffolding. The public plugin declares only
 # Android and iOS in pubspec.yaml.
 linux/
@@ -15,9 +31,18 @@ windows/
 
 # Repository-only preview assets.
 previews/
+assets/
+docs/
 
 # Local/generated files.
 .build/
 .swiftpm/
 **/.dart_tool/
 **/build/
+**/.gradle/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/coverage/
+**/.widget_preview/

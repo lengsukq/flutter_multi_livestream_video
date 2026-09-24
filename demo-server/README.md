@@ -1,23 +1,30 @@
 # Demo backend (keys stay here, never in Flutter)
 
+`npm start` is the **single application-backend entry point** for the demo. It
+serves the Flutter room API and the browser dashboard used to switch newly
+created rooms between AWS Chime and LiveKit at runtime.
+
 ## Run
 
 ```bash
 cd demo-server
 npm install
-AWS_PROFILE=chime-demo node server.mjs
+AWS_PROFILE=chime-demo npm start
 # or: PORT=3000 CHIME_MEDIA_REGION=ap-southeast-1 AWS_PROFILE=chime-demo npm start
 ```
+
+`npm start` loads an optional local `.env` file. Keep that file out of version
+control; the repository ignore rule already excludes it.
 
 Optional demo authentication:
 
 ```bash
-DEMO_BEARER_TOKEN=my-local-token AWS_PROFILE=chime-demo node server.mjs
+DEMO_BEARER_TOKEN=my-local-token AWS_PROFILE=chime-demo npm start
 ```
 
 When `DEMO_BEARER_TOKEN` is set, `/rooms` endpoints require
 `Authorization: Bearer <token>`. This is only a reference hook for exercising
-`ChimeClient.tokenProvider`; it is not a production authentication system.
+`MediaClient.tokenProvider`; it is not a production authentication system.
 
 Health check:
 
@@ -25,17 +32,26 @@ Health check:
 curl http://localhost:3000/health
 ```
 
+Dashboard:
+
+```text
+http://localhost:3000/
+```
+
+Switching the dashboard provider affects **new rooms only**. Existing room
+codes stay bound to the provider that originally created them.
+
 ## Room flow used by the example app
 
-The current example consumes the public `ChimeClient` API. Internally it uses
-the language-neutral backend contract documented in
-[`../BACKEND_CONTRACT.md`](../BACKEND_CONTRACT.md):
+The current `example/` app consumes the provider-neutral `MediaClient` API and
+uses the language-neutral contract documented in
+[`../MEDIA_BACKEND_CONTRACT.md`](../MEDIA_BACKEND_CONTRACT.md):
 
-1. Host: `POST /rooms {"nickname":"host","roomCode":"482913"}`
-2. Guest: `POST /rooms/482913/join {"userId":"guest"}`
-3. SDK parses `meeting` + `attendee` into `JoinInfo` and starts `ChimeMeetingSession`.
-4. SDK sends `POST /rooms/482913/heartbeat` while the room session is active.
-5. SDK sends best-effort `POST /rooms/482913/leave` on leave/dispose.
+1. App: `POST /rooms {"nickname":"host","roomCode":"482913","role":"participant"}` — no provider field.
+2. Server selects the current dashboard provider and returns `provider` plus provider-specific short-lived join data.
+3. Guest: `POST /rooms/482913/join {"userId":"guest","role":"participant"}` — room code resolves the original provider.
+4. Core resolves the matching adapter and starts the media session.
+5. SDK sends heartbeat/leave through the same room contract.
 
 Legacy `/meetings` and `/join` endpoints remain in the demo server for
 compatibility, but new Flutter integrations should use the room contract.
@@ -49,6 +65,17 @@ compatibility, but new Flutter integrations should use the room contract.
 | `CHIME_MEDIA_REGION` | `ap-southeast-1` | media region near CN |
 | `PORT` | `3000` | — |
 | `DEMO_BEARER_TOKEN` | unset | optional bearer token for room API demos |
+| `LIVEKIT_URL` | unset | LiveKit Cloud/server WebSocket URL |
+| `LIVEKIT_API_KEY` | unset | server-side LiveKit API key |
+| `LIVEKIT_API_SECRET` | unset | server-side signing secret; keep it in the ignored `.env` |
+
+For local LiveKit Server testing:
+
+```bash
+bash ../scripts/livekit-dev.sh start
+eval "$(bash ../scripts/livekit-dev.sh env)"
+AWS_PROFILE=chime-demo npm start
+```
 
 ## Scope
 

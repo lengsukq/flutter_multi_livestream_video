@@ -6,7 +6,7 @@
   "type": "module",
   "main": "server.mjs",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node --env-file-if-exists=.env server.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-chime-sdk-meetings": "^3.600.0",

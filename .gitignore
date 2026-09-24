@@ -24,12 +24,29 @@ migrate_working_dir/
 # Flutter/Dart/Pub related
 # Libraries should not include pubspec.lock, per https://dart.dev/guides/libraries/private-files#pubspeclock.
 /pubspec.lock
+packages/*/pubspec.lock
 **/doc/api/
 .dart_tool/
 .packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
 build/
 .build/
 .swiftpm/
+.gradle/
+coverage/
+.widget_preview/
+**/ios/Flutter/ephemeral/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/**/xcuserdata/
+*.xcuserstate
+
+# Local-only toolchains and runtime state: livekit-server binary, Go caches,
+# pid/log files. Safe to delete at any time; never committed.
+.local/
 
 # Agent prompts & skills (local only, never commit)
 # AGENTS.md 是项目级提示词注入，保持跟踪，不在这里忽略
@@ -52,4 +69,9 @@ CLAUDE.local.md
 GEMINI.local.md
 
 
-*/node_modules
+node_modules/
+
+# Local demo-server credentials (keep .env.example reviewable if added later).
+/demo-server/.env
+/demo-server/.env.*
+!/demo-server/.env.example
