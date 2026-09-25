@@ -26,6 +26,7 @@ import type {
   ChimeRoomEntry,
   MediaRole,
   ProviderAdapter,
+  RoomAttendee,
   RoomMode,
   RoomEntry,
   RoomSummary,
@@ -48,6 +49,9 @@ const MEDIA_CONNECTIONS_ENABLED = parseBoolean(
 const INITIAL_PROVIDER = String(process.env.MEDIA_DEFAULT_PROVIDER ?? 'chime').trim().toLowerCase();
 const STARTED_AT = Date.now();
 const EMPTY_CLOSE_AFTER_MS = Number(process.env.EMPTY_CLOSE_AFTER_MS ?? 90_000);
+const PARTICIPANT_STALE_AFTER_MS = Number(
+  process.env.PARTICIPANT_STALE_AFTER_MS ?? Math.max(120_000, EMPTY_CLOSE_AFTER_MS),
+);
 const SWEEP_INTERVAL_MS = 30_000;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -74,6 +78,13 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
 }
 
+function pruneStaleAttendees(entry: RoomEntry, now: number): void {
+  entry.attendees = entry.attendees.filter((attendee) => {
+    const lastSeen = attendee.lastHeartbeatMs;
+    return lastSeen == null || now - lastSeen <= PARTICIPANT_STALE_AFTER_MS;
+  });
+}
+
 function bindLogicalIdentity(
   entry: RoomEntry,
   participantId: string,
@@ -90,6 +101,7 @@ function bindLogicalIdentity(
   current.displayName = displayName;
   current.externalUserId = displayName;
   current.role = role;
+  current.lastHeartbeatMs = Date.now();
   if (deviceId) current.deviceId = deviceId;
   entry.attendees = entry.attendees.filter(
     (attendee) =>
@@ -228,6 +240,7 @@ function bindDevicePresence(
   );
   if (!current) return;
   current.deviceId = deviceId;
+  current.lastHeartbeatMs = Date.now();
   entry.attendees = entry.attendees.filter(
     (attendee) =>
       attendee.attendeeId === participantId || attendee.deviceId !== deviceId,
@@ -330,8 +343,11 @@ function requireRoomContract(req: Request, res: Response, next: NextFunction): R
 
 app.use('/rooms', (req, res, next) => {
   const isRoomList = req.method === 'GET' && req.path === '/';
+  const isRoomDiscovery = req.method === 'GET' && req.path === '/discover';
   const isRoomCleanup = req.method === 'DELETE' && /^\/[^/]+$/.test(req.path);
-  if (isRoomList || isRoomCleanup) return requireRoomContract(req, res, next);
+  if (isRoomList || isRoomDiscovery || isRoomCleanup) {
+    return requireRoomContract(req, res, next);
+  }
   return requireConnectionsEnabled(req, res, () => requireRoomContract(req, res, next));
 });
 app.use(['/meetings', '/join'], requireLegacyConnectionAccess);
@@ -457,6 +473,7 @@ async function closeRoom(entry: RoomEntry, reason: string): Promise<void> {
 }
 
 function summarizeRoom(entry: RoomEntry, req?: Request): RoomSummary {
+  pruneStaleAttendees(entry, Date.now());
   const provider = providerRegistry.require(entry.provider);
   const host = req ? `${req.protocol}://${req.get('host')}` : '';
   return {
@@ -469,6 +486,7 @@ if (!IS_VERCEL) {
   setInterval(() => {
     const now = Date.now();
     for (const entry of roomDirectory.entries()) {
+      pruneStaleAttendees(entry, now);
       if (now - (entry.lastHeartbeatMs ?? 0) <= EMPTY_CLOSE_AFTER_MS) continue;
       const idleSec = Math.round((now - entry.lastHeartbeatMs) / 1000);
       closeRoom(entry, `idle ${idleSec}s, no heartbeat`).catch((error) =>
@@ -546,6 +564,21 @@ app.get('/rooms', requireAdmin, (req, res) => {
     contractVersion: CONTRACT_VERSION,
     rooms: roomDirectory.entries().map((entry) => summarizeRoom(entry, req)),
   });
+});
+
+app.get('/rooms/discover', (req, res) => {
+  const rooms = roomDirectory.entries().map((entry) => {
+    const summary = summarizeRoom(entry, req);
+    return {
+      provider: summary.provider,
+      roomCode: summary.roomCode,
+      roomMode: summary.roomMode ?? 'meeting',
+      createdAt: summary.createdAt,
+      attendeeCount: summary.attendeeCount,
+    };
+  });
+  res.set('Cache-Control', 'no-store');
+  res.json({ contractVersion: CONTRACT_VERSION, rooms });
 });
 
 app.post('/rooms', async (req, res) => {
@@ -713,6 +746,19 @@ app.post('/rooms/:code/credentials/refresh', async (req, res) => {
 app.post('/rooms/:code/heartbeat', async (req, res) => {
   const entry = await resolveRoom(req.params.code);
   if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+  const participantId = String(req.body?.participantId ?? '').trim();
+  if (participantId) {
+    const attendee = entry.attendees.find((item) => item.attendeeId === participantId);
+    if (!attendee) {
+      return contractError(
+        res,
+        404,
+        'participant-not-found',
+        'The participant is no longer registered in this room.',
+      );
+    }
+    attendee.lastHeartbeatMs = Date.now();
+  }
   entry.lastHeartbeatMs = Date.now();
   res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode });
 });
@@ -736,6 +782,105 @@ app.post('/rooms/:code/leave', async (req, res) => {
     if (sendProviderError(res, error) !== false) return;
     console.error('leave failed', error);
     contractError(res, 500, 'leave-failed', 'Unable to leave the room.');
+  }
+});
+
+function requireHostAttendee(
+  entry: RoomEntry,
+  requesterParticipantId: unknown,
+): RoomAttendee | null {
+  const requester = String(requesterParticipantId ?? '').trim();
+  if (!requester) return null;
+  const attendee = entry.attendees.find(
+    (item) => item.attendeeId === requester,
+  );
+  return attendee?.role === 'host' ? attendee : null;
+}
+
+app.post('/rooms/:code/participants', async (req, res) => {
+  const entry = await resolveRoom(req.params.code);
+  if (!entry) {
+    return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+  }
+  if (!requireHostAttendee(entry, req.body?.requesterParticipantId)) {
+    return contractError(res, 403, 'forbidden', 'Host permission is required.');
+  }
+  res.json({
+    contractVersion: CONTRACT_VERSION,
+    roomCode: entry.roomCode,
+    participants: entry.attendees.map((attendee) => ({
+      participantId: attendee.attendeeId,
+      displayName: attendee.displayName ?? attendee.externalUserId,
+      role: attendee.role ?? 'participant',
+      joinedAt: attendee.joinedAt,
+    })),
+  });
+});
+
+app.post('/rooms/:code/participants/remove', async (req, res) => {
+  try {
+    const entry = await resolveRoom(req.params.code);
+    if (!entry) {
+      return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+    }
+    const host = requireHostAttendee(entry, req.body?.requesterParticipantId);
+    if (!host) {
+      return contractError(res, 403, 'forbidden', 'Host permission is required.');
+    }
+    const targetParticipantId = String(req.body?.targetParticipantId ?? '').trim();
+    if (!targetParticipantId) {
+      return contractError(res, 400, 'invalid-argument', 'targetParticipantId is required.');
+    }
+    if (host.attendeeId === targetParticipantId) {
+      return contractError(res, 400, 'invalid-argument', 'Use leave or closeRoom for the host.');
+    }
+    const provider = providerRegistry.requireConfigured(entry.provider);
+    if (typeof provider.moderateRemoveParticipant !== 'function') {
+      return contractError(
+        res,
+        400,
+        'unsupported-feature',
+        'This provider does not support server-enforced participant removal.',
+      );
+    }
+    const removed = await provider.moderateRemoveParticipant(entry, targetParticipantId);
+    if (!removed) {
+      return contractError(res, 404, 'participant-not-found', 'Participant was not found.');
+    }
+    logEvent('moderate', `${host.attendeeId} removed ${targetParticipantId} from room ${entry.roomCode}`);
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      ok: true,
+      roomCode: entry.roomCode,
+      participantId: targetParticipantId,
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('participant removal failed', error);
+    contractError(res, 500, 'moderation-failed', 'Unable to remove the participant.');
+  }
+});
+
+app.post('/rooms/:code/close', async (req, res) => {
+  try {
+    const entry = await resolveRoom(req.params.code);
+    if (!entry) {
+      return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+    }
+    if (!requireHostAttendee(entry, req.body?.requesterParticipantId)) {
+      return contractError(res, 403, 'forbidden', 'Host permission is required.');
+    }
+    await closeRoom(entry, 'host close');
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      ok: true,
+      closed: true,
+      roomCode: entry.roomCode,
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('host room close failed', error);
+    contractError(res, 500, 'close-failed', 'Unable to close the room.');
   }
 });
 

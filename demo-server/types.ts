@@ -7,6 +7,7 @@ export interface RoomAttendee {
   userId?: string;
   displayName?: string;
   joinedAt: string;
+  lastHeartbeatMs?: number;
   role?: MediaRole;
   deviceId?: string;
 }
@@ -165,6 +166,7 @@ export interface ProviderAdapter {
   summarizeRoom(entry: RoomEntry, context: { host: string }): RoomSummary;
 
   removeAttendee?(entry: RoomEntry, who: unknown): RemoveAttendeeResult;
+  moderateRemoveParticipant?(entry: RoomEntry, participantId: string): Promise<boolean>;
   refreshCredentials?(input: RefreshCredentialsInput): Promise<ProviderJoinResponse>;
   resolveExternalRoom?(
     ref: string,

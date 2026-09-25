@@ -1,23 +1,36 @@
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
+import { createServer, type Server } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
 
 let serverProcess: ChildProcess | undefined;
+let liveKitServer: Server | undefined;
 let baseUrl: string | undefined;
 let output = '';
+const liveKitRoomServiceCalls: string[] = [];
 
 interface ApiBody {
   activeProvider?: string;
   provider?: string;
   roomCode?: string;
+  participantId?: string;
   role?: string;
   roomMode?: string;
   providerList?: Array<{ id: string }>;
   providers?: Record<string, { configured?: boolean }>;
+  participants?: Array<{
+    participantId?: string;
+    displayName?: string;
+    role?: string;
+    joinedAt?: string;
+    deviceId?: string;
+    userId?: string;
+  }>;
   rooms?: Array<{
+    provider?: string;
     roomCode?: string;
     roomMode?: string;
     attendeeCount?: number;
@@ -36,6 +49,25 @@ function requireBaseUrl(): string {
 }
 
 before(async () => {
+  liveKitServer = createServer((req, res) => {
+    if (req.url?.startsWith('/twirp/livekit.RoomService/')) {
+      liveKitRoomServiceCalls.push(req.url);
+      req.resume();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{}');
+      return;
+    }
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end('{}');
+  });
+  await new Promise<void>((resolve, reject) => {
+    liveKitServer?.once('error', reject);
+    liveKitServer?.listen(0, '127.0.0.1', resolve);
+  });
+  const liveKitAddress = liveKitServer.address();
+  assert.ok(liveKitAddress && typeof liveKitAddress === 'object');
+  const liveKitUrl = `ws://127.0.0.1:${liveKitAddress.port}`;
+
   const stateFile = path.join(os.tmpdir(), `provider-routing-test-${process.pid}.json`);
   serverProcess = spawn(process.execPath, ['server.ts'], {
     cwd: path.resolve(import.meta.dirname, '..'),
@@ -44,7 +76,7 @@ before(async () => {
       PORT: '0',
       MEDIA_DEFAULT_PROVIDER: 'livekit',
       MEDIA_PROVIDER_STATE_PATH: stateFile,
-      LIVEKIT_URL: 'ws://127.0.0.1:7880',
+      LIVEKIT_URL: liveKitUrl,
       LIVEKIT_API_KEY: 'test-api-key',
       LIVEKIT_API_SECRET: 'test-api-secret',
       EMPTY_CLOSE_AFTER_MS: '60000',
@@ -69,9 +101,15 @@ before(async () => {
 });
 
 after(async () => {
-  if (!serverProcess || serverProcess.exitCode != null) return;
-  serverProcess.kill('SIGTERM');
-  await Promise.race([once(serverProcess, 'exit'), new Promise((resolve) => setTimeout(resolve, 3000))]);
+  if (serverProcess && serverProcess.exitCode == null) {
+    serverProcess.kill('SIGTERM');
+    await Promise.race([once(serverProcess, 'exit'), new Promise((resolve) => setTimeout(resolve, 3000))]);
+  }
+  if (liveKitServer?.listening) {
+    await new Promise<void>((resolve, reject) => {
+      liveKitServer?.close((error) => error ? reject(error) : resolve());
+    });
+  }
 });
 
 async function post(
@@ -121,6 +159,17 @@ test('switching the active provider does not change an existing room provider', 
   assert.equal(rejoinedSameDevice.status, 200);
   assert.equal(rejoinedSameDevice.body.role, 'participant');
 
+  const participantHeartbeat = await post('/rooms/stickyRoom1/heartbeat', {
+    participantId: rejoinedSameDevice.body.participantId,
+  });
+  assert.equal(participantHeartbeat.status, 200);
+
+  const staleHeartbeat = await post('/rooms/stickyRoom1/heartbeat', {
+    participantId: 'missing-participant',
+  });
+  assert.equal(staleHeartbeat.status, 404);
+  assert.equal(staleHeartbeat.body.error?.code, 'participant-not-found');
+
   const presenceResponse = await fetch(`${requireBaseUrl()}/api/overview`);
   const presence = await presenceResponse.json() as ApiBody;
   const stickyRoom = presence.rooms?.find((room) => room.roomCode === 'stickyRoom1');
@@ -155,6 +204,34 @@ test('switching the active provider does not change an existing room provider', 
   assert.equal(creatorRejoin.status, 200);
   assert.equal(creatorRejoin.body.role, 'host');
 
+  const forbiddenParticipants = await post('/rooms/broadcast01/participants', {
+    requesterParticipantId: viewer.body.participantId,
+  });
+  assert.equal(forbiddenParticipants.status, 403);
+  assert.equal(forbiddenParticipants.body.error?.code, 'forbidden');
+
+  const hostParticipants = await post('/rooms/broadcast01/participants', {
+    requesterParticipantId: creatorRejoin.body.participantId,
+  });
+  assert.equal(hostParticipants.status, 200);
+  assert.equal(hostParticipants.body.participants?.length, 2);
+  assert.equal(
+    hostParticipants.body.participants?.some((item) => item.role === 'host'),
+    true,
+  );
+  assert.equal(
+    hostParticipants.body.participants?.some((item) => item.role === 'viewer'),
+    true,
+  );
+  assert.equal(hostParticipants.body.participants?.[0]?.deviceId, undefined);
+  assert.equal(hostParticipants.body.participants?.[0]?.userId, undefined);
+
+  const selfRemove = await post('/rooms/broadcast01/participants/remove', {
+    requesterParticipantId: creatorRejoin.body.participantId,
+    targetParticipantId: creatorRejoin.body.participantId,
+  });
+  assert.equal(selfRemove.status, 400);
+
   const broadcastOverviewResponse = await fetch(`${requireBaseUrl()}/api/overview`);
   const broadcastOverview = await broadcastOverviewResponse.json() as ApiBody;
   const broadcastRoom = broadcastOverview.rooms?.find((room) => room.roomCode === 'broadcast01');
@@ -165,6 +242,26 @@ test('switching the active provider does not change an existing room provider', 
   );
   assert.equal(
     broadcastRoom?.attendees?.some((attendee) => attendee.role === 'viewer'),
+    true,
+  );
+
+  const discoveredResponse = await fetch(`${requireBaseUrl()}/rooms/discover`, {
+    headers: { 'X-Media-Backend-Contract': '1' },
+  });
+  assert.equal(discoveredResponse.status, 200);
+  const discovered = await discoveredResponse.json() as ApiBody;
+  const discoveredBroadcast = discovered.rooms?.find((room) => room.roomCode === 'broadcast01');
+  assert.equal(discoveredBroadcast?.provider, 'livekit');
+  assert.equal(discoveredBroadcast?.roomMode, 'broadcast');
+  assert.equal(typeof discoveredBroadcast?.attendeeCount, 'number');
+  assert.equal(discoveredBroadcast?.attendees, undefined);
+
+  const hostClose = await post('/rooms/broadcast01/close', {
+    requesterParticipantId: creatorRejoin.body.participantId,
+  });
+  assert.equal(hostClose.status, 200);
+  assert.equal(
+    liveKitRoomServiceCalls.includes('/twirp/livekit.RoomService/DeleteRoom'),
     true,
   );
 

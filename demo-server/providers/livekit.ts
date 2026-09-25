@@ -56,6 +56,49 @@ export function createLiveKitProvider({
     return `${unsigned}.${signature}`;
   }
 
+  function signRoomCreateToken(): string {
+    if (!apiKey || !apiSecret) throw new Error('LiveKit is not configured.');
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: 'HS256', typ: 'JWT' };
+    const payload = {
+      iss: apiKey,
+      sub: 'demo-room-admin',
+      nbf: now - 5,
+      exp: now + Math.min(ttlSeconds, 300),
+      video: { roomCreate: true },
+    };
+    const unsigned = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
+    const signature = crypto.createHmac('sha256', apiSecret).update(unsigned).digest('base64url');
+    return `${unsigned}.${signature}`;
+  }
+
+  function signRoomAdminToken(roomName: string): string {
+    if (!apiKey || !apiSecret) throw new Error('LiveKit is not configured.');
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: 'HS256', typ: 'JWT' };
+    const payload = {
+      iss: apiKey,
+      sub: 'demo-room-admin',
+      nbf: now - 5,
+      exp: now + Math.min(ttlSeconds, 300),
+      video: { roomAdmin: true, room: roomName },
+    };
+    const unsigned = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
+    const signature = crypto.createHmac('sha256', apiSecret).update(unsigned).digest('base64url');
+    return `${unsigned}.${signature}`;
+  }
+
+  function roomServiceUrl(method: string): string {
+    if (!url) throw new Error('LiveKit is not configured.');
+    const endpoint = new URL(url);
+    if (endpoint.protocol === 'ws:') endpoint.protocol = 'http:';
+    if (endpoint.protocol === 'wss:') endpoint.protocol = 'https:';
+    endpoint.pathname = `/twirp/livekit.RoomService/${method}`;
+    endpoint.search = '';
+    endpoint.hash = '';
+    return endpoint.toString();
+  }
+
   return {
     id: 'livekit',
     displayName: 'LiveKit',
@@ -80,6 +123,33 @@ export function createLiveKitProvider({
         response: { contractVersion, provider: 'livekit', role, roomCode },
       };
     },
+    async moderateRemoveParticipant(entry, participantId) {
+      const room = entry as NamedRoomEntry;
+      const target = room.attendees.find(
+        (attendee) => attendee.attendeeId === participantId,
+      );
+      if (!target) return false;
+      const response = await fetch(roomServiceUrl('RemoveParticipant'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${signRoomAdminToken(room.providerRoomName)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          room: room.providerRoomName,
+          identity: participantId,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(
+          `LiveKit RemoveParticipant failed with HTTP ${response.status}.`,
+        );
+      }
+      room.attendees = room.attendees.filter(
+        (attendee) => attendee.attendeeId !== participantId,
+      );
+      return true;
+    },
     async joinRoom({ entry, rawName, role }) {
       const room = entry as NamedRoomEntry;
       const identity = `p-${crypto.randomUUID()}`;
@@ -96,7 +166,20 @@ export function createLiveKitProvider({
         livekit: { url, token: signToken({ identity, name: displayName, roomName: room.providerRoomName, role }), identity },
       };
     },
-    async closeRoom() {},
+    async closeRoom({ entry }) {
+      const room = entry as NamedRoomEntry;
+      const response = await fetch(roomServiceUrl('DeleteRoom'), {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${signRoomCreateToken()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ room: room.providerRoomName }),
+      });
+      if (!response.ok) {
+        throw new Error(`LiveKit DeleteRoom failed with HTTP ${response.status}.`);
+      }
+    },
     removeAttendee(entry, who) {
       const before = entry.attendees.length;
       entry.attendees = entry.attendees.filter(

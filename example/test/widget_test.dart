@@ -14,8 +14,8 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const ChimeExampleApp());
 
-    // Verify that Chime Live title and tabs are rendered.
-    expect(find.text('Chime Live'), findsOneWidget);
+    // Verify that the provider-neutral title and tabs are rendered.
+    expect(find.text('Realtime Media'), findsOneWidget);
     expect(find.text('Join room'), findsNWidgets(2));
     expect(find.text('Create room'), findsOneWidget);
   });

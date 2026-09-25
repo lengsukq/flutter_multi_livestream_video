@@ -118,6 +118,9 @@ class _JoinScreenState extends State<JoinScreen>
   bool _testingServer = false;
   bool _serverStatusRequestInFlight = false;
   Timer? _serverStatusTimer;
+  bool _roomListRequestInFlight = false;
+  List<MediaRoomSummary> _availableRooms = const [];
+  String? _roomListError;
 
   @override
   void initState() {
@@ -126,9 +129,43 @@ class _JoinScreenState extends State<JoinScreen>
     _deviceIdFuture = _loadOrCreateDeviceId();
     _serverController.text = _defaultBackendUrl;
     unawaited(_testConnection());
+    unawaited(_refreshRooms(silent: true));
     _serverStatusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       unawaited(_testConnection(silent: true));
+      if (_tabs.index == 0 && !_busy) {
+        unawaited(_refreshRooms(silent: true));
+      }
     });
+  }
+
+  Future<void> _joinDiscoveredRoom(MediaRoomSummary room) async {
+    _joinCodeController.text = room.roomCode;
+    await _joinRoom();
+  }
+
+  Future<void> _refreshRooms({bool silent = false}) async {
+    if (_roomListRequestInFlight || _server.isEmpty) return;
+    _roomListRequestInFlight = true;
+    if (!silent && mounted) {
+      setState(() => _roomListError = null);
+    }
+    final client = _newClient();
+    try {
+      final rooms = await client.listRooms();
+      if (!mounted) return;
+      setState(() {
+        _availableRooms = rooms;
+        _roomListError = null;
+      });
+    } catch (error) {
+      if (!silent && mounted) {
+        setState(() => _roomListError = error.toString());
+      }
+    } finally {
+      client.dispose();
+      _roomListRequestInFlight = false;
+      if (!silent && mounted) setState(() {});
+    }
   }
 
   @override
@@ -589,13 +626,20 @@ class _JoinScreenState extends State<JoinScreen>
           builder: (context, _) {
             final isJoin = _tabs.index == 0;
             return isJoin
-                ? _roomForm(
-                    code: _joinCodeController,
-                    name: _joinNameController,
-                    codeLabel: 'Room code',
-                    actionLabel: 'Join room',
-                    action: _joinRoom,
-                    isCreate: false,
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _roomForm(
+                        code: _joinCodeController,
+                        name: _joinNameController,
+                        codeLabel: 'Room code',
+                        actionLabel: 'Join room',
+                        action: _joinRoom,
+                        isCreate: false,
+                      ),
+                      const SizedBox(height: 20),
+                      _buildAvailableRooms(),
+                    ],
                   )
                 : _roomForm(
                     code: _createCodeController,
@@ -727,6 +771,141 @@ class _JoinScreenState extends State<JoinScreen>
       ),
     ],
   );
+
+  Widget _buildAvailableRooms() {
+    final rooms = _availableRooms;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Available rooms',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: _roomListRequestInFlight || _busy
+                  ? null
+                  : () => _refreshRooms(),
+              icon: _roomListRequestInFlight
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded, size: 17),
+              label: const Text('Refresh'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        if (_roomListError != null)
+          Text(
+            _roomListError!,
+            style: const TextStyle(fontSize: 11.5, color: Color(0xFFB91C1C)),
+          )
+        else if (rooms.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No active rooms found.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+          )
+        else
+          ...rooms.map(_buildRoomDiscoveryCard),
+      ],
+    );
+  }
+
+  Widget _buildRoomDiscoveryCard(MediaRoomSummary room) {
+    final modeLabel = room.roomMode == MediaRoomMode.broadcast
+        ? 'Live'
+        : 'Meeting';
+    final providerLabel = switch (room.providerId) {
+      'artc' => 'ARTC',
+      'agora' => 'Agora',
+      'livekit' => 'LiveKit',
+      'trtc' => 'TRTC',
+      'chime' => 'Chime',
+      _ => room.providerId,
+    };
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: room.roomMode == MediaRoomMode.broadcast
+                  ? const Color(0xFFFFF1F2)
+                  : const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              room.roomMode == MediaRoomMode.broadcast
+                  ? Icons.podcasts_rounded
+                  : Icons.groups_2_rounded,
+              size: 19,
+              color: room.roomMode == MediaRoomMode.broadcast
+                  ? const Color(0xFFE11D48)
+                  : const Color(0xFF4F46E5),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  room.roomCode,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$modeLabel · $providerLabel · ${room.attendeeCount} online',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: _busy ? null : () => _joinDiscoveredRoom(room),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              minimumSize: Size.zero,
+            ),
+            child: const Text(
+              'Join',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildErrorBanner() => Container(
     padding: const EdgeInsets.all(12),
