@@ -6,8 +6,20 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'chime_join_info.dart';
 import 'chime_media_track.dart';
 
+const _chimeCapabilities = MediaCapabilities(
+  canPublishAudio: true,
+  canPublishVideo: true,
+  canSwitchCamera: true,
+  canSendData: true,
+  canSubscribeVideo: true,
+  canEnumerateAudioDevices: true,
+  canSelectAudioOutput: true,
+  maxDataMessageBytes: 2048,
+);
+
 /// Adapts the existing [chime.ChimeMeetingSession] without changing its native bridge.
-class ChimeMediaSession implements InteractiveMediaSession {
+class ChimeMediaSession
+    implements InteractiveMediaSession, MediaDeviceController {
   ChimeMediaSession({chime.ChimeMeetingSession? session})
     : _session = session ?? chime.ChimeMeetingSession();
 
@@ -21,7 +33,7 @@ class ChimeMediaSession implements InteractiveMediaSession {
   StreamSubscription<chime.ChimeEvent>? _eventSubscription;
   MediaSnapshot _snapshot = MediaSnapshot(
     role: MediaRole.participant,
-    capabilities: const MediaCapabilities.meeting(),
+    capabilities: _chimeCapabilities,
   );
   bool _disposed = false;
   Future<void>? _joinFuture;
@@ -38,7 +50,7 @@ class ChimeMediaSession implements InteractiveMediaSession {
   MediaRole get role => MediaRole.participant;
 
   @override
-  MediaCapabilities get capabilities => const MediaCapabilities.meeting();
+  MediaCapabilities get capabilities => _chimeCapabilities;
 
   @override
   MediaSessionState get state => _snapshot.state;
@@ -106,6 +118,43 @@ class ChimeMediaSession implements InteractiveMediaSession {
       _emit(MediaFailureEvent(mapped));
       throw mapped;
     }
+  }
+
+  @override
+  Future<List<MediaDevice>> listMediaDevices({
+    Set<MediaDeviceKind>? kinds,
+  }) async {
+    final requested = kinds ?? MediaDeviceKind.values.toSet();
+    if (!requested.contains(MediaDeviceKind.audioOutput)) return const [];
+    final devices = await listAudioDevices();
+    return devices
+        .map(
+          (device) => MediaDevice(
+            id: device.id ?? device.label,
+            label: device.label,
+            kind: MediaDeviceKind.audioOutput,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) {
+    if (device.kind != MediaDeviceKind.audioOutput) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message: 'Chime only exposes audio output device selection.',
+        providerId: providerId,
+      );
+    }
+    final mapped = MediaAudioDevice.fromLabel(device.label);
+    return selectAudioDevice(
+      MediaAudioDevice(
+        id: device.id.isEmpty ? null : device.id,
+        label: mapped.label,
+        type: mapped.type,
+      ),
+    );
   }
 
   void _attachProviderStreams() {

@@ -28,6 +28,8 @@ void main() {
       ).createSession(joinInfo());
       final events = <MediaEvent>[];
       final subscription = session.events.listen(events.add);
+      final stats = <MediaConnectionStats>[];
+      final statsSubscription = session.stats.listen(stats.add);
 
       await session.join(joinInfo());
       expect(session.state, MediaSessionState.connected);
@@ -72,6 +74,21 @@ void main() {
       );
 
       final engineEvents = engine.lastEvents!;
+      engineEvents.onStats?.call(
+        const MediaConnectionStats(
+          timestampMs: 1,
+          upstreamQuality: MediaNetworkQuality.good,
+          downstreamQuality: MediaNetworkQuality.fair,
+          rttMs: 55,
+          uplinkPacketLossPercent: 1,
+          downlinkPacketLossPercent: 2,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(session.connectionStats?.rttMs, 55);
+      expect(stats.single.downstreamQuality, MediaNetworkQuality.fair);
+      expect(events.whereType<MediaNetworkStatsUpdated>(), hasLength(1));
+
       engineEvents.onRemoteUserEnterRoom?.call('u-remote');
       engineEvents.onUserVideoAvailable?.call('u-remote', true);
       engineEvents.onUserAudioAvailable?.call('u-remote', true);
@@ -115,6 +132,7 @@ void main() {
       await session.leave();
       expect(session.state, MediaSessionState.ended);
       expect(engine.exitCount, 1);
+      await statsSubscription.cancel();
       await subscription.cancel();
       await session.dispose();
       expect(session.state, MediaSessionState.disposed);

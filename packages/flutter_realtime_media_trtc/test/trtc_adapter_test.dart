@@ -90,6 +90,11 @@ void main() {
       expect(host.capabilities.canSendData, isTrue);
       expect(host.capabilities.canScreenShare, isFalse);
       expect(host.capabilities.canEnumerateAudioDevices, isFalse);
+      expect(host.capabilities.canReportNetworkStats, isTrue);
+      expect(host.capabilities.maxDataMessageBytes, 1024);
+      expect(host.capabilities.canListParticipants, isTrue);
+      expect(host.capabilities.canCloseRoom, isTrue);
+      expect(host.capabilities.canRemoveParticipants, isFalse);
     });
 
     test('viewer is subscribe-only and cannot send data', () {
@@ -103,6 +108,7 @@ void main() {
       expect(viewer.capabilities.canPublishAudio, isFalse);
       expect(viewer.capabilities.canPublishVideo, isFalse);
       expect(viewer.capabilities.canSendData, isFalse);
+      expect(viewer.capabilities.canReportNetworkStats, isTrue);
     });
   });
 }

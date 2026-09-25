@@ -1,5 +1,3 @@
-library flutter_realtime_media_artc;
-
 export 'src/artc_engine.dart'
     show ArtcEngine, ArtcEngineEvents, ArtcEngineFactory;
 export 'src/artc_join_info.dart' show ArtcJoinInfo, ArtcRoomMode;

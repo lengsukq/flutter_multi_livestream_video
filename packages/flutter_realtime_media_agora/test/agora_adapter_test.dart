@@ -155,11 +155,17 @@ void main() {
       expect(participant.capabilities.canSwitchCamera, isTrue);
       expect(participant.capabilities.canScreenShare, isFalse);
       expect(participant.capabilities.canSendData, isTrue);
+      expect(participant.capabilities.canReportNetworkStats, isTrue);
+      expect(participant.capabilities.maxDataMessageBytes, 1024);
+      expect(host.capabilities.canListParticipants, isTrue);
+      expect(host.capabilities.canCloseRoom, isTrue);
+      expect(host.capabilities.canRemoveParticipants, isFalse);
 
       expect(viewer.capabilities.canPublishAudio, isFalse);
       expect(viewer.capabilities.canPublishVideo, isFalse);
       expect(viewer.capabilities.canSubscribeVideo, isTrue);
       expect(viewer.capabilities.canSendData, isFalse);
+      expect(viewer.capabilities.canReportNetworkStats, isTrue);
 
       await participant.dispose();
       await host.dispose();

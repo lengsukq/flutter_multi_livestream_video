@@ -75,6 +75,9 @@ void main() {
       expect(session.snapshot.localParticipant?.displayName, 'Local User');
       expect(session.capabilities.canPublishVideo, isTrue);
       expect(session.capabilities.canScreenShare, isFalse);
+      expect(session.capabilities.canSelectAudioOutput, isTrue);
+      expect(session.capabilities.maxDataMessageBytes, 2048);
+      expect(session.capabilities.canReportNetworkStats, isFalse);
       await session.dispose();
     });
 

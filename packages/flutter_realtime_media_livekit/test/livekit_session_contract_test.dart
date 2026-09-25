@@ -15,6 +15,10 @@ void main() {
       expect(session.capabilities.canSwitchCamera, isTrue);
       expect(session.capabilities.canScreenShare, isTrue);
       expect(session.capabilities.canSubscribeVideo, isTrue);
+      expect(session.capabilities.canReportNetworkStats, isTrue);
+      expect(session.capabilities.canTargetData, isTrue);
+      expect(session.capabilities.canSendUnreliableData, isTrue);
+      expect(session.capabilities.maxDataMessageBytes, 15 * 1024);
     });
 
     test('viewer is subscribe-only at the Dart type and capability layers', () {
@@ -27,6 +31,7 @@ void main() {
       expect(session.capabilities.canPublishVideo, isFalse);
       expect(session.capabilities.canScreenShare, isFalse);
       expect(session.capabilities.canSubscribeVideo, isTrue);
+      expect(session.capabilities.canTargetData, isTrue);
     });
 
     test('media operations fail with typed invalidState before join', () async {

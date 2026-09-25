@@ -39,6 +39,7 @@ class TrtcEngineEvents {
     this.onConnectionLost,
     this.onTryToReconnect,
     this.onConnectionRecovery,
+    this.onStats,
   });
 
   final void Function(int code, String message)? onError;
@@ -51,6 +52,7 @@ class TrtcEngineEvents {
   final void Function()? onConnectionLost;
   final void Function()? onTryToReconnect;
   final void Function()? onConnectionRecovery;
+  final void Function(MediaConnectionStats stats)? onStats;
 }
 
 /// Factory used by production sessions.
@@ -64,6 +66,7 @@ class _NativeTrtcEngine implements TrtcEngine {
   TrtcEngineEvents _events = const TrtcEngineEvents();
   bool _enterRequested = false;
   bool _registered = false;
+  MediaConnectionStats? _connectionStats;
 
   Future<TRTCCloud> _getCloud() async =>
       _cloud ??= await TRTCCloud.sharedInstance();
@@ -93,7 +96,61 @@ class _NativeTrtcEngine implements TrtcEngine {
     onConnectionLost: () => _events.onConnectionLost?.call(),
     onTryToReconnect: () => _events.onTryToReconnect?.call(),
     onConnectionRecovery: () => _events.onConnectionRecovery?.call(),
+    onNetworkQuality: (localInfo, _) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final quality = _mapQuality(localInfo.quality);
+      final next = (_connectionStats ?? MediaConnectionStats(timestampMs: now))
+          .copyWith(
+            timestampMs: now,
+            upstreamQuality: quality,
+            downstreamQuality: quality,
+          );
+      _connectionStats = next;
+      _events.onStats?.call(next);
+    },
+    onStatistics: (statistics) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final uploadKbps = statistics.localStatisticsArray?.fold<int>(
+        0,
+        (sum, value) =>
+            sum +
+            (value.audioBitrate > 0 ? value.audioBitrate : 0) +
+            (value.videoBitrate > 0 ? value.videoBitrate : 0),
+      );
+      final downloadKbps = statistics.remoteStatisticsArray?.fold<int>(
+        0,
+        (sum, value) =>
+            sum +
+            (value.audioBitrate > 0 ? value.audioBitrate : 0) +
+            (value.videoBitrate > 0 ? value.videoBitrate : 0),
+      );
+      final next = (_connectionStats ?? MediaConnectionStats(timestampMs: now))
+          .copyWith(
+            timestampMs: now,
+            rttMs: statistics.rtt >= 0 ? statistics.rtt : null,
+            uplinkPacketLossPercent: statistics.upLoss >= 0
+                ? statistics.upLoss.toDouble()
+                : null,
+            downlinkPacketLossPercent: statistics.downLoss >= 0
+                ? statistics.downLoss.toDouble()
+                : null,
+            uploadKbps: uploadKbps,
+            downloadKbps: downloadKbps,
+          );
+      _connectionStats = next;
+      _events.onStats?.call(next);
+    },
   );
+
+  MediaNetworkQuality _mapQuality(TRTCQuality quality) => switch (quality) {
+    TRTCQuality.excellent => MediaNetworkQuality.excellent,
+    TRTCQuality.good => MediaNetworkQuality.good,
+    TRTCQuality.poor => MediaNetworkQuality.fair,
+    TRTCQuality.bad => MediaNetworkQuality.poor,
+    TRTCQuality.vBad => MediaNetworkQuality.bad,
+    TRTCQuality.down => MediaNetworkQuality.down,
+    _ => MediaNetworkQuality.unknown,
+  };
 
   @override
   Future<int> enterRoom(TrtcJoinInfo joinInfo, TrtcEngineEvents events) async {

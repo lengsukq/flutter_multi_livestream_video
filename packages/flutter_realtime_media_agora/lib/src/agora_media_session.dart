@@ -14,8 +14,13 @@ const _agoraProviderId = AgoraJoinInfo.providerIdValue;
 
 MediaCapabilities _capabilitiesForRole(MediaRole role) {
   if (role == MediaRole.viewer) {
-    return const MediaCapabilities(canSubscribeVideo: true, canSendData: false);
+    return const MediaCapabilities(
+      canSubscribeVideo: true,
+      canSendData: false,
+      canReportNetworkStats: true,
+    );
   }
+
   final canSwitchCamera =
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.iOS ||
@@ -28,10 +33,19 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
     canSendData: true,
     canSubscribeVideo: true,
     canEnumerateAudioDevices: false,
+    canReportNetworkStats: true,
+    maxDataMessageBytes: 1024,
+    canListParticipants: role == MediaRole.host,
+    canCloseRoom: role == MediaRole.host,
   );
 }
 
-abstract class _AgoraMediaSession implements MediaSession, MediaDataMessenger {
+abstract class _AgoraMediaSession
+    implements
+        MediaSession,
+        MediaDataMessenger,
+        MediaDataPayloadSizer,
+        MediaStatsProvider {
   _AgoraMediaSession(this.role)
     : _capabilities = _capabilitiesForRole(role),
       _snapshot = MediaSnapshot(
@@ -48,6 +62,8 @@ abstract class _AgoraMediaSession implements MediaSession, MediaDataMessenger {
       StreamController<MediaSnapshot>.broadcast();
   final StreamController<MediaEvent> _eventController =
       StreamController<MediaEvent>.broadcast();
+  final StreamController<MediaConnectionStats> _statsController =
+      StreamController<MediaConnectionStats>.broadcast();
 
   final Map<String, MediaParticipant> _participants = {};
   final List<MediaMessage> _messages = [];
@@ -70,6 +86,7 @@ abstract class _AgoraMediaSession implements MediaSession, MediaDataMessenger {
   bool _localVideoEnabled = false;
   bool _disposed = false;
   MediaCameraPosition _cameraPosition = MediaCameraPosition.front;
+  MediaConnectionStats? _connectionStats;
 
   @override
   String get providerId => _agoraProviderId;
@@ -91,6 +108,24 @@ abstract class _AgoraMediaSession implements MediaSession, MediaDataMessenger {
 
   @override
   Stream<MediaEvent> get events => _eventController.stream;
+
+  @override
+  int dataPayloadSizeBytes(String message, MediaSendOptions options) => utf8
+      .encode(
+        jsonEncode({
+          'version': 1,
+          'topic': options.topic.trim(),
+          'message': message.trim(),
+          'timestampMs': DateTime.now().millisecondsSinceEpoch,
+        }),
+      )
+      .length;
+
+  @override
+  MediaConnectionStats? get connectionStats => _connectionStats;
+
+  @override
+  Stream<MediaConnectionStats> get stats => _statsController.stream;
 
   bool get _canPublish => role != MediaRole.viewer;
 
@@ -242,6 +277,36 @@ abstract class _AgoraMediaSession implements MediaSession, MediaDataMessenger {
         if (completer != null && !completer.isCompleted) {
           completer.complete();
         }
+      },
+      onRtcStats: (connection, value) {
+        _updateConnectionStats(
+          (_connectionStats ??
+                  MediaConnectionStats(
+                    timestampMs: DateTime.now().millisecondsSinceEpoch,
+                  ))
+              .copyWith(
+                timestampMs: DateTime.now().millisecondsSinceEpoch,
+                rttMs: value.lastmileDelay,
+                uplinkPacketLossPercent: value.txPacketLossRate?.toDouble(),
+                downlinkPacketLossPercent: value.rxPacketLossRate?.toDouble(),
+                uploadKbps: value.txKBitRate,
+                downloadKbps: value.rxKBitRate,
+              ),
+        );
+      },
+      onNetworkQuality: (connection, remoteUid, txQuality, rxQuality) {
+        if (remoteUid != 0) return;
+        _updateConnectionStats(
+          (_connectionStats ??
+                  MediaConnectionStats(
+                    timestampMs: DateTime.now().millisecondsSinceEpoch,
+                  ))
+              .copyWith(
+                timestampMs: DateTime.now().millisecondsSinceEpoch,
+                upstreamQuality: _mapAgoraQuality(txQuality),
+                downstreamQuality: _mapAgoraQuality(rxQuality),
+              ),
+        );
       },
       onRejoinChannelSuccess: (connection, elapsed) {
         _refreshSnapshot();
@@ -750,7 +815,25 @@ abstract class _AgoraMediaSession implements MediaSession, MediaDataMessenger {
     await _stateController.close();
     await _snapshotController.close();
     await _eventController.close();
+    await _statsController.close();
   }
+
+  void _updateConnectionStats(MediaConnectionStats value) {
+    _connectionStats = value;
+    if (!_statsController.isClosed) _statsController.add(value);
+    _emit(MediaNetworkStatsUpdated(value));
+  }
+
+  MediaNetworkQuality _mapAgoraQuality(agora.QualityType value) =>
+      switch (value) {
+        agora.QualityType.qualityExcellent => MediaNetworkQuality.excellent,
+        agora.QualityType.qualityGood => MediaNetworkQuality.good,
+        agora.QualityType.qualityPoor => MediaNetworkQuality.fair,
+        agora.QualityType.qualityBad => MediaNetworkQuality.poor,
+        agora.QualityType.qualityVbad => MediaNetworkQuality.bad,
+        agora.QualityType.qualityDown => MediaNetworkQuality.down,
+        _ => MediaNetworkQuality.unknown,
+      };
 
   Future<void> _tearDownEngine() async {
     final engine = _engine;

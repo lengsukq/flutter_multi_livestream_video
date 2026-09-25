@@ -1,25 +1,54 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 
 import 'livekit_join_info.dart';
 import 'livekit_media_track.dart';
 
-const _interactiveCapabilities = MediaCapabilities(
-  canPublishAudio: true,
-  canPublishVideo: true,
-  canSwitchCamera: true,
-  canScreenShare: true,
-  canSendData: true,
-  canSubscribeVideo: true,
-  canEnumerateAudioDevices: true,
-);
+MediaCapabilities _capabilitiesForRole(MediaRole role) {
+  final canSelectAudioInput =
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows);
+  final canSelectAudioOutput =
+      !kIsWeb && defaultTargetPlatform != TargetPlatform.iOS;
+  final isViewer = role == MediaRole.viewer;
+  final isHost = role == MediaRole.host;
+  return MediaCapabilities(
+    canPublishAudio: !isViewer,
+    canPublishVideo: !isViewer,
+    canSwitchCamera: !isViewer,
+    canScreenShare: !isViewer,
+    canSendData: true,
+    canSubscribeVideo: true,
+    canEnumerateAudioDevices: true,
+    canEnumerateMicrophones: !isViewer,
+    canEnumerateCameras: !isViewer,
+    canSelectMicrophone: !isViewer && canSelectAudioInput,
+    canSelectCamera: !isViewer,
+    canSelectAudioOutput: canSelectAudioOutput,
+    canTargetData: true,
+    canSendUnreliableData: true,
+    canReportNetworkStats: true,
+    maxDataMessageBytes: 15 * 1024,
+    canListParticipants: isHost,
+    canRemoveParticipants: isHost,
+    canCloseRoom: isHost,
+  );
+}
 
 /// Shared LiveKit lifecycle and event translation.
 abstract class LiveKitMediaSessionBase
-    implements MediaSession, MediaDataMessenger {
+    implements
+        MediaSession,
+        MediaDataMessenger,
+        MediaAdvancedDataMessenger,
+        MediaDeviceController,
+        MediaStatsProvider {
   LiveKitMediaSessionBase({
     required this.role,
     required MediaCapabilities capabilities,
@@ -48,6 +77,9 @@ abstract class LiveKitMediaSessionBase
       StreamController<MediaSnapshot>.broadcast();
   final StreamController<MediaEvent> _eventController =
       StreamController<MediaEvent>.broadcast();
+  final StreamController<MediaConnectionStats> _statsController =
+      StreamController<MediaConnectionStats>.broadcast();
+  MediaConnectionStats? _connectionStats;
 
   /// Underlying LiveKit room for provider-specific advanced integrations.
   lk.Room? get liveKitRoom => _room;
@@ -71,6 +103,12 @@ abstract class LiveKitMediaSessionBase
   Stream<MediaEvent> get events => _eventController.stream;
 
   @override
+  MediaConnectionStats? get connectionStats => _connectionStats;
+
+  @override
+  Stream<MediaConnectionStats> get stats => _statsController.stream;
+
+  @override
   Future<void> join(MediaJoinInfo joinInfo) {
     final current = _joinFuture;
     if (current != null) return current;
@@ -81,6 +119,123 @@ abstract class LiveKitMediaSessionBase
     _joinFuture = future;
     return future;
   }
+
+  @override
+  Future<List<MediaDevice>> listMediaDevices({
+    Set<MediaDeviceKind>? kinds,
+  }) async {
+    _ensureActive();
+    final requested = kinds ?? MediaDeviceKind.values.toSet();
+    final devices = <MediaDevice>[];
+    try {
+      if (requested.contains(MediaDeviceKind.microphone) &&
+          capabilities.canEnumerateMicrophones) {
+        devices.addAll(
+          (await lk.Hardware.instance.audioInputs()).map(
+            (device) => MediaDevice(
+              id: device.deviceId,
+              label: device.label,
+              kind: MediaDeviceKind.microphone,
+              groupId: device.groupId,
+            ),
+          ),
+        );
+      }
+      if (requested.contains(MediaDeviceKind.camera) &&
+          capabilities.canEnumerateCameras) {
+        devices.addAll(
+          (await lk.Hardware.instance.videoInputs()).map(
+            (device) => MediaDevice(
+              id: device.deviceId,
+              label: device.label,
+              kind: MediaDeviceKind.camera,
+              groupId: device.groupId,
+            ),
+          ),
+        );
+      }
+      if (requested.contains(MediaDeviceKind.audioOutput) &&
+          capabilities.canEnumerateAudioDevices) {
+        devices.addAll(
+          (await lk.Hardware.instance.audioOutputs()).map(
+            (device) => MediaDevice(
+              id: device.deviceId,
+              label: device.label,
+              kind: MediaDeviceKind.audioOutput,
+              groupId: device.groupId,
+            ),
+          ),
+        );
+      }
+      return List.unmodifiable(devices);
+    } catch (error) {
+      throw _mapError(error, 'Unable to enumerate LiveKit media devices.');
+    }
+  }
+
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) async {
+    _ensureActive();
+    try {
+      switch (device.kind) {
+        case MediaDeviceKind.microphone:
+          if (!capabilities.canSelectMicrophone) {
+            _unsupportedDevice('microphone device selection');
+          }
+          final selected = await _findLiveKitDevice(
+            device,
+            lk.Hardware.instance.audioInputs,
+          );
+          await _requireRoom().setAudioInputDevice(selected);
+        case MediaDeviceKind.camera:
+          if (!capabilities.canSelectCamera) {
+            _unsupportedDevice('camera device selection');
+          }
+          final selected = await _findLiveKitDevice(
+            device,
+            lk.Hardware.instance.videoInputs,
+          );
+          await _requireRoom().setVideoInputDevice(selected);
+        case MediaDeviceKind.audioOutput:
+          if (!capabilities.canSelectAudioOutput) {
+            _unsupportedDevice('audio output device selection');
+          }
+          final selected = await _findLiveKitDevice(
+            device,
+            lk.Hardware.instance.audioOutputs,
+          );
+          await _requireRoom().setAudioOutputDevice(selected);
+      }
+    } on MediaError {
+      rethrow;
+    } catch (error) {
+      throw _mapError(error, 'Unable to select the LiveKit media device.');
+    }
+  }
+
+  Future<lk.MediaDevice> _findLiveKitDevice(
+    MediaDevice device,
+    Future<List<lk.MediaDevice>> Function() loader,
+  ) async {
+    final values = await loader();
+    for (final value in values) {
+      if (value.deviceId == device.id ||
+          (device.id.isEmpty && value.label == device.label)) {
+        return value;
+      }
+    }
+    throw MediaError(
+      code: MediaErrorCode.invalidArgument,
+      message: 'The selected media device is no longer available.',
+      providerId: providerId,
+    );
+  }
+
+  Never _unsupportedDevice(String feature) => throw MediaError(
+    code: MediaErrorCode.unsupportedFeature,
+    message: 'LiveKit $feature is not supported for this session.',
+    providerId: providerId,
+  );
 
   Future<void> _join(MediaJoinInfo rawJoinInfo) async {
     _ensureNotDisposed();
@@ -222,10 +377,18 @@ abstract class LiveKitMediaSessionBase
     await _stateController.close();
     await _snapshotController.close();
     await _eventController.close();
+    await _statsController.close();
   }
 
   @override
-  Future<void> sendMessage(String message, {String topic = 'chat'}) async {
+  Future<void> sendMessage(String message, {String topic = 'chat'}) =>
+      sendDataMessage(message, options: MediaSendOptions(topic: topic));
+
+  @override
+  Future<void> sendDataMessage(
+    String message, {
+    MediaSendOptions options = const MediaSendOptions(),
+  }) async {
     _ensureActive();
     if (!capabilities.canSendData) {
       throw MediaError(
@@ -241,7 +404,7 @@ abstract class LiveKitMediaSessionBase
         providerId: providerId,
       );
     }
-    if (topic.trim().isEmpty) {
+    if (options.topic.trim().isEmpty) {
       throw MediaError(
         code: MediaErrorCode.invalidArgument,
         message: 'Message topic must not be empty.',
@@ -251,8 +414,11 @@ abstract class LiveKitMediaSessionBase
     try {
       await _requireLocalParticipant().publishData(
         utf8.encode(message),
-        reliable: true,
-        topic: topic,
+        reliable: options.reliability == MediaDataReliability.reliable,
+        destinationIdentities: options.targetParticipantIds.isEmpty
+            ? null
+            : options.targetParticipantIds,
+        topic: options.topic,
       );
     } catch (error) {
       throw _mapError(error, 'Unable to send LiveKit data.');
@@ -338,6 +504,25 @@ abstract class LiveKitMediaSessionBase
           displayName: participant.name.isEmpty ? null : participant.name,
         ),
       );
+    });
+    listener.on<lk.ParticipantConnectionQualityUpdatedEvent>((event) {
+      final local = room.localParticipant;
+      if (local == null || event.participant.identity != local.identity) return;
+      final quality = switch (event.connectionQuality) {
+        lk.ConnectionQuality.excellent => MediaNetworkQuality.excellent,
+        lk.ConnectionQuality.good => MediaNetworkQuality.good,
+        lk.ConnectionQuality.poor => MediaNetworkQuality.poor,
+        lk.ConnectionQuality.lost => MediaNetworkQuality.down,
+        _ => MediaNetworkQuality.unknown,
+      };
+      final value = MediaConnectionStats(
+        timestampMs: DateTime.now().millisecondsSinceEpoch,
+        upstreamQuality: quality,
+        downstreamQuality: quality,
+      );
+      _connectionStats = value;
+      if (!_statsController.isClosed) _statsController.add(value);
+      _emit(MediaNetworkStatsUpdated(value));
     });
     listener.on<lk.TrackSubscribedEvent>((event) {
       _refreshSnapshot();
@@ -649,11 +834,7 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
     implements InteractiveMediaSession {
   LiveKitInteractiveSession({super.role = MediaRole.participant})
     : assert(role != MediaRole.viewer),
-      super(
-        capabilities: role == MediaRole.host
-            ? const MediaCapabilities.broadcastHost()
-            : _interactiveCapabilities,
-      );
+      super(capabilities: _capabilitiesForRole(role));
 
   @override
   Future<void> setMuted(bool muted) async {
@@ -791,20 +972,11 @@ class LiveKitViewerSession extends LiveKitMediaSessionBase
   LiveKitViewerSession()
     : super(
         role: MediaRole.viewer,
-        capabilities: const MediaCapabilities.broadcastViewer(),
+        capabilities: _capabilitiesForRole(MediaRole.viewer),
       );
 }
 
 MediaCapabilities _capabilitiesWithDataPermission(
   MediaCapabilities current,
   bool canSendData,
-) => MediaCapabilities(
-  canPublishAudio: current.canPublishAudio,
-  canPublishVideo: current.canPublishVideo,
-  canSwitchCamera: current.canSwitchCamera,
-  canScreenShare: current.canScreenShare,
-  canSendData: canSendData,
-  canSubscribeVideo: current.canSubscribeVideo,
-  canEnumerateAudioDevices: current.canEnumerateAudioDevices,
-  maxVideoSubscriptions: current.maxVideoSubscriptions,
-);
+) => current.copyWith(canSendData: canSendData);

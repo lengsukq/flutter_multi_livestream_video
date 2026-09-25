@@ -7,15 +7,21 @@ import 'trtc_engine.dart';
 import 'trtc_join_info.dart';
 import 'trtc_media_track.dart';
 
-const _publisherCapabilities = MediaCapabilities(
+MediaCapabilities _publisherCapabilities(MediaRole role) => MediaCapabilities(
   canPublishAudio: true,
   canPublishVideo: true,
   canSwitchCamera: true,
   canSendData: true,
   canSubscribeVideo: true,
+  canReportNetworkStats: true,
+  maxDataMessageBytes: 1024,
+  canListParticipants: role == MediaRole.host,
+  canCloseRoom: role == MediaRole.host,
 );
-const _viewerCapabilities = MediaCapabilities.broadcastViewer(
+const _viewerCapabilities = MediaCapabilities(
+  canSubscribeVideo: true,
   canSendData: false,
+  canReportNetworkStats: true,
 );
 const _customMessageCommandId = 1;
 const _userSigCheckFailed = -100018;
@@ -52,7 +58,8 @@ class TrtcViewerSession extends _TrtcSessionBase
       _sendMessage(message, topic: topic);
 }
 
-abstract class _TrtcSessionBase implements TrtcMediaSession {
+abstract class _TrtcSessionBase
+    implements TrtcMediaSession, MediaStatsProvider, MediaDataPayloadSizer {
   _TrtcSessionBase(this.role, this._capabilities, this._engineFactory)
     : _snapshot = MediaSnapshot(role: role, capabilities: _capabilities);
 
@@ -80,6 +87,8 @@ abstract class _TrtcSessionBase implements TrtcMediaSession {
   final _stateController = StreamController<MediaSessionState>.broadcast();
   final _snapshotController = StreamController<MediaSnapshot>.broadcast();
   final _eventController = StreamController<MediaEvent>.broadcast();
+  final _statsController = StreamController<MediaConnectionStats>.broadcast();
+  MediaConnectionStats? _connectionStats;
 
   @override
   MediaCapabilities get capabilities => _capabilities;
@@ -100,6 +109,12 @@ abstract class _TrtcSessionBase implements TrtcMediaSession {
   Stream<MediaEvent> get events => _eventController.stream;
 
   @override
+  MediaConnectionStats? get connectionStats => _connectionStats;
+
+  @override
+  Stream<MediaConnectionStats> get stats => _statsController.stream;
+
+  @override
   void setCredentialRefreshCallback(MediaCredentialRefreshCallback? callback) {
     _refreshCallback = callback;
     if (callback == null) _refreshTimer?.cancel();
@@ -107,6 +122,13 @@ abstract class _TrtcSessionBase implements TrtcMediaSession {
       _scheduleCredentialRefresh();
     }
   }
+
+  @override
+  int dataPayloadSizeBytes(String message, MediaSendOptions options) => utf8
+      .encode(
+        jsonEncode({'topic': options.topic.trim(), 'message': message.trim()}),
+      )
+      .length;
 
   @override
   Future<void> join(MediaJoinInfo joinInfo) {
@@ -257,6 +279,11 @@ abstract class _TrtcSessionBase implements TrtcMediaSession {
       if (state == MediaSessionState.reconnecting) {
         _setState(MediaSessionState.connected);
       }
+    },
+    onStats: (stats) {
+      _connectionStats = stats;
+      if (!_statsController.isClosed) _statsController.add(stats);
+      _eventController.add(MediaNetworkStatsUpdated(stats));
     },
   );
 
@@ -681,13 +708,14 @@ abstract class _TrtcSessionBase implements TrtcMediaSession {
     await _stateController.close();
     await _snapshotController.close();
     await _eventController.close();
+    await _statsController.close();
   }
 }
 
 abstract class _TrtcInteractiveSession extends _TrtcSessionBase
     implements InteractiveMediaSession {
   _TrtcInteractiveSession(MediaRole role, TrtcEngineFactory engineFactory)
-    : super(role, _publisherCapabilities, engineFactory);
+    : super(role, _publisherCapabilities(role), engineFactory);
 
   @override
   Future<void> setMuted(bool muted) async {

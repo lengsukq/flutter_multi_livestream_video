@@ -171,6 +171,19 @@ void main() {
     },
   );
 
+  test('host advertises backend room management but not native removal', () async {
+    final session = ArtcSessionFactory(
+      engineFactory: () async => _FakeArtcEngine(),
+    ).createSession(joinInfo(role: MediaRole.host));
+    await session.join(joinInfo(role: MediaRole.host));
+
+    expect(session.capabilities.canListParticipants, isTrue);
+    expect(session.capabilities.canCloseRoom, isTrue);
+    expect(session.capabilities.canRemoveParticipants, isFalse);
+    expect(session.capabilities.maxDataMessageBytes, 1024);
+    await session.dispose();
+  });
+
   test(
     'viewer surface is subscribe-only and receives but cannot send data',
     () async {

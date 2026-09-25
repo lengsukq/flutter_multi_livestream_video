@@ -10,11 +10,8 @@ import 'artc_media_track.dart';
 typedef ArtcSessionEngineFactory = Future<ArtcEngine> Function();
 
 abstract class _ArtcMediaSession
-    implements MediaSession, MediaCredentialRefreshable {
-  _ArtcMediaSession({
-    required this.role,
-    required ArtcSessionEngineFactory engineFactory,
-  }) : _engineFactory = engineFactory;
+    implements MediaSession, MediaCredentialRefreshable, MediaDataPayloadSizer {
+  _ArtcMediaSession({required this.role, required this._engineFactory});
 
   static _ArtcMediaSession? _activeSession;
 
@@ -69,6 +66,13 @@ abstract class _ArtcMediaSession
   }
 
   @override
+  int dataPayloadSizeBytes(String message, MediaSendOptions options) => utf8
+      .encode(
+        jsonEncode({'message': message.trim(), 'topic': options.topic.trim()}),
+      )
+      .length;
+
+  @override
   Future<void> join(MediaJoinInfo joinInfo) async {
     if (_disposed || _state == MediaSessionState.disposed) {
       throw _error(
@@ -101,12 +105,23 @@ abstract class _ArtcMediaSession
     _activeSession = this;
     _joinInfo = joinInfo;
     _capabilities = switch (role) {
-      MediaRole.participant || MediaRole.host => const MediaCapabilities(
+      MediaRole.participant => const MediaCapabilities(
         canPublishAudio: true,
         canPublishVideo: true,
         canSwitchCamera: true,
         canSendData: true,
         canSubscribeVideo: true,
+        maxDataMessageBytes: 1024,
+      ),
+      MediaRole.host => const MediaCapabilities(
+        canPublishAudio: true,
+        canPublishVideo: true,
+        canSwitchCamera: true,
+        canSendData: true,
+        canSubscribeVideo: true,
+        maxDataMessageBytes: 1024,
+        canListParticipants: true,
+        canCloseRoom: true,
       ),
       MediaRole.viewer => const MediaCapabilities.broadcastViewer(
         canSendData: false,
@@ -151,8 +166,9 @@ abstract class _ArtcMediaSession
   Future<void> leave() async {
     if (_disposed ||
         _state == MediaSessionState.ended ||
-        _state == MediaSessionState.idle)
+        _state == MediaSessionState.idle) {
       return;
+    }
     _refreshTimer?.cancel();
     _refreshTimer = null;
     _setState(MediaSessionState.leaving);
@@ -211,8 +227,9 @@ abstract class _ArtcMediaSession
     onMessage: _receiveMessage,
     onReconnecting: () => _setState(MediaSessionState.reconnecting),
     onRecovered: () {
-      if (_state == MediaSessionState.reconnecting)
+      if (_state == MediaSessionState.reconnecting) {
         _setState(MediaSessionState.connected);
+      }
     },
     onAuthWillExpire: () => unawaited(_refreshAndRejoin()),
   );
@@ -423,8 +440,9 @@ abstract class _ArtcMediaSession
     final info = _joinInfo;
     if (info == null ||
         _refreshCallback == null ||
-        _state != MediaSessionState.connected)
+        _state != MediaSessionState.connected) {
       return;
+    }
     final delayMs =
         info.expiresAtMs - 30000 - DateTime.now().millisecondsSinceEpoch;
     _refreshTimer = Timer(
@@ -609,8 +627,8 @@ abstract class _ArtcMediaSession
 
 class ArtcParticipantSession extends _ArtcMediaSession
     implements InteractiveMediaSession {
-  ArtcParticipantSession({required ArtcSessionEngineFactory engineFactory})
-    : super(role: MediaRole.participant, engineFactory: engineFactory);
+  ArtcParticipantSession({required super.engineFactory})
+    : super(role: MediaRole.participant);
 
   @override
   Future<void> setMuted(bool muted) => _setMuted(muted);
@@ -643,8 +661,8 @@ class ArtcParticipantSession extends _ArtcMediaSession
 
 class ArtcBroadcastHostSession extends _ArtcMediaSession
     implements BroadcastHostSession {
-  ArtcBroadcastHostSession({required ArtcSessionEngineFactory engineFactory})
-    : super(role: MediaRole.host, engineFactory: engineFactory);
+  ArtcBroadcastHostSession({required super.engineFactory})
+    : super(role: MediaRole.host);
 
   @override
   Future<void> setMuted(bool muted) => _setMuted(muted);
@@ -677,8 +695,8 @@ class ArtcBroadcastHostSession extends _ArtcMediaSession
 
 class ArtcBroadcastViewerSession extends _ArtcMediaSession
     implements BroadcastViewerSession {
-  ArtcBroadcastViewerSession({required ArtcSessionEngineFactory engineFactory})
-    : super(role: MediaRole.viewer, engineFactory: engineFactory);
+  ArtcBroadcastViewerSession({required super.engineFactory})
+    : super(role: MediaRole.viewer);
 
   @override
   Future<void> sendMessage(String message, {String topic = 'chat'}) =>
