@@ -141,6 +141,32 @@ the same persisted device identity remains the host. Providers that cannot
 support both host and viewer roles (currently the Chime adapter) reject Live
 room creation.
 
+The demo also exposes `GET /rooms/discover` for the Flutter join screen. It
+returns only room code, provider, room mode, creation time, and current attendee
+count. Participant names, device ids, and provider credentials are not exposed
+through discovery. The Flutter example refreshes this list while the Join tab is
+visible and can join a selected room with one tap.
+
+Current SDK heartbeats include `participantId`. The demo tracks a per-participant
+last-seen timestamp and removes stale logical participants from discovery/admin
+counts while keeping empty-body room heartbeats compatible with older clients.
+
+For broadcast rooms the reference server also exposes optional host-management
+routes: `POST /rooms/:code/participants`,
+`POST /rooms/:code/participants/remove`, and
+`POST /rooms/:code/close`. Participant listing is sanitized and never returns
+stable user/device ids or provider credentials. Native participant removal is
+currently implemented for LiveKit, and LiveKit room close uses RoomService
+`DeleteRoom` so connected participants are actually disconnected. Other
+providers return
+`unsupported-feature` instead of pretending a local list deletion kicked a
+remote RTC client.
+
+Because this Demo intentionally has no account system, its
+`requesterParticipantId` host check is demonstration-level authorization, not
+a production security boundary. A real backend should bind these operations to
+its authenticated user/session and independently authorize the host action.
+
 ## Public Vercel deployment
 
 The server can be deployed from this directory as an Express Vercel Function.

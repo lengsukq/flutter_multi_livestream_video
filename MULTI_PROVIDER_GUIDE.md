@@ -24,6 +24,14 @@ instead of rejecting the room up front. Provider/native SDKs remain responsible
 for reporting genuinely unsupported targets, while feature-level differences
 continue to be exposed through `MediaCapabilities`.
 
+For optional functionality, application code should also stay provider-neutral:
+query `MediaCapabilities` / `MediaFeature`, then use the shared device,
+network-stat, advanced-data, recovery, or room-management APIs. The current
+cross-provider matrix is documented in
+[`SDK_CAPABILITY_MATRIX.md`](SDK_CAPABILITY_MATRIX.md). Unsupported optional behavior
+returns a typed error rather than requiring `providerId` conditionals in the
+business layer.
+
 The reference backend also owns role assignment. New clients create either a
 `meeting` or `broadcast` room and do not choose a role when joining:
 `meeting` grants `participant` to everyone, while `broadcast` grants

@@ -119,11 +119,105 @@ For rooms created with `roomMode`, the backend ignores any valid client role
 hint on join and returns the role granted by the room policy. This prevents a
 viewer from changing a request field to become a host.
 
+### Discover rooms
+
+`GET /rooms/discover` returns lightweight room metadata for join UIs:
+
+```json
+{
+  "contractVersion": 1,
+  "rooms": [
+    {
+      "provider": "livekit",
+      "roomCode": "482913",
+      "roomMode": "meeting",
+      "createdAt": "2026-09-24T10:00:00.000Z",
+      "attendeeCount": 2
+    }
+  ]
+}
+```
+
+Discovery intentionally excludes attendee identities and provider credentials.
+It follows the same application-token protection as the other room endpoints.
+Clients can refresh this list and pass the selected `roomCode` to the normal
+join endpoint.
+
 The reference demo backend keeps only the latest participant record for a
 stable `userId` in a room and also collapses repeated joins from the same
 `deviceId` when supplied. `participantId` remains the provider/session
 identity and may change on reconnect; `displayName` may change without
 creating a second logical user.
+
+### Host room management (optional)
+
+The reference backend exposes a provider-neutral management surface for rooms
+whose assigned role model includes a `host`. Unsupported operations return
+`unsupported-feature` rather than pretending a local state change affected the
+provider session.
+
+#### `POST /rooms/{roomCode}/participants`
+
+Lists sanitized logical participants:
+
+```json
+{ "requesterParticipantId": "host-1" }
+```
+
+```json
+{
+  "contractVersion": 1,
+  "roomCode": "482913",
+  "participants": [
+    {
+      "participantId": "viewer-1",
+      "displayName": "Viewer",
+      "role": "viewer",
+      "joinedAt": "2026-09-24T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+Do not return stable application user ids, device ids, provider credentials, or
+join tokens from this endpoint.
+
+#### `POST /rooms/{roomCode}/participants/remove`
+
+Requests server-enforced removal of a current participant:
+
+```json
+{
+  "requesterParticipantId": "host-1",
+  "targetParticipantId": "viewer-1"
+}
+```
+
+The reference backend currently implements native participant removal for
+LiveKit. A provider without a server-side removal primitive returns
+`unsupported-feature`.
+
+#### `POST /rooms/{roomCode}/close`
+
+Host-authorized room closure:
+
+```json
+{ "requesterParticipantId": "host-1" }
+```
+
+This differs from a normal participant `leave`: it prevents future joins and
+invokes the provider room-close behavior where applicable.
+
+For LiveKit, the reference backend calls RoomService `DeleteRoom`, which
+forcibly disconnects current participants instead of only deleting the local
+room-directory entry.
+
+The account-free demo server checks that `requesterParticipantId` currently
+belongs to the room host. That is demonstration-level authorization, **not
+production authentication**. Production implementations must bind management
+requests to the authenticated application identity/session (for example the
+Bearer credential) and must not trust a caller-supplied participant id or role
+by itself.
 
 ### `POST /rooms/{roomCode}/credentials/refresh` (optional)
 
@@ -144,7 +238,17 @@ refresh response that changes any of those fields is rejected by Core. Return
 ### `POST /rooms/{roomCode}/heartbeat`
 
 Best-effort presence signal, called once after joining and then every
-heartbeat interval. Body may be empty. Example success:
+heartbeat interval. Current clients include the logical participant id so the
+backend can maintain participant-level presence:
+
+```json
+{ "participantId": "host-a" }
+```
+
+For backwards compatibility, servers may still accept an empty body as a
+room-level heartbeat. A backend that tracks participant presence should return
+`participant-not-found` (`404`) when a supplied participant id is no longer
+registered in the room. Example success:
 
 ```json
 { "contractVersion": 1, "ok": true, "roomCode": "482913" }
@@ -438,6 +542,7 @@ another provider.
 | `unauthorized` | 401 | `unauthorized` |
 | `forbidden` | 403 | `forbidden` |
 | `room-not-found` | 404 | `roomNotFound` |
+| `participant-not-found` | 404 | `participantNotFound` |
 | `room-exists` | 409 | `roomConflict` |
 | `bad-room-code` | 400 | `invalidRoomCode` |
 | `unsupported-provider` | 400 | `unsupportedProvider` |

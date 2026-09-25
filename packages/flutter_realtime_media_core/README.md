@@ -41,17 +41,46 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 final registry = MediaRegistry([LiveKitSessionFactory()]); // adapter package
 final client = MediaClient(backendUrl: 'http://192.168.31.8:3000', registry: registry);
 
-final room = await client.createRoomAndJoin(
-  role: MediaRole.host,
-  nickname: 'Host A',
+final room = await client.createRoomAndJoinIdentity(
+  identity: const MediaIdentity(
+    userId: 'stable-app-user-or-device-id',
+    displayName: 'Host A',
+  ),
+  roomMode: MediaRoomMode.broadcast,
 );
 
-await room.session.events.listen(print);
+room.session.events.listen(print);
 await (room.session as InteractiveMediaSession).setMuted(false);
 
 await room.dispose();
 client.dispose();
 ```
+
+Common optional capabilities stay provider-neutral:
+
+```dart
+if (room.session.capabilities.canEnumerateMicrophones) {
+  final microphones = await room.session.listMicrophones();
+  if (microphones.isNotEmpty &&
+      room.session.capabilities.canSelectMicrophone) {
+    await room.session.selectMicrophone(microphones.first);
+  }
+}
+
+if (room.session.capabilities.canReportNetworkStats) {
+  room.session.stats.listen((stats) => print(stats.rttMs));
+}
+
+await room.session.sendData(
+  'hello',
+  options: const MediaSendOptions(topic: 'chat'),
+);
+
+room.recoveries.listen(print);
+```
+
+See [`SDK_CAPABILITY_MATRIX.md`](../../SDK_CAPABILITY_MATRIX.md) for the current provider
+matrix and the host room-management surface.
 
 Failures are typed:
 
@@ -70,13 +99,17 @@ try {
 - `MediaSession`, `InteractiveMediaSession`, `BroadcastHostSession`,
   `BroadcastViewerSession`
 - `MediaSessionState`, `MediaSnapshot`, `MediaParticipant`, `MediaVideoTrack`,
-  `MediaMessage`, `MediaCapabilities`, `MediaRole`, `MediaAudioDevice`
+  `MediaMessage`, `MediaCapabilities`, `MediaRole`, `MediaAudioDevice`,
+  `MediaDevice`, `MediaConnectionStats`, `MediaRecoveryStatus`
 - `MediaEvent` hierarchy (connection, participants, tracks, local media,
   messages, failures)
 - `MediaError` / `MediaErrorCode` and `MediaBackendError` /
   `MediaBackendErrorCode`
 - `MediaClient`, `MediaRoomSession`, `MediaBackendClient`,
   `MediaBackendTransport`
+- room discovery, typed local-device helpers, network-stat streams, advanced
+  data delivery options, reconnect/recovery reporting, and backend-authoritative
+  host management
 - `MediaRegistry`, `MediaSessionFactory`, `MediaJoinInfo`
 - `MediaTrackRenderer`, `MediaTrackView`
 

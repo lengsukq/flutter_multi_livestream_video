@@ -48,7 +48,10 @@ front/back camera switching remains Android/iOS-only.
 | Amazon IVS | — | Planned | Future live adapter |
 
 See [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md) for the unified API and
-backend-selected provider flow.
+backend-selected provider flow, and
+[`SDK_CAPABILITY_MATRIX.md`](SDK_CAPABILITY_MATRIX.md) for the runtime capability matrix
+covering devices, network statistics, data delivery, recovery, and host
+management.
 
 ## Backend-selected provider flow
 
