@@ -15,6 +15,9 @@ enum MediaBackendErrorCode {
   /// The room does not exist (HTTP 404).
   roomNotFound,
 
+  /// The requested participant no longer exists in the room.
+  participantNotFound,
+
   /// The room already exists (HTTP 409).
   roomConflict,
 
@@ -23,6 +26,9 @@ enum MediaBackendErrorCode {
 
   /// The backend does not implement the requested provider (HTTP 400).
   unsupportedProvider,
+
+  /// The backend/provider does not implement this optional operation.
+  unsupportedFeature,
 
   /// The backend has no credentials configured for the requested provider
   /// (HTTP 503).

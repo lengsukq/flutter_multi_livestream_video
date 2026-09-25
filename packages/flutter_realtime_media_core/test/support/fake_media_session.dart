@@ -286,7 +286,10 @@ class FakeMediaSession
     actions.add('message:$topic:$message');
   }
 
-  void _setState(MediaSessionState state, {MediaError? error}) {
+  void simulateState(MediaSessionState state, {String? reason}) =>
+      _setState(state, reason: reason);
+
+  void _setState(MediaSessionState state, {MediaError? error, String? reason}) {
     if (_snapshot.state == state) return;
     final previous = _snapshot.state;
     final next = error == null
@@ -296,7 +299,11 @@ class FakeMediaSession
     if (!_stateController.isClosed) {
       _stateController.add(state);
       _eventController.add(
-        MediaConnectionStateChanged(previous: previous, current: state),
+        MediaConnectionStateChanged(
+          previous: previous,
+          current: state,
+          reason: reason,
+        ),
       );
     }
   }

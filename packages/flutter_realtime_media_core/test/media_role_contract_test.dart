@@ -122,6 +122,42 @@ void main() {
       expect(capabilities.canSendData, isFalse);
       expect(capabilities.canSubscribeVideo, isTrue);
     });
+
+    test(
+      'advanced sendData falls back to legacy reliable broadcast only',
+      () async {
+        final session = _ViewerOnlySession();
+        await session.join(
+          MediaJoinInfo(
+            providerId: 'fake',
+            roomCode: '482913',
+            participantId: 'viewer-1',
+            role: MediaRole.viewer,
+          ),
+        );
+
+        await session.sendData(
+          'hello',
+          options: const MediaSendOptions(topic: 'questions'),
+        );
+        expect(session.sentMessages, ['questions:hello']);
+
+        expect(
+          () => session.sendData(
+            'private',
+            options: const MediaSendOptions(targetParticipantIds: ['host-1']),
+          ),
+          throwsA(
+            isA<MediaError>().having(
+              (error) => error.code,
+              'code',
+              MediaErrorCode.unsupportedFeature,
+            ),
+          ),
+        );
+        await session.dispose();
+      },
+    );
   });
 
   group('MediaCapabilities presets', () {
@@ -143,6 +179,22 @@ void main() {
       const capabilities = MediaCapabilities.none();
       expect(capabilities.canPublishAudio, isFalse);
       expect(capabilities.canSubscribeVideo, isFalse);
+    });
+
+    test('new optional capabilities remain explicit and queryable', () {
+      const capabilities = MediaCapabilities(
+        canEnumerateMicrophones: true,
+        canSelectCamera: true,
+        canReportNetworkStats: true,
+        canTargetData: true,
+        canRemoveParticipants: true,
+      );
+      expect(capabilities.supports(MediaFeature.enumerateMicrophones), isTrue);
+      expect(capabilities.supports(MediaFeature.selectCamera), isTrue);
+      expect(capabilities.supports(MediaFeature.networkStats), isTrue);
+      expect(capabilities.supports(MediaFeature.targetedData), isTrue);
+      expect(capabilities.supports(MediaFeature.removeParticipants), isTrue);
+      expect(capabilities.supports(MediaFeature.unreliableData), isFalse);
     });
   });
 

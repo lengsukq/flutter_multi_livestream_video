@@ -203,6 +203,129 @@ void main() {
       client.dispose();
     });
 
+    test('normalizes reconnect and recovery for the logical room', () async {
+      final client = clientFor(
+        (_) => jsonResponse(
+          liveKitJoinPayload(
+            provider: 'fake',
+            participantId: 'p1',
+            role: 'participant',
+          ),
+        ),
+        heartbeatInterval: Duration.zero,
+      );
+      final room = await client.createRoomAndJoin(nickname: 'Leo');
+      final recoveries = <MediaRecoveryStatus>[];
+      final subscription = room.recoveries.listen(recoveries.add);
+      final session = factory.createdSessions.single;
+
+      session.simulateState(
+        MediaSessionState.reconnecting,
+        reason: 'network-lost',
+      );
+      await Future<void>.delayed(Duration.zero);
+      session.simulateState(
+        MediaSessionState.connected,
+        reason: 'network-restored',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(recoveries, isNotEmpty);
+      expect(recoveries.first.phase, MediaRecoveryPhase.reconnecting);
+      expect(recoveries.first.attempt, 1);
+      expect(recoveries.last.phase, MediaRecoveryPhase.recovered);
+      expect(recoveries.last.attempt, 1);
+      expect(room.recoveryStatus?.phase, MediaRecoveryPhase.recovered);
+
+      await subscription.cancel();
+      await room.dispose();
+      client.dispose();
+    });
+
+    test('reports standardized reconnect and recovery lifecycle', () async {
+      final client = clientFor(
+        (_) => jsonResponse(
+          liveKitJoinPayload(
+            provider: 'fake',
+            participantId: 'p1',
+            role: 'participant',
+          ),
+        ),
+        heartbeatInterval: Duration.zero,
+      );
+      final room = await client.createRoomAndJoin(nickname: 'Leo');
+      final session = factory.createdSessions.single;
+      final recoveries = <MediaRecoveryStatus>[];
+      final subscription = room.recoveries.listen(recoveries.add);
+
+      session.simulateState(
+        MediaSessionState.reconnecting,
+        reason: 'network-lost',
+      );
+      await Future<void>.delayed(Duration.zero);
+      session.simulateState(
+        MediaSessionState.connected,
+        reason: 'network-recovered',
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        recoveries.any(
+          (item) =>
+              item.phase == MediaRecoveryPhase.reconnecting &&
+              item.reason == 'network-lost',
+        ),
+        isTrue,
+      );
+      expect(room.recoveryStatus?.phase, MediaRecoveryPhase.recovered);
+      expect(room.recoveryStatus?.reason, 'network-recovered');
+      expect(room.recoveryStatus?.attempt, 1);
+
+      await subscription.cancel();
+      await room.dispose();
+      client.dispose();
+    });
+
+    test(
+      'reports reconnect as failed when the provider ends the session',
+      () async {
+        final client = clientFor(
+          (_) => jsonResponse(
+            liveKitJoinPayload(
+              provider: 'fake',
+              participantId: 'p1',
+              role: 'participant',
+            ),
+          ),
+          heartbeatInterval: Duration.zero,
+        );
+        final room = await client.createRoomAndJoin(nickname: 'Leo');
+        final session = factory.createdSessions.single;
+        final recoveries = <MediaRecoveryStatus>[];
+        final subscription = room.recoveries.listen(recoveries.add);
+
+        session.simulateState(
+          MediaSessionState.reconnecting,
+          reason: 'network-lost',
+        );
+        await Future<void>.delayed(Duration.zero);
+        session.simulateState(
+          MediaSessionState.ended,
+          reason: 'provider-disconnected',
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(recoveries.last.phase, MediaRecoveryPhase.failed);
+        expect(recoveries.last.attempt, 1);
+        expect(recoveries.last.reason, 'provider-disconnected');
+        expect(room.recoveryStatus?.phase, MediaRecoveryPhase.failed);
+
+        await subscription.cancel();
+        await room.dispose();
+        client.dispose();
+      },
+    );
+
     test('registers, joins, and attaches backend presence', () async {
       final client = clientFor(
         (_) => jsonResponse(
@@ -257,10 +380,53 @@ void main() {
         transport.requestsTo('/rooms/482913/heartbeat').length,
         greaterThanOrEqualTo(2),
       );
+      expect(transport.requestsTo('/rooms/482913/heartbeat').last.json, {
+        'participantId': 'host-a',
+      });
 
       await room.dispose();
       client.dispose();
     });
+
+    test(
+      'host close stops heartbeat and does not send a redundant leave',
+      () async {
+        final client = clientFor(
+          (_) => jsonResponse(
+            liveKitJoinPayload(
+              provider: 'fake',
+              participantId: 'host-a',
+              role: 'host',
+            ),
+          ),
+          heartbeatInterval: const Duration(milliseconds: 20),
+        );
+
+        final room = await client.createRoomAndJoin(
+          nickname: 'Host',
+          role: MediaRole.host,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        await room.closeRoom();
+        final heartbeatCount = transport
+            .requestsTo('/rooms/482913/heartbeat')
+            .length;
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+
+        expect(transport.requestsTo('/rooms/482913/close'), hasLength(1));
+        expect(
+          transport.requestsTo('/rooms/482913/heartbeat').length,
+          heartbeatCount,
+        );
+        expect(transport.requestsTo('/rooms/482913/leave'), isEmpty);
+        expect(factory.createdSessions.single.leaveCount, 1);
+
+        await room.dispose();
+        expect(transport.requestsTo('/rooms/482913/leave'), isEmpty);
+        client.dispose();
+      },
+    );
 
     test('backend heartbeat failures do not stop healthy media', () async {
       var failHeartbeat = false;

@@ -4,6 +4,7 @@ import '../model/media_error.dart';
 import '../model/media_identity.dart';
 import '../model/media_role.dart';
 import '../model/media_room_mode.dart';
+import '../model/media_room_summary.dart';
 import '../session/media_join_info.dart';
 import '../session/media_credential_refresh.dart';
 import '../session/media_room_session.dart';
@@ -73,6 +74,9 @@ class MediaClient {
     );
     return _joinResponse(response);
   }
+
+  /// Returns rooms advertised by the backend for lightweight discovery.
+  Future<List<MediaRoomSummary>> listRooms() => backend.listRooms();
 
   Future<MediaRoomSession> joinRoomIdentity({
     required String roomCode,

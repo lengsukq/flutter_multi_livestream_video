@@ -72,6 +72,29 @@ void main() {
       expect(transport.requests.single.json!.containsKey('roomCode'), isFalse);
     });
 
+    test('maps participant-not-found backend errors distinctly', () async {
+      final client = clientFor(
+        (_) => const MediaBackendTransportResponse(
+          statusCode: 404,
+          body: '{"error":{"code":"participant-not-found","message":"gone"}}',
+        ),
+      );
+      await expectLater(
+        client.removeRoomParticipant(
+          '482913',
+          requesterParticipantId: 'host-1',
+          targetParticipantId: 'viewer-1',
+        ),
+        throwsA(
+          isA<MediaBackendError>().having(
+            (error) => error.code,
+            'code',
+            MediaBackendErrorCode.participantNotFound,
+          ),
+        ),
+      );
+    });
+
     test('rejects empty required arguments locally', () async {
       final client = clientFor((_) => jsonResponse(liveKitJoinPayload()));
       await expectLater(
@@ -85,6 +108,116 @@ void main() {
         ),
       );
       expect(transport.requests, isEmpty);
+    });
+  });
+
+  group('room management', () {
+    test('lists sanitized participants as the requester', () async {
+      final client = clientFor(
+        (_) => jsonResponse({
+          'contractVersion': 1,
+          'roomCode': '482913',
+          'participants': [
+            {
+              'participantId': 'host-1',
+              'displayName': 'Host',
+              'role': 'host',
+              'joinedAt': '2026-09-24T10:00:00.000Z',
+            },
+          ],
+        }),
+      );
+
+      final participants = await client.listRoomParticipants(
+        '482913',
+        requesterParticipantId: 'host-1',
+      );
+
+      expect(transport.requests.single.uri.path, '/rooms/482913/participants');
+      expect(transport.requests.single.json, {
+        'requesterParticipantId': 'host-1',
+      });
+      expect(participants.single.participantId, 'host-1');
+      expect(participants.single.role, MediaRole.host);
+    });
+
+    test('posts participant removal and host close requests', () async {
+      final client = clientFor(
+        (_) => jsonResponse({'contractVersion': 1, 'ok': true}),
+      );
+
+      await client.removeRoomParticipant(
+        '482913',
+        requesterParticipantId: 'host-1',
+        targetParticipantId: 'viewer-1',
+      );
+      await client.closeRoomAsParticipant(
+        '482913',
+        requesterParticipantId: 'host-1',
+      );
+
+      expect(
+        transport.requests[0].uri.path,
+        '/rooms/482913/participants/remove',
+      );
+      expect(transport.requests[0].json, {
+        'requesterParticipantId': 'host-1',
+        'targetParticipantId': 'viewer-1',
+      });
+      expect(transport.requests[1].uri.path, '/rooms/482913/close');
+    });
+
+    test('maps unsupported-feature backend errors', () async {
+      final client = clientFor(
+        (_) => const MediaBackendTransportResponse(
+          statusCode: 400,
+          body:
+              '{"error":{"code":"unsupported-feature","message":"not supported"}}',
+        ),
+      );
+      await expectLater(
+        client.removeRoomParticipant(
+          '482913',
+          requesterParticipantId: 'host-1',
+          targetParticipantId: 'viewer-1',
+        ),
+        throwsA(
+          isA<MediaBackendError>().having(
+            (error) => error.code,
+            'code',
+            MediaBackendErrorCode.unsupportedFeature,
+          ),
+        ),
+      );
+    });
+  });
+
+  group('room discovery', () {
+    test('parses lightweight discoverable rooms', () async {
+      final client = clientFor(
+        (_) => jsonResponse({
+          'contractVersion': 1,
+          'rooms': [
+            {
+              'provider': 'livekit',
+              'roomCode': 'room1234',
+              'roomMode': 'broadcast',
+              'attendeeCount': 3,
+              'createdAt': '2026-09-24T10:00:00.000Z',
+            },
+          ],
+        }),
+      );
+
+      final rooms = await client.listRooms();
+
+      expect(transport.requests.single.method, 'GET');
+      expect(transport.requests.single.uri.path, '/rooms/discover');
+      expect(rooms, hasLength(1));
+      expect(rooms.single.roomCode, 'room1234');
+      expect(rooms.single.providerId, 'livekit');
+      expect(rooms.single.roomMode, MediaRoomMode.broadcast);
+      expect(rooms.single.attendeeCount, 3);
     });
   });
 
@@ -269,12 +402,12 @@ void main() {
     test('heartbeat, leave, and closeRoom hit the contract paths', () async {
       final client = clientFor((_) => jsonResponse({'ok': true}));
 
-      await client.heartbeat('482913');
+      await client.heartbeat('482913', participantId: 'attendee-1');
       await client.leave('482913', participantId: 'attendee-1');
       await client.closeRoom('482913');
 
       expect(transport.requests[0].uri.path, '/rooms/482913/heartbeat');
-      expect(transport.requests[0].json, isEmpty);
+      expect(transport.requests[0].json, {'participantId': 'attendee-1'});
       expect(transport.requests[1].uri.path, '/rooms/482913/leave');
       expect(transport.requests[1].json, {'participantId': 'attendee-1'});
       expect(transport.requests[2].method, 'DELETE');
@@ -322,6 +455,11 @@ void main() {
         'room-not-found',
         404,
         MediaBackendErrorCode.roomNotFound,
+      );
+      await expectCode(
+        'participant-not-found',
+        404,
+        MediaBackendErrorCode.participantNotFound,
       );
       await expectCode('room-exists', 409, MediaBackendErrorCode.roomConflict);
       await expectCode(

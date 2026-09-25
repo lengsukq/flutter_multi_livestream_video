@@ -1,3 +1,4 @@
+import 'media_connection_stats.dart';
 import 'media_error.dart';
 import 'media_message.dart';
 import 'media_participant.dart';
@@ -13,6 +14,18 @@ sealed class MediaEvent {
 
   /// Session state this event belongs to, when it is state related.
   MediaSessionState? get state => null;
+}
+
+/// Provider-neutral network/RTC statistics changed.
+class MediaNetworkStatsUpdated extends MediaEvent {
+  const MediaNetworkStatsUpdated(this.stats);
+
+  final MediaConnectionStats stats;
+
+  @override
+  String toString() =>
+      'MediaNetworkStatsUpdated(up: ${stats.upstreamQuality.name}, '
+      'down: ${stats.downstreamQuality.name})';
 }
 
 /// The session moved to a new lifecycle state.

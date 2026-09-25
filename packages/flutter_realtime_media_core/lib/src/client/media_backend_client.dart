@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import '../model/media_role.dart';
 import '../model/media_room_mode.dart';
+import '../model/media_room_participant_summary.dart';
+import '../model/media_room_summary.dart';
 import 'media_backend_config.dart';
 import 'media_backend_error.dart';
 import 'media_backend_transport.dart';
@@ -65,6 +67,88 @@ class MediaBackendClient {
 
   /// Reads the provider-neutral backend health endpoint without creating a room.
   Future<Map<String, dynamic>> health() => _request('GET', '/health');
+
+  /// Returns lightweight discoverable rooms without participant identity data.
+  Future<List<MediaRoomSummary>> listRooms() async {
+    final data = await _request('GET', '/rooms/discover');
+    final rawRooms = data['rooms'];
+    if (rawRooms == null) return const [];
+    if (rawRooms is! List) {
+      throw const MediaBackendError(
+        code: MediaBackendErrorCode.invalidResponse,
+        message: 'Backend room discovery response has an invalid rooms field.',
+      );
+    }
+    return rawRooms
+        .whereType<Map>()
+        .map(
+          (room) => MediaRoomSummary.fromJson(Map<String, dynamic>.from(room)),
+        )
+        .where((room) => room.roomCode.isNotEmpty && room.providerId.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<List<MediaRoomParticipantSummary>> listRoomParticipants(
+    String roomCode, {
+    required String requesterParticipantId,
+  }) async {
+    final code = _required(roomCode, 'roomCode');
+    final requester = _required(
+      requesterParticipantId,
+      'requesterParticipantId',
+    );
+    final data = await _post(
+      '/rooms/${Uri.encodeComponent(code)}/participants',
+      {'requesterParticipantId': requester},
+    );
+    final raw = data['participants'];
+    if (raw is! List) {
+      throw const MediaBackendError(
+        code: MediaBackendErrorCode.invalidResponse,
+        message: 'Backend participant response is malformed.',
+      );
+    }
+    return raw
+        .whereType<Map>()
+        .map(
+          (item) => MediaRoomParticipantSummary.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .where((item) => item.participantId.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<void> removeRoomParticipant(
+    String roomCode, {
+    required String requesterParticipantId,
+    required String targetParticipantId,
+  }) async {
+    final code = _required(roomCode, 'roomCode');
+    await _post('/rooms/${Uri.encodeComponent(code)}/participants/remove', {
+      'requesterParticipantId': _required(
+        requesterParticipantId,
+        'requesterParticipantId',
+      ),
+      'targetParticipantId': _required(
+        targetParticipantId,
+        'targetParticipantId',
+      ),
+    });
+  }
+
+  Future<void> closeRoomAsParticipant(
+    String roomCode, {
+    required String requesterParticipantId,
+  }) async {
+    final code = _required(roomCode, 'roomCode');
+    await _post('/rooms/${Uri.encodeComponent(code)}/close', {
+      'requesterParticipantId': _required(
+        requesterParticipantId,
+        'requesterParticipantId',
+      ),
+    });
+  }
 
   Future<MediaRoomJoinResponse> createRoom({
     required MediaRole role,
@@ -161,9 +245,12 @@ class MediaBackendClient {
     return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
   }
 
-  Future<void> heartbeat(String roomCode) async {
+  Future<void> heartbeat(String roomCode, {String? participantId}) async {
     final code = _required(roomCode, 'roomCode');
-    await _post('/rooms/${Uri.encodeComponent(code)}/heartbeat', const {});
+    await _post('/rooms/${Uri.encodeComponent(code)}/heartbeat', {
+      if (participantId != null && participantId.trim().isNotEmpty)
+        'participantId': participantId.trim(),
+    });
   }
 
   Future<void> leave(String roomCode, {String? participantId}) async {
@@ -361,9 +448,11 @@ class MediaBackendClient {
       'unauthorized' => MediaBackendErrorCode.unauthorized,
       'forbidden' => MediaBackendErrorCode.forbidden,
       'room-not-found' => MediaBackendErrorCode.roomNotFound,
+      'participant-not-found' => MediaBackendErrorCode.participantNotFound,
       'room-exists' => MediaBackendErrorCode.roomConflict,
       'bad-room-code' => MediaBackendErrorCode.invalidRoomCode,
       'unsupported-provider' => MediaBackendErrorCode.unsupportedProvider,
+      'unsupported-feature' => MediaBackendErrorCode.unsupportedFeature,
       'provider-not-configured' => MediaBackendErrorCode.providerNotConfigured,
       _ when statusCode == 400 => MediaBackendErrorCode.invalidArgument,
       _ when statusCode == 401 => MediaBackendErrorCode.unauthorized,
