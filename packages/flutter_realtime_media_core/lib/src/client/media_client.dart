@@ -230,6 +230,7 @@ class MediaClient {
         chatProvider: _normalizedOptionalProvider(
           response.json['chatProvider'],
         ),
+        backendMetadata: response.json,
         session: session,
         backend: backend,
         heartbeatInterval: config.heartbeatInterval,

@@ -372,7 +372,8 @@ Common fields:
   "role": "host",
   "roomCode": "482913",
   "participantId": "host-a",
-  "participantCredential": "<opaque-session-proof>"
+  "participantCredential": "<opaque-session-proof>",
+  "requiredCapabilities": ["publish-audio", "publish-video", "chat"]
 }
 ```
 
@@ -383,6 +384,16 @@ that proof on `MediaRoomSession` and automatically returns it for credential
 refresh and host-management requests. Rejoining rotates the proof. It must not
 be logged, exposed through room discovery/participant lists, or used as a
 stable application identity. Additional fields are allowed and ignored.
+
+`requiredCapabilities` is optional and provider-neutral. When present, the
+high-level SDK verifies the requirements after resolving the actual media and
+Product Chat/RTC Chat sessions. Supported v1 names are:
+`publish-audio`, `publish-video`, `subscribe-video`, `screen-share`,
+`chat`, `list-participants`, `remove-participants`, and `close-room`.
+Unknown requirements or requirements the resolved client cannot satisfy fail
+explicitly as unsupported features; they never trigger a provider switch or a
+silent capability downgrade. Omitting the field preserves existing v1
+behavior.
 
 ### LiveKit provider block
 

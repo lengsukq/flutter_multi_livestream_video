@@ -28,6 +28,7 @@ class MediaRoomSession {
     this.participantCredential,
     this.roomOwnerCredential,
     this.chatProvider,
+    this.backendMetadata = const {},
     required this.session,
   }) {
     _stateSubscription = session.states.listen(_onStateChanged);
@@ -42,6 +43,7 @@ class MediaRoomSession {
     String? participantCredential,
     String? roomOwnerCredential,
     String? chatProvider,
+    Map<String, dynamic> backendMetadata = const {},
     required MediaSession session,
     required MediaBackendClient backend,
     required Duration heartbeatInterval,
@@ -53,6 +55,7 @@ class MediaRoomSession {
     participantCredential: participantCredential,
     roomOwnerCredential: roomOwnerCredential,
     chatProvider: chatProvider,
+    backendMetadata: Map.unmodifiable(backendMetadata),
     session: session,
   );
 
@@ -61,6 +64,9 @@ class MediaRoomSession {
   final String? participantCredential;
   final String? roomOwnerCredential;
   final String? chatProvider;
+  /// Provider-neutral backend response metadata retained for high-level
+  /// orchestration such as capability negotiation.
+  final Map<String, dynamic> backendMetadata;
   final MediaSession session;
   final MediaBackendClient _backend;
   final Duration _heartbeatInterval;
