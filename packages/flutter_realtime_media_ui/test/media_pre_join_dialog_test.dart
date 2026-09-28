@@ -7,6 +7,9 @@ void main() {
   test('provider display names keep known brands readable', () {
     expect(mediaProviderDisplayName('livekit'), 'LiveKit');
     expect(mediaProviderDisplayName('trtc'), 'Tencent TRTC');
+    expect(mediaProviderDisplayName('aws'), 'AWS');
+    expect(mediaProviderDisplayName('chime'), 'AWS · Chime');
+    expect(mediaProviderDisplayName('ivs'), 'AWS · IVS');
     expect(mediaProviderDisplayName('custom'), 'CUSTOM');
   });
 

@@ -52,14 +52,20 @@ different scheme can use `headersProvider` instead.
 | --- | --- | --- |
 | `roomMode` | create request | `meeting` or `broadcast`. New clients should send this instead of choosing a role. |
 | `role` | request body | Legacy compatibility override. Modern clients omit it and let the backend assign the role from room policy. |
-| `provider` | response body | Provider selected by the backend and used to issue credentials. Optional only for legacy Chime responses; when absent the SDK assumes `chime`. |
+| `provider` | response body | Public provider/vendor selected by the backend. AWS rooms use `aws`. Optional only for legacy Chime responses; when absent the SDK assumes `chime`. |
+| `engine` | response body | Optional concrete adapter engine. AWS uses `chime` for `meeting` and `ivs` for `broadcast`. Clients that understand this field resolve the engine adapter while presenting the public vendor. |
 | `chatProvider` | response body | Optional product-chat provider bound to the room. It is independent from the media `provider`. |
 | `role` | response body | The role granted by the backend: `participant`, `host`, or `viewer`. |
 
-Flutter never requests `livekit`, `chime`, or another provider. The backend may
+Flutter never requests `livekit`, `aws`, or another provider. The backend may
 choose based on deployment configuration, tenant, room policy, requested role,
 capacity, cost, region, feature flags, or another server-side rule. Existing
 room codes must keep resolving to the provider that owns that room.
+
+The reference backend treats AWS as a vendor-level provider. `roomMode=meeting`
+routes to the Chime engine and `roomMode=broadcast` routes to the IVS Real-Time
+engine. Responses expose `provider: "aws"` plus `engine: "chime" | "ivs"`.
+Legacy `chime` / `ivs` selections remain accepted as compatibility aliases.
 
 If the server-selected provider is not configured, return
 `provider-not-configured` (HTTP `503`).

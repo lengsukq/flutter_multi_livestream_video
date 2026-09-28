@@ -8,10 +8,14 @@ class MediaRoomSummary {
     required this.attendeeCount,
     this.roomMode,
     this.createdAt,
+    this.engineId,
   });
 
   final String roomCode;
   final String providerId;
+
+  /// Concrete engine id when [providerId] is a public vendor such as `aws`.
+  final String? engineId;
   final MediaRoomMode? roomMode;
   final int attendeeCount;
   final DateTime? createdAt;
@@ -19,6 +23,7 @@ class MediaRoomSummary {
   factory MediaRoomSummary.fromJson(Map<String, dynamic> json) {
     final roomCode = json['roomCode']?.toString().trim() ?? '';
     final providerId = json['provider']?.toString().trim().toLowerCase() ?? '';
+    final rawEngineId = json['engine']?.toString().trim().toLowerCase();
     final rawMode = json['roomMode']?.toString().trim().toLowerCase();
     final roomMode = switch (rawMode) {
       'meeting' => MediaRoomMode.meeting,
@@ -33,6 +38,7 @@ class MediaRoomSummary {
     return MediaRoomSummary(
       roomCode: roomCode,
       providerId: providerId,
+      engineId: rawEngineId == null || rawEngineId.isEmpty ? null : rawEngineId,
       roomMode: roomMode,
       attendeeCount: attendeeCount,
       createdAt: createdAt,

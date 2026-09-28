@@ -98,15 +98,13 @@ class MediaBackendClient {
       requesterParticipantId,
       'requesterParticipantId',
     );
-    final data = await _post(
-      '/rooms/${Uri.encodeComponent(code)}/participants',
-      {
-        'requesterParticipantId': requester,
-        if (participantCredential != null &&
-            participantCredential.trim().isNotEmpty)
-          'participantCredential': participantCredential.trim(),
-      },
-    );
+    final data =
+        await _post('/rooms/${Uri.encodeComponent(code)}/participants', {
+          'requesterParticipantId': requester,
+          if (participantCredential != null &&
+              participantCredential.trim().isNotEmpty)
+            'participantCredential': participantCredential.trim(),
+        });
     final raw = data['participants'];
     if (raw is! List) {
       throw const MediaBackendError(
@@ -201,8 +199,7 @@ class MediaBackendClient {
       if (role != null) 'role': role.wireName,
       if (deviceId != null && deviceId.trim().isNotEmpty)
         'deviceId': deviceId.trim(),
-      if (roomOwnerCredential != null &&
-          roomOwnerCredential.trim().isNotEmpty)
+      if (roomOwnerCredential != null && roomOwnerCredential.trim().isNotEmpty)
         'roomOwnerCredential': roomOwnerCredential.trim(),
     });
     return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
@@ -243,8 +240,7 @@ class MediaBackendClient {
       'role': role.wireName,
       if (deviceId != null && deviceId.trim().isNotEmpty)
         'deviceId': deviceId.trim(),
-      if (roomOwnerCredential != null &&
-          roomOwnerCredential.trim().isNotEmpty)
+      if (roomOwnerCredential != null && roomOwnerCredential.trim().isNotEmpty)
         'roomOwnerCredential': roomOwnerCredential.trim(),
     });
     return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
@@ -443,7 +439,13 @@ class MediaBackendClient {
         message: 'Backend response is missing roomCode.',
       );
     }
-    final providerId = data['provider']?.toString().trim().toLowerCase() ?? '';
+    final publicProviderId =
+        data['provider']?.toString().trim().toLowerCase() ?? '';
+    final engineId = data['engine']?.toString().trim().toLowerCase() ?? '';
+    // Vendor-aware backends may expose provider=aws while retaining the
+    // concrete adapter id in engine. Older backends continue to work because
+    // they only return provider.
+    final providerId = engineId.isNotEmpty ? engineId : publicProviderId;
     final resolvedRole =
         MediaRole.tryParse(data['role']) ?? role ?? MediaRole.participant;
     return MediaRoomJoinResponse(

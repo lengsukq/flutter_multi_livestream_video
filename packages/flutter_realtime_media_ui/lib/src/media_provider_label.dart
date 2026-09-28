@@ -15,6 +15,18 @@ class MediaProviderPresentation {
 }
 
 const Map<String, MediaProviderPresentation> _mediaProviderPresentations = {
+  'aws': MediaProviderPresentation(
+    label: 'AWS',
+    background: Color(0xFFFFF7ED),
+    border: Color(0xFFFED7AA),
+    foreground: Color(0xFFEA580C),
+  ),
+  'ivs': MediaProviderPresentation(
+    label: 'AWS · IVS',
+    background: Color(0xFFFFF7ED),
+    border: Color(0xFFFED7AA),
+    foreground: Color(0xFFEA580C),
+  ),
   'artc': MediaProviderPresentation(
     label: 'Alibaba Cloud ARTC',
     background: Color(0xFFF0FDF4),
@@ -40,7 +52,7 @@ const Map<String, MediaProviderPresentation> _mediaProviderPresentations = {
     foreground: Color(0xFFD94645),
   ),
   'chime': MediaProviderPresentation(
-    label: 'Chime',
+    label: 'AWS · Chime',
     background: Color(0xFFFFF7ED),
     border: Color(0xFFFED7AA),
     foreground: Color(0xFFEA580C),
