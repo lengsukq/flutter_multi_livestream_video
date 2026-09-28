@@ -4,10 +4,9 @@ import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
-import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'provider_adapters.dart';
@@ -32,9 +31,6 @@ void main() {
 
 final _providerAdapters = createProviderAdapters();
 final MediaRegistry _mediaRegistry = _providerAdapters.registry;
-final Map<String, MediaTrackRenderer> _mediaRenderers =
-    _providerAdapters.renderers;
-final ChatRegistry _chatRegistry = _providerAdapters.chatRegistry;
 
 const String _defaultBackendUrl = String.fromEnvironment(
   'MEDIA_BACKEND_URL',
@@ -277,33 +273,30 @@ class _JoinScreenState extends State<JoinScreen>
       setState(() => _error = 'Room code must be 4–12 letters or digits.');
       return;
     }
-    final client = _newClient();
+    final sdk = _newRealtimeSdk();
     final role = _createRoomMode == MediaRoomMode.broadcast
         ? MediaRole.host
         : MediaRole.participant;
-    final canContinue = await _runPreJoin(client, role: role);
-    if (!canContinue) {
-      client.dispose();
-      return;
-    }
+    final canContinue = await _runPreJoin(sdk, role: role);
+    if (!canContinue) return;
     final deviceId = await _deviceIdFuture;
     final displayName = _nickname(_createNameController);
     await _run(() async {
-      final room = await client.createRoomAndJoinIdentity(
+      final room = await sdk.createRoom(
         roomCode: requestedCode.isEmpty ? null : requestedCode,
-        identity: MediaIdentity(
+        user: MediaIdentity(
           userId: deviceId,
           displayName: displayName,
           deviceId: deviceId,
         ),
-        roomMode: _createRoomMode,
+        mode: _createRoomMode,
       );
-      final ownerCredential = room.roomOwnerCredential;
+      final ownerCredential = room.media.roomOwnerCredential;
       if (ownerCredential != null) {
         _roomOwnerCredentials[room.roomCode] = ownerCredential;
       }
-      await _openMeeting(client, room);
-    }, client);
+      await _openMeeting(room);
+    });
   }
 
   Future<void> _joinRoom({String? providerId, MediaRoomMode? roomMode}) async {
@@ -316,38 +309,35 @@ class _JoinScreenState extends State<JoinScreen>
       setState(() => _error = 'Enter a room code first.');
       return;
     }
-    final client = _newClient();
+    final sdk = _newRealtimeSdk();
     final role = roomMode == MediaRoomMode.broadcast
         ? MediaRole.viewer
         : MediaRole.participant;
     final canContinue = await _runPreJoin(
-      client,
+      sdk,
       role: role,
       providerId: providerId,
       roomCode: code,
     );
-    if (!canContinue) {
-      client.dispose();
-      return;
-    }
+    if (!canContinue) return;
     final deviceId = await _deviceIdFuture;
     final displayName = _nickname(_joinNameController);
     await _run(() async {
-      final room = await client.joinRoomIdentity(
+      final room = await sdk.joinRoom(
         roomCode: code,
         roomOwnerCredential: _roomOwnerCredentials[code],
-        identity: MediaIdentity(
+        user: MediaIdentity(
           userId: deviceId,
           displayName: displayName,
           deviceId: deviceId,
         ),
       );
-      final ownerCredential = room.roomOwnerCredential;
+      final ownerCredential = room.media.roomOwnerCredential;
       if (ownerCredential != null) {
         _roomOwnerCredentials[room.roomCode] = ownerCredential;
       }
-      await _openMeeting(client, room);
-    }, client);
+      await _openMeeting(room);
+    });
   }
 
   MediaClient _newClient() => MediaClient(
@@ -356,14 +346,16 @@ class _JoinScreenState extends State<JoinScreen>
     tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
   );
 
-  ChatClient _newChatClient() => ChatClient(
+  RealtimeSdk _newRealtimeSdk() => RealtimeSdk(
     backendUrl: _server,
-    registry: _chatRegistry,
+    plugins: _providerAdapters.plugins.providerIds.map(
+      _providerAdapters.plugins.require,
+    ),
     tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
   );
 
   Future<bool> _runPreJoin(
-    MediaClient client, {
+    RealtimeSdk sdk, {
     required MediaRole role,
     String? providerId,
     String? roomCode,
@@ -371,7 +363,7 @@ class _JoinScreenState extends State<JoinScreen>
     if (!mounted) return Future.value(false);
     return MediaPreJoinDialog.show(
       context,
-      runCheck: () => client.runPreJoinCheck(
+      runCheck: () => sdk.preJoin(
         role: role,
         providerId: providerId,
         roomCode: roomCode,
@@ -379,7 +371,7 @@ class _JoinScreenState extends State<JoinScreen>
     );
   }
 
-  Future<void> _run(Future<void> Function() action, MediaClient client) async {
+  Future<void> _run(Future<void> Function() action) async {
     setState(() {
       _busy = true;
       _error = null;
@@ -387,92 +379,29 @@ class _JoinScreenState extends State<JoinScreen>
     try {
       await action();
     } catch (error) {
-      client.dispose();
       if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _openMeeting(MediaClient client, MediaRoomSession room) async {
-    final renderer = _mediaRenderers[room.providerId];
-    if (renderer == null) {
-      await room.dispose();
-      client.dispose();
-      throw StateError(
-        'No renderer is registered for backend provider ${room.providerId}.',
-      );
-    }
+  Future<void> _openMeeting(RealtimeRoom realtimeRoom) async {
     if (!mounted) {
-      await room.dispose();
-      client.dispose();
-      return;
-    }
-
-    ChatClient? chatClient;
-    ChatRoomSession? chatRoom;
-    RtcDataChatSession? rtcChatSession;
-    ChatSession? activeChatSession;
-    final chatProvider = room.chatProvider;
-    if (chatProvider != null) {
-      chatClient = _newChatClient();
-      try {
-        chatRoom = await chatClient.connectRoom(
-          roomCode: room.roomCode,
-          participantId: room.participantId,
-          participantCredential: room.participantCredential,
-        );
-        if (chatRoom.session.providerId != chatProvider) {
-          throw ChatError(
-            code: ChatErrorCode.invalidJoinInfo,
-            message:
-                'Backend expected chat provider "$chatProvider" but issued '
-                '"${chatRoom.session.providerId}" credentials.',
-            providerId: chatProvider,
-          );
-        }
-      } catch (error) {
-        chatClient.dispose();
-        chatClient = null;
-        chatRoom = null;
-        debugPrint('Chat unavailable for room ${room.roomCode}: $error');
-      }
-    }
-    activeChatSession = resolveChatSessionWithRtcFallback(
-      room: room,
-      productChatConfigured: chatProvider != null,
-      productChatSession: chatRoom?.session,
-    );
-    if (activeChatSession is RtcDataChatSession) {
-      rtcChatSession = activeChatSession;
-    }
-
-    if (!mounted) {
-      await chatRoom?.dispose();
-      await rtcChatSession?.dispose();
-      chatClient?.dispose();
-      await room.dispose();
-      client.dispose();
+      await realtimeRoom.dispose();
       return;
     }
 
     try {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (_) => MediaRoomView(
-            room: room,
-            renderer: renderer,
-            chatSession: activeChatSession,
+          builder: (_) => RealtimeRoomView(
+            room: realtimeRoom,
             config: const MediaRoomViewConfig(showChat: true),
           ),
         ),
       );
     } finally {
-      await chatRoom?.dispose();
-      await rtcChatSession?.dispose();
-      chatClient?.dispose();
-      await room.dispose();
-      client.dispose();
+      await realtimeRoom.dispose();
     }
   }
 

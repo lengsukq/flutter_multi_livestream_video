@@ -348,6 +348,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_sdk:
+    dependency: "direct main"
+    description:
+      path: "../packages/flutter_realtime_sdk"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter

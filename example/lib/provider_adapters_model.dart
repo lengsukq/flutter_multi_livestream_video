@@ -1,14 +1,14 @@
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 class ProviderAdapters {
-  const ProviderAdapters({
-    required this.registry,
-    required this.renderers,
-    required this.chatRegistry,
-  });
+  ProviderAdapters({required Iterable<RealtimeProviderPlugin> plugins})
+    : plugins = RealtimePluginRegistry(plugins);
 
-  final MediaRegistry registry;
-  final Map<String, MediaTrackRenderer> renderers;
-  final ChatRegistry chatRegistry;
+  final RealtimePluginRegistry plugins;
+
+  RealtimeMediaAdapters get media => plugins.media;
+  ChatRegistry get chatRegistry => plugins.chat;
+  MediaRegistry get registry => plugins.media.registry;
 }
