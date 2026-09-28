@@ -14,6 +14,26 @@ short-lived join information.
 4. Run the app on iOS 15+ or Android API 24+ and create or join a room.
 5. Allow microphone and camera access when prompted.
 
+### Run on Web
+
+Enable Flutter Web once on the development machine with `flutter config --enable-web`.
+Install the pinned browser SDKs with `npm ci` in `web/provider_bridge`.
+In VS Code, restart the Flutter daemon, choose the **Flutter Web (Edge)** launch
+configuration, then run or debug. The launch configuration builds the local SDK
+bridge before starting the app. This workspace maps Flutter's Chrome device to
+Microsoft Edge on macOS; adjust `CHROME_EXECUTABLE` in `.vscode/settings.json`
+on machines that use a different Chromium-based browser.
+
+The Web build bundles Amazon IVS Chat locally for rooms whose backend-selected
+Chat provider is IVS Chat. When no product Chat provider is configured, the app
+uses the same RTC data-chat fallback as native clients when the selected media
+provider supports bidirectional data; LiveKit supports this on Web.
+
+For a terminal launch, build the SDK bridge with
+`npm --prefix web/provider_bridge run build`, then run
+`flutter run --no-pub -d web-server` from this directory and open the printed URL
+in a supported browser.
+
 Existing rooms keep their original provider even after the backend dashboard is
 switched. The app UI does not expose or require provider selection.
 

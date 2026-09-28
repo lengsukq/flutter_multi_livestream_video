@@ -33,6 +33,44 @@ void main() {
     await fixture.dispose();
   });
 
+  testWidgets('Chat panel adapts between compact and wide layouts', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture();
+    final chat = _FakeChatSession();
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          chatSession: chat,
+          config: const MediaRoomViewConfig(confirmBeforeLeave: false),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byIcon(Icons.data_object_rounded), findsNothing);
+    await tester.tap(find.byIcon(Icons.chat_bubble_outline_rounded));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('chat-panel-wide')), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-panel-compact')), findsNothing);
+
+    tester.view.physicalSize = const Size(480, 800);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('chat-panel-wide')), findsNothing);
+    expect(find.byKey(const ValueKey('chat-panel-compact')), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await chat.dispose();
+    await fixture.dispose();
+  });
+
   testWidgets('ChatSession drives Chat UI while RTC debug remains separate', (
     tester,
   ) async {
@@ -45,6 +83,13 @@ void main() {
           displayName: 'Alice',
           message: 'hello',
           timestamp: DateTime.fromMillisecondsSinceEpoch(1),
+        ),
+        ChatMessage(
+          id: 'm-2',
+          userId: 'user-me',
+          displayName: 'Me',
+          message: 'hi Alice',
+          timestamp: DateTime.fromMillisecondsSinceEpoch(2),
         ),
       ],
     );
@@ -74,13 +119,16 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is RichText && widget.text.toPlainText() == 'Alice: hello',
-      ),
+      find.byKey(const ValueKey('chat-message-m-1-remote')),
       findsOneWidget,
     );
-
+    expect(
+      find.byKey(const ValueKey('chat-message-m-2-local')),
+      findsOneWidget,
+    );
+    expect(find.text('Alice'), findsOneWidget);
+    expect(find.text('hello'), findsOneWidget);
+    expect(find.text('hi Alice'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.data_object_rounded));
     await tester.pump();
     expect(find.text('RTC Data'), findsOneWidget);
@@ -188,7 +236,7 @@ class _FakeMediaSession implements MediaSession, MediaDataMessenger {
   }
 }
 
-class _FakeChatSession implements ChatSession {
+class _FakeChatSession implements ChatSession, ChatSessionIdentity {
   _FakeChatSession({List<ChatMessage> messages = const []})
     : _messages = List<ChatMessage>.of(messages);
 
@@ -203,6 +251,15 @@ class _FakeChatSession implements ChatSession {
 
   @override
   String get providerId => 'fake-chat';
+
+  @override
+  String get localParticipantId => 'participant-1';
+
+  @override
+  String get localUserId => 'user-me';
+
+  @override
+  String get localDisplayName => 'Me';
 
   @override
   ChatRole get role => ChatRole.participant;

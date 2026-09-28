@@ -246,6 +246,17 @@
       background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
     }
 
+    .provider-panel-with-matrix {
+      display: block;
+    }
+
+    .provider-panel-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
     .provider-panel-info {
       max-width: 580px;
     }
@@ -328,6 +339,242 @@
 
     .provider-opt.active .opt-dot {
       background: #10b981;
+    }
+
+    .capability-matrix-section {
+      width: 100%;
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .capability-matrix-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+    }
+
+    .capability-matrix-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .capability-matrix-subtitle {
+      margin-top: 2px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .capability-legend {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    .capability-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .capability-matrix-scroll {
+      overflow-x: auto;
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      background: #ffffff;
+      scrollbar-width: thin;
+    }
+
+    .capability-matrix {
+      display: grid;
+      grid-template-columns:
+        minmax(142px, 1.15fr)
+        repeat(var(--provider-count), minmax(116px, 1fr));
+      min-width: max(720px, calc(150px + var(--provider-count) * 124px));
+    }
+
+    .capability-cell {
+      min-height: 42px;
+      padding: 9px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid var(--border-subtle);
+      border-bottom: 1px solid var(--border-subtle);
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: #ffffff;
+    }
+
+    .capability-cell.capability-label {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      justify-content: flex-start;
+      text-align: left;
+      font-weight: 650;
+      color: var(--text-main);
+      background: #fbfcfe;
+      box-shadow: 1px 0 0 var(--border-subtle);
+    }
+
+    .capability-provider {
+      min-height: 56px;
+      flex-direction: column;
+      gap: 3px;
+      font-weight: 700;
+      color: var(--text-main);
+      background: #f8fafc;
+    }
+
+    .capability-provider.capability-label {
+      z-index: 3;
+    }
+
+    .capability-provider small {
+      font-size: 9.5px;
+      font-weight: 600;
+      color: var(--text-tertiary);
+    }
+
+    .capability-cell.active-provider {
+      background: #f5f7ff;
+      box-shadow: inset 2px 0 0 var(--primary), inset -2px 0 0 var(--primary);
+    }
+
+    .capability-provider.active-provider {
+      color: var(--primary);
+      background: var(--primary-subtle);
+      box-shadow:
+        inset 2px 0 0 var(--primary),
+        inset -2px 0 0 var(--primary),
+        inset 0 2px 0 var(--primary);
+    }
+
+    .capability-cell.unconfigured {
+      opacity: 0.46;
+    }
+
+    .capability-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+      font-weight: 650;
+    }
+
+    .capability-state::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+
+    .capability-state.supported {
+      color: #047857;
+    }
+
+    .capability-state.supported::before {
+      background: #10b981;
+    }
+
+    .capability-state.conditional {
+      color: #b45309;
+    }
+
+    .capability-state.conditional::before {
+      background: #f59e0b;
+    }
+
+    .capability-state.unsupported {
+      color: #94a3b8;
+      font-weight: 550;
+    }
+
+    .capability-state.unsupported::before {
+      background: #cbd5e1;
+    }
+
+    .capability-value {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .capability-help {
+      width: 18px;
+      height: 18px;
+      border: 1px solid #cbd5e1;
+      border-radius: 50%;
+      background: #ffffff;
+      color: #64748b;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+      cursor: pointer;
+      transition:
+        border-color 0.15s ease,
+        color 0.15s ease,
+        background 0.15s ease,
+        transform 0.15s ease;
+    }
+
+    .capability-help:hover,
+    .capability-help:focus-visible {
+      color: var(--primary);
+      border-color: var(--primary);
+      background: var(--primary-subtle);
+      outline: none;
+      transform: translateY(-1px);
+    }
+
+    .capability-help.conditional {
+      color: #b45309;
+      border-color: #fbbf24;
+      background: #fffbeb;
+    }
+
+    .capability-detail-box {
+      max-width: 460px;
+    }
+
+    .capability-detail-icon {
+      background: var(--primary-subtle);
+      color: var(--primary);
+    }
+
+    .capability-detail-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .capability-detail-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 9px;
+      border-radius: var(--radius-pill);
+      background: var(--surface-subtle);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 650;
     }
 
     /* KPI Stats Grid */
@@ -919,6 +1166,24 @@
       }
     }
 
+    function showCapabilityDetail(button) {
+      const modal = document.getElementById('capability-detail-modal');
+      const provider = button.dataset.provider || 'Provider';
+      const capability = button.dataset.capability || '能力';
+      const support = button.dataset.support || 'conditional';
+      const note = button.dataset.note || '暂无额外说明。';
+      document.getElementById('capability-detail-provider').textContent = provider;
+      document.getElementById('capability-detail-name').textContent = capability;
+      document.getElementById('capability-detail-status').textContent =
+        capabilityStateLabel(support);
+      document.getElementById('capability-detail-desc').textContent = note;
+      modal.classList.add('open');
+    }
+
+    function closeCapabilityDetail() {
+      document.getElementById('capability-detail-modal').classList.remove('open');
+    }
+
     @media (max-width: 768px) {
       header.card {
         flex-direction: column;
@@ -933,12 +1198,21 @@
         flex-direction: column;
         align-items: stretch;
       }
+      .provider-panel-main {
+        flex-direction: column;
+        align-items: stretch;
+      }
       .provider-switcher {
         width: 100%;
+        overflow-x: auto;
       }
       .provider-opt {
-        flex: 1;
+        flex: 0 0 auto;
         justify-content: center;
+      }
+      .capability-matrix-heading {
+        align-items: flex-start;
+        flex-direction: column;
       }
       .toolbar.card {
         flex-direction: column;
@@ -993,6 +1267,29 @@
     </div>
   </div>
 
+  <div
+    class="modal-overlay"
+    id="capability-detail-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="capability-detail-title"
+    onclick="if (event.target === this) closeCapabilityDetail()"
+  >
+    <div class="modal-box capability-detail-box">
+      <div class="modal-icon capability-detail-icon">?</div>
+      <h3 class="modal-title" id="capability-detail-title">能力说明</h3>
+      <div class="capability-detail-meta">
+        <span class="capability-detail-chip" id="capability-detail-provider">Provider</span>
+        <span class="capability-detail-chip" id="capability-detail-name">能力</span>
+        <span class="capability-detail-chip" id="capability-detail-status">状态</span>
+      </div>
+      <p class="modal-desc" id="capability-detail-desc">暂无额外说明。</p>
+      <div class="modal-actions">
+        <button class="btn btn-primary btn-sm" onclick="closeCapabilityDetail()">知道了</button>
+      </div>
+    </div>
+  </div>
+
   <div class="container auth-hidden" id="dashboard-root">
     <!-- Header -->
     <header class="card">
@@ -1025,13 +1322,29 @@
     </div>
 
     <!-- Provider Switcher -->
-    <div class="card provider-panel">
-      <div class="provider-panel-info">
-        <div class="panel-badge">Media Provider Routing</div>
-        <h2>新房间媒体引擎调度</h2>
-        <p id="provider-panel-note">控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。</p>
+    <div class="card provider-panel provider-panel-with-matrix">
+      <div class="provider-panel-main">
+        <div class="provider-panel-info">
+          <div class="panel-badge">Media Provider Routing</div>
+          <h2>新房间媒体引擎调度</h2>
+          <p id="provider-panel-note">控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。</p>
+        </div>
+        <div class="provider-switcher" id="provider-switcher"></div>
       </div>
-      <div class="provider-switcher" id="provider-switcher"></div>
+      <div class="capability-matrix-section">
+        <div class="capability-matrix-heading">
+          <div>
+            <div class="capability-matrix-title">当前 SDK 能力矩阵</div>
+            <div class="capability-matrix-subtitle">展示本项目当前 adapter 能力，而不是厂商服务的理论全集；将鼠标悬停在单元格上可查看限制。</div>
+          </div>
+          <div class="capability-legend" aria-label="能力状态图例">
+            <span class="capability-legend-item"><span class="capability-state supported">支持</span></span>
+            <span class="capability-legend-item"><span class="capability-state conditional">有条件</span></span>
+            <span class="capability-legend-item"><span class="capability-state unsupported">不支持</span></span>
+          </div>
+        </div>
+        <div class="capability-matrix-scroll" id="provider-capability-matrix"></div>
+      </div>
     </div>
 
     <div class="card provider-panel">
@@ -1362,6 +1675,124 @@
       return hash % 360;
     }
 
+    function capabilityStateLabel(support) {
+      switch (support) {
+        case 'supported':
+          return '支持';
+        case 'conditional':
+          return '有条件';
+        default:
+          return '不支持';
+      }
+    }
+
+    function renderProviderCapabilityMatrix(activeProvider) {
+      const root = document.getElementById('provider-capability-matrix');
+      const providers = [...cachedProviders.values()];
+      if (!root || providers.length === 0) return;
+
+      const rows = new Map();
+      for (const provider of providers) {
+        for (const capability of provider.capabilities || []) {
+          if (!capability || !capability.key || rows.has(capability.key)) continue;
+          rows.set(capability.key, {
+            key: capability.key,
+            label: capability.label || capability.key,
+          });
+        }
+      }
+
+      if (rows.size === 0) {
+        root.innerHTML = '<div class="empty-state" style="padding:18px;">暂无 Provider 能力元数据</div>';
+        return;
+      }
+
+      const capabilityMaps = new Map(
+        providers.map(provider => [
+          provider.id,
+          new Map((provider.capabilities || []).map(item => [item.key, item])),
+        ]),
+      );
+
+      let html =
+        '<div class="capability-matrix" style="--provider-count:' +
+        providers.length +
+        '">';
+      html += '<div class="capability-cell capability-provider capability-label">能力</div>';
+
+      for (const provider of providers) {
+        const active = provider.id === activeProvider;
+        const classes = [
+          'capability-cell',
+          'capability-provider',
+          active ? 'active-provider' : '',
+          provider.configured ? '' : 'unconfigured',
+        ].filter(Boolean).join(' ');
+        const status = !provider.configured
+          ? '未配置'
+          : (active ? '当前使用' : '可选择');
+        html +=
+          '<div class="' +
+          classes +
+          '" title="' +
+          esc(provider.description || provider.displayName) +
+          '"><span>' +
+          esc(provider.label || provider.displayName || provider.id) +
+          '</span><small>' +
+          esc(status) +
+          '</small></div>';
+      }
+
+      for (const row of rows.values()) {
+        html +=
+          '<div class="capability-cell capability-label">' +
+          esc(row.label) +
+          '</div>';
+        for (const provider of providers) {
+          const capability = capabilityMaps.get(provider.id)?.get(row.key);
+          const support = capability?.support || 'unsupported';
+          const active = provider.id === activeProvider;
+          const classes = [
+            'capability-cell',
+            active ? 'active-provider' : '',
+            provider.configured ? '' : 'unconfigured',
+          ].filter(Boolean).join(' ');
+          const note = capability?.note || '';
+          const help =
+            note
+              ? '<button type="button" class="capability-help ' +
+                esc(support) +
+                '" aria-label="查看 ' +
+                esc(provider.displayName || provider.id) +
+                ' ' +
+                esc(row.label) +
+                ' 的能力说明" data-provider="' +
+                esc(provider.label || provider.displayName || provider.id) +
+                '" data-capability="' +
+                esc(row.label) +
+                '" data-support="' +
+                esc(support) +
+                '" data-note="' +
+                esc(note) +
+                '" onclick="showCapabilityDetail(this)">?</button>'
+              : '';
+          html +=
+            '<div class="' +
+            classes +
+            '"><span class="capability-value"><span class="capability-state ' +
+            esc(support) +
+            '">' +
+            capabilityStateLabel(support) +
+            '</span>' +
+            help +
+            '</span></div>';
+        }
+      }
+
+      html += '</div>';
+      root.innerHTML = html;
+    }
+
     function renderProviderSwitcher(activeProvider) {
       const switcher = document.getElementById('provider-switcher');
       const providers = [...cachedProviders.values()];
@@ -1383,6 +1814,7 @@
           ${esc(provider.label || provider.displayName || provider.id)}
         </button>`;
       }).join('');
+      renderProviderCapabilityMatrix(activeProvider);
     }
 
     function renderChatProviderSwitcher(activeProvider) {

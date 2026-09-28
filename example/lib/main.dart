@@ -1,55 +1,40 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
 import 'package:flutter_realtime_chat_ivs/flutter_realtime_chat_ivs.dart';
-import 'package:flutter_realtime_media_artc/flutter_realtime_media_artc.dart';
-import 'package:flutter_realtime_media_agora/flutter_realtime_media_agora.dart';
-import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
-import 'package:flutter_realtime_media_ivs/flutter_realtime_media_ivs.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
-import 'package:flutter_realtime_media_livekit/flutter_realtime_media_livekit.dart';
-import 'package:flutter_realtime_media_trtc/flutter_realtime_media_trtc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'provider_adapters.dart';
 import 'widgets/glass_widgets.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      statusBarBrightness: Brightness.light,
-      systemNavigationBarColor: Colors.white,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ),
-  );
+  if (!kIsWeb) {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+    );
+  }
 
   runApp(const ChimeExampleApp());
 }
 
-final MediaRegistry _mediaRegistry = MediaRegistry([
-  const ArtcSessionFactory(),
-  const AgoraSessionFactory(),
-  const LiveKitSessionFactory(),
-  ChimeSessionFactory(),
-  const TrtcSessionFactory(),
-  const IvsSessionFactory(),
-]);
-
-final Map<String, MediaTrackRenderer> _mediaRenderers = {
-  'artc': const ArtcTrackRenderer(),
-  'agora': const AgoraTrackRenderer(),
-  'livekit': const LiveKitTrackRenderer(),
-  'chime': const ChimeTrackRenderer(),
-  'trtc': const TrtcTrackRenderer(),
-  'ivs': const IvsTrackRenderer(),
-};
+final _providerAdapters = createProviderAdapters();
+final MediaRegistry _mediaRegistry = _providerAdapters.registry;
+final Map<String, MediaTrackRenderer> _mediaRenderers =
+    _providerAdapters.renderers;
 
 final ChatRegistry _chatRegistry = ChatRegistry([
   const IvsChatSessionFactory(),
@@ -447,7 +432,6 @@ class _JoinScreenState extends State<JoinScreen>
             providerId: chatProvider,
           );
         }
-        activeChatSession = chatRoom.session;
       } catch (error) {
         chatClient.dispose();
         chatClient = null;
@@ -480,7 +464,7 @@ class _JoinScreenState extends State<JoinScreen>
             room: room,
             renderer: renderer,
             chatSession: activeChatSession,
-            config: const MediaRoomViewConfig(showRtcDataMessages: true),
+            config: const MediaRoomViewConfig(showChat: true),
           ),
         ),
       );

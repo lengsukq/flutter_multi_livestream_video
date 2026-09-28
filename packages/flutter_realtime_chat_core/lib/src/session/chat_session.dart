@@ -26,3 +26,14 @@ abstract class ChatSession {
   Future<void> disconnect();
   Future<void> dispose();
 }
+
+/// Optional identity contract exposed by chat adapters that know the
+/// authenticated local chat identity.
+///
+/// This stays separate from [ChatSession] so custom adapters that only
+/// implement the base transport contract remain source compatible.
+abstract interface class ChatSessionIdentity {
+  String get localParticipantId;
+  String get localUserId;
+  String get localDisplayName;
+}

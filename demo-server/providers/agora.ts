@@ -6,6 +6,7 @@ import type {
   ProviderAdapter,
   ProviderFactoryContext,
 } from '../types.ts';
+import { mediaCapabilityMatrix } from './provider-capabilities.ts';
 
 export function createAgoraProvider({
   env = process.env,
@@ -30,6 +31,38 @@ export function createAgoraProvider({
     label: 'Agora RTC',
     description: 'Agora RTC 全球实时网络',
     themeKey: 'agora',
+    capabilityMatrix: mediaCapabilityMatrix({
+      meeting: 'supported',
+      broadcastHost: 'supported',
+      broadcastViewer: 'supported',
+      microphone: {
+        support: 'conditional',
+        note: 'participant / host 可发布，viewer 仅订阅。',
+      },
+      camera: {
+        support: 'conditional',
+        note: 'participant / host 可发布，viewer 仅订阅。',
+      },
+      screenShare: {
+        support: 'conditional',
+        note: '当前 Web Bridge 支持；原生 Flutter adapter 暂未暴露。',
+      },
+      rtcDataSend: {
+        support: 'conditional',
+        note: 'participant / host 可发送，viewer 仅接收。',
+      },
+      rtcDataReceive: 'supported',
+      web: {
+        support: 'conditional',
+        note: '通过官方 Agora Web SDK Bridge 接入。',
+      },
+      credentialRefresh: 'unsupported',
+      moderation: 'unsupported',
+      closeRoom: {
+        support: 'conditional',
+        note: 'host 具备 SDK 房间关闭能力；服务端房间为逻辑房间。',
+      },
+    }),
     configurationError: 'Agora is not configured. Set AGORA_APP_ID and AGORA_APP_CERTIFICATE.',
     isConfigured: () => Boolean(appId && appCertificate),
     supportsRole: () => true,

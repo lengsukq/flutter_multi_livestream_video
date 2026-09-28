@@ -13,7 +13,7 @@ const int _rtcDataChatEnvelopeVersion = 1;
 /// This adapter is intentionally used only as a fallback when the backend did
 /// not bind a dedicated product-chat provider. It never changes media publish
 /// permissions and it never owns or disposes the media session.
-class RtcDataChatSession implements ChatSession {
+class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
   factory RtcDataChatSession({
     required MediaRoomSession room,
     String? userId,
@@ -117,6 +117,15 @@ class RtcDataChatSession implements ChatSession {
 
   @override
   String get providerId => 'rtc-data:$_mediaProviderId';
+
+  @override
+  String get localParticipantId => _participantId;
+
+  @override
+  String get localUserId => _participantId;
+
+  @override
+  String get localDisplayName => _displayName;
 
   @override
   final ChatRole role;

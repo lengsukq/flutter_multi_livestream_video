@@ -82,6 +82,7 @@ GEMINI.local.md
 
 
 node_modules/
+/example/web/provider_bridge/dist/
 
 # Local demo-server credentials (keep .env.example reviewable if added later).
 /demo-server/.env

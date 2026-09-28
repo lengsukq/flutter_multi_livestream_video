@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
@@ -49,9 +50,12 @@ class MediaRoomView extends StatefulWidget {
 class _MediaRoomViewState extends State<MediaRoomView> {
   final _message = TextEditingController();
   final _rtcDataMessage = TextEditingController();
+  final _chatScroll = ScrollController();
   Timer? _timer;
   int _seconds = 0;
+  int _lastChatMessageCount = 0;
   bool _chatOpen = false;
+  bool _chatSending = false;
   bool _rtcDataOpen = false;
   bool _copied = false;
   String? _error;
@@ -70,6 +74,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     _timer?.cancel();
     _message.dispose();
     _rtcDataMessage.dispose();
+    _chatScroll.dispose();
     super.dispose();
   }
 
@@ -134,25 +139,80 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       return Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         body: SafeArea(
-          child: Column(
-            children: [
-              _topBar(value),
-              if (_error != null) _errorView(),
-              Expanded(
-                child: value.participants.isEmpty ? _waiting() : _grid(value),
-              ),
-              if (value.contentShareTrack != null) _screenShare(value),
-              if (_chatOpen) _chat(),
-              if (_rtcDataOpen) _rtcData(),
-              _controls(value),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 900;
+              final compact = constraints.maxWidth < 520;
+              return Column(
+                children: [
+                  _topBar(value, compact: compact),
+                  if (_error != null) _errorView(),
+                  Expanded(
+                    child: wide
+                        ? _wideContent(value, constraints)
+                        : _compactContent(value, constraints),
+                  ),
+                  if (_rtcDataOpen) _rtcData(),
+                  _controls(value),
+                ],
+              );
+            },
           ),
         ),
       );
     },
   );
 
-  Widget _topBar(MediaSnapshot value) {
+  Widget _wideContent(MediaSnapshot value, BoxConstraints constraints) {
+    final chat = widget.chatSession;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: _mediaStage(value)),
+        if (_chatOpen && chat != null) ...[
+          const VerticalDivider(width: 1, thickness: 1),
+          SizedBox(
+            key: const ValueKey('chat-panel-wide'),
+            width: (constraints.maxWidth * .30).clamp(320.0, 420.0),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 12, 8),
+              child: _productChat(chat),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _compactContent(MediaSnapshot value, BoxConstraints constraints) {
+    final chat = widget.chatSession;
+    final maxChatHeight = math.max(140.0, constraints.maxHeight - 150);
+    final desiredChatHeight = (constraints.maxHeight * .42).clamp(180.0, 380.0);
+    final chatHeight = math.min(desiredChatHeight, maxChatHeight);
+    return Column(
+      children: [
+        Expanded(child: _mediaStage(value)),
+        if (_chatOpen && chat != null)
+          SizedBox(
+            key: const ValueKey('chat-panel-compact'),
+            height: chatHeight,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+              child: _productChat(chat),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _mediaStage(MediaSnapshot value) => Column(
+    children: [
+      Expanded(child: value.participants.isEmpty ? _waiting() : _grid(value)),
+      if (value.contentShareTrack != null) _screenShare(value),
+    ],
+  );
+
+  Widget _topBar(MediaSnapshot value, {required bool compact}) {
     final mm = (_seconds ~/ 60).toString().padLeft(2, '0');
     final ss = (_seconds % 60).toString().padLeft(2, '0');
     return Container(
@@ -172,13 +232,15 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               _copied ? Icons.check_rounded : Icons.copy_rounded,
             ),
           ),
-          if (widget.config.showProvider) ...[
+          if (widget.config.showProvider && !compact) ...[
             const SizedBox(width: 8),
             _providerBadge(widget.room.providerId),
           ],
           const Spacer(),
-          _badge('$mm:$ss', Icons.circle),
-          const SizedBox(width: 8),
+          if (!compact) ...[
+            _badge('$mm:$ss', Icons.circle),
+            const SizedBox(width: 8),
+          ],
           _badge('${value.participants.length}', Icons.people_outline_rounded),
         ],
       ),
@@ -331,12 +393,6 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     ),
   );
 
-  Widget _chat() {
-    final chat = widget.chatSession;
-    if (chat != null) return _productChat(chat);
-    return const SizedBox.shrink();
-  }
-
   Widget _productChat(ChatSession chat) => StreamBuilder<ChatConnectionState>(
     stream: chat.states,
     initialData: chat.state,
@@ -347,108 +403,52 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         initialData: chat.messages,
         builder: (context, messageSnapshot) {
           final messages = messageSnapshot.data ?? chat.messages;
+          _syncChatScroll(messages.length);
           return Container(
-            margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0A0F172A),
+                  blurRadius: 18,
+                  offset: Offset(0, 4),
+                ),
+              ],
             ),
+            clipBehavior: Clip.antiAlias,
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    const Text(
-                      'Chat',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      connectionState.name,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        color: connectionState.isConnected
-                            ? const Color(0xFF16A34A)
-                            : const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-                if (messages.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 132),
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      reverse: true,
-                      itemCount: messages.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 6),
-                      itemBuilder: (context, index) {
-                        final message = messages[messages.length - 1 - index];
-                        return Align(
-                          alignment: Alignment.centerLeft,
-                          child: RichText(
-                            text: TextSpan(
-                              style: const TextStyle(
-                                color: Color(0xFF334155),
-                                fontSize: 12,
+                _chatHeader(connectionState, messages.length),
+                const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                Expanded(
+                  child: messages.isEmpty
+                      ? _emptyChat()
+                      : ListView.builder(
+                          key: const ValueKey('chat-message-list'),
+                          controller: _chatScroll,
+                          reverse: true,
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final messageIndex = messages.length - 1 - index;
+                            final message = messages[messageIndex];
+                            final previous = messageIndex > 0
+                                ? messages[messageIndex - 1]
+                                : null;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _chatMessage(
+                                chat,
+                                message,
+                                previousMessage: previous,
                               ),
-                              children: [
-                                TextSpan(
-                                  text: '${message.displayName}: ',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                TextSpan(text: message.message),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 8),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'No messages yet',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: Color(0xFF94A3B8),
-                      ),
-                    ),
-                  ),
-                ],
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _message,
-                        enabled: connectionState.isConnected,
-                        decoration: InputDecoration(
-                          hintText: connectionState.isConnected
-                              ? 'Type a message…'
-                              : 'Chat is ${connectionState.name}',
-                          border: InputBorder.none,
+                            );
+                          },
                         ),
-                        onSubmitted: (_) => _sendChat(chat),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: connectionState.isConnected
-                          ? () => _sendChat(chat)
-                          : null,
-                      icon: const Icon(Icons.arrow_upward_rounded),
-                    ),
-                  ],
                 ),
+                _chatComposer(chat, connectionState),
               ],
             ),
           );
@@ -457,12 +457,371 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     },
   );
 
-  void _sendChat(ChatSession chat) {
-    final text = _message.text.trim();
-    if (text.isEmpty) return;
-    _run(() => chat.sendMessage(text)).then((_) {
-      if (mounted && _error == null) _message.clear();
+  Widget _chatHeader(ChatConnectionState connectionState, int messageCount) =>
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 11, 8, 10),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 17,
+                color: Color(0xFF4F46E5),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'Chat',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (messageCount > 0) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '$messageCount',
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: connectionState.isConnected
+                              ? const Color(0xFF22C55E)
+                              : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          connectionState.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Close chat',
+              visualDensity: VisualDensity.compact,
+              onPressed: _toggleChat,
+              icon: const Icon(Icons.close_rounded, size: 19),
+            ),
+          ],
+        ),
+      );
+
+  Widget _emptyChat() => const Center(
+    child: Padding(
+      padding: EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.forum_outlined, size: 28, color: Color(0xFFCBD5E1)),
+          SizedBox(height: 8),
+          Text(
+            'No messages yet',
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 3),
+          Text(
+            'Start the conversation',
+            style: TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8)),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _chatMessage(
+    ChatSession chat,
+    ChatMessage message, {
+    ChatMessage? previousMessage,
+  }) {
+    if (message.type != 'message') {
+      return Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE2E8F0),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            message.message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+          ),
+        ),
+      );
+    }
+
+    final own = _isOwnChatMessage(chat, message);
+    final sameSenderAsPrevious =
+        previousMessage != null && previousMessage.userId == message.userId;
+    final displayName = message.displayName.trim().isEmpty
+        ? message.userId
+        : message.displayName.trim();
+    return LayoutBuilder(
+      builder: (context, constraints) => Align(
+        alignment: own ? Alignment.centerRight : Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: constraints.maxWidth * .80),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: own
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
+            children: [
+              if (!own && !sameSenderAsPrevious)
+                Padding(
+                  padding: const EdgeInsets.only(left: 3, bottom: 4),
+                  child: Text(
+                    displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      color: Color(0xFF64748B),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              Container(
+                key: ValueKey(
+                  'chat-message-${message.id}-${own ? 'local' : 'remote'}',
+                ),
+                padding: const EdgeInsets.fromLTRB(11, 8, 10, 6),
+                decoration: BoxDecoration(
+                  color: own ? const Color(0xFF4F46E5) : Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(15),
+                    topRight: const Radius.circular(15),
+                    bottomLeft: Radius.circular(own ? 15 : 5),
+                    bottomRight: Radius.circular(own ? 5 : 15),
+                  ),
+                  border: own
+                      ? null
+                      : Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        message.message,
+                        style: TextStyle(
+                          color: own ? Colors.white : const Color(0xFF1E293B),
+                          fontSize: 12.5,
+                          height: 1.28,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _formatChatTime(message.timestamp),
+                      style: TextStyle(
+                        color: own
+                            ? Colors.white.withValues(alpha: .72)
+                            : const Color(0xFF94A3B8),
+                        fontSize: 9.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chatComposer(ChatSession chat, ChatConnectionState connectionState) {
+    final enabled =
+        connectionState.isConnected &&
+        chat.capabilities.canSendMessage &&
+        !_chatSending;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: TextField(
+                key: const ValueKey('chat-message-input'),
+                controller: _message,
+                enabled: enabled,
+                minLines: 1,
+                maxLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  hintText: connectionState.isConnected
+                      ? chat.capabilities.canSendMessage
+                            ? 'Message…'
+                            : 'Read only'
+                      : 'Chat is ${connectionState.name}',
+                  hintStyle: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+                onSubmitted: enabled ? (_) => _sendChat(chat) : null,
+              ),
+            ),
+          ),
+          const SizedBox(width: 7),
+          SizedBox(
+            width: 38,
+            height: 38,
+            child: FilledButton(
+              key: const ValueKey('chat-send-button'),
+              onPressed: enabled ? () => _sendChat(chat) : null,
+              style: FilledButton.styleFrom(
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(13),
+                ),
+              ),
+              child: _chatSending
+                  ? const SizedBox(
+                      width: 15,
+                      height: 15,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.arrow_upward_rounded, size: 18),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isOwnChatMessage(ChatSession chat, ChatMessage message) {
+    if (chat is ChatSessionIdentity) {
+      final identity = chat as ChatSessionIdentity;
+      final localUserId = identity.localUserId.trim();
+      if (localUserId.isNotEmpty && message.userId == localUserId) return true;
+      final localParticipantId = identity.localParticipantId.trim();
+      if (localParticipantId.isNotEmpty &&
+          message.attributes['participantId'] == localParticipantId) {
+        return true;
+      }
+    }
+    if (message.attributes['local'] == 'true') return true;
+    return message.userId == widget.room.participantId;
+  }
+
+  String _formatChatTime(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  void _syncChatScroll(int messageCount) {
+    if (_lastChatMessageCount == messageCount) return;
+    final previousCount = _lastChatMessageCount;
+    _lastChatMessageCount = messageCount;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_chatScroll.hasClients) return;
+      final nearLatest =
+          previousCount == 0 || _chatScroll.position.pixels <= 72;
+      if (nearLatest) {
+        _chatScroll.animateTo(
+          0,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+      }
     });
+  }
+
+  void _toggleChat() {
+    setState(() => _chatOpen = !_chatOpen);
+    if (_chatOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_chatScroll.hasClients) _chatScroll.jumpTo(0);
+      });
+    }
+  }
+
+  Future<void> _sendChat(ChatSession chat) async {
+    final text = _message.text.trim();
+    if (text.isEmpty || _chatSending) return;
+    setState(() => _chatSending = true);
+    try {
+      await chat.sendMessage(text);
+      if (!mounted) return;
+      _message.clear();
+      setState(() => _error = null);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_chatScroll.hasClients) {
+          _chatScroll.animateTo(
+            0,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _chatSending = false);
+    }
   }
 
   Widget _rtcData() {
@@ -573,7 +932,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               const SizedBox(width: 8),
               _control(
                 Icons.chat_bubble_outline_rounded,
-                () => setState(() => _chatOpen = !_chatOpen),
+                _toggleChat,
                 active: _chatOpen,
               ),
             ],

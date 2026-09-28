@@ -6,6 +6,7 @@ import type {
   ProviderAdapter,
   ProviderFactoryContext,
 } from '../types.ts';
+import { mediaCapabilityMatrix } from './provider-capabilities.ts';
 
 function base64Url(value: string): string {
   return Buffer.from(value).toString('base64url');
@@ -105,6 +106,35 @@ export function createLiveKitProvider({
     label: 'LiveKit WebRTC',
     description: 'WebRTC 原生流集群',
     themeKey: 'livekit',
+    capabilityMatrix: mediaCapabilityMatrix({
+      meeting: 'supported',
+      broadcastHost: 'supported',
+      broadcastViewer: 'supported',
+      microphone: {
+        support: 'conditional',
+        note: 'participant / host 可发布，viewer 仅订阅。',
+      },
+      camera: {
+        support: 'conditional',
+        note: 'participant / host 可发布，viewer 仅订阅。',
+      },
+      screenShare: {
+        support: 'conditional',
+        note: 'participant / host 支持；移动 Web 浏览器受 LiveKit SDK 限制。',
+      },
+      rtcDataSend: 'supported',
+      rtcDataReceive: 'supported',
+      web: 'supported',
+      credentialRefresh: 'unsupported',
+      moderation: {
+        support: 'supported',
+        note: 'host 可移除远端成员。',
+      },
+      closeRoom: {
+        support: 'supported',
+        note: 'host 可关闭房间。',
+      },
+    }),
     configurationError: 'LiveKit is not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET.',
     isConfigured: () => Boolean(url && apiKey && apiSecret),
     metadata: () => ({ url }),

@@ -15,6 +15,7 @@ import type {
   ProviderFactoryContext,
 } from '../types.ts';
 import { ProviderOperationError } from './provider-registry.ts';
+import { mediaCapabilityMatrix } from './provider-capabilities.ts';
 
 export interface IvsParticipantToken {
   token: string;
@@ -178,6 +179,38 @@ export function createIvsProvider({
     label: 'Amazon IVS Real-Time',
     description: 'AWS WebRTC real-time stage',
     themeKey: 'ivs',
+    capabilityMatrix: mediaCapabilityMatrix({
+      meeting: 'supported',
+      broadcastHost: 'supported',
+      broadcastViewer: 'supported',
+      microphone: {
+        support: 'conditional',
+        note: 'participant / host 可发布，viewer token 仅 SUBSCRIBE。',
+      },
+      camera: {
+        support: 'conditional',
+        note: 'participant / host 可发布，viewer token 仅 SUBSCRIBE。',
+      },
+      screenShare: {
+        support: 'conditional',
+        note: '当前 Web Bridge 支持；原生 Flutter adapter 暂未暴露。',
+      },
+      rtcDataSend: 'unsupported',
+      rtcDataReceive: 'unsupported',
+      web: {
+        support: 'conditional',
+        note: '通过 Amazon IVS Web Broadcast SDK Bridge 接入。',
+      },
+      credentialRefresh: 'supported',
+      moderation: {
+        support: 'supported',
+        note: 'host 可通过 IVS DisconnectParticipant 移除成员。',
+      },
+      closeRoom: {
+        support: 'supported',
+        note: 'host 可关闭 Stage / 房间。',
+      },
+    }),
     configurationError:
       'Amazon IVS Real-Time is not configured. Set IVS_REALTIME_REGION (or AWS_REGION) and provide AWS credentials through the server IAM credential chain.',
     isConfigured: () => api != null,

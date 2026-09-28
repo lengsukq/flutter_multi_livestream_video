@@ -34,7 +34,7 @@ class DefaultMediaPermissionProbe implements MediaPermissionProbe {
 
   @override
   Future<MediaPermissionState> status(MediaPermissionKind kind) async {
-    if (kIsWeb ||
+    if (!kIsWeb &&
         (defaultTargetPlatform != TargetPlatform.android &&
             defaultTargetPlatform != TargetPlatform.iOS)) {
       return MediaPermissionState.unsupported;
@@ -49,6 +49,10 @@ class DefaultMediaPermissionProbe implements MediaPermissionProbe {
       if (value.isPermanentlyDenied) {
         return MediaPermissionState.permanentlyDenied;
       }
+      // permission_handler maps the browser's "prompt" state to denied. A
+      // prompt means access has not been requested yet, so pre-join must leave
+      // the decision to the user's explicit join/device action.
+      if (kIsWeb && value.isDenied) return MediaPermissionState.unknown;
       if (value.isRestricted) return MediaPermissionState.restricted;
       if (value.isLimited) return MediaPermissionState.limited;
       if (value.isProvisional) return MediaPermissionState.provisional;

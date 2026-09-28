@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Flutter Web (Edge)",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/example",
+      "program": "${workspaceFolder}/example/lib/main.dart",
+      "deviceId": "chrome",
+      "preLaunchTask": "Build provider Web SDK bridge"
+    }
+  ]
+}

@@ -1,5 +1,16 @@
 export type MediaRole = 'participant' | 'host' | 'viewer';
 export type RoomMode = 'meeting' | 'broadcast';
+export type ProviderCapabilitySupport =
+  | 'supported'
+  | 'conditional'
+  | 'unsupported';
+
+export interface ProviderCapability {
+  key: string;
+  label: string;
+  support: ProviderCapabilitySupport;
+  note?: string;
+}
 
 export interface RoomAttendee {
   attendeeId: string;
@@ -22,6 +33,7 @@ export interface ChatProviderMetadata {
   themeKey: string;
   enabled: boolean;
   configured: boolean;
+  capabilities?: ProviderCapability[];
   [key: string]: unknown;
 }
 
@@ -54,6 +66,7 @@ export interface ChatProviderAdapter {
   themeKey?: string;
   enabled?: boolean;
   configurationError?: string;
+  capabilityMatrix?: ProviderCapability[];
 
   isConfigured(): boolean;
   metadata?(): Record<string, unknown>;
@@ -169,6 +182,7 @@ export interface ProviderMetadata {
   themeKey: string;
   enabled: boolean;
   configured: boolean;
+  capabilities?: ProviderCapability[];
   [key: string]: unknown;
 }
 
@@ -215,6 +229,7 @@ export interface ProviderAdapter {
   themeKey?: string;
   enabled?: boolean;
   configurationError?: string;
+  capabilityMatrix?: ProviderCapability[];
 
   isConfigured(): boolean;
   metadata?(): Record<string, unknown>;

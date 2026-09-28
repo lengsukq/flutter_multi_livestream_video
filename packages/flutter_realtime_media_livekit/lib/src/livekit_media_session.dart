@@ -22,14 +22,16 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
     canPublishAudio: !isViewer,
     canPublishVideo: !isViewer,
     canSwitchCamera: !isViewer,
-    canScreenShare: !isViewer,
+    // LiveKit's Flutter Web SDK does not support screen capture on mobile
+    // browsers, even though desktop browsers support getDisplayMedia.
+    canScreenShare: !isViewer && (!kIsWeb || !lk.lkPlatformIsWebMobile()),
     canSendData: true,
     canReceiveData: true,
     canSubscribeVideo: true,
     canEnumerateAudioDevices: true,
     canEnumerateMicrophones: !isViewer,
     canEnumerateCameras: !isViewer,
-    canSelectMicrophone: !isViewer && canSelectAudioInput,
+    canSelectMicrophone: !isViewer && (kIsWeb || canSelectAudioInput),
     canSelectCamera: !isViewer,
     canSelectAudioOutput: canSelectAudioOutput,
     canTargetData: true,

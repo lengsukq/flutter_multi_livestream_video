@@ -5,7 +5,7 @@ import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'ivs_chat_engine.dart';
 import 'ivs_chat_join_info.dart';
 
-class IvsChatSession implements ChatSession {
+class IvsChatSession implements ChatSession, ChatSessionIdentity {
   IvsChatSession({required this.role, required this.engineFactory});
 
   final IvsChatEngineFactory engineFactory;
@@ -28,6 +28,15 @@ class IvsChatSession implements ChatSession {
 
   @override
   String get providerId => IvsChatJoinInfo.providerIdValue;
+
+  @override
+  String get localParticipantId => _joinInfo?.participantId ?? '';
+
+  @override
+  String get localUserId => _joinInfo?.userId ?? '';
+
+  @override
+  String get localDisplayName => _joinInfo?.displayName ?? '';
 
   @override
   ChatCapabilities get capabilities {

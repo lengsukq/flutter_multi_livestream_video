@@ -24,8 +24,21 @@ interface ApiBody {
   roomOwnerCredential?: string;
   role?: string;
   roomMode?: string;
-  providerList?: Array<{ id: string }>;
-  providers?: Record<string, { configured?: boolean }>;
+  providerList?: Array<{
+    id: string;
+    capabilities?: Array<{
+      key?: string;
+      support?: string;
+      note?: string;
+    }>;
+  }>;
+  providers?: Record<
+    string,
+    {
+      configured?: boolean;
+      capabilities?: Array<{ key?: string; support?: string }>;
+    }
+  >;
   participants?: Array<{
     participantId?: string;
     displayName?: string;
@@ -158,6 +171,25 @@ test('provider metadata is dynamic and unconfigured providers cannot be selected
   assert.equal(overview.providerList.some((provider: { id: string }) => provider.id === 'livekit'), true);
   assert.equal(overview.providers?.livekit?.configured, true);
   assert.equal(overview.providers?.agora?.configured, false);
+  const livekitMetadata = overview.providerList.find(
+    (provider) => provider.id === 'livekit',
+  );
+  assert.ok(Array.isArray(livekitMetadata?.capabilities));
+  assert.equal(
+    livekitMetadata?.capabilities?.some(
+      (capability) =>
+        capability.key === 'rtcDataSend' && capability.support === 'supported',
+    ),
+    true,
+  );
+  assert.equal(
+    overview.providers?.ivs?.capabilities?.some(
+      (capability) =>
+        capability.key === 'rtcDataSend' &&
+        capability.support === 'unsupported',
+    ),
+    true,
+  );
 
   const unconfigured = await post('/api/provider', { provider: 'agora' });
   assert.equal(unconfigured.status, 503);

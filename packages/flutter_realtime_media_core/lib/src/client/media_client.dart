@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import '../diagnostics/media_permission_probe.dart';
 import '../diagnostics/media_pre_join.dart';
 import '../diagnostics/media_pre_join_runner.dart';
@@ -190,10 +188,12 @@ class MediaClient {
       response: response,
       parseErrorMessage: 'Unable to parse backend join information.',
     );
-    final participantCredential =
-        response.json['participantCredential']?.toString().trim();
-    final roomOwnerCredential =
-        response.json['roomOwnerCredential']?.toString().trim();
+    final participantCredential = response.json['participantCredential']
+        ?.toString()
+        .trim();
+    final roomOwnerCredential = response.json['roomOwnerCredential']
+        ?.toString()
+        .trim();
 
     final session = factory.createSession(joinInfo);
     if (session case final MediaCredentialRefreshable refreshable) {
@@ -227,7 +227,9 @@ class MediaClient {
             roomOwnerCredential == null || roomOwnerCredential.isEmpty
             ? null
             : roomOwnerCredential,
-        chatProvider: _normalizedOptionalProvider(response.json['chatProvider']),
+        chatProvider: _normalizedOptionalProvider(
+          response.json['chatProvider'],
+        ),
         session: session,
         backend: backend,
         heartbeatInterval: config.heartbeatInterval,
@@ -343,5 +345,9 @@ class MediaClient {
   }
 }
 
-/// Whether the current platform can run device media sessions.
-bool get isMediaPlatformSupported => !kIsWeb;
+/// Whether the provider-neutral media client can run on this platform.
+///
+/// Provider adapters perform their own runtime capability checks before
+/// creating a media session. Register only adapters that support the current
+/// platform in the host application's media registry.
+bool get isMediaPlatformSupported => true;

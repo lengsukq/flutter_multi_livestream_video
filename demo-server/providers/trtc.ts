@@ -10,6 +10,7 @@ import type {
   TrtcRoomAttendee,
   TrtcRoomEntry,
 } from '../types.ts';
+import { mediaCapabilityMatrix } from './provider-capabilities.ts';
 
 export function createTrtcProvider({
   env = process.env,
@@ -55,6 +56,38 @@ export function createTrtcProvider({
     label: 'Tencent TRTC',
     description: '腾讯云 TRTC 实时音视频',
     themeKey: 'trtc',
+    capabilityMatrix: mediaCapabilityMatrix({
+      meeting: 'supported',
+      broadcastHost: 'supported',
+      broadcastViewer: 'supported',
+      microphone: {
+        support: 'conditional',
+        note: 'meeting participant / live host 可发布，viewer 仅订阅。',
+      },
+      camera: {
+        support: 'conditional',
+        note: 'meeting participant / live host 可发布，viewer 仅订阅。',
+      },
+      screenShare: {
+        support: 'conditional',
+        note: '当前 Web Bridge 支持；原生 Flutter adapter 暂未暴露。',
+      },
+      rtcDataSend: {
+        support: 'conditional',
+        note: 'participant / host 可发送，viewer 仅接收。',
+      },
+      rtcDataReceive: 'supported',
+      web: {
+        support: 'conditional',
+        note: '通过官方 TRTC Web SDK Bridge 接入。',
+      },
+      credentialRefresh: 'supported',
+      moderation: 'unsupported',
+      closeRoom: {
+        support: 'conditional',
+        note: 'host 可关闭当前逻辑房间。',
+      },
+    }),
     configurationError: 'TRTC is not configured. Set TRTC_SDK_APP_ID and TRTC_SDK_SECRET_KEY.',
     isConfigured: configured,
     supportsRole: (role, entry = null) => supportsRole(role, entry as TrtcRoomEntry | null),

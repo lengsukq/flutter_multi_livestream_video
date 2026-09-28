@@ -18,6 +18,7 @@ import type {
   ProviderJoinResponse,
   RoomEntry,
 } from '../types.ts';
+import { mediaCapabilityMatrix } from './provider-capabilities.ts';
 
 type RawMeeting = {
   MeetingId?: string;
@@ -128,6 +129,35 @@ export function createChimeProvider({
     label: 'AWS Chime SDK',
     description: 'Amazon Chime 媒体面',
     themeKey: 'chime',
+    capabilityMatrix: mediaCapabilityMatrix({
+      meeting: 'supported',
+      broadcastHost: {
+        support: 'unsupported',
+        note: '当前后端仅开放 participant 会议房间。',
+      },
+      broadcastViewer: {
+        support: 'unsupported',
+        note: '当前后端仅开放 participant 会议房间。',
+      },
+      microphone: 'supported',
+      camera: 'supported',
+      screenShare: {
+        support: 'conditional',
+        note: 'Web Bridge 支持内容共享；当前原生 Flutter Chime adapter 未暴露该能力。',
+      },
+      rtcDataSend: 'supported',
+      rtcDataReceive: 'supported',
+      web: {
+        support: 'conditional',
+        note: 'Web Bridge 支持，但角色仍仅限 participant。',
+      },
+      credentialRefresh: 'unsupported',
+      moderation: 'unsupported',
+      closeRoom: {
+        support: 'unsupported',
+        note: '当前没有 host 角色控制面。',
+      },
+    }),
     isConfigured: () => true,
     metadata: () => ({ controlRegion, mediaRegion }),
     supportsRole: (role: MediaRole) => role === 'participant',

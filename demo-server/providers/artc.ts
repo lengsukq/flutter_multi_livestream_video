@@ -10,6 +10,7 @@ import type {
   ProviderFactoryContext,
   ProviderJoinResponse,
 } from '../types.ts';
+import { mediaCapabilityMatrix } from './provider-capabilities.ts';
 
 const DEFAULT_TTL_SECONDS = 600;
 const MIN_TTL_SECONDS = 60;
@@ -87,6 +88,38 @@ export function createArtcProvider({
     label: '阿里云 ARTC',
     description: '阿里云实时音视频与互动直播',
     themeKey: 'artc',
+    capabilityMatrix: mediaCapabilityMatrix({
+      meeting: 'supported',
+      broadcastHost: 'supported',
+      broadcastViewer: 'supported',
+      microphone: {
+        support: 'conditional',
+        note: 'meeting participant / live host 可发布，viewer 仅订阅。',
+      },
+      camera: {
+        support: 'conditional',
+        note: 'meeting participant / live host 可发布，viewer 仅订阅。',
+      },
+      screenShare: {
+        support: 'conditional',
+        note: '当前 Web Bridge 支持；原生 Flutter adapter 暂未暴露。',
+      },
+      rtcDataSend: {
+        support: 'conditional',
+        note: 'participant / host 可发送，viewer 仅接收。',
+      },
+      rtcDataReceive: 'supported',
+      web: {
+        support: 'conditional',
+        note: '通过阿里云 Web SDK Bridge 接入。',
+      },
+      credentialRefresh: 'supported',
+      moderation: 'unsupported',
+      closeRoom: {
+        support: 'conditional',
+        note: 'host 可关闭当前逻辑房间。',
+      },
+    }),
     configurationError: 'ARTC is not configured. Set ARTC_APP_ID and ARTC_APP_KEY.',
     isConfigured: () => Boolean(appId && appKey && ttlIsValid),
     metadata: () => ttlIsValid ? {} : { configurationError: 'ARTC_TOKEN_TTL_SECONDS must be between 60 and 86400.' },

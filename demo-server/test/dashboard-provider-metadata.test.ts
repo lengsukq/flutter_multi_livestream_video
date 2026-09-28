@@ -10,10 +10,16 @@ test('dashboard provider switcher is metadata-driven and its script parses', asy
   );
 
   assert.match(html, /id="provider-switcher"/);
+  assert.match(html, /id="provider-capability-matrix"/);
+  assert.match(html, /id="capability-detail-modal"/);
   assert.match(html, /id="chat-provider-switcher"/);
   assert.match(html, /d\.providerList/);
   assert.match(html, /d\.chatProviderList/);
   assert.match(html, /renderProviderSwitcher\(d\.activeProvider\)/);
+  assert.match(html, /renderProviderCapabilityMatrix\(activeProvider\)/);
+  assert.match(html, /provider\.capabilities/);
+  assert.match(html, /onclick="showCapabilityDetail\(this\)"/);
+  assert.match(html, /function showCapabilityDetail\(button\)/);
   assert.match(
     html,
     /renderChatProviderSwitcher\(d\.activeChatProvider \|\| null\)/,

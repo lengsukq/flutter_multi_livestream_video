@@ -1,11 +1,14 @@
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 
 import 'ivs_chat_engine.dart';
+import 'ivs_chat_engine_factory.dart';
 import 'ivs_chat_join_info.dart';
 import 'ivs_chat_session.dart';
 
 class IvsChatSessionFactory implements ChatSessionFactory {
-  const IvsChatSessionFactory({this.engineFactory = createNativeIvsChatEngine});
+  const IvsChatSessionFactory({
+    this.engineFactory = createDefaultIvsChatEngine,
+  });
 
   final IvsChatEngineFactory engineFactory;
 

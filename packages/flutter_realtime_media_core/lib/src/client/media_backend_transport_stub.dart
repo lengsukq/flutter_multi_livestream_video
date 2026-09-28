@@ -1,9 +1,9 @@
 import 'media_backend_transport.dart';
 
-/// Web (and any other unsupported platform) fallback.
+/// Unsupported-platform fallback.
 ///
-/// The generic SDK targets devices; browsers fail loudly instead of silently
-/// attempting a backend call with no HTTP stack.
+/// Platforms without a compatible HTTP implementation fail loudly instead of
+/// attempting a backend call with no transport.
 MediaBackendTransport createDefaultMediaBackendTransport() =>
     UnsupportedMediaBackendTransport();
 

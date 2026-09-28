@@ -1,0 +1,17 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build provider Web SDK bridge",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "${workspaceFolder}/example/web/provider_bridge",
+        "run",
+        "build"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}

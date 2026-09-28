@@ -85,6 +85,7 @@ export class ProviderRegistry {
       themeKey: provider.themeKey ?? provider.id,
       enabled: provider.enabled !== false,
       configured: provider.isConfigured(),
+      capabilities: provider.capabilityMatrix ?? [],
       ...(typeof provider.metadata === 'function' ? provider.metadata() : {}),
     }));
   }
