@@ -72,6 +72,69 @@ void main() {
       await subscription.cancel();
     });
 
+    test(
+      'pre-join probe degrades network checks without credentials',
+      () async {
+        const factory = LiveKitSessionFactory();
+        final probe = factory as MediaPreJoinProbe;
+
+        final result = await probe.runPreJoinProbe(
+          const MediaPreJoinProbeRequest(
+            providerId: 'livekit',
+            role: MediaRole.viewer,
+            requirements: MediaPreJoinRequirements.viewer(),
+          ),
+        );
+
+        expect(
+          result.checks
+              .singleWhere(
+                (check) => check.type == MediaPreJoinCheckType.providerNetwork,
+              )
+              .status,
+          MediaPreJoinStatus.unsupported,
+        );
+        expect(
+          result.checks.where(
+            (check) => check.type == MediaPreJoinCheckType.microphoneDevice,
+          ),
+          isEmpty,
+        );
+        expect(
+          result.checks.where(
+            (check) => check.type == MediaPreJoinCheckType.cameraDevice,
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test('required device enumeration failure is blocking', () async {
+      final factory = LiveKitSessionFactory(
+        audioInputCountLoader: () async => throw StateError('device failure'),
+        videoInputCountLoader: () async => 1,
+      );
+      final probe = factory as MediaPreJoinProbe;
+
+      final result = await probe.runPreJoinProbe(
+        const MediaPreJoinProbeRequest(
+          providerId: 'livekit',
+          role: MediaRole.participant,
+          requirements: MediaPreJoinRequirements(
+            microphone: MediaPreJoinRequirement.required,
+            camera: MediaPreJoinRequirement.skipped,
+            network: MediaPreJoinRequirement.skipped,
+          ),
+        ),
+      );
+
+      final microphone = result.checks.singleWhere(
+        (check) => check.type == MediaPreJoinCheckType.microphoneDevice,
+      );
+      expect(microphone.status, MediaPreJoinStatus.unknown);
+      expect(microphone.isBlocking, isTrue);
+    });
+
     testWidgets('renderer rejects a track from another provider', (
       tester,
     ) async {

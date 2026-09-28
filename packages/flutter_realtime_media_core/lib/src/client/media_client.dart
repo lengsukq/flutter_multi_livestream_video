@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 
+import '../diagnostics/media_permission_probe.dart';
+import '../diagnostics/media_pre_join.dart';
+import '../diagnostics/media_pre_join_runner.dart';
 import '../model/media_error.dart';
 import '../model/media_identity.dart';
 import '../model/media_role.dart';
@@ -32,6 +35,7 @@ class MediaClient {
     Duration requestTimeout = const Duration(seconds: 15),
     Duration heartbeatInterval = const Duration(seconds: 30),
     MediaBackendTransport? transport,
+    MediaPermissionProbe? permissionProbe,
   }) : this.withConfig(
          MediaBackendConfig.fromUrl(
            backendUrl,
@@ -42,18 +46,42 @@ class MediaClient {
          ),
          registry: registry,
          transport: transport,
+         permissionProbe: permissionProbe,
        );
 
   MediaClient.withConfig(
     this.config, {
     MediaRegistry? registry,
     MediaBackendTransport? transport,
+    MediaPermissionProbe? permissionProbe,
   }) : registry = registry ?? MediaRegistry.global,
-       backend = MediaBackendClient(config, transport: transport);
+       backend = MediaBackendClient(config, transport: transport),
+       permissionProbe = permissionProbe ?? const DefaultMediaPermissionProbe();
 
   final MediaBackendConfig config;
   final MediaRegistry registry;
   final MediaBackendClient backend;
+  final MediaPermissionProbe permissionProbe;
+
+  /// Runs provider-neutral checks without creating or joining a room.
+  Future<MediaPreJoinResult> runPreJoinCheck({
+    MediaRole role = MediaRole.participant,
+    String? providerId,
+    String? roomCode,
+    MediaPreJoinRequirements? requirements,
+  }) =>
+      MediaPreJoinRunner(
+        backend: backend,
+        registry: registry,
+        permissionProbe: permissionProbe,
+      ).run(
+        MediaPreJoinRequest(
+          role: role,
+          providerId: providerId,
+          roomCode: roomCode,
+          requirements: requirements,
+        ),
+      );
 
   /// Creates a room and joins it as [nickname].
   ///
@@ -148,34 +176,11 @@ class MediaClient {
       );
     }
 
-    final MediaJoinInfo joinInfo;
-    try {
-      final adapterJson = Map<String, dynamic>.from(response.json)
-        ..putIfAbsent('provider', () => response.providerId)
-        ..putIfAbsent('role', () => response.role.wireName)
-        ..putIfAbsent('roomCode', () => response.roomCode);
-      joinInfo = factory.parseJoinInfo(adapterJson);
-      if (joinInfo.providerId.trim().toLowerCase() != response.providerId ||
-          joinInfo.role != response.role ||
-          joinInfo.roomCode != response.roomCode) {
-        throw MediaError(
-          code: MediaErrorCode.invalidJoinInfo,
-          message:
-              'The provider adapter returned join information that does not '
-              'match the backend response.',
-          providerId: response.providerId,
-        );
-      }
-    } on MediaError {
-      rethrow;
-    } catch (error) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
-        message: 'Unable to parse backend join information.',
-        details: error,
-        providerId: response.providerId,
-      );
-    }
+    final joinInfo = _parseJoinInfo(
+      factory: factory,
+      response: response,
+      parseErrorMessage: 'Unable to parse backend join information.',
+    );
 
     final session = factory.createSession(joinInfo);
     if (session case final MediaCredentialRefreshable refreshable) {
@@ -229,11 +234,6 @@ class MediaClient {
         participantId: currentJoinInfo.participantId,
         role: currentJoinInfo.role,
       );
-      final adapterJson = Map<String, dynamic>.from(response.json)
-        ..putIfAbsent('provider', () => response.providerId)
-        ..putIfAbsent('role', () => response.role.wireName)
-        ..putIfAbsent('roomCode', () => response.roomCode);
-      final refreshed = factory.parseJoinInfo(adapterJson);
       final responseRole = response.json['role'];
       if (responseRole != null && MediaRole.tryParse(responseRole) == null) {
         throw MediaError(
@@ -243,14 +243,17 @@ class MediaClient {
           providerId: currentJoinInfo.providerId,
         );
       }
+      final refreshed = _parseJoinInfo(
+        factory: factory,
+        response: response,
+        parseErrorMessage: 'Unable to parse refreshed media credentials.',
+      );
       if (response.providerId != currentJoinInfo.providerId ||
           response.roomCode != currentJoinInfo.roomCode ||
           response.role != currentJoinInfo.role ||
-          refreshed.providerId.trim().toLowerCase() !=
-              currentJoinInfo.providerId ||
-          refreshed.roomCode != currentJoinInfo.roomCode ||
           refreshed.participantId != currentJoinInfo.participantId ||
-          refreshed.role != currentJoinInfo.role) {
+          refreshed.providerId.trim().toLowerCase() !=
+              currentJoinInfo.providerId) {
         throw MediaError(
           code: MediaErrorCode.invalidJoinInfo,
           message:
@@ -275,6 +278,41 @@ class MediaClient {
         message: 'Unable to parse refreshed media credentials.',
         details: error,
         providerId: currentJoinInfo.providerId,
+      );
+    }
+  }
+
+  MediaJoinInfo _parseJoinInfo({
+    required MediaSessionFactory factory,
+    required MediaRoomJoinResponse response,
+    required String parseErrorMessage,
+  }) {
+    try {
+      final adapterJson = Map<String, dynamic>.from(response.json)
+        ..putIfAbsent('provider', () => response.providerId)
+        ..putIfAbsent('role', () => response.role.wireName)
+        ..putIfAbsent('roomCode', () => response.roomCode);
+      final joinInfo = factory.parseJoinInfo(adapterJson);
+      if (joinInfo.providerId.trim().toLowerCase() != response.providerId ||
+          joinInfo.role != response.role ||
+          joinInfo.roomCode != response.roomCode) {
+        throw MediaError(
+          code: MediaErrorCode.invalidJoinInfo,
+          message:
+              'The provider adapter returned join information that does not '
+              'match the backend response.',
+          providerId: response.providerId,
+        );
+      }
+      return joinInfo;
+    } on MediaError {
+      rethrow;
+    } catch (error) {
+      throw MediaError(
+        code: MediaErrorCode.invalidJoinInfo,
+        message: parseErrorMessage,
+        details: error,
+        providerId: response.providerId,
       );
     }
   }
