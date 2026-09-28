@@ -20,6 +20,7 @@ class MediaSnapshot {
     this.localParticipantId,
     this.localMuted = true,
     this.localVideoEnabled = false,
+    this.localScreenShareEnabled = false,
     this.contentShareTrack,
     this.capabilities = const MediaCapabilities.none(),
     this.lastError,
@@ -46,6 +47,9 @@ class MediaSnapshot {
 
   /// Whether the local camera is publishing.
   final bool localVideoEnabled;
+
+  /// Whether the local participant is publishing a screen share.
+  final bool localScreenShareEnabled;
 
   /// Screen share track currently received, if any.
   final MediaVideoTrack? contentShareTrack;
@@ -80,6 +84,7 @@ class MediaSnapshot {
     bool clearLocalParticipantId = false,
     bool? localMuted,
     bool? localVideoEnabled,
+    bool? localScreenShareEnabled,
     MediaVideoTrack? contentShareTrack,
     bool clearContentShareTrack = false,
     MediaCapabilities? capabilities,
@@ -95,6 +100,8 @@ class MediaSnapshot {
         : localParticipantId ?? this.localParticipantId,
     localMuted: localMuted ?? this.localMuted,
     localVideoEnabled: localVideoEnabled ?? this.localVideoEnabled,
+    localScreenShareEnabled:
+        localScreenShareEnabled ?? this.localScreenShareEnabled,
     contentShareTrack: clearContentShareTrack
         ? null
         : contentShareTrack ?? this.contentShareTrack,

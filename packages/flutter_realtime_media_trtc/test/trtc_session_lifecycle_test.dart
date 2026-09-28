@@ -52,16 +52,9 @@ void main() {
         ]),
       );
       expect(events.whereType<MediaTrackPublished>(), hasLength(1));
-      await expectLater(
-        interactive.setScreenShareEnabled(true),
-        throwsA(
-          isA<MediaError>().having(
-            (error) => error.code,
-            'code',
-            MediaErrorCode.unsupportedFeature,
-          ),
-        ),
-      );
+      await interactive.setScreenShareEnabled(true);
+      expect(session.snapshot.localScreenShareEnabled, isTrue);
+      expect(engine.calls, contains('screen:start'));
       await expectLater(
         interactive.sendMessage(List.filled(1000, 'x').join()),
         throwsA(
@@ -105,6 +98,26 @@ void main() {
         engine.calls,
         containsAll(['remote:start:u-remote:77', 'remote:stop:u-remote']),
       );
+
+      engineEvents.onUserSubStreamAvailable?.call('u-remote', true);
+      final screenTrack =
+          session.snapshot.contentShareTrack! as TrtcMediaVideoTrack;
+      expect(screenTrack.isScreenShare, isTrue);
+      screenTrack.startRendering(88);
+      screenTrack.stopRendering();
+      expect(
+        engine.calls,
+        containsAll([
+          'remote:sub:start:u-remote:88',
+          'remote:sub:stop:u-remote',
+        ]),
+      );
+      engineEvents.onUserSubStreamAvailable?.call('u-remote', false);
+      expect(session.snapshot.contentShareTrack, isNull);
+
+      await interactive.setScreenShareEnabled(false);
+      expect(session.snapshot.localScreenShareEnabled, isFalse);
+      expect(engine.calls, contains('screen:stop'));
 
       engineEvents.onRecvCustomCmdMsg?.call(
         'u-remote',
@@ -272,6 +285,20 @@ class _FakeTrtcEngine implements TrtcEngine {
 
   @override
   void stopRemoteView(String userId) => calls.add('remote:stop:$userId');
+
+  @override
+  void startRemoteSubStreamView(String userId, int viewId) =>
+      calls.add('remote:sub:start:$userId:$viewId');
+
+  @override
+  void stopRemoteSubStreamView(String userId) =>
+      calls.add('remote:sub:stop:$userId');
+
+  @override
+  void startScreenCapture() => calls.add('screen:start');
+
+  @override
+  void stopScreenCapture() => calls.add('screen:stop');
 
   @override
   int switchCamera(bool frontCamera) {

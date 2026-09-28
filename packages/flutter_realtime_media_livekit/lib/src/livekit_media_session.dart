@@ -4,10 +4,16 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:livekit_client/livekit_client.dart' as lk;
 
 import 'livekit_join_info.dart';
 import 'livekit_media_track.dart';
+
+const _androidScreenShareChannel = MethodChannel(
+  'flutter_realtime_media_livekit/screen_share',
+);
 
 MediaCapabilities _capabilitiesForRole(MediaRole role) {
   final canSelectAudioInput =
@@ -73,6 +79,7 @@ abstract class LiveKitMediaSessionBase
   Future<void>? _joinFuture;
   Future<void>? _leaveFuture;
   Future<void>? _disposeFuture;
+  bool _androidScreenShareServiceStarted = false;
 
   final StreamController<MediaSessionState> _stateController =
       StreamController<MediaSessionState>.broadcast();
@@ -648,6 +655,9 @@ abstract class LiveKitMediaSessionBase
       room.remoteParticipants.values.map(_mapRemoteParticipant),
     );
     final screenShare = _findScreenShare(room);
+    final localScreenShareEnabled =
+        local?.getTrackPublicationBySource(lk.TrackSource.screenShareVideo) !=
+        null;
     _replaceSnapshot(
       MediaSnapshot(
         state: _snapshot.state,
@@ -657,6 +667,7 @@ abstract class LiveKitMediaSessionBase
         localParticipantId: local?.identity ?? _joinInfo?.participantId,
         localMuted: local?.isMuted ?? true,
         localVideoEnabled: local?.isCameraEnabled() ?? false,
+        localScreenShareEnabled: localScreenShareEnabled,
         contentShareTrack: screenShare,
         capabilities: _capabilities,
         lastError: clearLastError ? null : _snapshot.lastError,
@@ -808,12 +819,39 @@ abstract class LiveKitMediaSessionBase
   }
 
   Future<void> _tearDownRoom() async {
+    await _stopAndroidScreenShareService();
     final listener = _listener;
     _listener = null;
     if (listener != null) await listener.dispose();
     final room = _room;
     _room = null;
     if (room != null && !room.isDisposed) await room.dispose();
+  }
+
+  Future<void> _prepareAndroidScreenShare() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+
+    final permissionGranted = await rtc.Helper.requestCapturePermission();
+    if (!permissionGranted) {
+      throw MediaError(
+        code: MediaErrorCode.permissionDenied,
+        message: 'Screen-capture permission was denied.',
+        providerId: providerId,
+      );
+    }
+
+    await _androidScreenShareChannel.invokeMethod<void>('start');
+    _androidScreenShareServiceStarted = true;
+  }
+
+  Future<void> _stopAndroidScreenShareService() async {
+    if (!_androidScreenShareServiceStarted ||
+        kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    _androidScreenShareServiceStarted = false;
+    await _androidScreenShareChannel.invokeMethod<void>('stop');
   }
 
   MediaError _mapError(Object error, String fallbackMessage) {
@@ -873,10 +911,27 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
   Future<void> setScreenShareEnabled(bool enabled) async {
     _ensureActive();
     if (!capabilities.canScreenShare) _unsupported('screen sharing');
+    var androidServicePrepared = false;
     try {
-      await _requireLocalParticipant().setScreenShareEnabled(enabled);
+      if (enabled) {
+        await _prepareAndroidScreenShare();
+        androidServicePrepared = _androidScreenShareServiceStarted;
+      }
+      await _requireLocalParticipant().setScreenShareEnabled(
+        enabled,
+        screenShareCaptureOptions: !kIsWeb &&
+                defaultTargetPlatform == TargetPlatform.iOS
+            ? const lk.ScreenShareCaptureOptions(
+                useiOSBroadcastExtension: false,
+              )
+            : null,
+      );
       _refreshSnapshot();
+      if (!enabled) await _stopAndroidScreenShareService();
     } catch (error) {
+      if (enabled && androidServicePrepared) {
+        await _stopAndroidScreenShareService();
+      }
       throw _mapError(error, 'Unable to change LiveKit screen-share state.');
     }
   }

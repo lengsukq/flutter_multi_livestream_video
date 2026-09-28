@@ -89,7 +89,7 @@ void main() {
       expect(host.capabilities.canPublishVideo, isTrue);
       expect(host.capabilities.canSendData, isTrue);
       expect(host.capabilities.canReceiveData, isTrue);
-      expect(host.capabilities.canScreenShare, isFalse);
+      expect(host.capabilities.canScreenShare, isTrue);
       expect(host.capabilities.canEnumerateAudioDevices, isFalse);
       expect(host.capabilities.canReportNetworkStats, isTrue);
       expect(host.capabilities.maxDataMessageBytes, 1024);

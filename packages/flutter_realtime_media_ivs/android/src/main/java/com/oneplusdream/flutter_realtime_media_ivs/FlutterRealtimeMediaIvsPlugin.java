@@ -3,6 +3,7 @@ package com.oneplusdream.flutter_realtime_media_ivs;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.Manifest;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
@@ -206,6 +207,7 @@ public final class FlutterRealtimeMediaIvsPlugin
         final String role = requireString(call, "role");
         shouldPublish = !"viewer".equals(role);
         connectedOnce = false;
+        ensurePublishPermissions();
         prepareLocalStreams();
 
         final Stage.Strategy strategy = new Stage.Strategy() {
@@ -239,6 +241,21 @@ public final class FlutterRealtimeMediaIvsPlugin
         stage = new Stage(requireContext(), token, strategy);
         stage.addRenderer(this);
         stage.join();
+    }
+
+    private void ensurePublishPermissions() {
+        if (!shouldPublish) return;
+        final Context context = requireContext();
+        if (context.checkSelfPermission(Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            throw new SecurityException(
+                    "Camera permission is required before joining IVS as a publisher.");
+        }
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            throw new SecurityException(
+                    "Microphone permission is required before joining IVS as a publisher.");
+        }
     }
 
     private void prepareLocalStreams() {

@@ -627,6 +627,9 @@
   function createIvsSession(session) {
     const info = providerBlock(session, 'ivs');
     const sdk = global.IVSBroadcastClient;
+    if (!sdk?.Stage || !sdk?.LocalStageStream) {
+      throw new Error('Amazon IVS Web Broadcast SDK is unavailable in this browser build.');
+    }
     const canPublish = session.role !== 'viewer' && info.capabilities?.includes('PUBLISH');
     const localStreams = [];
     const remoteStreams = new Map();
@@ -637,7 +640,8 @@
     });
     stage.on(StageEvents.CONNECTION, (state) => {
       if (state === sdk.StageConnectionState.CONNECTED) emitState(session, 'connected');
-      else if (state === sdk.StageConnectionState.DISCONNECTED) emitState(session, 'reconnecting');
+      else if (state === sdk.StageConnectionState.CONNECTING) emitState(session, 'connecting');
+      else if (state === sdk.StageConnectionState.DISCONNECTED) emitState(session, 'disconnected');
     });
     stage.on(StageEvents.JOINED, (participant) => { addParticipant(session, participant.userId || participant.id, participant.userInfo?.displayName, participant.isLocal); publishSnapshot(session); });
     stage.on(StageEvents.LEFT, (participant) => removeParticipant(session, participant.userId || participant.id));
@@ -673,6 +677,9 @@
     session.driver = {
       async join() {
         if (canPublish) {
+          if (!navigator.mediaDevices?.getUserMedia) {
+            throw new Error('This browser cannot access camera or microphone media devices.');
+          }
           const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
           for (const track of media.getTracks()) {
             const localStream = new sdk.LocalStageStream(track);

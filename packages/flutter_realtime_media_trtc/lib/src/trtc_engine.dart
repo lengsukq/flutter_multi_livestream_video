@@ -22,6 +22,10 @@ abstract interface class TrtcEngine {
   void clearLocalView();
   void startRemoteView(String userId, int viewId);
   void stopRemoteView(String userId);
+  void startRemoteSubStreamView(String userId, int viewId);
+  void stopRemoteSubStreamView(String userId);
+  void startScreenCapture();
+  void stopScreenCapture();
   int switchCamera(bool frontCamera);
   bool sendCustomCmdMsg(int commandId, String data);
   Future<void> dispose();
@@ -34,6 +38,7 @@ class TrtcEngineEvents {
     this.onRemoteUserEnterRoom,
     this.onRemoteUserLeaveRoom,
     this.onUserVideoAvailable,
+    this.onUserSubStreamAvailable,
     this.onUserAudioAvailable,
     this.onRecvCustomCmdMsg,
     this.onConnectionLost,
@@ -46,6 +51,7 @@ class TrtcEngineEvents {
   final void Function(String userId)? onRemoteUserEnterRoom;
   final void Function(String userId)? onRemoteUserLeaveRoom;
   final void Function(String userId, bool available)? onUserVideoAvailable;
+  final void Function(String userId, bool available)? onUserSubStreamAvailable;
   final void Function(String userId, bool available)? onUserAudioAvailable;
   final void Function(String userId, int commandId, String data)?
   onRecvCustomCmdMsg;
@@ -89,6 +95,8 @@ class _NativeTrtcEngine implements TrtcEngine {
         _events.onRemoteUserLeaveRoom?.call(userId),
     onUserVideoAvailable: (userId, available) =>
         _events.onUserVideoAvailable?.call(userId, available),
+    onUserSubStreamAvailable: (userId, available) =>
+        _events.onUserSubStreamAvailable?.call(userId, available),
     onUserAudioAvailable: (userId, available) =>
         _events.onUserAudioAvailable?.call(userId, available),
     onRecvCustomCmdMsg: (userId, commandId, _, data) =>
@@ -232,6 +240,30 @@ class _NativeTrtcEngine implements TrtcEngine {
   @override
   void stopRemoteView(String userId) =>
       _cloud?.stopRemoteView(userId, TRTCVideoStreamType.big);
+
+  @override
+  void startRemoteSubStreamView(String userId, int viewId) =>
+      _cloud!.startRemoteView(userId, TRTCVideoStreamType.sub, viewId);
+
+  @override
+  void stopRemoteSubStreamView(String userId) =>
+      _cloud?.stopRemoteView(userId, TRTCVideoStreamType.sub);
+
+  @override
+  void startScreenCapture() {
+    final param = TRTCVideoEncParam(
+      videoResolution: TRTCVideoResolution.res_1280_720,
+      videoResolutionMode: TRTCVideoResolutionMode.landscape,
+      videoBitrate: 1600,
+      videoFps: 10,
+      enableAdjustRes: false,
+    );
+    _cloud!.startScreenCapture(0, TRTCVideoStreamType.sub, param);
+    _cloud!.setSubStreamEncoderParam(param);
+  }
+
+  @override
+  void stopScreenCapture() => _cloud?.stopScreenCapture();
 
   @override
   int switchCamera(bool frontCamera) =>

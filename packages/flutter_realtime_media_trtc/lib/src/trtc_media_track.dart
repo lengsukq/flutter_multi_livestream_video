@@ -7,6 +7,7 @@ class TrtcMediaVideoTrack extends MediaVideoTrack {
     required this.local,
     required this.startRendering,
     required this.stopRendering,
+    this.screenShare = false,
     this.generation = 0,
   });
 
@@ -14,6 +15,7 @@ class TrtcMediaVideoTrack extends MediaVideoTrack {
   final String userId;
 
   final bool local;
+  final bool screenShare;
 
   /// Starts the provider stream in the platform view id supplied by TRTC.
   final void Function(int viewId) startRendering;
@@ -25,7 +27,8 @@ class TrtcMediaVideoTrack extends MediaVideoTrack {
   final int generation;
 
   @override
-  String get id => 'trtc:$userId:camera:$generation';
+  String get id =>
+      'trtc:$userId:${screenShare ? 'screen' : 'camera'}:$generation';
 
   @override
   String get participantId => userId;
@@ -34,7 +37,7 @@ class TrtcMediaVideoTrack extends MediaVideoTrack {
   bool get isLocal => local;
 
   @override
-  bool get isScreenShare => false;
+  bool get isScreenShare => screenShare;
 
   @override
   int get width => 0;

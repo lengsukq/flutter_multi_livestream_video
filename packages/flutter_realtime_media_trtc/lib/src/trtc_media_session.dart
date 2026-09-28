@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'trtc_engine.dart';
@@ -11,6 +13,10 @@ MediaCapabilities _publisherCapabilities(MediaRole role) => MediaCapabilities(
   canPublishAudio: true,
   canPublishVideo: true,
   canSwitchCamera: true,
+  canScreenShare:
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS),
   canSendData: true,
   canReceiveData: true,
   canSubscribeVideo: true,
@@ -41,8 +47,7 @@ class TrtcParticipantSession extends _TrtcInteractiveSession {
   }) : super(MediaRole.participant, engineFactory);
 }
 
-/// TRTC live-stream publisher. Screen sharing and device enumeration are not
-/// part of this adapter's first release.
+/// TRTC live-stream publisher.
 class TrtcHostSession extends _TrtcInteractiveSession
     implements BroadcastHostSession {
   TrtcHostSession({TrtcEngineFactory engineFactory = createNativeTrtcEngine})
@@ -273,6 +278,7 @@ abstract class _TrtcSessionBase
     onRemoteUserEnterRoom: _remoteUserEntered,
     onRemoteUserLeaveRoom: _remoteUserLeft,
     onUserVideoAvailable: _remoteVideoAvailable,
+    onUserSubStreamAvailable: _remoteScreenShareAvailable,
     onUserAudioAvailable: _remoteAudioAvailable,
     onRecvCustomCmdMsg: _messageReceived,
     onConnectionLost: () => _setState(MediaSessionState.reconnecting),
@@ -326,6 +332,7 @@ abstract class _TrtcSessionBase
         _engine!.startLocalAudio();
         _engine!.muteLocalAudio(_snapshot.localMuted);
         if (_snapshot.localVideoEnabled) _engine!.muteLocalVideo(false);
+        if (_snapshot.localScreenShareEnabled) _engine!.startScreenCapture();
       }
       _refreshLocalTrack();
       _setState(MediaSessionState.connected);
@@ -379,6 +386,19 @@ abstract class _TrtcSessionBase
     );
   }
 
+  TrtcMediaVideoTrack _makeScreenShareTrack(String userId) {
+    final engine = _engine!;
+    return TrtcMediaVideoTrack(
+      userId: userId,
+      local: false,
+      screenShare: true,
+      generation: _streamGeneration,
+      startRendering: (viewId) =>
+          engine.startRemoteSubStreamView(userId, viewId),
+      stopRendering: () => engine.stopRemoteSubStreamView(userId),
+    );
+  }
+
   Future<void> _exitCloudRoom() async {
     final engine = _engine;
     if (engine == null || !_enterRequested) return;
@@ -414,11 +434,13 @@ abstract class _TrtcSessionBase
 
   void _remoteUserLeft(String userId) {
     if (_findParticipant(userId) == null) return;
+    final sharedTrack = _snapshot.contentShareTrack;
     _setSnapshot(
       _snapshot.copyWith(
         participants: _snapshot.participants
             .where((item) => item.id != userId)
             .toList(),
+        clearContentShareTrack: sharedTrack?.participantId == userId,
       ),
     );
     _eventController.add(MediaParticipantLeft(participantId: userId));
@@ -428,6 +450,15 @@ abstract class _TrtcSessionBase
         participantId: userId,
       ),
     );
+    if (sharedTrack?.participantId == userId) {
+      _eventController.add(
+        MediaTrackUnpublished(
+          trackId: sharedTrack!.id,
+          participantId: userId,
+          wasScreenShare: true,
+        ),
+      );
+    }
   }
 
   void _remoteVideoAvailable(String userId, bool available) {
@@ -466,6 +497,26 @@ abstract class _TrtcSessionBase
     }
     if (participant == null) return;
     _replaceParticipant(participant.copyWith(isMuted: !available));
+  }
+
+  void _remoteScreenShareAvailable(String userId, bool available) {
+    if (userId == _joinInfo?.userId) return;
+    if (available && _engine != null) {
+      final track = _makeScreenShareTrack(userId);
+      _setSnapshot(_snapshot.copyWith(contentShareTrack: track));
+      _eventController.add(MediaTrackPublished(track));
+      return;
+    }
+    final current = _snapshot.contentShareTrack;
+    if (current?.participantId != userId) return;
+    _setSnapshot(_snapshot.copyWith(clearContentShareTrack: true));
+    _eventController.add(
+      MediaTrackUnpublished(
+        trackId: current!.id,
+        participantId: userId,
+        wasScreenShare: true,
+      ),
+    );
   }
 
   void _messageReceived(String userId, int cmdId, String data) {
@@ -685,6 +736,8 @@ abstract class _TrtcSessionBase
         participants: const [],
         clearLocalParticipantId: true,
         localVideoEnabled: false,
+        localScreenShareEnabled: false,
+        clearContentShareTrack: true,
       ),
     );
     _setState(MediaSessionState.ended);
@@ -778,13 +831,27 @@ abstract class _TrtcInteractiveSession extends _TrtcSessionBase
   }
 
   @override
-  Future<void> setScreenShareEnabled(bool enabled) => Future.error(
-    MediaError(
-      code: MediaErrorCode.unsupportedFeature,
-      message: 'TRTC screen sharing is not supported by this adapter.',
-      providerId: providerId,
-    ),
-  );
+  Future<void> setScreenShareEnabled(bool enabled) async {
+    _requireConnected();
+    if (!capabilities.canScreenShare) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message: 'TRTC screen sharing is supported on Android and iOS only.',
+        providerId: providerId,
+      );
+    }
+    if (_snapshot.localScreenShareEnabled == enabled) return;
+    try {
+      if (enabled) {
+        _engine!.startScreenCapture();
+      } else {
+        _engine!.stopScreenCapture();
+      }
+      _setSnapshot(_snapshot.copyWith(localScreenShareEnabled: enabled));
+    } catch (error) {
+      throw _mapError(error, 'Unable to change TRTC screen-share state.');
+    }
+  }
 
   @override
   Future<void> switchCamera(MediaCameraPosition position) async {
