@@ -7,6 +7,7 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:web/web.dart' as web;
 
 import 'provider_web_bridge.dart';
+import 'provider_web_profile.dart';
 import 'provider_web_track.dart';
 
 class ProviderWebJoinInfo extends MediaJoinInfo {
@@ -22,15 +23,15 @@ class ProviderWebJoinInfo extends MediaJoinInfo {
 
 /// Browser implementation backed by the provider's official JavaScript SDK.
 class ProviderWebSessionFactory implements MediaSessionFactory {
-  const ProviderWebSessionFactory(this.providerId);
+  ProviderWebSessionFactory(this.providerId)
+    : profile = ProviderWebProfile.forProvider(providerId);
 
   @override
   final String providerId;
+  final ProviderWebProfile profile;
 
   @override
-  Set<MediaRole> get supportedRoles => providerId == 'chime'
-      ? const {MediaRole.participant}
-      : const {MediaRole.participant, MediaRole.host, MediaRole.viewer};
+  Set<MediaRole> get supportedRoles => profile.supportedRoles;
 
   @override
   ProviderWebJoinInfo parseJoinInfo(Map<String, dynamic> json) {
@@ -72,7 +73,7 @@ class ProviderWebSessionFactory implements MediaSessionFactory {
   String _participantIdFromPayload(Map<String, dynamic> json) {
     final supplied = json['participantId']?.toString().trim();
     if (supplied != null && supplied.isNotEmpty) return supplied;
-    if (providerId == 'chime') {
+    if (profile.usesChimeAttendeePayload) {
       final attendee = json['attendee'] ?? json['Attendee'];
       if (attendee is Map) {
         final id = (attendee['AttendeeId'] ?? attendee['attendeeId'])
@@ -93,7 +94,7 @@ class ProviderWebSessionFactory implements MediaSessionFactory {
     if (displayName != null && displayName.isNotEmpty) return displayName;
     final nickname = json['nickname']?.toString().trim();
     if (nickname != null && nickname.isNotEmpty) return nickname;
-    if (providerId == 'chime') {
+    if (profile.usesChimeAttendeePayload) {
       final attendee = json['attendee'] ?? json['Attendee'];
       if (attendee is Map) {
         return (attendee['ExternalUserId'] ?? attendee['externalUserId'])
@@ -119,7 +120,7 @@ class ProviderWebSessionFactory implements MediaSessionFactory {
     final sessionId =
         '${providerId}_${DateTime.now().microsecondsSinceEpoch}_'
         '${_nextSessionId++}';
-    final capabilities = _capabilitiesFor(providerId, joinInfo.role);
+    final capabilities = _capabilitiesFor(profile, joinInfo.role);
     return switch (joinInfo.role) {
       MediaRole.participant => ProviderWebParticipantSession(
         providerId: providerId,
@@ -148,20 +149,19 @@ class ProviderWebSessionFactory implements MediaSessionFactory {
 
 int _nextSessionId = 0;
 
-MediaCapabilities _capabilitiesFor(String providerId, MediaRole role) {
+MediaCapabilities _capabilitiesFor(ProviderWebProfile profile, MediaRole role) {
   final isViewer = role == MediaRole.viewer;
-  final isChime = providerId == 'chime';
   final canScreenShare = !isViewer && _browserSupportsScreenShare;
   final canEnumerateDevices = _browserSupportsDeviceEnumeration;
   final canSelectAudioOutput =
-      (providerId == 'agora' || isChime) &&
+      profile.supportsAudioOutputSelection &&
       _browserSupportsAudioOutputSelection;
-  final canReportStats = providerId != 'chime';
-  final canManageParticipants = role == MediaRole.host && !isChime;
+  final canManageParticipants =
+      role == MediaRole.host && profile.canManageParticipants;
   return MediaCapabilities(
     canPublishAudio: !isViewer,
     canPublishVideo: !isViewer,
-    canSwitchCamera: !isViewer && !isChime,
+    canSwitchCamera: !isViewer && profile.canSwitchCamera,
     canScreenShare: canScreenShare,
     canSendData: false,
     canReceiveData: false,
@@ -172,9 +172,9 @@ MediaCapabilities _capabilitiesFor(String providerId, MediaRole role) {
     canSelectMicrophone: !isViewer && canEnumerateDevices,
     canSelectCamera: !isViewer && canEnumerateDevices,
     canSelectAudioOutput: canSelectAudioOutput,
-    canReportNetworkStats: canReportStats,
+    canReportNetworkStats: profile.canReportNetworkStats,
     canListParticipants: role == MediaRole.host,
-    canRemoveParticipants: canManageParticipants && providerId == 'ivs',
+    canRemoveParticipants: canManageParticipants && profile.canRemoveParticipants,
     canCloseRoom: canManageParticipants,
   );
 }
