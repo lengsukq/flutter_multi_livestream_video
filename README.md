@@ -19,6 +19,21 @@ Applications can connect with a direct `ChatJoinInfo`, implement
 `StandaloneChatProvisioner` against any control plane, or use the demo HTTP
 provisioner. Long-lived provider secrets remain server-side.
 
+### Management and moderation
+
+Meeting, Live and Product Chat expose provider-neutral management surfaces.
+Capabilities describe both support and execution location
+(`client`, `backend`, `hybrid`, or `unsupported`) so applications do not
+need provider-name branches. Meeting/Live room owners can list logical
+participants, remove them when the selected provider has a real enforcement
+API, and close the room. Product Chat keeps its own moderation domain:
+IVS Chat currently exposes client-enforced message deletion and user
+disconnection for host credentials, while standalone rooms also expose
+authenticated member listing and room close through the reference control
+plane. Mute, ban, role changes, and similar operations stay explicitly
+unsupported until an adapter can enforce them; the SDK does not emulate them
+with advisory data messages.
+
 ## Core philosophy
 
 This repository follows these architectural rules:

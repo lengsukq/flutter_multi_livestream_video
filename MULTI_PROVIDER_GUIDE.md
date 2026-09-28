@@ -18,6 +18,30 @@ Chat Provider selection is independent from Media Provider selection. The same
 provisioner. RTC Data remains a media data-channel/debug capability and is not
 treated as Product Chat.
 
+### Management capability model
+
+Management is resolved as `Provider × Mode × Role × Capability`. Media and
+Chat moderation remain separate contracts even when the high-level Realtime
+SDK exposes both on one room. Each management capability carries an execution
+mode: `client`, `backend`, `hybrid`, or `unsupported`, plus an optional
+reason for UI help text. The demo server is only the reference control plane
+for operations that require server authority.
+
+Current enforced baseline:
+
+- Meeting: logical owner member list and room close; provider-enforced kick
+  where the media provider exposes it.
+- Live: host member list, provider-enforced kick where available, and room
+  close without treating broadcast viewers as meeting participants.
+- Attached Chat: provider-native moderation such as IVS Chat delete/disconnect
+  when the issued host token contains those capabilities.
+- Standalone Chat: the same ChatSession UI/functions, plus authenticated member
+  list and provider room close. Public join requests cannot self-promote to
+  host.
+
+`kick/remove` is not `ban`, and remote mute is not reported as supported
+when a provider can only send an advisory message.
+
 ## Package layout
 
 ```text
