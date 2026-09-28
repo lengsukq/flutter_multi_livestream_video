@@ -135,6 +135,33 @@ class MediaRoomSession {
         participantCredential: participantCredential,
       );
 
+  Future<void> muteParticipant(String targetParticipantId) =>
+      _requireModeration('mute room participants').muteParticipant(
+        roomCode,
+        requesterParticipantId: participantId,
+        targetParticipantId: targetParticipantId,
+        participantCredential: participantCredential,
+      );
+
+  Future<void> stopParticipantVideo(String targetParticipantId) =>
+      _requireModeration('stop participant video').stopParticipantVideo(
+        roomCode,
+        requesterParticipantId: participantId,
+        targetParticipantId: targetParticipantId,
+        participantCredential: participantCredential,
+      );
+
+  Future<void> changeParticipantRole(
+    String targetParticipantId,
+    MediaRole role,
+  ) => _requireModeration('change participant role').changeParticipantRole(
+    roomCode,
+    requesterParticipantId: participantId,
+    targetParticipantId: targetParticipantId,
+    role: role,
+    participantCredential: participantCredential,
+  );
+
   /// Removes a participant when the backend/provider supports true moderation.
   Future<void> removeParticipant(String targetParticipantId) =>
       _requireManagement('remove room participants').removeParticipant(
@@ -379,6 +406,17 @@ class MediaRoomSession {
       message:
           'Cannot $operation because this room was joined without a room '
           'management executor.',
+      providerId: providerId,
+    );
+  }
+
+  MediaRoomModeration _requireModeration(String operation) {
+    final management = _management;
+    if (management is MediaRoomModeration) return management;
+    throw MediaError(
+      code: MediaErrorCode.unsupportedFeature,
+      message:
+          'Cannot $operation because this room has no advanced moderation executor.',
       providerId: providerId,
     );
   }

@@ -1,3 +1,5 @@
+import 'media_management_capability.dart';
+
 /// Feature declaration for a session.
 ///
 /// Adapters advertise what they actually implement instead of pretending every
@@ -27,6 +29,7 @@ class MediaCapabilities {
     this.canListParticipants = false,
     this.canRemoveParticipants = false,
     this.canCloseRoom = false,
+    this.management,
     this.maxVideoSubscriptions,
   });
 
@@ -89,6 +92,21 @@ class MediaCapabilities {
   final bool canListParticipants;
   final bool canRemoveParticipants;
   final bool canCloseRoom;
+  final MediaManagementCapabilities? management;
+
+  MediaManagementCapabilities get managementCapabilities =>
+      management ??
+      MediaManagementCapabilities(
+        listParticipants: canListParticipants
+            ? const ManagementCapability.backend()
+            : const ManagementCapability.unsupported(),
+        removeParticipant: canRemoveParticipants
+            ? const ManagementCapability.backend()
+            : const ManagementCapability.unsupported(),
+        closeRoom: canCloseRoom
+            ? const ManagementCapability.backend()
+            : const ManagementCapability.unsupported(),
+      );
 
   /// Provider limit on simultaneous video subscriptions, when it exposes one.
   final int? maxVideoSubscriptions;
@@ -115,6 +133,7 @@ class MediaCapabilities {
     bool? canListParticipants,
     bool? canRemoveParticipants,
     bool? canCloseRoom,
+    MediaManagementCapabilities? management,
     int? maxVideoSubscriptions,
   }) => MediaCapabilities(
     canPublishAudio: canPublishAudio ?? this.canPublishAudio,
@@ -140,6 +159,7 @@ class MediaCapabilities {
     canListParticipants: canListParticipants ?? this.canListParticipants,
     canRemoveParticipants: canRemoveParticipants ?? this.canRemoveParticipants,
     canCloseRoom: canCloseRoom ?? this.canCloseRoom,
+    management: management ?? this.management,
     maxVideoSubscriptions: maxVideoSubscriptions ?? this.maxVideoSubscriptions,
   );
 

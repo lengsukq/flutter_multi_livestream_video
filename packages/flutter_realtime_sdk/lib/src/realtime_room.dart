@@ -9,6 +9,7 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'realtime_error.dart';
 import 'realtime_event.dart';
 import 'realtime_room_state.dart';
+import 'realtime_moderation.dart';
 
 /// A fully resolved room containing media, rendering and optional chat.
 class RealtimeRoom {
@@ -72,6 +73,10 @@ class RealtimeRoom {
   );
   Stream<RealtimeRoomState> get states => _stateController.stream;
   Stream<RealtimeEvent> get events => _eventController.stream;
+  RealtimeMediaModeration get mediaModeration => RealtimeMediaModeration(media);
+  RealtimeChatModeration? get chatModeration => chat == null
+      ? null
+      : RealtimeChatModeration(chat!, _productChatRoom?.moderation);
 
   void _onMediaEvent(MediaEvent event) {
     if (_disposed) return;

@@ -1,3 +1,5 @@
+import 'chat_management_capability.dart';
+
 class ChatCapabilities {
   const ChatCapabilities({
     this.canSendMessage = false,
@@ -6,6 +8,7 @@ class ChatCapabilities {
     this.canStandalone = true,
     this.canReconnect = true,
     this.canLoadHistory = false,
+    this.management,
   });
 
   const ChatCapabilities.none()
@@ -14,7 +17,8 @@ class ChatCapabilities {
       canDisconnectUser = false,
       canStandalone = false,
       canReconnect = false,
-      canLoadHistory = false;
+      canLoadHistory = false,
+      management = null;
 
   final bool canSendMessage;
   final bool canDeleteMessage;
@@ -22,4 +26,16 @@ class ChatCapabilities {
   final bool canStandalone;
   final bool canReconnect;
   final bool canLoadHistory;
+  final ChatManagementCapabilities? management;
+
+  ChatManagementCapabilities get managementCapabilities =>
+      management ??
+      ChatManagementCapabilities(
+        removeMember: canDisconnectUser
+            ? const ChatManagementCapability.client()
+            : const ChatManagementCapability.unsupported(),
+        deleteMessage: canDeleteMessage
+            ? const ChatManagementCapability.client()
+            : const ChatManagementCapability.unsupported(),
+      );
 }

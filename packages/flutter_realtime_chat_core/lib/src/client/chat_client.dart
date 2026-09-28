@@ -67,11 +67,11 @@ class ChatClient {
     );
     return connect(
       joinInfo,
-      credentialProvider: () => controller.join(
+      credentialProvider: () => controller.provision(
         roomCode: joinInfo.roomCode,
-        userId: joinInfo.userId,
-        displayName: joinInfo.displayName,
-        role: joinInfo.role,
+        participantId: joinInfo.participantId,
+        participantCredential: joinInfo.json['participantCredential']
+            ?.toString(),
       ),
     );
   }
@@ -114,6 +114,11 @@ class ChatClient {
         userId: joinInfo.userId,
         role: joinInfo.role,
         session: session,
+        moderation: provisioner is StandaloneChatModerationProvider
+            ? (provisioner as StandaloneChatModerationProvider).moderationFor(
+                joinInfo,
+              )
+            : null,
       );
     } catch (_) {
       await session.dispose();

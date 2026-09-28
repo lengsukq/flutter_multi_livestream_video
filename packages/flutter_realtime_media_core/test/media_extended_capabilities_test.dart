@@ -3,6 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('extended SDK capabilities', () {
+    test('legacy room management flags map to backend execution', () {
+      const capabilities = MediaCapabilities(
+        canListParticipants: true,
+        canRemoveParticipants: true,
+        canCloseRoom: true,
+      );
+      expect(
+        capabilities.managementCapabilities.listParticipants.execution,
+        ManagementExecution.backend,
+      );
+      expect(capabilities.managementCapabilities.removeParticipant.supported, isTrue);
+      expect(capabilities.managementCapabilities.muteParticipant.supported, isFalse);
+    });
     test('device helpers filter and select provider-neutral devices', () async {
       final session = _ExtendedSession();
 

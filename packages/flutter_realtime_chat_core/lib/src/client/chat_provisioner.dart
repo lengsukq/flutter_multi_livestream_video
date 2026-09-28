@@ -1,6 +1,7 @@
 import '../session/chat_join_info.dart';
 import '../model/chat_role.dart';
 import '../model/chat_room_context.dart';
+import '../session/chat_moderation.dart';
 
 /// Resolves short-lived chat credentials without prescribing HTTP or a
 /// particular backend language/runtime.
@@ -10,6 +11,10 @@ abstract interface class ChatProvisioner {
     required String participantId,
     String? participantCredential,
   });
+}
+
+abstract interface class StandaloneChatModerationProvider {
+  ChatModeration moderationFor(ChatJoinInfo joinInfo);
 }
 
 /// Optional control-plane contract for chat rooms that exist independently

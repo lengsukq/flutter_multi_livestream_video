@@ -7,6 +7,7 @@ import '../model/chat_error.dart';
 import '../model/chat_role.dart';
 import '../model/chat_room_context.dart';
 import '../session/chat_join_info.dart';
+import '../session/chat_moderation.dart';
 import 'chat_backend_config.dart';
 import 'chat_provisioner.dart';
 
@@ -25,7 +26,8 @@ class ChatBackendJoinResponse {
   final Map<String, dynamic> json;
 }
 
-class HttpStandaloneChatProvisioner implements StandaloneChatProvisioner {
+class HttpStandaloneChatProvisioner
+    implements StandaloneChatProvisioner, StandaloneChatModerationProvider {
   HttpStandaloneChatProvisioner(ChatBackendConfig config)
     : _backend = ChatBackendClient(config);
 
@@ -42,15 +44,29 @@ class HttpStandaloneChatProvisioner implements StandaloneChatProvisioner {
       'POST',
       '/chat/rooms',
       body: {
+        'userId': userId,
+        'displayName': displayName,
         if (roomCode != null && roomCode.trim().isNotEmpty)
           'roomCode': roomCode.trim(),
       },
     );
-    return join(
+    final providerId =
+        created['chatProvider']?.toString().trim().toLowerCase() ?? '';
+    if (providerId.isEmpty) {
+      throw const ChatError(
+        code: ChatErrorCode.invalidJoinInfo,
+        message: 'Standalone chat create response is missing chatProvider.',
+      );
+    }
+    return ChatJoinInfo(
+      providerId: providerId,
       roomCode: created['roomCode']?.toString() ?? '',
-      userId: userId,
-      displayName: displayName,
-      role: role,
+      participantId: created['participantId']?.toString() ?? userId,
+      userId: created['userId']?.toString() ?? userId,
+      displayName: created['displayName']?.toString() ?? displayName,
+      role: ChatRole.tryParse(created['role']) ?? ChatRole.host,
+      json: created,
+      context: ChatRoomContext.standalone,
     );
   }
 
@@ -70,7 +86,8 @@ class HttpStandaloneChatProvisioner implements StandaloneChatProvisioner {
         'role': role.wireName,
       },
     );
-    final providerId = data['chatProvider']?.toString().trim().toLowerCase() ?? '';
+    final providerId =
+        data['chatProvider']?.toString().trim().toLowerCase() ?? '';
     if (providerId.isEmpty) {
       throw const ChatError(
         code: ChatErrorCode.invalidJoinInfo,
@@ -94,27 +111,125 @@ class HttpStandaloneChatProvisioner implements StandaloneChatProvisioner {
     required String roomCode,
     required String participantId,
     String? participantCredential,
-  }) => join(
-    roomCode: roomCode,
-    userId: participantId,
-    displayName: participantId,
-  );
+  }) async {
+    final data = await _backend._request(
+      'POST',
+      '/chat/rooms/${Uri.encodeComponent(roomCode.trim())}/credentials',
+      body: {
+        'participantId': participantId,
+        if (participantCredential != null)
+          'participantCredential': participantCredential,
+      },
+    );
+    final providerId =
+        data['chatProvider']?.toString().trim().toLowerCase() ?? '';
+    return ChatJoinInfo(
+      providerId: providerId,
+      roomCode: data['roomCode']?.toString() ?? roomCode,
+      participantId: data['participantId']?.toString() ?? participantId,
+      userId: data['userId']?.toString() ?? participantId,
+      displayName: data['displayName']?.toString() ?? participantId,
+      role: ChatRole.tryParse(data['role']) ?? ChatRole.participant,
+      json: data,
+      context: ChatRoomContext.standalone,
+    );
+  }
 
   @override
   Future<List<ChatRoomSummary>> listRooms() async {
     final data = await _backend._request('GET', '/chat/rooms');
     final raw = data['rooms'];
     if (raw is! List) return const [];
-    return raw.whereType<Map>().map((item) {
-      final map = Map<String, dynamic>.from(item);
-      return ChatRoomSummary(
-        roomCode: map['roomCode']?.toString() ?? '',
-        providerId: map['chatProvider']?.toString() ?? '',
-      );
-    }).where((room) => room.roomCode.isNotEmpty).toList(growable: false);
+    return raw
+        .whereType<Map>()
+        .map((item) {
+          final map = Map<String, dynamic>.from(item);
+          return ChatRoomSummary(
+            roomCode: map['roomCode']?.toString() ?? '',
+            providerId: map['chatProvider']?.toString() ?? '',
+          );
+        })
+        .where((room) => room.roomCode.isNotEmpty)
+        .toList(growable: false);
   }
 
   void dispose() => _backend.dispose();
+
+  @override
+  ChatModeration moderationFor(ChatJoinInfo joinInfo) =>
+      _HttpStandaloneChatModeration(_backend, joinInfo);
+}
+
+class _HttpStandaloneChatModeration implements ChatModeration {
+  const _HttpStandaloneChatModeration(this.backend, this.joinInfo);
+  final ChatBackendClient backend;
+  final ChatJoinInfo joinInfo;
+
+  Map<String, Object?> get _auth => {
+    'requesterParticipantId': joinInfo.participantId,
+    'participantCredential': joinInfo.json['participantCredential']?.toString(),
+  };
+
+  @override
+  Future<List<ChatMember>> listMembers() async {
+    final data = await backend._request(
+      'POST',
+      '/chat/rooms/${Uri.encodeComponent(joinInfo.roomCode)}/members',
+      body: _auth,
+    );
+    final raw = data['members'];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((value) {
+          final item = Map<String, dynamic>.from(value);
+          return ChatMember(
+            userId: item['userId']?.toString() ?? '',
+            displayName: item['displayName']?.toString() ?? '',
+            role: ChatRole.tryParse(item['role']) ?? ChatRole.participant,
+          );
+        })
+        .where((member) => member.userId.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> removeMember(String userId) =>
+      _unsupported('server-enforced member removal');
+  @override
+  Future<void> closeRoom() => _post('close');
+
+  @override
+  Future<void> banMember(String userId, {required bool banned}) =>
+      _unsupported('ban/unban members');
+  @override
+  Future<void> muteMember(String userId, {required bool muted}) =>
+      _unsupported('mute/unmute members');
+  @override
+  Future<void> recallMessage(String messageId) =>
+      _unsupported('recall messages through the control plane');
+  @override
+  Future<void> changeMemberRole(String userId, ChatRole role) =>
+      _unsupported('change member roles');
+
+  Future<void> _post(
+    String operation, [
+    Map<String, Object?> extra = const {},
+  ]) async {
+    await backend._request(
+      'POST',
+      '/chat/rooms/${Uri.encodeComponent(joinInfo.roomCode)}/manage/$operation',
+      body: {..._auth, ...extra},
+    );
+  }
+
+  Future<void> _unsupported(String operation) => Future<void>.error(
+    ChatError(
+      code: ChatErrorCode.unsupportedFeature,
+      message: 'The selected chat provider does not support $operation.',
+      providerId: joinInfo.providerId,
+    ),
+  );
 }
 
 class ChatBackendClient {

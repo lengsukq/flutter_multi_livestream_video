@@ -1,5 +1,6 @@
 import '../model/chat_role.dart';
 import 'chat_session.dart';
+import 'chat_moderation.dart';
 
 class ChatRoomSession {
   ChatRoomSession({
@@ -8,6 +9,7 @@ class ChatRoomSession {
     required this.userId,
     required this.role,
     required this.session,
+    this.moderation,
   });
 
   final String roomCode;
@@ -15,6 +17,7 @@ class ChatRoomSession {
   final String userId;
   final ChatRole role;
   final ChatSession session;
+  final ChatModeration? moderation;
 
   Future<void> dispose() => session.dispose();
 }

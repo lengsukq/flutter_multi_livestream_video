@@ -124,6 +124,18 @@ class _FakeFactory extends ChatSessionFactory {
 }
 
 void main() {
+  test('legacy chat moderation flags map to typed execution capabilities', () {
+    const capabilities = ChatCapabilities(
+      canDeleteMessage: true,
+      canDisconnectUser: true,
+    );
+    expect(
+      capabilities.managementCapabilities.deleteMessage.execution,
+      ChatManagementExecution.client,
+    );
+    expect(capabilities.managementCapabilities.removeMember.supported, isTrue);
+    expect(capabilities.managementCapabilities.banMember.supported, isFalse);
+  });
   test('chat token request carries the participant credential proof', () async {
     late Map<String, dynamic> requestBody;
     final backend = ChatBackendClient(

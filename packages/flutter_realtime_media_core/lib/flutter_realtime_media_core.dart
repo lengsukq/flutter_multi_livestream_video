@@ -24,6 +24,7 @@ export 'src/model/media_device.dart';
 export 'src/model/media_error.dart';
 export 'src/model/media_feature.dart';
 export 'src/model/media_identity.dart';
+export 'src/model/media_management_capability.dart';
 export 'src/model/media_event.dart';
 export 'src/model/media_message.dart';
 export 'src/model/media_participant.dart';
