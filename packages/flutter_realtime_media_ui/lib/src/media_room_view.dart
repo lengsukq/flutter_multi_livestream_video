@@ -3,11 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
-typedef MediaParticipantBuilder = Widget Function(
-  BuildContext context,
-  MediaParticipant participant,
-  MediaTrackRenderer renderer,
-);
+import 'media_provider_label.dart';
+
+typedef MediaParticipantBuilder =
+    Widget Function(
+      BuildContext context,
+      MediaParticipant participant,
+      MediaTrackRenderer renderer,
+    );
 
 class MediaRoomViewConfig {
   const MediaRoomViewConfig({
@@ -74,26 +77,28 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   Future<void> _leave() async {
     var leave = true;
     if (widget.config.confirmBeforeLeave) {
-      leave = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Leave Meeting?'),
-          content: const Text('Are you sure you want to disconnect?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+      leave =
+          await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Leave Meeting?'),
+              content: const Text('Are you sure you want to disconnect?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFDC2626),
+                  ),
+                  child: const Text('Leave'),
+                ),
+              ],
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
-              ),
-              child: const Text('Leave'),
-            ),
-          ],
-        ),
-      ) ?? false;
+          ) ??
+          false;
     }
     if (!leave) return;
     await widget.room.dispose();
@@ -125,9 +130,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               _topBar(value),
               if (_error != null) _errorView(),
               Expanded(
-                child: value.participants.isEmpty
-                    ? _waiting()
-                    : _grid(value),
+                child: value.participants.isEmpty ? _waiting() : _grid(value),
               ),
               if (value.contentShareTrack != null) _screenShare(value),
               if (_chatOpen) _chat(),
@@ -148,46 +151,46 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
       ),
-      child: Row(children: [
-        _iconButton(Icons.arrow_back_ios_new_rounded, _leave),
-        const SizedBox(width: 10),
-        InkWell(
-          onTap: _copyCode,
-          child: _badge(
-            widget.room.roomCode,
-            _copied ? Icons.check_rounded : Icons.copy_rounded,
+      child: Row(
+        children: [
+          _iconButton(Icons.arrow_back_ios_new_rounded, _leave),
+          const SizedBox(width: 10),
+          InkWell(
+            onTap: _copyCode,
+            child: _badge(
+              widget.room.roomCode,
+              _copied ? Icons.check_rounded : Icons.copy_rounded,
+            ),
           ),
-        ),
-        if (widget.config.showProvider) ...[
+          if (widget.config.showProvider) ...[
+            const SizedBox(width: 8),
+            _providerBadge(widget.room.providerId),
+          ],
+          const Spacer(),
+          _badge('$mm:$ss', Icons.circle),
           const SizedBox(width: 8),
-          _providerBadge(widget.room.providerId),
+          _badge('${value.participants.length}', Icons.people_outline_rounded),
         ],
-        const Spacer(),
-        _badge('$mm:$ss', Icons.circle),
-        const SizedBox(width: 8),
-        _badge('${value.participants.length}', Icons.people_outline_rounded),
-      ]),
+      ),
     );
   }
 
   Widget _providerBadge(String id) {
-    final label = switch (id) {
-      'artc' => 'Alibaba Cloud ARTC',
-      'livekit' => 'LiveKit',
-      'agora' => 'Agora',
-      'trtc' => 'Tencent TRTC',
-      'chime' => 'Chime',
-      _ => id,
-    };
+    final label = mediaProviderDisplayName(id);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: const Color(0xFFEEF2FF),
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Text(label, style: const TextStyle(
-        color: Color(0xFF4F46E5), fontSize: 10.5, fontWeight: FontWeight.w700,
-      )),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF4F46E5),
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 
@@ -197,11 +200,17 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       color: const Color(0xFFF1F5F9),
       borderRadius: BorderRadius.circular(10),
     ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-      const SizedBox(width: 5),
-      Icon(icon, size: 12, color: const Color(0xFF64748B)),
-    ]),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          text,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(width: 5),
+        Icon(icon, size: 12, color: const Color(0xFF64748B)),
+      ],
+    ),
   );
 
   Widget _errorView() => Container(
@@ -211,41 +220,55 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       color: const Color(0xFFFEF2F2),
       borderRadius: BorderRadius.circular(10),
     ),
-    child: Row(children: [
-      const Icon(Icons.error_outline, size: 16, color: Color(0xFFDC2626)),
-      const SizedBox(width: 8),
-      Expanded(child: Text(_error!, style: const TextStyle(
-        fontSize: 12, color: Color(0xFFB91C1C),
-      ))),
-    ]),
+    child: Row(
+      children: [
+        const Icon(Icons.error_outline, size: 16, color: Color(0xFFDC2626)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _error!,
+            style: const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+          ),
+        ),
+      ],
+    ),
   );
 
   Widget _waiting() => Center(
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Container(
-        width: 84,
-        height: 84,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle, color: Color(0xFFEEF2FF),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 84,
+          height: 84,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Color(0xFFEEF2FF),
+          ),
+          child: const Icon(
+            Icons.wifi_tethering_rounded,
+            size: 34,
+            color: Color(0xFF4F46E5),
+          ),
         ),
-        child: const Icon(
-          Icons.wifi_tethering_rounded, size: 34, color: Color(0xFF4F46E5),
+        const SizedBox(height: 20),
+        const Text(
+          "You're the only one here",
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
-      ),
-      const SizedBox(height: 20),
-      const Text("You're the only one here", style: TextStyle(
-        fontSize: 18, fontWeight: FontWeight.w700,
-      )),
-      const SizedBox(height: 6),
-      const Text('Share the room code to start streaming',
-        style: TextStyle(color: Color(0xFF64748B))),
-      const SizedBox(height: 16),
-      FilledButton.icon(
-        onPressed: _copyCode,
-        icon: Icon(_copied ? Icons.check_rounded : Icons.copy_rounded),
-        label: Text(_copied ? 'Copied' : 'Copy ${widget.room.roomCode}'),
-      ),
-    ]),
+        const SizedBox(height: 6),
+        const Text(
+          'Share the room code to start streaming',
+          style: TextStyle(color: Color(0xFF64748B)),
+        ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: _copyCode,
+          icon: Icon(_copied ? Icons.check_rounded : Icons.copy_rounded),
+          label: Text(_copied ? 'Copied' : 'Copy ${widget.room.roomCode}'),
+        ),
+      ],
+    ),
   );
 
   Widget _grid(MediaSnapshot value) => LayoutBuilder(
@@ -268,10 +291,14 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         itemBuilder: (context, index) {
           final participant = value.participants[index];
           return widget.participantBuilder?.call(
-            context, participant, widget.renderer,
-          ) ?? MediaParticipantTile(
-            participant: participant, renderer: widget.renderer,
-          );
+                context,
+                participant,
+                widget.renderer,
+              ) ??
+              MediaParticipantTile(
+                participant: participant,
+                renderer: widget.renderer,
+              );
         },
       );
     },
@@ -288,14 +315,16 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     child: ClipRRect(
       borderRadius: BorderRadius.circular(15),
       child: MediaTrackView(
-        renderer: widget.renderer, track: value.contentShareTrack,
+        renderer: widget.renderer,
+        track: value.contentShareTrack,
       ),
     ),
   );
 
   Widget _chat() {
     final messenger = session is MediaDataMessenger
-        ? session as MediaDataMessenger : null;
+        ? session as MediaDataMessenger
+        : null;
     if (messenger == null) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -305,20 +334,24 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Row(children: [
-        Expanded(child: TextField(
-          controller: _message,
-          decoration: const InputDecoration(
-            hintText: 'Type a message to participants…',
-            border: InputBorder.none,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _message,
+              decoration: const InputDecoration(
+                hintText: 'Type a message to participants…',
+                border: InputBorder.none,
+              ),
+              onSubmitted: (_) => _send(messenger),
+            ),
           ),
-          onSubmitted: (_) => _send(messenger),
-        )),
-        IconButton(
-          onPressed: () => _send(messenger),
-          icon: const Icon(Icons.arrow_upward_rounded),
-        ),
-      ]),
+          IconButton(
+            onPressed: () => _send(messenger),
+            icon: const Icon(Icons.arrow_upward_rounded),
+          ),
+        ],
+      ),
     );
   }
 
@@ -332,7 +365,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   Widget _controls(MediaSnapshot value) {
     final interactive = session is InteractiveMediaSession
-        ? session as InteractiveMediaSession : null;
+        ? session as InteractiveMediaSession
+        : null;
     final caps = value.capabilities;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 12),
@@ -344,48 +378,58 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          if (interactive != null && caps.canPublishAudio)
-            _control(
-              value.localMuted ? Icons.mic_off_outlined : Icons.mic_none_rounded,
-              () => _run(interactive.toggleMute),
-              active: !value.localMuted,
-            ),
-          if (interactive != null && caps.canPublishVideo) ...[
-            const SizedBox(width: 8),
-            _control(
-              value.localVideoEnabled
-                  ? Icons.videocam_outlined : Icons.videocam_off_outlined,
-              () => _run(() => interactive.setVideoEnabled(!value.localVideoEnabled)),
-              active: value.localVideoEnabled,
-            ),
+        child: Row(
+          children: [
+            if (interactive != null && caps.canPublishAudio)
+              _control(
+                value.localMuted
+                    ? Icons.mic_off_outlined
+                    : Icons.mic_none_rounded,
+                () => _run(interactive.toggleMute),
+                active: !value.localMuted,
+              ),
+            if (interactive != null && caps.canPublishVideo) ...[
+              const SizedBox(width: 8),
+              _control(
+                value.localVideoEnabled
+                    ? Icons.videocam_outlined
+                    : Icons.videocam_off_outlined,
+                () => _run(
+                  () => interactive.setVideoEnabled(!value.localVideoEnabled),
+                ),
+                active: value.localVideoEnabled,
+              ),
+            ],
+            if (interactive != null && caps.canSwitchCamera) ...[
+              const SizedBox(width: 8),
+              _control(
+                Icons.cameraswitch_outlined,
+                () => _run(
+                  () => interactive.switchCamera(MediaCameraPosition.back),
+                ),
+              ),
+            ],
+            if (interactive != null && caps.canScreenShare) ...[
+              const SizedBox(width: 8),
+              _control(
+                Icons.screen_share_outlined,
+                () => _run(() => interactive.setScreenShareEnabled(true)),
+              ),
+            ],
+            if (widget.config.showChat &&
+                session is MediaDataMessenger &&
+                caps.canSendData) ...[
+              const SizedBox(width: 8),
+              _control(
+                Icons.chat_bubble_outline_rounded,
+                () => setState(() => _chatOpen = !_chatOpen),
+                active: _chatOpen,
+              ),
+            ],
+            const SizedBox(width: 10),
+            _control(Icons.call_end_rounded, _leave, endCall: true),
           ],
-          if (interactive != null && caps.canSwitchCamera) ...[
-            const SizedBox(width: 8),
-            _control(
-              Icons.cameraswitch_outlined,
-              () => _run(() => interactive.switchCamera(MediaCameraPosition.back)),
-            ),
-          ],
-          if (interactive != null && caps.canScreenShare) ...[
-            const SizedBox(width: 8),
-            _control(
-              Icons.screen_share_outlined,
-              () => _run(() => interactive.setScreenShareEnabled(true)),
-            ),
-          ],
-          if (widget.config.showChat &&
-              session is MediaDataMessenger && caps.canSendData) ...[
-            const SizedBox(width: 8),
-            _control(
-              Icons.chat_bubble_outline_rounded,
-              () => setState(() => _chatOpen = !_chatOpen),
-              active: _chatOpen,
-            ),
-          ],
-          const SizedBox(width: 10),
-          _control(Icons.call_end_rounded, _leave, endCall: true),
-        ]),
+        ),
       ),
     );
   }
@@ -437,63 +481,83 @@ class MediaParticipantTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = participant.displayName.isEmpty
-        ? 'Participant' : participant.displayName;
+        ? 'Participant'
+        : participant.displayName;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: participant.isSpeaking
-              ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+              ? const Color(0xFF10B981)
+              : const Color(0xFFE2E8F0),
           width: participant.isSpeaking ? 2 : 1,
         ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Stack(fit: StackFit.expand, children: [
-          if (participant.videoTrack != null)
-            MediaTrackView(renderer: renderer, track: participant.videoTrack)
-          else
-            Container(
-              color: const Color(0xFFF8FAFC),
-              alignment: Alignment.center,
-              child: CircleAvatar(
-                radius: 29,
-                backgroundColor: const Color(0xFFEEF2FF),
-                child: Text(
-                  name.characters.first.toUpperCase(),
-                  style: const TextStyle(
-                    color: Color(0xFF4F46E5),
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (participant.videoTrack != null)
+              MediaTrackView(renderer: renderer, track: participant.videoTrack)
+            else
+              Container(
+                color: const Color(0xFFF8FAFC),
+                alignment: Alignment.center,
+                child: CircleAvatar(
+                  radius: 29,
+                  backgroundColor: const Color(0xFFEEF2FF),
+                  child: Text(
+                    name.characters.first.toUpperCase(),
+                    style: const TextStyle(
+                      color: Color(0xFF4F46E5),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
-            ),
-          Positioned(
-            left: 8, right: 8, bottom: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .94),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(children: [
-                Expanded(child: Text(
-                  '$name${participant.isLocal ? ' (you)' : ''}',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                )),
-                Icon(
-                  participant.isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                  size: 14,
-                  color: participant.isMuted
-                      ? const Color(0xFFDC2626) : const Color(0xFF64748B),
+            Positioned(
+              left: 8,
+              right: 8,
+              bottom: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
                 ),
-              ]),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .94),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$name${participant.isLocal ? ' (you)' : ''}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      participant.isMuted
+                          ? Icons.mic_off_rounded
+                          : Icons.mic_rounded,
+                      size: 14,
+                      color: participant.isMuted
+                          ? const Color(0xFFDC2626)
+                          : const Color(0xFF64748B),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }

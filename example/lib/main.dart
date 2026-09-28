@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -27,6 +25,7 @@ void main() {
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
+
   runApp(const ChimeExampleApp());
 }
 
@@ -140,7 +139,7 @@ class _JoinScreenState extends State<JoinScreen>
 
   Future<void> _joinDiscoveredRoom(MediaRoomSummary room) async {
     _joinCodeController.text = room.roomCode;
-    await _joinRoom();
+    await _joinRoom(providerId: room.providerId, roomMode: room.roomMode);
   }
 
   Future<void> _refreshRooms({bool silent = false}) async {
@@ -229,29 +228,27 @@ class _JoinScreenState extends State<JoinScreen>
     }
     _serverStatusRequestInFlight = true;
     if (!silent && mounted) setState(() => _testingServer = true);
-    HttpClient? client;
+    final client = _newClient();
     try {
-      final uri = Uri.parse(url.endsWith('/') ? '${url}health' : '$url/health');
-      client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
-      final req = await client.getUrl(uri);
-      final resp = await req.close();
-      if (resp.statusCode == 200) {
-        final body = await resp.transform(utf8.decoder).join();
-        final json = jsonDecode(body) as Map<String, dynamic>;
-        final active = json['activeProvider'] as String? ?? 'ready';
-        if (mounted && _server == url) {
-          setState(() {
-            _serverOnline = true;
-            _serverProviderInfo = 'Default: $active';
-          });
-        }
-      } else {
-        if (mounted && _server == url) {
-          setState(() {
-            _serverOnline = false;
-            _serverProviderInfo = 'HTTP ${resp.statusCode}';
-          });
-        }
+      final report = await MediaDoctor.check(
+        backend: client.backend,
+        registry: _mediaRegistry,
+      );
+      final backendCheck = report.checkById('backend');
+      final online = backendCheck?.status != MediaDoctorStatus.fail;
+      if (mounted && _server == url) {
+        setState(() {
+          _serverOnline = online;
+          _serverProviderInfo = online
+              ? backendCheck?.status == MediaDoctorStatus.warning
+                    ? 'Reachable (health unavailable)'
+                    : report.activeProvider == null
+                    ? 'Ready'
+                    : 'Default: ${mediaProviderDisplayName(report.activeProvider!)}'
+              : report.backendReachable
+              ? 'Health check failed'
+              : 'Unreachable';
+        });
       }
     } catch (_) {
       if (mounted && _server == url) {
@@ -261,7 +258,7 @@ class _JoinScreenState extends State<JoinScreen>
         });
       }
     } finally {
-      client?.close(force: true);
+      client.dispose();
       _serverStatusRequestInFlight = false;
       if (!silent && mounted) setState(() => _testingServer = false);
     }
@@ -286,6 +283,14 @@ class _JoinScreenState extends State<JoinScreen>
       return;
     }
     final client = _newClient();
+    final role = _createRoomMode == MediaRoomMode.broadcast
+        ? MediaRole.host
+        : MediaRole.participant;
+    final canContinue = await _runPreJoin(client, role: role);
+    if (!canContinue) {
+      client.dispose();
+      return;
+    }
     final deviceId = await _deviceIdFuture;
     final displayName = _nickname(_createNameController);
     await _run(() async {
@@ -302,7 +307,7 @@ class _JoinScreenState extends State<JoinScreen>
     }, client);
   }
 
-  Future<void> _joinRoom() async {
+  Future<void> _joinRoom({String? providerId, MediaRoomMode? roomMode}) async {
     if (_server.isEmpty) {
       setState(() => _error = 'Enter your backend URL first.');
       return;
@@ -313,6 +318,19 @@ class _JoinScreenState extends State<JoinScreen>
       return;
     }
     final client = _newClient();
+    final role = roomMode == MediaRoomMode.broadcast
+        ? MediaRole.viewer
+        : MediaRole.participant;
+    final canContinue = await _runPreJoin(
+      client,
+      role: role,
+      providerId: providerId,
+      roomCode: code,
+    );
+    if (!canContinue) {
+      client.dispose();
+      return;
+    }
     final deviceId = await _deviceIdFuture;
     final displayName = _nickname(_joinNameController);
     await _run(() async {
@@ -333,6 +351,23 @@ class _JoinScreenState extends State<JoinScreen>
     registry: _mediaRegistry,
     tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
   );
+
+  Future<bool> _runPreJoin(
+    MediaClient client, {
+    required MediaRole role,
+    String? providerId,
+    String? roomCode,
+  }) {
+    if (!mounted) return Future.value(false);
+    return MediaPreJoinDialog.show(
+      context,
+      runCheck: () => client.runPreJoinCheck(
+        role: role,
+        providerId: providerId,
+        roomCode: roomCode,
+      ),
+    );
+  }
 
   Future<void> _run(Future<void> Function() action, MediaClient client) async {
     setState(() {
@@ -829,14 +864,7 @@ class _JoinScreenState extends State<JoinScreen>
     final modeLabel = room.roomMode == MediaRoomMode.broadcast
         ? 'Live'
         : 'Meeting';
-    final providerLabel = switch (room.providerId) {
-      'artc' => 'ARTC',
-      'agora' => 'Agora',
-      'livekit' => 'LiveKit',
-      'trtc' => 'TRTC',
-      'chime' => 'Chime',
-      _ => room.providerId,
-    };
+    final providerLabel = mediaProviderDisplayName(room.providerId);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1132,34 +1160,11 @@ class _MeetingRoomPageState extends State<MeetingRoomPage> {
   );
 
   Widget _buildTopBar(MediaSnapshot value, String providerId) {
-    final providerLabel = switch (providerId) {
-      'artc' => 'Alibaba Cloud ARTC',
-      'livekit' => 'LiveKit',
-      'agora' => 'Agora',
-      'trtc' => 'Tencent TRTC',
-      _ => 'Chime',
-    };
-    final providerBackground = switch (providerId) {
-      'artc' => const Color(0xFFF0FDF4),
-      'livekit' => const Color(0xFFF0F9FF),
-      'agora' => const Color(0xFFF5F3FF),
-      'trtc' => const Color(0xFFFFF1F0),
-      _ => const Color(0xFFFFF7ED),
-    };
-    final providerBorder = switch (providerId) {
-      'artc' => const Color(0xFFBBF7D0),
-      'livekit' => const Color(0xFFBAE6FD),
-      'agora' => const Color(0xFFDDD6FE),
-      'trtc' => const Color(0xFFFECACA),
-      _ => const Color(0xFFFED7AA),
-    };
-    final providerColor = switch (providerId) {
-      'artc' => const Color(0xFF16A34A),
-      'livekit' => const Color(0xFF0284C7),
-      'agora' => const Color(0xFF7C3AED),
-      'trtc' => const Color(0xFFD94645),
-      _ => const Color(0xFFEA580C),
-    };
+    final provider = mediaProviderPresentation(providerId);
+    final providerLabel = provider.label;
+    final providerBackground = provider.background;
+    final providerBorder = provider.border;
+    final providerColor = provider.foreground;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

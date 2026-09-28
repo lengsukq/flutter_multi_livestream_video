@@ -8,6 +8,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_webrtc
   iris_method_channel
   livekit_client
+  permission_handler_windows
   tencent_rtc_sdk
 )
 
