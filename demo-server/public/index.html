@@ -1034,6 +1034,15 @@
       <div class="provider-switcher" id="provider-switcher"></div>
     </div>
 
+    <div class="card provider-panel">
+      <div class="provider-panel-info">
+        <div class="panel-badge">Chat Provider Routing</div>
+        <h2>新房间聊天服务调度</h2>
+        <p id="chat-provider-panel-note">聊天与音视频独立选择。关闭 Chat 时仍可使用媒体 Provider 自带的 RTC Data 作为调试能力，但不会作为产品聊天。</p>
+      </div>
+      <div class="provider-switcher" id="chat-provider-switcher"></div>
+    </div>
+
     <!-- KPI Metric Cards -->
     <div class="stats-grid">
       <div class="stat-card" style="--stat-bg: #ecfdf5; --stat-color: #059669;">
@@ -1164,9 +1173,11 @@
     let timer = null;
     let cachedRooms = [];
     let cachedProviders = new Map();
+    let cachedChatProviders = new Map();
     let cachedEvents = [];
     let currentEventFilter = 'all';
     let providerSelectionEnabled = true;
+    let chatProviderSelectionEnabled = true;
 
     function toast(text, type = 'info') {
       const c = document.getElementById('toast-container');
@@ -1284,6 +1295,26 @@
       }
     }
 
+    async function switchChatProvider(provider) {
+      try {
+        const d = await api('/api/chat-provider', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider })
+        });
+        await refresh();
+        const label = chatProviderLabel(d.activeChatProvider);
+        toast(
+          d.activeChatProvider
+            ? `新房间聊天服务已切换为 <b>${label}</b>`
+            : '新房间产品聊天已关闭',
+          'success'
+        );
+      } catch (e) {
+        toast('Chat Provider 切换失败: ' + e.message, 'error');
+      }
+    }
+
     function providerInfo(provider) {
       return cachedProviders.get(provider) || {
         id: provider,
@@ -1297,6 +1328,30 @@
     function providerLabel(provider) {
       const info = providerInfo(provider);
       return info.label || info.displayName || provider;
+    }
+
+    function chatProviderInfo(provider) {
+      if (!provider) {
+        return {
+          id: 'none',
+          displayName: 'Disabled',
+          label: '关闭 Chat',
+          description: '不为新房间创建产品聊天服务',
+          configured: true,
+        };
+      }
+      return cachedChatProviders.get(provider) || {
+        id: provider,
+        displayName: provider,
+        label: provider,
+        description: '',
+        configured: true,
+      };
+    }
+
+    function chatProviderLabel(provider) {
+      const info = chatProviderInfo(provider);
+      return info.label || info.displayName || provider || '关闭 Chat';
     }
 
     function providerHue(provider) {
@@ -1324,6 +1379,43 @@
           style="--provider-accent:${accent}"
           title="${esc(title)}"
           ${provider.configured && (providerSelectionEnabled || active) ? '' : 'disabled'}>
+          <span class="opt-dot" style="background:${accent}"></span>
+          ${esc(provider.label || provider.displayName || provider.id)}
+        </button>`;
+      }).join('');
+    }
+
+    function renderChatProviderSwitcher(activeProvider) {
+      const switcher = document.getElementById('chat-provider-switcher');
+      const providers = [
+        {
+          id: 'none',
+          displayName: 'Disabled',
+          label: '关闭 Chat',
+          description: '不为新房间创建产品聊天服务',
+          configured: true,
+        },
+        ...cachedChatProviders.values(),
+      ];
+      switcher.innerHTML = providers.map(provider => {
+        const providerId = provider.id === 'none' ? null : provider.id;
+        const active = providerId === activeProvider;
+        const accent = provider.id === 'none'
+          ? '#94a3b8'
+          : `hsl(${providerHue(provider.id)} 65% 45%)`;
+        const title = !provider.configured
+          ? `${provider.displayName} 尚未完成服务端配置`
+          : (!chatProviderSelectionEnabled && !active
+            ? '线上 Chat Provider 由 CHAT_DEFAULT_PROVIDER 环境变量配置'
+            : (providerId
+              ? `新房间使用 ${provider.displayName}`
+              : '新房间不创建产品聊天服务'));
+        return `<button class="provider-opt${active ? ' active' : ''}"
+          data-provider="${esc(provider.id)}"
+          onclick="switchChatProvider(this.dataset.provider)"
+          style="--provider-accent:${accent}"
+          title="${esc(title)}"
+          ${provider.configured && (chatProviderSelectionEnabled || active) ? '' : 'disabled'}>
           <span class="opt-dot" style="background:${accent}"></span>
           ${esc(provider.label || provider.displayName || provider.id)}
         </button>`;
@@ -1388,6 +1480,7 @@
         list = list.filter(r => {
           if (r.roomCode && r.roomCode.toLowerCase().includes(query)) return true;
           if (r.provider && r.provider.toLowerCase().includes(query)) return true;
+          if (r.chatProvider && r.chatProvider.toLowerCase().includes(query)) return true;
           if (r.attendees && r.attendees.some(a => (a.externalUserId || '').toLowerCase().includes(query))) return true;
           return false;
         });
@@ -1406,8 +1499,14 @@
       tb.innerHTML = list.map(r => {
         const provider = providerInfo(r.provider);
         const roomProviderLabel = provider.displayName || provider.label || r.provider;
+        const roomChatProvider = chatProviderInfo(r.chatProvider);
+        const roomChatProviderLabel = r.chatProvider
+          ? (roomChatProvider.displayName || roomChatProvider.label || r.chatProvider)
+          : 'Chat Off';
         const hue = providerHue(r.provider);
         const providerStyle = `background:hsl(${hue} 80% 97%);color:hsl(${hue} 58% 38%);border-color:hsl(${hue} 65% 86%)`;
+        const chatHue = r.chatProvider ? providerHue(r.chatProvider) : 215;
+        const chatProviderStyle = `background:hsl(${chatHue} 55% 97%);color:hsl(${chatHue} 42% 42%);border-color:hsl(${chatHue} 45% 88%)`;
         const idleText = r.idleSec > 0 ? `${r.idleSec}s 前心跳` : '🟢 活跃在线';
         const attendeesHtml = r.attendees && r.attendees.length
           ? `<div class="attendee-chips">` + r.attendees.map(a => {
@@ -1434,6 +1533,11 @@
             <span class="provider-pill" style="${providerStyle}">
               ${esc(roomProviderLabel)}
             </span>
+            <div style="margin-top:6px">
+              <span class="provider-pill" style="${chatProviderStyle}">
+                Chat · ${esc(roomChatProviderLabel)}
+              </span>
+            </div>
           </td>
           <td>
             <span style="font-weight: 700; font-size: 15px; color: ${r.attendeeCount > 0 ? 'var(--emerald-color)' : 'var(--text-tertiary)'}">
@@ -1475,12 +1579,19 @@
       try {
         const d = await api('/api/overview');
         providerSelectionEnabled = d.providerSelectionEnabled !== false;
+        chatProviderSelectionEnabled = d.chatProviderSelectionEnabled !== false;
         const providerList = d.providerList || Object.values(d.providers || {});
+        const chatProviderList = d.chatProviderList || Object.values(d.chatProviders || {});
         cachedProviders = new Map(providerList.map(provider => [provider.id, provider]));
+        cachedChatProviders = new Map(chatProviderList.map(provider => [provider.id, provider]));
         const currentProvider = providerInfo(d.activeProvider);
         const providerName = currentProvider.displayName || currentProvider.label || d.activeProvider;
+        const currentChatProvider = chatProviderInfo(d.activeChatProvider);
+        const chatProviderName = d.activeChatProvider
+          ? (currentChatProvider.displayName || currentChatProvider.label || d.activeChatProvider)
+          : '关闭 Chat';
         document.getElementById('header-meta').textContent =
-          `当前通道：${providerName}`;
+          `Media：${providerName} · Chat：${chatProviderName}`;
         const status = document.getElementById('service-status');
         const banner = document.getElementById('connection-banner');
         status.classList.toggle('paused', !d.connectionsEnabled);
@@ -1492,9 +1603,14 @@
         document.getElementById('provider-panel-note').textContent = providerSelectionEnabled
           ? '控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。'
           : '线上默认通道由 Vercel 的 MEDIA_DEFAULT_PROVIDER 环境变量决定；修改后需重新部署。';
+        document.getElementById('chat-provider-panel-note').textContent =
+          chatProviderSelectionEnabled
+            ? '聊天与音视频独立选择。切换只影响后续新建房间；关闭 Chat 时不会创建产品聊天服务。'
+            : '线上默认 Chat Provider 由 Vercel 的 CHAT_DEFAULT_PROVIDER 环境变量决定；修改后需重新部署。';
         document.getElementById('region-tags').textContent =
           `${d.controlRegion} / ${d.mediaRegion}`;
         renderProviderSwitcher(d.activeProvider);
+        renderChatProviderSwitcher(d.activeChatProvider || null);
 
         document.getElementById('c-rooms').textContent = d.roomCount;
         document.getElementById('c-att').textContent = d.attendeeCount;

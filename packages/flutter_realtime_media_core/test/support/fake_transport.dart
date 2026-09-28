@@ -79,12 +79,18 @@ Map<String, Object?> liveKitJoinPayload({
   String role = 'host',
   String url = 'ws://192.168.31.8:7880',
   String token = 'jwt-token',
+  String? participantCredential,
+  String? roomOwnerCredential,
 }) => {
   'contractVersion': 1,
   'provider': provider,
   'role': role,
   'roomCode': roomCode,
   'participantId': participantId,
+  if (participantCredential != null)
+    'participantCredential': participantCredential,
+  if (roomOwnerCredential != null)
+    'roomOwnerCredential': roomOwnerCredential,
   'livekit': {'url': url, 'token': token, 'identity': participantId},
 };
 

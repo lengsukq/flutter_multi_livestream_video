@@ -10,8 +10,16 @@ test('dashboard provider switcher is metadata-driven and its script parses', asy
   );
 
   assert.match(html, /id="provider-switcher"/);
+  assert.match(html, /id="chat-provider-switcher"/);
   assert.match(html, /d\.providerList/);
+  assert.match(html, /d\.chatProviderList/);
   assert.match(html, /renderProviderSwitcher\(d\.activeProvider\)/);
+  assert.match(
+    html,
+    /renderChatProviderSwitcher\(d\.activeChatProvider \|\| null\)/,
+  );
+  assert.match(html, /switchChatProvider\(this\.dataset\.provider\)/);
+  assert.match(html, /CHAT_DEFAULT_PROVIDER/);
 
   for (const hardcodedFlow of [
     'provider-livekit',
@@ -29,4 +37,20 @@ test('dashboard provider switcher is metadata-driven and its script parses', asy
   const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
   assert.ok(scriptMatch, 'dashboard inline script not found');
   assert.doesNotThrow(() => new Function(scriptMatch[1]!));
+});
+
+test('chat-token route is protected by the shared room middleware', async () => {
+  const server = await readFile(
+    path.resolve(import.meta.dirname, '..', 'server.ts'),
+    'utf8',
+  );
+  const middlewareIndex = server.indexOf("app.use('/rooms'");
+  const chatTokenIndex = server.indexOf("app.post('/rooms/:code/chat/token'");
+
+  assert.notEqual(middlewareIndex, -1, 'room middleware was not found');
+  assert.notEqual(chatTokenIndex, -1, 'chat-token route was not found');
+  assert.ok(
+    middlewareIndex < chatTokenIndex,
+    'chat-token route must be registered after the shared /rooms middleware',
+  );
 });

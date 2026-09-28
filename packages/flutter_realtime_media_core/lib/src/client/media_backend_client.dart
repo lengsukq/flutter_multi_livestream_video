@@ -91,6 +91,7 @@ class MediaBackendClient {
   Future<List<MediaRoomParticipantSummary>> listRoomParticipants(
     String roomCode, {
     required String requesterParticipantId,
+    String? participantCredential,
   }) async {
     final code = _required(roomCode, 'roomCode');
     final requester = _required(
@@ -99,7 +100,12 @@ class MediaBackendClient {
     );
     final data = await _post(
       '/rooms/${Uri.encodeComponent(code)}/participants',
-      {'requesterParticipantId': requester},
+      {
+        'requesterParticipantId': requester,
+        if (participantCredential != null &&
+            participantCredential.trim().isNotEmpty)
+          'participantCredential': participantCredential.trim(),
+      },
     );
     final raw = data['participants'];
     if (raw is! List) {
@@ -123,6 +129,7 @@ class MediaBackendClient {
     String roomCode, {
     required String requesterParticipantId,
     required String targetParticipantId,
+    String? participantCredential,
   }) async {
     final code = _required(roomCode, 'roomCode');
     await _post('/rooms/${Uri.encodeComponent(code)}/participants/remove', {
@@ -134,12 +141,16 @@ class MediaBackendClient {
         targetParticipantId,
         'targetParticipantId',
       ),
+      if (participantCredential != null &&
+          participantCredential.trim().isNotEmpty)
+        'participantCredential': participantCredential.trim(),
     });
   }
 
   Future<void> closeRoomAsParticipant(
     String roomCode, {
     required String requesterParticipantId,
+    String? participantCredential,
   }) async {
     final code = _required(roomCode, 'roomCode');
     await _post('/rooms/${Uri.encodeComponent(code)}/close', {
@@ -147,6 +158,9 @@ class MediaBackendClient {
         requesterParticipantId,
         'requesterParticipantId',
       ),
+      if (participantCredential != null &&
+          participantCredential.trim().isNotEmpty)
+        'participantCredential': participantCredential.trim(),
     });
   }
 
@@ -177,6 +191,7 @@ class MediaBackendClient {
     required String userId,
     required String displayName,
     String? deviceId,
+    String? roomOwnerCredential,
     MediaRole? role,
   }) async {
     final code = _required(roomCode, 'roomCode');
@@ -186,6 +201,9 @@ class MediaBackendClient {
       if (role != null) 'role': role.wireName,
       if (deviceId != null && deviceId.trim().isNotEmpty)
         'deviceId': deviceId.trim(),
+      if (roomOwnerCredential != null &&
+          roomOwnerCredential.trim().isNotEmpty)
+        'roomOwnerCredential': roomOwnerCredential.trim(),
     });
     return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
   }
@@ -217,6 +235,7 @@ class MediaBackendClient {
     required String roomCode,
     required String nickname,
     String? deviceId,
+    String? roomOwnerCredential,
   }) async {
     final code = _required(roomCode, 'roomCode');
     final data = await _post('/rooms/${Uri.encodeComponent(code)}/join', {
@@ -224,6 +243,9 @@ class MediaBackendClient {
       'role': role.wireName,
       if (deviceId != null && deviceId.trim().isNotEmpty)
         'deviceId': deviceId.trim(),
+      if (roomOwnerCredential != null &&
+          roomOwnerCredential.trim().isNotEmpty)
+        'roomOwnerCredential': roomOwnerCredential.trim(),
     });
     return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
   }
@@ -235,12 +257,16 @@ class MediaBackendClient {
     required String roomCode,
     required String participantId,
     required MediaRole role,
+    String? participantCredential,
   }) async {
     final code = _required(roomCode, 'roomCode');
     final data =
         await _post('/rooms/${Uri.encodeComponent(code)}/credentials/refresh', {
           'participantId': _required(participantId, 'participantId'),
           'role': role.wireName,
+          if (participantCredential != null &&
+              participantCredential.trim().isNotEmpty)
+            'participantCredential': participantCredential.trim(),
         });
     return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
   }

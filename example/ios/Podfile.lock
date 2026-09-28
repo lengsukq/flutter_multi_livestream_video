@@ -1,77 +1,11 @@
 PODS:
-  - agora_rtc_engine (6.6.4):
-    - AgoraIrisRTC_iOS (= 4.6.4-build.4)
-    - AgoraRtcEngine_iOS (= 4.6.4)
-    - Flutter
-  - AgoraInfra_iOS (1.3.5)
-  - AgoraIrisRTC_iOS (4.6.4-build.4)
-  - AgoraRtcEngine_iOS (4.6.4):
-    - AgoraRtcEngine_iOS/AIAEC (= 4.6.4)
-    - AgoraRtcEngine_iOS/AIAECLL (= 4.6.4)
-    - AgoraRtcEngine_iOS/AINS (= 4.6.4)
-    - AgoraRtcEngine_iOS/AINSLL (= 4.6.4)
-    - AgoraRtcEngine_iOS/AudioBeauty (= 4.6.4)
-    - AgoraRtcEngine_iOS/ClearVision (= 4.6.4)
-    - AgoraRtcEngine_iOS/ContentInspect (= 4.6.4)
-    - AgoraRtcEngine_iOS/FaceCapture (= 4.6.4)
-    - AgoraRtcEngine_iOS/FaceDetection (= 4.6.4)
-    - AgoraRtcEngine_iOS/LipSync (= 4.6.4)
-    - AgoraRtcEngine_iOS/ReplayKit (= 4.6.4)
-    - AgoraRtcEngine_iOS/RtcBasic (= 4.6.4)
-    - AgoraRtcEngine_iOS/SpatialAudio (= 4.6.4)
-    - AgoraRtcEngine_iOS/VideoAv1CodecEnc (= 4.6.4)
-    - AgoraRtcEngine_iOS/VideoCodecEnc (= 4.6.4)
-    - AgoraRtcEngine_iOS/VirtualBackground (= 4.6.4)
-    - AgoraRtcEngine_iOS/VQA (= 4.6.4)
-  - AgoraRtcEngine_iOS/AIAEC (4.6.4)
-  - AgoraRtcEngine_iOS/AIAECLL (4.6.4)
-  - AgoraRtcEngine_iOS/AINS (4.6.4)
-  - AgoraRtcEngine_iOS/AINSLL (4.6.4)
-  - AgoraRtcEngine_iOS/AudioBeauty (4.6.4)
-  - AgoraRtcEngine_iOS/ClearVision (4.6.4)
-  - AgoraRtcEngine_iOS/ContentInspect (4.6.4)
-  - AgoraRtcEngine_iOS/FaceCapture (4.6.4)
-  - AgoraRtcEngine_iOS/FaceDetection (4.6.4)
-  - AgoraRtcEngine_iOS/LipSync (4.6.4)
-  - AgoraRtcEngine_iOS/ReplayKit (4.6.4)
-  - AgoraRtcEngine_iOS/RtcBasic (4.6.4):
-    - AgoraInfra_iOS (= 1.3.5)
-  - AgoraRtcEngine_iOS/SpatialAudio (4.6.4)
-  - AgoraRtcEngine_iOS/VideoAv1CodecEnc (4.6.4)
-  - AgoraRtcEngine_iOS/VideoCodecEnc (4.6.4)
-  - AgoraRtcEngine_iOS/VirtualBackground (4.6.4)
-  - AgoraRtcEngine_iOS/VQA (4.6.4)
   - AliVCSDK_ARTC (7.11.0):
     - AliVCSDK_ARTC/Default (= 7.11.0)
   - AliVCSDK_ARTC/Default (7.11.0)
-  - AmazonChimeSDK (0.27.4):
-    - AmazonChimeSDKMedia (= 0.25.4)
-  - AmazonChimeSDKMachineLearning (0.3.3)
-  - AmazonChimeSDKMedia (0.25.4)
-  - connectivity_plus (0.0.1):
-    - Flutter
-  - device_info_plus (0.0.1):
-    - Flutter
   - Flutter (1.0.0)
-  - flutter_aws_chime (3.0.0):
-    - AmazonChimeSDK (= 0.27.4)
-    - AmazonChimeSDKMachineLearning (= 0.3.3)
-    - AmazonChimeSDKMedia (= 0.25.4)
-    - Flutter
   - flutter_realtime_media_artc (0.1.0):
     - AliVCSDK_ARTC (= 7.11.0)
     - Flutter
-  - flutter_webrtc (1.6.2):
-    - Flutter
-    - WebRTC-SDK (= 150.7871.01)
-  - integration_test (0.0.1):
-    - Flutter
-  - iris_method_channel (0.0.1):
-    - Flutter
-  - livekit_client (2.13.0):
-    - Flutter
-    - flutter_webrtc
-    - WebRTC-SDK (= 150.7871.01)
   - super_player (13.5.0):
     - Flutter
     - super_player/bare (= 13.5.0)
@@ -89,85 +23,38 @@ PODS:
   - TXLiteAVSDK_Professional (13.5.21355):
     - TXLiteAVSDK_Professional/Professional (= 13.5.21355)
   - TXLiteAVSDK_Professional/Professional (13.5.21355)
-  - WebRTC-SDK (150.7871.01)
 
 DEPENDENCIES:
-  - agora_rtc_engine (from `.symlinks/plugins/agora_rtc_engine/ios`)
-  - connectivity_plus (from `.symlinks/plugins/connectivity_plus/ios`)
-  - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - Flutter (from `Flutter`)
-  - flutter_aws_chime (from `.symlinks/plugins/flutter_aws_chime/ios`)
   - flutter_realtime_media_artc (from `.symlinks/plugins/flutter_realtime_media_artc/ios`)
-  - flutter_webrtc (from `.symlinks/plugins/flutter_webrtc/ios`)
-  - integration_test (from `.symlinks/plugins/integration_test/ios`)
-  - iris_method_channel (from `.symlinks/plugins/iris_method_channel/ios`)
-  - livekit_client (from `.symlinks/plugins/livekit_client/ios`)
   - super_player (from `.symlinks/plugins/super_player/ios`)
   - tencent_rtc_sdk (from `.symlinks/plugins/tencent_rtc_sdk/ios`)
 
 SPEC REPOS:
   trunk:
-    - AgoraInfra_iOS
-    - AgoraIrisRTC_iOS
-    - AgoraRtcEngine_iOS
     - AliVCSDK_ARTC
-    - AmazonChimeSDK
-    - AmazonChimeSDKMachineLearning
-    - AmazonChimeSDKMedia
     - TXCustomBeautyProcesserPlugin
     - TXLiteAVSDK_Professional
-    - WebRTC-SDK
 
 EXTERNAL SOURCES:
-  agora_rtc_engine:
-    :path: ".symlinks/plugins/agora_rtc_engine/ios"
-  connectivity_plus:
-    :path: ".symlinks/plugins/connectivity_plus/ios"
-  device_info_plus:
-    :path: ".symlinks/plugins/device_info_plus/ios"
   Flutter:
     :path: Flutter
-  flutter_aws_chime:
-    :path: ".symlinks/plugins/flutter_aws_chime/ios"
   flutter_realtime_media_artc:
     :path: ".symlinks/plugins/flutter_realtime_media_artc/ios"
-  flutter_webrtc:
-    :path: ".symlinks/plugins/flutter_webrtc/ios"
-  integration_test:
-    :path: ".symlinks/plugins/integration_test/ios"
-  iris_method_channel:
-    :path: ".symlinks/plugins/iris_method_channel/ios"
-  livekit_client:
-    :path: ".symlinks/plugins/livekit_client/ios"
   super_player:
     :path: ".symlinks/plugins/super_player/ios"
   tencent_rtc_sdk:
     :path: ".symlinks/plugins/tencent_rtc_sdk/ios"
 
 SPEC CHECKSUMS:
-  agora_rtc_engine: 2c4d8824b042f37d58cc334d5128cd87bc8915f5
-  AgoraInfra_iOS: 0bf927aad4fc425b24ca5d094b333361960f5cb0
-  AgoraIrisRTC_iOS: 62c1cec878320d75ee2c5ebb43f0e72659a2bbf3
-  AgoraRtcEngine_iOS: 2ac3c06dd68eff8e895b5529e59a10a05da63878
   AliVCSDK_ARTC: 746ae545f16c74c519914e6b85afbebcf426a7fe
-  AmazonChimeSDK: 10260c8417629cb48d6fe39cabd8f97e1d0b8e6f
-  AmazonChimeSDKMachineLearning: c37ff63f59aa0d14a090a780cab97b9188e993d4
-  AmazonChimeSDKMedia: 138d3c7464e6ce9baa557d1c1a28f5960cafefa2
-  connectivity_plus: cb623214f4e1f6ef8fe7403d580fdad517d2f7dd
-  device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
-  flutter_aws_chime: eae6c842a9e8ba268edce6fb03d7af2ade185ea9
-  flutter_realtime_media_artc: ddf45c6be553d0b1af9d09c5932e6bdf76a0a321
-  flutter_webrtc: 99283145164f482a16bf7122ef407b5d59d43158
-  integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
-  iris_method_channel: 7d661cf3259b3009ae423508470dbeb9374446ee
-  livekit_client: 55f2f6afa597719985fa4913f6e889eb2b7eacd8
+  flutter_realtime_media_artc: 004884194e3ca98e4ebce7b3a25c58aac48020ef
   super_player: 5080d7232ba3c0536ae341e6980fc17bcc5cd47b
   tencent_rtc_sdk: 3932e0b18093c31c0f605aa3a5890830fe9f9d1b
   TXCustomBeautyProcesserPlugin: 099393b941cb40eda12b3a80bf6c0319957b1cfd
   TXLiteAVSDK_Professional: 914aa2e59545c8cdff80ab70c1bc8191c683ecfc
-  WebRTC-SDK: 7dc931c64c00c735a614382f1a59cf65019c3c17
 
-PODFILE CHECKSUM: 9c46fd01abff66081b39f5fa5767b3f1d0b11d76
+PODFILE CHECKSUM: d16988f055294b37868e2c7ae343770a5ae0ddf6
 
 COCOAPODS: 1.16.2

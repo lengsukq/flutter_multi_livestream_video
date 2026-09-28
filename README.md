@@ -392,8 +392,8 @@ available unchanged for Chime-only applications.
 |---:|---|---|
 | 1 | Upgrade Flutter and AWS Chime SDK to the latest versions | Complete in 2.0.0 |
 | 2 | Support more APIs from the latest Chime SDK | Complete in 2.0.0 |
-| 3 | Add video/audio communication backends besides Chime | LiveKit, Agora, TRTC, and ARTC implemented via optional adapters |
-| 4 | Add one-to-many livestreaming | LiveKit, Agora, TRTC, and ARTC host/viewer implemented; IVS remains future work |
+| 3 | Add video/audio communication backends besides Chime | LiveKit, Agora, TRTC, ARTC, and IVS Real-Time implemented via optional adapters |
+| 4 | Add one-to-many livestreaming | LiveKit, Agora, TRTC, ARTC, and IVS Real-Time host/viewer implemented |
 
 See [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md) for the current
 multi-provider architecture and [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)
@@ -410,7 +410,9 @@ Flutter App 统一依赖 Core 接口，房间实际使用哪一家媒体服务�
 各供应商 SDK 通过独立 Adapter 接入，因此业务 UI 不需要绑定 LiveKit、Chime
 或未来其他供应商的具体实现。
 
-当前仓库已经支持 **AWS Chime**、**LiveKit**、**Agora**、**腾讯云 TRTC** 和 **阿里云 ARTC**。原有根目录
+当前仓库已经支持 **AWS Chime**、**LiveKit**、**Agora**、**腾讯云 TRTC**、
+**阿里云 ARTC** 和 **Amazon IVS Real-Time**。产品聊天是独立 Provider 轴，
+当前已通过 Chat Core 接入 **Amazon IVS Chat**。原有根目录
 `flutter_aws_chime` v3 包继续保留，供已有 Chime-only 项目兼容使用。
 
 ## 包结构
@@ -423,6 +425,9 @@ Flutter App 统一依赖 Core 接口，房间实际使用哪一家媒体服务�
 | `flutter_realtime_media_chime` | AWS Chime Core Adapter | 已实现 |
 | `flutter_realtime_media_trtc` | 可选的腾讯云 TRTC RTC + Host/Viewer Adapter | 已实现；真实设备 E2E 可选 |
 | `flutter_realtime_media_artc` | 可选的阿里云 ARTC RTC + Host/Viewer Adapter | 已实现；真实设备 E2E 可选 |
+| `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + Host/Viewer Adapter | Android/iOS 已实现 |
+| `flutter_realtime_chat_core` | Provider 无关的产品聊天 Client/Session 契约 | 已实现 |
+| `flutter_realtime_chat_ivs` | Amazon IVS Chat Adapter | Android/iOS 已实现 |
 | `flutter_aws_chime` | 原有独立 Chime v3 Flutter 插件 | 兼容维护 |
 
 Core 不直接依赖任何供应商 SDK，供应商依赖仅存在于各自 Adapter 中。应用只添加并注册
@@ -439,7 +444,7 @@ Agora Adapter 支持 Android、iOS 和 macOS；macOS 通过 Agora 原生桌面�
 | Agora 声网 | 支持 | 支持 Host/Viewer | Adapter 已实现 |
 | 腾讯云 TRTC | 支持 | 支持 Host/Viewer | 可选 Adapter 已实现 |
 | 阿里云 ARTC | 支持 | 支持 Host/Viewer | 可选 Adapter 已实现 |
-| Amazon IVS | — | 计划支持 | 后续直播 Adapter |
+| Amazon IVS Real-Time | 支持 | 支持 Host/Viewer | Android/iOS 已实现 |
 
 统一 API 与后端选择 Provider 的完整说明见
 [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md)。
@@ -459,7 +464,8 @@ Flutter App
    ├── Agora
    ├── AWS Chime
    ├── 腾讯云 TRTC（可选）
-   └── 阿里云 ARTC（可选）
+   ├── 阿里云 ARTC（可选）
+   └── Amazon IVS Real-Time（可选）
    │
    ▼
 Core → 对应 Provider Adapter
@@ -751,8 +757,8 @@ await session.dispose();
 |---:|---|---|
 | 1 | 升级 Flutter 和 AWS Chime SDK | Complete in 2.0.0 |
 | 2 | 支持更多新版 Chime SDK API | Complete in 2.0.0 |
-| 3 | 增加 Chime 以外的音视频通信后端 | LiveKit、Agora、TRTC、ARTC 已通过可选 Adapter 实现 |
-| 4 | 增加一对多直播 | LiveKit、Agora、TRTC、ARTC host/viewer 已实现；IVS 为后续计划 |
+| 3 | 增加 Chime 以外的音视频通信后端 | LiveKit、Agora、TRTC、ARTC、IVS Real-Time 已通过可选 Adapter 实现 |
+| 4 | 增加一对多直播 | LiveKit、Agora、TRTC、ARTC、IVS Real-Time host/viewer 已实现 |
 
 当前多 Provider 使用方式见 [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md)，
 更完整的后续路线见 [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)。

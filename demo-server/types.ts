@@ -3,6 +3,8 @@ export type RoomMode = 'meeting' | 'broadcast';
 
 export interface RoomAttendee {
   attendeeId: string;
+  providerParticipantId?: string;
+  participantCredentialHash?: string;
   externalUserId: string;
   userId?: string;
   displayName?: string;
@@ -10,6 +12,54 @@ export interface RoomAttendee {
   lastHeartbeatMs?: number;
   role?: MediaRole;
   deviceId?: string;
+}
+
+export interface ChatProviderMetadata {
+  id: string;
+  displayName: string;
+  label: string;
+  description: string;
+  themeKey: string;
+  enabled: boolean;
+  configured: boolean;
+  [key: string]: unknown;
+}
+
+export interface ChatRoomBinding {
+  chatProvider: string;
+  chatRoomArn: string;
+}
+
+export interface IssueChatTokenInput {
+  entry: RoomEntry;
+  attendee: RoomAttendee;
+}
+
+export interface ChatProviderTokenResponse {
+  contractVersion: number;
+  chatProvider: string;
+  roomCode: string;
+  participantId: string;
+  userId: string;
+  displayName: string;
+  role: MediaRole;
+  chat: Record<string, unknown>;
+}
+
+export interface ChatProviderAdapter {
+  id: string;
+  displayName: string;
+  label?: string;
+  description?: string;
+  themeKey?: string;
+  enabled?: boolean;
+  configurationError?: string;
+
+  isConfigured(): boolean;
+  metadata?(): Record<string, unknown>;
+  createRoom(roomCode: string): Promise<ChatRoomBinding>;
+  issueToken(input: IssueChatTokenInput): Promise<ChatProviderTokenResponse>;
+  closeRoom(entry: RoomEntry): Promise<void>;
 }
 
 export interface ChimeMeeting {
@@ -30,16 +80,25 @@ export interface ChimeAttendee {
 
 export interface RoomEntry {
   provider: string;
+  chatProvider?: string;
+  chatRoomArn?: string;
+  mediaClosed?: boolean;
+  chatClosed?: boolean;
+  closePending?: boolean;
   roomCode: string;
   roomMode?: RoomMode;
-  creatorUserId?: string;
-  creatorDeviceId?: string;
+  roomOwnerCredentialHash?: string;
   createdAt: string;
   attendees: RoomAttendee[];
   lastHeartbeatMs: number;
   providerRoomName?: string;
   scene?: 'meeting' | 'live';
   meeting?: ChimeMeeting;
+}
+
+export interface IvsRoomEntry extends RoomEntry {
+  provider: 'ivs';
+  stageArn: string;
 }
 
 export interface NamedRoomEntry extends RoomEntry {
@@ -86,6 +145,7 @@ export interface ProviderJoinResponse extends ProviderBaseResponse {
 
 export interface RoomSummary {
   provider: string;
+  chatProvider?: string;
   roomCode: string;
   roomMode?: RoomMode;
   meetingId?: string;
@@ -127,6 +187,8 @@ export interface JoinRoomInput {
   entry: RoomEntry;
   rawName: unknown;
   role: MediaRole;
+  userId?: string;
+  deviceId?: string | null;
 }
 
 export interface CloseRoomInput {

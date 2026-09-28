@@ -3,10 +3,13 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+import 'package:flutter_realtime_chat_ivs/flutter_realtime_chat_ivs.dart';
 import 'package:flutter_realtime_media_artc/flutter_realtime_media_artc.dart';
 import 'package:flutter_realtime_media_agora/flutter_realtime_media_agora.dart';
 import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
+import 'package:flutter_realtime_media_ivs/flutter_realtime_media_ivs.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_realtime_media_livekit/flutter_realtime_media_livekit.dart';
 import 'package:flutter_realtime_media_trtc/flutter_realtime_media_trtc.dart';
@@ -35,6 +38,7 @@ final MediaRegistry _mediaRegistry = MediaRegistry([
   const LiveKitSessionFactory(),
   ChimeSessionFactory(),
   const TrtcSessionFactory(),
+  const IvsSessionFactory(),
 ]);
 
 final Map<String, MediaTrackRenderer> _mediaRenderers = {
@@ -43,7 +47,12 @@ final Map<String, MediaTrackRenderer> _mediaRenderers = {
   'livekit': const LiveKitTrackRenderer(),
   'chime': const ChimeTrackRenderer(),
   'trtc': const TrtcTrackRenderer(),
+  'ivs': const IvsTrackRenderer(),
 };
+
+final ChatRegistry _chatRegistry = ChatRegistry([
+  const IvsChatSessionFactory(),
+]);
 
 const String _defaultBackendUrl = String.fromEnvironment(
   'MEDIA_BACKEND_URL',
@@ -120,6 +129,7 @@ class _JoinScreenState extends State<JoinScreen>
   bool _roomListRequestInFlight = false;
   List<MediaRoomSummary> _availableRooms = const [];
   String? _roomListError;
+  final Map<String, String> _roomOwnerCredentials = {};
 
   @override
   void initState() {
@@ -303,6 +313,10 @@ class _JoinScreenState extends State<JoinScreen>
         ),
         roomMode: _createRoomMode,
       );
+      final ownerCredential = room.roomOwnerCredential;
+      if (ownerCredential != null) {
+        _roomOwnerCredentials[room.roomCode] = ownerCredential;
+      }
       await _openMeeting(client, room);
     }, client);
   }
@@ -336,12 +350,17 @@ class _JoinScreenState extends State<JoinScreen>
     await _run(() async {
       final room = await client.joinRoomIdentity(
         roomCode: code,
+        roomOwnerCredential: _roomOwnerCredentials[code],
         identity: MediaIdentity(
           userId: deviceId,
           displayName: displayName,
           deviceId: deviceId,
         ),
       );
+      final ownerCredential = room.roomOwnerCredential;
+      if (ownerCredential != null) {
+        _roomOwnerCredentials[room.roomCode] = ownerCredential;
+      }
       await _openMeeting(client, room);
     }, client);
   }
@@ -349,6 +368,12 @@ class _JoinScreenState extends State<JoinScreen>
   MediaClient _newClient() => MediaClient(
     backendUrl: _server,
     registry: _mediaRegistry,
+    tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
+  );
+
+  ChatClient _newChatClient() => ChatClient(
+    backendUrl: _server,
+    registry: _chatRegistry,
     tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
   );
 
@@ -398,13 +423,57 @@ class _JoinScreenState extends State<JoinScreen>
       client.dispose();
       return;
     }
+
+    ChatClient? chatClient;
+    ChatRoomSession? chatRoom;
+    final chatProvider = room.chatProvider;
+    if (chatProvider != null) {
+      chatClient = _newChatClient();
+      try {
+        chatRoom = await chatClient.connectRoom(
+          roomCode: room.roomCode,
+          participantId: room.participantId,
+          participantCredential: room.participantCredential,
+        );
+        if (chatRoom.session.providerId != chatProvider) {
+          throw ChatError(
+            code: ChatErrorCode.invalidJoinInfo,
+            message:
+                'Backend expected chat provider "$chatProvider" but issued '
+                '"${chatRoom.session.providerId}" credentials.',
+            providerId: chatProvider,
+          );
+        }
+      } catch (error) {
+        chatClient.dispose();
+        chatClient = null;
+        chatRoom = null;
+        debugPrint('Chat unavailable for room ${room.roomCode}: $error');
+      }
+    }
+
+    if (!mounted) {
+      await chatRoom?.dispose();
+      chatClient?.dispose();
+      await room.dispose();
+      client.dispose();
+      return;
+    }
+
     try {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (_) => MediaRoomView(room: room, renderer: renderer),
+          builder: (_) => MediaRoomView(
+            room: room,
+            renderer: renderer,
+            chatSession: chatRoom?.session,
+            config: const MediaRoomViewConfig(showRtcDataMessages: true),
+          ),
         ),
       );
     } finally {
+      await chatRoom?.dispose();
+      chatClient?.dispose();
       await room.dispose();
       client.dispose();
     }

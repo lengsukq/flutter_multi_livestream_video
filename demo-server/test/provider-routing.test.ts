@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
+import { writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,12 +12,16 @@ let liveKitServer: Server | undefined;
 let baseUrl: string | undefined;
 let output = '';
 const liveKitRoomServiceCalls: string[] = [];
+let failLiveKitDeleteRoom = false;
 
 interface ApiBody {
   activeProvider?: string;
+  activeChatProvider?: string | null;
   provider?: string;
   roomCode?: string;
   participantId?: string;
+  participantCredential?: string;
+  roomOwnerCredential?: string;
   role?: string;
   roomMode?: string;
   providerList?: Array<{ id: string }>;
@@ -53,6 +58,14 @@ before(async () => {
     if (req.url?.startsWith('/twirp/livekit.RoomService/')) {
       liveKitRoomServiceCalls.push(req.url);
       req.resume();
+      if (
+        failLiveKitDeleteRoom &&
+        req.url === '/twirp/livekit.RoomService/DeleteRoom'
+      ) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end('{}');
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end('{}');
       return;
@@ -69,12 +82,19 @@ before(async () => {
   const liveKitUrl = `ws://127.0.0.1:${liveKitAddress.port}`;
 
   const stateFile = path.join(os.tmpdir(), `provider-routing-test-${process.pid}.json`);
+  writeFileSync(
+    stateFile,
+    JSON.stringify({ provider: 'livekit', chatProvider: 'none' }),
+    'utf8',
+  );
   serverProcess = spawn(process.execPath, ['server.ts'], {
     cwd: path.resolve(import.meta.dirname, '..'),
     env: {
       PATH: process.env.PATH,
       PORT: '0',
       MEDIA_DEFAULT_PROVIDER: 'livekit',
+      CHAT_DEFAULT_PROVIDER: 'ivs-chat',
+      IVS_CHAT_REGION: 'us-west-2',
       MEDIA_PROVIDER_STATE_PATH: stateFile,
       LIVEKIT_URL: liveKitUrl,
       LIVEKIT_API_KEY: 'test-api-key',
@@ -129,6 +149,11 @@ test('provider metadata is dynamic and unconfigured providers cannot be selected
   const overview = await overviewResponse.json() as ApiBody;
 
   assert.equal(overview.activeProvider, 'livekit');
+  assert.equal(
+    overview.activeChatProvider,
+    null,
+    'persisted chatProvider=none must override CHAT_DEFAULT_PROVIDER',
+  );
   assert.ok(Array.isArray(overview.providerList));
   assert.equal(overview.providerList.some((provider: { id: string }) => provider.id === 'livekit'), true);
   assert.equal(overview.providers?.livekit?.configured, true);
@@ -187,6 +212,7 @@ test('switching the active provider does not change an existing room provider', 
   assert.equal(broadcast.status, 200);
   assert.equal(broadcast.body.role, 'host');
   assert.equal(broadcast.body.roomMode, 'broadcast');
+  assert.ok(broadcast.body.roomOwnerCredential);
 
   const viewer = await post('/rooms/broadcast01/join', {
     userId: 'viewer-user',
@@ -196,22 +222,45 @@ test('switching the active provider does not change an existing room provider', 
   assert.equal(viewer.status, 200);
   assert.equal(viewer.body.role, 'viewer');
 
+  const spoofedCreator = await post('/rooms/broadcast01/join', {
+    userId: 'creator-user',
+    displayName: 'Impersonated Creator',
+    deviceId: 'device-creator-001',
+  });
+  assert.equal(spoofedCreator.status, 200);
+  assert.equal(
+    spoofedCreator.body.role,
+    'viewer',
+    'client-declared creator userId/deviceId must never restore host',
+  );
+
+  const wrongOwnerProof = await post('/rooms/broadcast01/join', {
+    userId: 'creator-user',
+    displayName: 'Fake Creator',
+    deviceId: 'device-creator-001',
+    roomOwnerCredential: 'not-the-owner-proof',
+  });
+  assert.equal(wrongOwnerProof.status, 403);
+
   const creatorRejoin = await post('/rooms/broadcast01/join', {
     userId: 'creator-user',
     displayName: 'Creator again',
     deviceId: 'device-creator-001',
+    roomOwnerCredential: broadcast.body.roomOwnerCredential,
   });
   assert.equal(creatorRejoin.status, 200);
   assert.equal(creatorRejoin.body.role, 'host');
 
   const forbiddenParticipants = await post('/rooms/broadcast01/participants', {
     requesterParticipantId: viewer.body.participantId,
+    participantCredential: viewer.body.participantCredential,
   });
   assert.equal(forbiddenParticipants.status, 403);
   assert.equal(forbiddenParticipants.body.error?.code, 'forbidden');
 
   const hostParticipants = await post('/rooms/broadcast01/participants', {
     requesterParticipantId: creatorRejoin.body.participantId,
+    participantCredential: creatorRejoin.body.participantCredential,
   });
   assert.equal(hostParticipants.status, 200);
   assert.equal(hostParticipants.body.participants?.length, 2);
@@ -226,14 +275,37 @@ test('switching the active provider does not change an existing room provider', 
   assert.equal(hostParticipants.body.participants?.[0]?.deviceId, undefined);
   assert.equal(hostParticipants.body.participants?.[0]?.userId, undefined);
 
+  const impersonatedHost = await post('/rooms/broadcast01/participants', {
+    requesterParticipantId: creatorRejoin.body.participantId,
+    participantCredential: viewer.body.participantCredential,
+  });
+  assert.equal(impersonatedHost.status, 403);
+
   const selfRemove = await post('/rooms/broadcast01/participants/remove', {
     requesterParticipantId: creatorRejoin.body.participantId,
+    participantCredential: creatorRejoin.body.participantCredential,
     targetParticipantId: creatorRejoin.body.participantId,
   });
   assert.equal(selfRemove.status, 400);
 
   const broadcastOverviewResponse = await fetch(`${requireBaseUrl()}/api/overview`);
   const broadcastOverview = await broadcastOverviewResponse.json() as ApiBody;
+  assert.equal(
+    JSON.stringify(broadcastOverview).includes('participantCredential'),
+    false,
+  );
+  assert.equal(
+    JSON.stringify(broadcastOverview).includes('participantCredentialHash'),
+    false,
+  );
+  assert.equal(
+    JSON.stringify(broadcastOverview).includes('roomOwnerCredential'),
+    false,
+  );
+  assert.equal(
+    JSON.stringify(broadcastOverview).includes('roomOwnerCredentialHash'),
+    false,
+  );
   const broadcastRoom = broadcastOverview.rooms?.find((room) => room.roomCode === 'broadcast01');
   assert.equal(broadcastRoom?.roomMode, 'broadcast');
   assert.equal(
@@ -258,11 +330,57 @@ test('switching the active provider does not change an existing room provider', 
 
   const hostClose = await post('/rooms/broadcast01/close', {
     requesterParticipantId: creatorRejoin.body.participantId,
+    participantCredential: creatorRejoin.body.participantCredential,
   });
   assert.equal(hostClose.status, 200);
   assert.equal(
     liveKitRoomServiceCalls.includes('/twirp/livekit.RoomService/DeleteRoom'),
     true,
+  );
+
+  const retryRoom = await post('/rooms', {
+    roomCode: 'deleteRetry1',
+    displayName: 'Retry Host',
+    userId: 'retry-host',
+    roomMode: 'broadcast',
+    deviceId: 'device-retry-001',
+  });
+  assert.equal(retryRoom.status, 200);
+  failLiveKitDeleteRoom = true;
+  const failedClose = await post('/rooms/deleteRetry1/close', {
+    requesterParticipantId: retryRoom.body.participantId,
+    participantCredential: retryRoom.body.participantCredential,
+  });
+  assert.equal(failedClose.status, 500);
+  const afterFailedClose = await fetch(`${requireBaseUrl()}/api/overview`);
+  const failedCloseOverview = await afterFailedClose.json() as ApiBody;
+  assert.equal(
+    failedCloseOverview.rooms?.some((room) => room.roomCode === 'deleteRetry1'),
+    true,
+    'failed provider deletion must keep the room directory entry for retry',
+  );
+  const discoverAfterFailedClose = await fetch(
+    `${requireBaseUrl()}/rooms/discover`,
+    { headers: { 'X-Media-Backend-Contract': '1' } },
+  );
+  const discoverAfterFailure = await discoverAfterFailedClose.json() as ApiBody;
+  assert.equal(
+    discoverAfterFailure.rooms?.some((room) => room.roomCode === 'deleteRetry1'),
+    false,
+    'partially closed rooms must not remain discoverable',
+  );
+
+  failLiveKitDeleteRoom = false;
+  const retriedClose = await post('/rooms/deleteRetry1/close', {
+    requesterParticipantId: retryRoom.body.participantId,
+    participantCredential: retryRoom.body.participantCredential,
+  });
+  assert.equal(retriedClose.status, 200);
+  const afterRetry = await fetch(`${requireBaseUrl()}/api/overview`);
+  const retryOverview = await afterRetry.json() as ApiBody;
+  assert.equal(
+    retryOverview.rooms?.some((room) => room.roomCode === 'deleteRetry1'),
+    false,
   );
 
   const switched = await post('/api/provider', { provider: 'chime' });

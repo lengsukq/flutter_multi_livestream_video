@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-chime-sdk-meetings": "^3.600.0",
+    "@aws-sdk/client-ivs-realtime": "^3.1141.0",
+    "@aws-sdk/client-ivschat": "^3.1141.0",
     "agora-token": "^2.0.6",
     "cors": "^2.8.5",
     "express": "^4.19.2",

@@ -15,6 +15,7 @@ interface ArtcApiBody {
   role?: string;
   roomCode?: string;
   participantId?: string;
+  participantCredential?: string;
   artc?: {
     appId?: string;
     channelId?: string;
@@ -124,6 +125,7 @@ test('assigns ARTC broadcast roles, signs short-lived auth info, and refreshes t
   assert.equal(viewer.body.role, 'viewer');
   const refreshed = await post('/rooms/artcHost01/credentials/refresh', {
     participantId: viewer.body.participantId,
+    participantCredential: viewer.body.participantCredential,
     role: 'viewer',
   });
   assert.equal(refreshed.status, 200);
@@ -135,6 +137,7 @@ test('assigns ARTC broadcast roles, signs short-lived auth info, and refreshes t
 
   const changedRole = await post('/rooms/artcHost01/credentials/refresh', {
     participantId: viewer.body.participantId,
+    participantCredential: viewer.body.participantCredential,
     role: 'host',
   });
   assert.equal(changedRole.status, 403);

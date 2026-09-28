@@ -32,6 +32,12 @@ dependencies:
     path: ../packages/flutter_realtime_media_chime
   flutter_realtime_media_trtc:
     path: ../packages/flutter_realtime_media_trtc
+  flutter_realtime_media_ivs:
+    path: ../packages/flutter_realtime_media_ivs
+  flutter_realtime_chat_core:
+    path: ../packages/flutter_realtime_chat_core
+  flutter_realtime_chat_ivs:
+    path: ../packages/flutter_realtime_chat_ivs
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -56,13 +62,8 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-  # The root plugin is a local path dependency whose package name
-  # (flutter_aws_chime) differs from this repository directory name. Flutter's
-  # generated SwiftPM package uses the path basename as identity, which makes
-  # that local monorepo layout ambiguous. The example already has CocoaPods
-  # integration, so keep SwiftPM disabled for this development app only.
   config:
-    enable-swift-package-manager: false
+    enable-swift-package-manager: true
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

@@ -4,22 +4,41 @@ The application should branch on `MediaCapabilities` / `MediaFeature`, not
 on `providerId`. A provider may expose a smaller capability set on a specific
 platform or role.
 
-| Capability | LiveKit | Chime | Agora | TRTC | ARTC |
-| --- | --- | --- | --- | --- | --- |
-| Meeting audio/video | Yes | Yes | Yes | Yes | Yes |
-| Broadcast host/viewer | Yes | No (participant only) | Yes | Yes | Yes |
-| Data message | Yes | Yes | Host/participant | Host/participant | Host/participant |
-| SDK message-size limit | 15 KiB | 2 KiB | 1 KiB | 1 KiB | 1 KiB |
-| Targeted data | Yes | No | No | No | No |
-| Unreliable data | Yes | No | No | No | No |
-| Device enumeration/selection | Yes, platform dependent | Audio output | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter |
-| Pre-Join native device probe | Mic/camera | No native probe | No native probe | No native probe | No native probe |
-| Pre-Join provider network probe | Unsupported without issued credentials | No native probe | No native probe | No native probe | No native probe |
-| Network stats | Yes | Not exposed by adapter | Yes | Yes | Not exposed by adapter |
-| Screen share | Yes for publishers | Not exposed by adapter | Deferred | Not exposed by adapter | Not exposed by adapter |
-| Host participant list | Backend + host role | Not available (no host role) | Backend + host role | Backend + host role | Backend + host role |
-| Host remove participant | LiveKit host | No | No | No | No |
-| Host close room | Host via backend | Not available (no host role) | Host via backend | Host via backend | Host via backend |
+| Capability | LiveKit | Chime | Agora | TRTC | ARTC | IVS Real-Time |
+| --- | --- | --- | --- | --- | --- | --- |
+| Meeting audio/video | Yes | Yes | Yes | Yes | Yes | Yes |
+| Broadcast host/viewer | Yes | No (participant only) | Yes | Yes | Yes | Yes |
+| RTC data message | Yes | Yes | Host/participant | Host/participant | Host/participant | No |
+| SDK message-size limit | 15 KiB | 2 KiB | 1 KiB | 1 KiB | 1 KiB | — |
+| Targeted data | Yes | No | No | No | No | No |
+| Unreliable data | Yes | No | No | No | No | No |
+| Device enumeration/selection | Yes, platform dependent | Audio output | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter | Mic/camera probe; camera switch |
+| Pre-Join native device probe | Mic/camera | No native probe | No native probe | No native probe | No native probe | Mic/camera |
+| Pre-Join provider network probe | Unsupported without issued credentials | No native probe | No native probe | No native probe | No native probe | Unsupported without participant token |
+| Network stats | Yes | Not exposed by adapter | Yes | Yes | Not exposed by adapter | Basic RTC stats |
+| Screen share | Yes for publishers | Not exposed by adapter | Deferred | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter |
+| Host participant list | Backend + host role | Not available (no host role) | Backend + host role | Backend + host role | Backend + host role | Backend + host role |
+| Host remove participant | LiveKit host | No | No | No | No | IVS DisconnectParticipant |
+| Host close room | Host via backend | Not available (no host role) | Host via backend | Host via backend | Host via backend | Host via backend |
+
+## Product chat
+
+Product chat is not inferred from the media provider or `MediaCapabilities`.
+It uses `ChatSession` / `ChatCapabilities` from
+`flutter_realtime_chat_core`.
+
+| Capability | Amazon IVS Chat |
+| --- | --- |
+| Send message | Yes |
+| Receive live message | Yes |
+| Delete message | Host/moderator token |
+| Disconnect user | Host/moderator token |
+| Automatic reconnect token refresh | Yes |
+| Provider-independent from media | Yes |
+
+RTC data messages remain a media transport feature. They may be useful for
+control/debug payloads but are not treated as product chat by the built-in UI
+when a `ChatSession` is attached.
 
 ## Provider-neutral APIs
 

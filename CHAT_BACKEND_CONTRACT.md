@@ -1,0 +1,83 @@
+# Chat Backend Contract v1
+
+Product chat is independent from the media provider. A room can use any
+supported media provider and optionally bind a separate chat provider. RTC data
+messages are not a substitute for this contract.
+
+## Versioning
+
+Chat requests send header X-Realtime-Chat-Contract: 1. Authentication uses the
+same application-level Authorization or custom headers as the media backend.
+Provider API credentials remain server-side.
+
+## Issue chat credentials
+
+POST /rooms/{roomCode}/chat/token
+
+Request:
+
+~~~json
+{
+  "participantId": "viewer-a",
+  "participantCredential": "<opaque-session-proof>"
+}
+~~~
+
+participantId must already belong to the media room and participantCredential
+must be the opaque proof issued to that exact participant by the media join
+response. Knowing another participant's id is therefore insufficient to mint
+their chat token. The client does not send userId, displayName, or role to
+obtain chat permission. The backend validates the participant proof, resolves
+the stored media participant, and grants capabilities from that server-side
+identity/role.
+
+The media backend must also establish that role without trusting public,
+client-declared identity fields. In particular, `userId`, `displayName`,
+and `deviceId` must not restore a broadcast `host`. The reference backend
+issues a separate random `roomOwnerCredential` when the broadcast is created
+and only a join presenting that proof can become `host`. This matters because
+chat messages may expose the sender's logical `userId`; learning that value
+must not allow another participant to obtain `DELETE_MESSAGE` or
+`DISCONNECT_USER`.
+
+Response:
+
+~~~json
+{
+  "contractVersion": 1,
+  "chatProvider": "ivs-chat",
+  "roomCode": "482913",
+  "participantId": "viewer-a",
+  "userId": "account-123",
+  "displayName": "Viewer A",
+  "role": "viewer",
+  "chat": {
+    "roomArn": "arn:aws:ivschat:us-west-2:123456789012:room/abc",
+    "token": "<short-lived-chat-token>",
+    "capabilities": ["SEND_MESSAGE"],
+    "tokenExpirationTimeMs": 1790570600000,
+    "sessionExpirationTimeMs": 1790573600000,
+    "region": "us-west-2"
+  }
+}
+~~~
+
+For Amazon IVS Chat, participant/viewer receives SEND_MESSAGE. Host receives
+SEND_MESSAGE, DELETE_MESSAGE, and DISCONNECT_USER. Token duration is clamped to
+the AWS-supported 1-180 minute range. During reconnect, the native Chat SDK
+requests a fresh token through Dart instead of reusing a consumed token.
+
+The participantCredential is not an AWS credential. The reference backend
+generates 32 random bytes per admitted participant, returns the opaque value
+only to that participant, and stores only a SHA-256 digest. A new join for that
+participant rotates the proof.
+
+If a room has no chat provider, the reference backend returns
+unsupported-feature. Unknown rooms or participants return typed errors.
+
+## Room lifecycle
+
+The backend creates the product-chat room together with the media room when a
+Chat Provider is enabled and deletes both when the application room closes.
+Changing the default Media or Chat Provider affects only newly created rooms;
+existing rooms retain both bindings.

@@ -53,6 +53,7 @@ different scheme can use `headersProvider` instead.
 | `roomMode` | create request | `meeting` or `broadcast`. New clients should send this instead of choosing a role. |
 | `role` | request body | Legacy compatibility override. Modern clients omit it and let the backend assign the role from room policy. |
 | `provider` | response body | Provider selected by the backend and used to issue credentials. Optional only for legacy Chime responses; when absent the SDK assumes `chime`. |
+| `chatProvider` | response body | Optional product-chat provider bound to the room. It is independent from the media `provider`. |
 | `role` | response body | The role granted by the backend: `participant`, `host`, or `viewer`. |
 
 Flutter never requests `livekit`, `chime`, or another provider. The backend may
@@ -90,16 +91,20 @@ to accept `nickname` when the newer pair is absent.
 `deviceId` is optional and opaque. Demo applications may persist a random
 install-scoped id and send it on create/join so the backend can treat repeated
 joins from the same app installation as one logical device presence. It is not
-a hardware identifier and must not contain provider credentials.
+a hardware identifier and must not contain provider credentials. Neither
+`userId` nor `deviceId` is authorization proof: both are client-declared
+values and must never grant `host` or moderation privileges by themselves.
 
 The reference backend assigns roles from `roomMode`:
 
 - `meeting`: creator and joiners are `participant`;
 - `broadcast`: creator is `host`; other devices are `viewer`;
-- if the broadcast creator reconnects with the same stable `userId` or
-  `deviceId`, it remains `host`.
+- broadcast creation returns a random `roomOwnerCredential`; a later join is
+  restored to `host` only when it presents that server-issued proof.
 
 Clients must not be able to self-promote by sending `role: "host"` on join.
+Copying the creator's `userId`, display name, or `deviceId` must still
+produce a `viewer`.
 
 ### `POST /rooms/{roomCode}/join`
 
@@ -118,6 +123,21 @@ Missing room returns `room-not-found` (`404`).
 For rooms created with `roomMode`, the backend ignores any valid client role
 hint on join and returns the role granted by the room policy. This prevents a
 viewer from changing a request field to become a host.
+
+The broadcast owner may additionally send:
+
+```json
+{
+  "roomOwnerCredential": "<opaque-owner-proof>"
+}
+```
+
+The reference backend generates 32 random bytes when the broadcast room is
+created, stores only a SHA-256 digest in `RoomEntry`, and returns the opaque
+proof only to the creator. `MediaRoomSession.roomOwnerCredential` exposes it
+to the creating client so an application can keep it in secure session
+storage. It is intentionally excluded from room discovery, participant lists,
+and dashboard summaries.
 
 ### Discover rooms
 
@@ -161,7 +181,10 @@ provider session.
 Lists sanitized logical participants:
 
 ```json
-{ "requesterParticipantId": "host-1" }
+{
+  "requesterParticipantId": "host-1",
+  "participantCredential": "<opaque-session-proof>"
+}
 ```
 
 ```json
@@ -189,6 +212,7 @@ Requests server-enforced removal of a current participant:
 ```json
 {
   "requesterParticipantId": "host-1",
+  "participantCredential": "<opaque-session-proof>",
   "targetParticipantId": "viewer-1"
 }
 ```
@@ -202,7 +226,10 @@ LiveKit. A provider without a server-side removal primitive returns
 Host-authorized room closure:
 
 ```json
-{ "requesterParticipantId": "host-1" }
+{
+  "requesterParticipantId": "host-1",
+  "participantCredential": "<opaque-session-proof>"
+}
 ```
 
 This differs from a normal participant `leave`: it prevents future joins and
@@ -212,12 +239,13 @@ For LiveKit, the reference backend calls RoomService `DeleteRoom`, which
 forcibly disconnects current participants instead of only deleting the local
 room-directory entry.
 
-The account-free demo server checks that `requesterParticipantId` currently
-belongs to the room host. That is demonstration-level authorization, **not
-production authentication**. Production implementations must bind management
-requests to the authenticated application identity/session (for example the
-Bearer credential) and must not trust a caller-supplied participant id or role
-by itself.
+The reference backend checks both `requesterParticipantId` and the opaque
+`participantCredential` issued to that exact participant at join time before
+granting host management operations. The credential is random session proof,
+not a provider token or stable device id; the reference server stores only its
+SHA-256 digest. Production implementations should additionally bind requests to
+the authenticated application identity/session (for example the Bearer
+credential).
 
 ### `POST /rooms/{roomCode}/credentials/refresh` (optional)
 
@@ -226,14 +254,22 @@ that support renewal call this endpoint; existing adapters and compatible
 backends that do not use expiring credentials are unaffected.
 
 ```json
-{ "participantId": "u-123", "role": "host" }
+{
+  "participantId": "u-123",
+  "participantCredential": "<opaque-session-proof>",
+  "role": "host"
+}
 ```
 
 Success returns the standard [join response](#join-response). The backend must
 keep `provider`, `roomCode`, `participantId`, and `role` identical to the
-original session, and must authorize the caller as that application user. A
-refresh response that changes any of those fields is rejected by Core. Return
-`forbidden` (`403`) when the user is not authorized to refresh that participant.
+original session, and must authorize the caller as that exact participant.
+`role` in the request is compatibility information only: the backend must
+derive the effective role from its stored room participant and must never use a
+caller-supplied role to increase privileges. A refresh response that changes
+any of those fields is rejected by Core. Return `forbidden` (`403`) when the
+participant proof is missing/invalid or a requested role does not match the
+stored role.
 
 ### `POST /rooms/{roomCode}/heartbeat`
 
@@ -307,6 +343,12 @@ Applications are not required to expose it to ordinary clients. For providers
 that bill by attendance there is nothing to release; for providers that bill by
 provisioned room (for example AWS Chime) this is the "stop future joins" call.
 
+If any provider-side cleanup fails, the reference backend does **not** remove
+the local room-directory entry. It marks the room cleanup-pending, excludes it
+from public discovery, rejects new join/token/refresh requests, and keeps enough
+state to retry only the resources that have not already been deleted. The room
+record is removed only after all required Media and Chat cleanup succeeds.
+
 ## Join response
 
 Common fields:
@@ -317,13 +359,18 @@ Common fields:
   "provider": "livekit",
   "role": "host",
   "roomCode": "482913",
-  "participantId": "host-a"
+  "participantId": "host-a",
+  "participantCredential": "<opaque-session-proof>"
 }
 ```
 
 `roomCode` is required (the SDK falls back to the requested code on join calls),
-`participantId` is required by adapters. Additional fields are allowed and
-ignored.
+`participantId` is required by adapters. The reference backend also returns a
+random `participantCredential` after an actual create+join or join. Core keeps
+that proof on `MediaRoomSession` and automatically returns it for credential
+refresh and host-management requests. Rejoining rotates the proof. It must not
+be logged, exposed through room discovery/participant lists, or used as a
+stable application identity. Additional fields are allowed and ignored.
 
 ### LiveKit provider block
 
@@ -488,6 +535,38 @@ from changing its SDK role. ARTC custom data messages require a publisher to
 have an active audio or video stream; viewers can receive messages but cannot
 send them through this adapter.
 
+### Amazon IVS Real-Time provider block
+
+~~~json
+{
+  "contractVersion": 1,
+  "provider": "ivs",
+  "role": "viewer",
+  "roomCode": "482913",
+  "participantId": "viewer-a",
+  "chatProvider": "ivs-chat",
+  "ivs": {
+    "stageArn": "arn:aws:ivs:us-west-2:123456789012:stage/abc",
+    "token": "<short-lived-participant-token>",
+    "tokenParticipantId": "<aws-participant-id>",
+    "capabilities": ["SUBSCRIBE"],
+    "expiresAtMs": 1790573600000,
+    "region": "us-west-2"
+  }
+}
+~~~
+
+The backend must enforce Stage capabilities. participant / host receive
+PUBLISH + SUBSCRIBE; viewer receives SUBSCRIBE only. The AWS
+tokenParticipantId is provider state and may change on refresh. The top-level
+participantId is the stable logical application identity and must not change.
+
+The IVS adapter refreshes an active Stage with exchangeToken instead of
+leaving/rejoining. Credential refresh resolves the role from the stored
+participant before calling CreateParticipantToken, so a viewer cannot request a
+host token. The reference backend maps host participant removal to IVS
+DisconnectParticipant.
+
 ### Chime compatibility
 
 A Chime-only backend may omit `provider`, `role`, and `participantId` and
@@ -603,6 +682,7 @@ identity instead of trusting a joiner's requested role.
 | LiveKit (self-hosted) | Auto-created on first join; empty rooms cost nothing | No per-minute charge; you pay for the host |
 | LiveKit Cloud | Same | Metered in participant-minutes; the free Build tier has hard monthly caps |
 | AWS Chime | Explicitly created and must be deleted after use | Attendee-minutes bill while someone is in the meeting; delete the meeting to stop future joins |
+| Amazon IVS Real-Time | Stage is explicitly created/deleted by the backend | Short-lived Stage participant tokens remain server-issued |
 
 ## Backend responsibilities
 

@@ -13,7 +13,11 @@ flutter_realtime_media_core
   ├─ flutter_realtime_media_agora   -> agora_rtc_engine
   ├─ flutter_realtime_media_trtc    -> tencent_rtc_sdk
   ├─ flutter_realtime_media_artc    -> native AliVCSDK_ARTC (Android/iOS)
+  ├─ flutter_realtime_media_ivs     -> Amazon IVS Broadcast Stages (Android/iOS)
   └─ flutter_realtime_media_chime   -> flutter_aws_chime
+
+flutter_realtime_chat_core
+  └─ flutter_realtime_chat_ivs      -> Amazon IVS Chat Messaging (Android/iOS)
 ```
 
 Provider SDKs never become dependencies of Core.
@@ -45,6 +49,7 @@ final registry = MediaRegistry([
   const LiveKitSessionFactory(),
   const TrtcSessionFactory(),
   const ArtcSessionFactory(),
+  const IvsSessionFactory(),
   ChimeSessionFactory(),
 ]);
 
@@ -63,6 +68,28 @@ final room = await client.createRoomAndJoinIdentity(
   ),
 );
 ```
+
+Media and product chat are separate provider axes. If `room.chatProvider` is
+non-null after media join, attach chat using the media participant identity:
+
+```dart
+final chatClient = ChatClient(
+  backendUrl: 'https://api.example.com',
+  registry: ChatRegistry([
+    const IvsChatSessionFactory(),
+  ]),
+  tokenProvider: () async => applicationToken,
+);
+
+final chatRoom = await chatClient.connectRoom(
+  roomCode: room.roomCode,
+  participantId: room.participantId,
+);
+```
+
+The chat-token request never sends a client-selected chat role. The backend
+resolves the existing media participant and grants chat capabilities from the
+stored role.
 
 ## Pre-Join before create/join
 
@@ -131,6 +158,7 @@ POST   /rooms/{roomCode}/heartbeat
 POST   /rooms/{roomCode}/leave
 DELETE /rooms/{roomCode}
 POST   /rooms/{roomCode}/credentials/refresh  (optional)
+POST   /rooms/{roomCode}/chat/token            (when chat is enabled)
 ```
 
 Long-lived provider credentials remain on that server. Flutter receives only
@@ -158,11 +186,23 @@ To enable Agora in the same server, also set `AGORA_APP_ID` and
 `AGORA_APP_CERTIFICATE` (normally in the ignored `demo-server/.env`).
 
 The public URL is `http://127.0.0.1:3000`. Open the existing dashboard and
-switch new rooms between LiveKit, Agora, AWS Chime, Tencent TRTC, and Alibaba
-ARTC directly in the server UI. TRTC signing requires `TRTC_SDK_APP_ID` and
+switch the **Media Provider** for new rooms between LiveKit, Agora, AWS Chime,
+Tencent TRTC, Alibaba ARTC, and Amazon IVS Real-Time. The **Chat Provider** is
+selected independently; the reference backend supports Amazon IVS Chat or no
+product chat. Existing rooms keep both provider bindings assigned at creation.
+For the local persisted dashboard state, an explicit Chat selection of
+`none` is a real value and takes precedence over `CHAT_DEFAULT_PROVIDER`
+after restart; the environment default is used only when no persisted Chat
+selection exists.
+TRTC signing requires `TRTC_SDK_APP_ID` and
 `TRTC_SDK_SECRET_KEY` on the server; enable Advanced Permission Control in the
 Tencent RTC project. The Flutter package receives short-lived UserSig and room
 PrivateMapKey values only.
+
+Amazon IVS Real-Time uses the server IAM credential chain and
+`IVS_REALTIME_REGION` (or the configured AWS region). Amazon IVS Chat uses
+`IVS_CHAT_REGION` and the same server-side IAM model. Flutter receives only
+short-lived Stage/Chat tokens.
 
 The LiveKit server itself is managed by `bash scripts/livekit-dev.sh` and can remain
 running between tests.

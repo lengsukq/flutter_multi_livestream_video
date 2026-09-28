@@ -19,6 +19,17 @@ import { createAgoraProvider } from './providers/agora.ts';
 import { createArtcProvider } from './providers/artc.ts';
 import { createChimeProvider } from './providers/chime.ts';
 import { createLiveKitProvider } from './providers/livekit.ts';
+import { createIvsProvider } from './providers/ivs.ts';
+import { ChatProviderRegistry } from './chat/chat-provider-registry.ts';
+import { createIvsChatProvider } from './chat/ivs-chat.ts';
+import {
+  issueParticipantCredential,
+  requireParticipantCredential,
+} from './participant-credential.ts';
+import {
+  issueRoomOwnerCredential,
+  matchesRoomOwnerCredential,
+} from './room-owner-credential.ts';
 import { ProviderOperationError, ProviderRegistry } from './providers/provider-registry.ts';
 import { RoomDirectory } from './providers/room-directory.ts';
 import { createTrtcProvider } from './providers/trtc.ts';
@@ -36,6 +47,7 @@ const CONTROL_REGION = process.env.AWS_REGION ?? 'us-east-1';
 const MEDIA_REGION = process.env.CHIME_MEDIA_REGION ?? 'ap-southeast-1';
 const CONTRACT_VERSION = 1;
 const MEDIA_CONTRACT_HEADER = 'X-Media-Backend-Contract';
+const CHAT_CONTRACT_HEADER = 'X-Realtime-Chat-Contract';
 const LEGACY_CHIME_CONTRACT_HEADER = 'X-Chime-Backend-Contract';
 const DEMO_BEARER_TOKEN = process.env.DEMO_BEARER_TOKEN?.trim() || null;
 const MEDIA_ADMIN_PASSWORD = process.env.MEDIA_ADMIN_PASSWORD?.trim() || '';
@@ -47,6 +59,7 @@ const MEDIA_CONNECTIONS_ENABLED = parseBoolean(
   !IS_VERCEL,
 );
 const INITIAL_PROVIDER = String(process.env.MEDIA_DEFAULT_PROVIDER ?? 'chime').trim().toLowerCase();
+const INITIAL_CHAT_PROVIDER = String(process.env.CHAT_DEFAULT_PROVIDER ?? 'none').trim().toLowerCase();
 const STARTED_AT = Date.now();
 const EMPTY_CLOSE_AFTER_MS = Number(process.env.EMPTY_CLOSE_AFTER_MS ?? 90_000);
 const PARTICIPANT_STALE_AFTER_MS = Number(
@@ -66,9 +79,10 @@ app.use(cors({
     'Authorization',
     'Content-Type',
     'X-Media-Backend-Contract',
+    'X-Realtime-Chat-Contract',
     'X-Chime-Backend-Contract',
   ],
-  exposedHeaders: [MEDIA_CONTRACT_HEADER],
+  exposedHeaders: [MEDIA_CONTRACT_HEADER, CHAT_CONTRACT_HEADER],
   maxAge: 600,
 }));
 app.use(express.json({ limit: '64kb' }));
@@ -103,12 +117,18 @@ function bindLogicalIdentity(
   current.role = role;
   current.lastHeartbeatMs = Date.now();
   if (deviceId) current.deviceId = deviceId;
-  entry.attendees = entry.attendees.filter(
-    (attendee) =>
-      attendee.attendeeId === participantId ||
-      (attendee.userId !== userId && (!deviceId || attendee.deviceId !== deviceId)),
-  );
+  entry.attendees = entry.attendees.filter((attendee) => {
+    if (attendee.attendeeId === participantId) return true;
+    if (attendee.role === 'host') {
+      return role !== 'host';
+    }
+    return (
+      attendee.userId !== userId &&
+      (!deviceId || attendee.deviceId !== deviceId)
+    );
+  });
 }
+
 
 function getCookie(req: Request, name: string): string | null {
   const header = req.get('Cookie');
@@ -265,16 +285,19 @@ function creatorRoleForMode(mode: RoomMode): MediaRole {
 
 function joinRoleForRoom(
   entry: RoomEntry,
-  userId: string,
-  deviceId: string | null,
+  roomOwnerCredential: unknown,
 ): MediaRole {
   if (entry.roomMode !== 'broadcast') return 'participant';
-  const isCreator =
-    (entry.creatorUserId != null && entry.creatorUserId === userId) ||
-    (deviceId != null &&
-      entry.creatorDeviceId != null &&
-      entry.creatorDeviceId === deviceId);
-  return isCreator ? 'host' : 'viewer';
+  const credential = String(roomOwnerCredential ?? '').trim();
+  if (!credential) return 'viewer';
+  if (!matchesRoomOwnerCredential(entry, credential)) {
+    throw new ProviderOperationError(
+      403,
+      'forbidden',
+      'The room owner credential is invalid.',
+    );
+  }
+  return 'host';
 }
 
 const chimeProvider = createChimeProvider({
@@ -282,12 +305,49 @@ const chimeProvider = createChimeProvider({
   contractVersion: CONTRACT_VERSION,
   normalizeUserId,
 });
+
+app.post('/api/chat-provider', requireSameOrigin, requireAdmin, (req, res) => {
+  const requested = String(req.body?.provider ?? '').trim().toLowerCase();
+  if (IS_VERCEL) {
+    const deploymentValue = INITIAL_CHAT_PROVIDER === 'none' ? null : INITIAL_CHAT_PROVIDER;
+    if ((requested === 'none' ? null : requested) !== deploymentValue) {
+      return contractError(
+        res,
+        409,
+        'provider-selection-is-deployment-config',
+        'Set CHAT_DEFAULT_PROVIDER in Vercel and redeploy to change the default chat provider.',
+      );
+    }
+  }
+  try {
+    if (requested === 'none' || requested === '') {
+      activeChatProvider = null;
+    } else {
+      activeChatProvider = chatProviderRegistry.requireConfigured(requested).id;
+    }
+    logEvent(
+      'chat-provider-switch',
+      activeChatProvider
+        ? `new rooms will use chat provider ${activeChatProvider}`
+        : 'new rooms will not attach a chat provider',
+    );
+    persistActiveProviders(activeProvider, activeChatProvider);
+    res.json({ ok: true, activeChatProvider });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    throw error;
+  }
+});
 const providerRegistry = new ProviderRegistry([
   chimeProvider,
   createLiveKitProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
   createAgoraProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
   createTrtcProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
   createArtcProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
+  createIvsProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
+]);
+const chatProviderRegistry = new ChatProviderRegistry([
+  createIvsChatProvider({ env: process.env, contractVersion: CONTRACT_VERSION }),
 ]);
 const roomDirectory = new RoomDirectory();
 const events: Array<{ ts: string; type: string; message: string }> = [];
@@ -322,7 +382,11 @@ function sendProviderError(res: Response, error: unknown): Response | false {
 
 function requireRoomContract(req: Request, res: Response, next: NextFunction): Response | void {
   res.set(MEDIA_CONTRACT_HEADER, String(CONTRACT_VERSION));
-  const requestedVersion = req.get(MEDIA_CONTRACT_HEADER) ?? req.get(LEGACY_CHIME_CONTRACT_HEADER);
+  res.set(CHAT_CONTRACT_HEADER, String(CONTRACT_VERSION));
+  const requestedVersion =
+    req.get(MEDIA_CONTRACT_HEADER) ??
+    req.get(CHAT_CONTRACT_HEADER) ??
+    req.get(LEGACY_CHIME_CONTRACT_HEADER);
   if (requestedVersion && requestedVersion !== String(CONTRACT_VERSION)) {
     return contractError(
       res,
@@ -425,12 +489,47 @@ function loadPersistedProvider(): string {
   return initial.isConfigured() ? initial.id : 'chime';
 }
 
-function persistActiveProvider(provider: string): void {
+function loadPersistedChatProvider(): string | null {
+  const configuredDefault = INITIAL_CHAT_PROVIDER === 'none'
+    ? null
+    : chatProviderRegistry.get(INITIAL_CHAT_PROVIDER);
+  if (IS_VERCEL) {
+    return configuredDefault?.isConfigured() ? configuredDefault.id : null;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(PROVIDER_STATE_PATH, 'utf8')) as {
+      chatProvider?: unknown;
+    };
+    const hasPersistedSelection = Object.prototype.hasOwnProperty.call(
+      parsed,
+      'chatProvider',
+    );
+    if (!hasPersistedSelection) {
+      return configuredDefault?.isConfigured() ? configuredDefault.id : null;
+    }
+    if (parsed.chatProvider == null || parsed.chatProvider === 'none') return null;
+    const provider = chatProviderRegistry.get(parsed.chatProvider);
+    if (provider?.isConfigured()) return provider.id;
+  } catch (_) {
+    // Missing/corrupt state falls back to CHAT_DEFAULT_PROVIDER.
+  }
+  return configuredDefault?.isConfigured() ? configuredDefault.id : null;
+}
+
+function persistActiveProviders(mediaProvider: string, chatProvider: string | null): void {
   if (IS_VERCEL) return;
   try {
     writeFileSync(
       PROVIDER_STATE_PATH,
-      JSON.stringify({ provider, updatedAt: new Date().toISOString() }, null, 2) + '\n',
+      JSON.stringify(
+        {
+          provider: mediaProvider,
+          chatProvider: chatProvider ?? 'none',
+          updatedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ) + '\n',
       'utf8',
     );
   } catch (error) {
@@ -440,6 +539,7 @@ function persistActiveProvider(provider: string): void {
 }
 
 let activeProvider = loadPersistedProvider();
+let activeChatProvider = loadPersistedChatProvider();
 
 async function resolveRoom(ref: unknown): Promise<RoomEntry | null> {
   const key = String(ref ?? '').trim();
@@ -466,7 +566,33 @@ async function resolveChimeRoom(ref: unknown): Promise<RoomEntry | null> {
 
 async function closeRoom(entry: RoomEntry, reason: string): Promise<void> {
   const provider = providerRegistry.require(entry.provider);
-  await provider.closeRoom({ entry, reason });
+  entry.closePending = true;
+  let chatError: unknown;
+  if (entry.chatProvider && !entry.chatClosed) {
+    try {
+      await chatProviderRegistry.require(entry.chatProvider).closeRoom(entry);
+      entry.chatClosed = true;
+    } catch (error) {
+      chatError = error;
+    }
+  }
+  let mediaError: unknown;
+  if (!entry.mediaClosed) {
+    try {
+      await provider.closeRoom({ entry, reason });
+      entry.mediaClosed = true;
+    } catch (error) {
+      mediaError = error;
+    }
+  }
+  if (mediaError || chatError) {
+    logEvent(
+      'error',
+      `room ${entry.roomCode} close incomplete (${reason}); retry remains possible`,
+    );
+    if (mediaError) throw mediaError;
+    throw chatError;
+  }
   roomDirectory.remove(entry);
   const suffix = entry.provider === 'chime' ? ' — billing for future joins stops' : '';
   logEvent('delete', `room ${entry.roomCode} closed (${reason})${suffix}`);
@@ -476,10 +602,35 @@ function summarizeRoom(entry: RoomEntry, req?: Request): RoomSummary {
   pruneStaleAttendees(entry, Date.now());
   const provider = providerRegistry.require(entry.provider);
   const host = req ? `${req.protocol}://${req.get('host')}` : '';
+  const providerSummary = provider.summarizeRoom(entry, { host });
   return {
-    ...provider.summarizeRoom(entry, { host }),
+    ...providerSummary,
+    attendees: providerSummary.attendees.map((attendee) => ({
+      attendeeId: attendee.attendeeId,
+      ...(attendee.providerParticipantId
+        ? { providerParticipantId: attendee.providerParticipantId }
+        : {}),
+      externalUserId: attendee.externalUserId,
+      ...(attendee.userId ? { userId: attendee.userId } : {}),
+      ...(attendee.displayName ? { displayName: attendee.displayName } : {}),
+      joinedAt: attendee.joinedAt,
+      ...(attendee.lastHeartbeatMs != null
+        ? { lastHeartbeatMs: attendee.lastHeartbeatMs }
+        : {}),
+      ...(attendee.role ? { role: attendee.role } : {}),
+      ...(attendee.deviceId ? { deviceId: attendee.deviceId } : {}),
+    })),
     ...(entry.roomMode ? { roomMode: entry.roomMode } : {}),
+    ...(entry.chatProvider ? { chatProvider: entry.chatProvider } : {}),
   };
+}
+
+function isRoomPartiallyClosed(entry: RoomEntry): boolean {
+  return (
+    entry.closePending === true ||
+    entry.mediaClosed === true ||
+    entry.chatClosed === true
+  );
 }
 
 if (!IS_VERCEL) {
@@ -503,15 +654,19 @@ app.get('/', (_req, res) => {
 app.get('/health', (_req, res) => {
   const current = providerRegistry.require(activeProvider);
   const providerList = providerRegistry.metadata();
+  const chatProviderList = chatProviderRegistry.metadata();
   res.json({
     ok: current.isConfigured(),
     connectionsEnabled: MEDIA_CONNECTIONS_ENABLED,
     contractVersion: CONTRACT_VERSION,
     activeProvider,
+    activeChatProvider,
     controlRegion: CONTROL_REGION,
     mediaRegion: MEDIA_REGION,
     providers: Object.fromEntries(providerList.map((item) => [item.id, item])),
     providerList,
+    chatProviders: Object.fromEntries(chatProviderList.map((item) => [item.id, item])),
+    chatProviderList,
   });
 });
 
@@ -530,7 +685,7 @@ app.post('/api/provider', requireSameOrigin, requireAdmin, (req, res) => {
       activeProvider = provider.id;
       logEvent('provider-switch', `new rooms will use ${provider.id}`);
     }
-    persistActiveProvider(provider.id);
+    persistActiveProviders(provider.id, activeChatProvider);
     res.json({ ok: true, activeProvider });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
@@ -541,13 +696,20 @@ app.post('/api/provider', requireSameOrigin, requireAdmin, (req, res) => {
 app.get('/api/overview', requireAdmin, (req, res) => {
   const allRooms = roomDirectory.entries();
   const providerList = providerRegistry.metadata();
+  const chatProviderList = chatProviderRegistry.metadata();
   res.json({
     ok: true,
     connectionsEnabled: MEDIA_CONNECTIONS_ENABLED,
     providerSelectionEnabled: !IS_VERCEL,
+    chatProviderSelectionEnabled: !IS_VERCEL,
     activeProvider,
+    activeChatProvider,
     providers: Object.fromEntries(providerList.map((item) => [item.id, item])),
     providerList,
+    chatProviders: Object.fromEntries(
+      chatProviderList.map((item) => [item.id, item]),
+    ),
+    chatProviderList,
     controlRegion: CONTROL_REGION,
     mediaRegion: MEDIA_REGION,
     uptimeSec: Math.floor((Date.now() - STARTED_AT) / 1000),
@@ -567,16 +729,20 @@ app.get('/rooms', requireAdmin, (req, res) => {
 });
 
 app.get('/rooms/discover', (req, res) => {
-  const rooms = roomDirectory.entries().map((entry) => {
+  const rooms = roomDirectory
+    .entries()
+    .filter((entry) => !isRoomPartiallyClosed(entry))
+    .map((entry) => {
     const summary = summarizeRoom(entry, req);
     return {
       provider: summary.provider,
+      ...(summary.chatProvider ? { chatProvider: summary.chatProvider } : {}),
       roomCode: summary.roomCode,
       roomMode: summary.roomMode ?? 'meeting',
       createdAt: summary.createdAt,
       attendeeCount: summary.attendeeCount,
     };
-  });
+    });
   res.set('Cache-Control', 'no-store');
   res.json({ contractVersion: CONTRACT_VERSION, rooms });
 });
@@ -628,22 +794,54 @@ app.post('/rooms', async (req, res) => {
       assertRole(provider, 'viewer');
     }
     const rawNickname = req.body?.displayName?.trim() || req.body?.nickname?.trim() || null;
-    const suppliedUserId = req.body?.userId ?? deviceId ?? rawNickname;
-    const creatorUserId = suppliedUserId == null ? undefined : normalizeUserId(suppliedUserId);
     const created = await provider.createRoom({ roomCode, role });
+    if (activeChatProvider) {
+      try {
+        const chat = await chatProviderRegistry
+          .requireConfigured(activeChatProvider)
+          .createRoom(roomCode);
+        created.entry.chatProvider = chat.chatProvider;
+        created.entry.chatRoomArn = chat.chatRoomArn;
+        created.response.chatProvider = chat.chatProvider;
+      } catch (error) {
+        try {
+          await provider.closeRoom({ entry: created.entry, reason: 'chat room create rollback' });
+        } catch (cleanupError) {
+          console.error('media rollback after chat create failure failed', cleanupError);
+        }
+        throw error;
+      }
+    }
     created.entry.roomMode = roomMode;
-    created.entry.creatorUserId = creatorUserId;
-    if (deviceId) created.entry.creatorDeviceId = deviceId;
     created.response.roomMode = roomMode;
+    const roomOwnerCredential =
+      roomMode === 'broadcast'
+        ? issueRoomOwnerCredential(created.entry)
+        : null;
+    if (roomOwnerCredential) {
+      created.response.roomOwnerCredential = roomOwnerCredential;
+    }
     registerRoom(provider, created.entry);
     created.entry.lastHeartbeatMs = Date.now();
     logEvent('create', `room ${roomCode} created with ${provider.displayName}`);
 
     if (!rawNickname) return res.json(created.response);
 
-    const response = await provider.joinRoom({ entry: created.entry, rawName: rawNickname, role });
+    const userId = normalizeUserId(
+      req.body?.userId ?? deviceId ?? rawNickname,
+    );
+    const response = await provider.joinRoom({
+      entry: created.entry,
+      rawName: rawNickname,
+      role,
+      userId,
+      deviceId,
+    });
+    if (created.entry.chatProvider) response.chatProvider = created.entry.chatProvider;
     response.roomMode = roomMode;
-    const userId = creatorUserId ?? normalizeUserId(req.body?.userId ?? deviceId ?? rawNickname);
+    if (roomOwnerCredential) {
+      response.roomOwnerCredential = roomOwnerCredential;
+    }
     bindLogicalIdentity(
       created.entry,
       response.participantId,
@@ -651,6 +849,10 @@ app.post('/rooms', async (req, res) => {
       rawNickname,
       deviceId,
       role,
+    );
+    response.participantCredential = issueParticipantCredential(
+      created.entry,
+      response.participantId,
     );
     logEvent('join', `${response.displayName} created+joined room ${roomCode} via ${provider.displayName}`);
     res.json(response);
@@ -669,6 +871,14 @@ app.post('/rooms/:code/join', async (req, res) => {
     if (!entry) {
       logEvent('error', `join ${req.params.code} failed: not found`);
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+    }
+    if (isRoomPartiallyClosed(entry)) {
+      return contractError(
+        res,
+        409,
+        'room-closing',
+        'The room is partially closed and is waiting for cleanup retry.',
+      );
     }
     const provider = providerRegistry.requireConfigured(entry.provider);
     const deviceId = normalizeDeviceId(req.body?.deviceId);
@@ -692,11 +902,23 @@ app.post('/rooms/:code/join', async (req, res) => {
       return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
     }
     const role = entry.roomMode
-      ? joinRoleForRoom(entry, userId, deviceId)
+      ? joinRoleForRoom(entry, req.body?.roomOwnerCredential)
       : requestedRole ?? 'participant';
     assertRole(provider, role, entry);
-    const response = await provider.joinRoom({ entry, rawName: displayName, role });
+    const response = await provider.joinRoom({
+      entry,
+      rawName: displayName,
+      role,
+      userId,
+      deviceId,
+    });
+    if (entry.chatProvider) response.chatProvider = entry.chatProvider;
     if (entry.roomMode) response.roomMode = entry.roomMode;
+    if (role === 'host') {
+      response.roomOwnerCredential = String(
+        req.body?.roomOwnerCredential ?? '',
+      ).trim();
+    }
     bindLogicalIdentity(
       entry,
       response.participantId,
@@ -704,6 +926,10 @@ app.post('/rooms/:code/join', async (req, res) => {
       displayName,
       deviceId,
       role,
+    );
+    response.participantCredential = issueParticipantCredential(
+      entry,
+      response.participantId,
     );
     logEvent('join', `${response.displayName} joined room ${entry.roomCode} via ${provider.displayName}`);
     res.json(response);
@@ -716,14 +942,82 @@ app.post('/rooms/:code/join', async (req, res) => {
   }
 });
 
+app.post('/rooms/:code/chat/token', async (req, res) => {
+  try {
+    const entry = await resolveRoom(req.params.code);
+    if (!entry) {
+      return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+    }
+    if (isRoomPartiallyClosed(entry)) {
+      return contractError(
+        res,
+        409,
+        'room-closing',
+        'The room is partially closed and cannot issue chat credentials.',
+      );
+    }
+    if (!entry.chatProvider || !entry.chatRoomArn) {
+      return contractError(
+        res,
+        400,
+        'unsupported-feature',
+        'This room does not have a chat provider.',
+      );
+    }
+    const participantId = String(req.body?.participantId ?? '').trim();
+    if (!participantId) {
+      return contractError(res, 400, 'invalid-argument', 'participantId is required.');
+    }
+    pruneStaleAttendees(entry, Date.now());
+    const attendee = requireParticipantCredential(
+      entry,
+      participantId,
+      req.body?.participantCredential,
+    );
+    const chatProvider = chatProviderRegistry.requireConfigured(entry.chatProvider);
+    const response = await chatProvider.issueToken({ entry, attendee });
+    res.json(response);
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('chat token failed', error);
+    contractError(res, 500, 'chat-token-failed', 'Unable to issue chat credentials.');
+  }
+});
+
 app.post('/rooms/:code/credentials/refresh', async (req, res) => {
   try {
     const entry = await resolveRoom(req.params.code);
     if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+    if (isRoomPartiallyClosed(entry)) {
+      return contractError(
+        res,
+        409,
+        'room-closing',
+        'The room is partially closed and cannot refresh credentials.',
+      );
+    }
     const participantId = String(req.body?.participantId ?? '').trim();
-    const role = parseRole(req.body?.role);
-    if (!participantId || !role) {
-      return contractError(res, 400, 'invalid-argument', 'participantId and a valid role are required.');
+    if (!participantId) {
+      return contractError(res, 400, 'invalid-argument', 'participantId is required.');
+    }
+    pruneStaleAttendees(entry, Date.now());
+    const attendee = requireParticipantCredential(
+      entry,
+      participantId,
+      req.body?.participantCredential,
+    );
+    const role = attendee.role ?? 'participant';
+    const requestedRole = req.body?.role == null ? null : parseRole(req.body.role);
+    if (req.body?.role != null && requestedRole == null) {
+      return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
+    }
+    if (requestedRole != null && requestedRole !== role) {
+      return contractError(
+        res,
+        403,
+        'forbidden',
+        'Credential refresh cannot change the participant role.',
+      );
     }
     const provider = providerRegistry.requireConfigured(entry.provider);
     if (typeof provider.refreshCredentials !== 'function') {
@@ -788,13 +1082,26 @@ app.post('/rooms/:code/leave', async (req, res) => {
 function requireHostAttendee(
   entry: RoomEntry,
   requesterParticipantId: unknown,
+  participantCredential: unknown,
 ): RoomAttendee | null {
   const requester = String(requesterParticipantId ?? '').trim();
   if (!requester) return null;
-  const attendee = entry.attendees.find(
-    (item) => item.attendeeId === requester,
-  );
-  return attendee?.role === 'host' ? attendee : null;
+  try {
+    const attendee = requireParticipantCredential(
+      entry,
+      requester,
+      participantCredential,
+    );
+    return attendee.role === 'host' ? attendee : null;
+  } catch (error) {
+    if (
+      error instanceof ProviderOperationError &&
+      (error.status === 403 || error.status === 404)
+    ) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 app.post('/rooms/:code/participants', async (req, res) => {
@@ -802,7 +1109,11 @@ app.post('/rooms/:code/participants', async (req, res) => {
   if (!entry) {
     return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
   }
-  if (!requireHostAttendee(entry, req.body?.requesterParticipantId)) {
+  if (!requireHostAttendee(
+    entry,
+    req.body?.requesterParticipantId,
+    req.body?.participantCredential,
+  )) {
     return contractError(res, 403, 'forbidden', 'Host permission is required.');
   }
   res.json({
@@ -823,7 +1134,11 @@ app.post('/rooms/:code/participants/remove', async (req, res) => {
     if (!entry) {
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
-    const host = requireHostAttendee(entry, req.body?.requesterParticipantId);
+    const host = requireHostAttendee(
+      entry,
+      req.body?.requesterParticipantId,
+      req.body?.participantCredential,
+    );
     if (!host) {
       return contractError(res, 403, 'forbidden', 'Host permission is required.');
     }
@@ -867,7 +1182,11 @@ app.post('/rooms/:code/close', async (req, res) => {
     if (!entry) {
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
-    if (!requireHostAttendee(entry, req.body?.requesterParticipantId)) {
+    if (!requireHostAttendee(
+      entry,
+      req.body?.requesterParticipantId,
+      req.body?.participantCredential,
+    )) {
       return contractError(res, 403, 'forbidden', 'Host permission is required.');
     }
     await closeRoom(entry, 'host close');

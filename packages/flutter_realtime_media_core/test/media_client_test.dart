@@ -48,6 +48,7 @@ void main() {
               provider: 'fake',
               participantId: 'participant-1',
               role: 'host',
+              participantCredential: 'proof-123',
             ),
           );
         }, heartbeatInterval: Duration.zero);
@@ -68,6 +69,10 @@ void main() {
         final second = session.refreshCredentials(current);
         await Future<void>.delayed(Duration.zero);
         expect(refreshRequests, 1);
+        final refreshRequest = transport.requests.firstWhere(
+          (request) => request.uri.path.endsWith('/credentials/refresh'),
+        );
+        expect(refreshRequest.json?['participantCredential'], 'proof-123');
         refreshResponse.complete(
           jsonResponse(
             liveKitJoinPayload(
@@ -333,6 +338,7 @@ void main() {
             provider: 'fake',
             participantId: 'host-a',
             role: 'host',
+            roomOwnerCredential: 'owner-proof-123',
           ),
         ),
         heartbeatInterval: Duration.zero,
@@ -347,6 +353,7 @@ void main() {
       expect(room.providerId, 'fake');
       expect(room.roomCode, '482913');
       expect(room.participantId, 'host-a');
+      expect(room.roomOwnerCredential, 'owner-proof-123');
       expect(room.session.state, MediaSessionState.connected);
       expect(factory.parsedPayloads.single['provider'], 'fake');
       expect(factory.parsedPayloads.single['role'], 'host');

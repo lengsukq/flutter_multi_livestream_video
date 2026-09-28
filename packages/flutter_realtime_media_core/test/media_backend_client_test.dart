@@ -131,11 +131,13 @@ void main() {
       final participants = await client.listRoomParticipants(
         '482913',
         requesterParticipantId: 'host-1',
+        participantCredential: 'proof-host-1',
       );
 
       expect(transport.requests.single.uri.path, '/rooms/482913/participants');
       expect(transport.requests.single.json, {
         'requesterParticipantId': 'host-1',
+        'participantCredential': 'proof-host-1',
       });
       expect(participants.single.participantId, 'host-1');
       expect(participants.single.role, MediaRole.host);
@@ -150,10 +152,12 @@ void main() {
         '482913',
         requesterParticipantId: 'host-1',
         targetParticipantId: 'viewer-1',
+        participantCredential: 'proof-host-1',
       );
       await client.closeRoomAsParticipant(
         '482913',
         requesterParticipantId: 'host-1',
+        participantCredential: 'proof-host-1',
       );
 
       expect(
@@ -163,8 +167,13 @@ void main() {
       expect(transport.requests[0].json, {
         'requesterParticipantId': 'host-1',
         'targetParticipantId': 'viewer-1',
+        'participantCredential': 'proof-host-1',
       });
       expect(transport.requests[1].uri.path, '/rooms/482913/close');
+      expect(transport.requests[1].json, {
+        'requesterParticipantId': 'host-1',
+        'participantCredential': 'proof-host-1',
+      });
     });
 
     test('maps unsupported-feature backend errors', () async {
@@ -277,6 +286,31 @@ void main() {
         expect(response.role, MediaRole.viewer);
       },
     );
+
+    test('join identity forwards room owner proof when restoring host', () async {
+      final client = clientFor(
+        (_) => jsonResponse(
+          liveKitJoinPayload(participantId: 'host-1', role: 'host')
+            ..['roomMode'] = 'broadcast',
+        ),
+      );
+
+      final response = await client.joinRoomWithIdentity(
+        roomCode: '482913',
+        userId: 'public-host-id',
+        displayName: 'Host',
+        deviceId: 'device-host',
+        roomOwnerCredential: 'owner-proof-123',
+      );
+
+      expect(transport.requests.single.json, {
+        'userId': 'public-host-id',
+        'displayName': 'Host',
+        'deviceId': 'device-host',
+        'roomOwnerCredential': 'owner-proof-123',
+      });
+      expect(response.role, MediaRole.host);
+    });
   });
 
   group('joinRoom', () {

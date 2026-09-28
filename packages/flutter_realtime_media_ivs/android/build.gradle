@@ -1,0 +1,171 @@
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
+import org.gradle.api.artifacts.transform.InputArtifact
+import org.gradle.api.artifacts.transform.TransformAction
+import org.gradle.api.artifacts.transform.TransformOutputs
+import org.gradle.api.artifacts.transform.TransformParameters
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+import org.gradle.api.attributes.Attribute
+import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+
+abstract class StripIvsJniZeroTransform
+        implements TransformAction<TransformParameters.None> {
+    @InputArtifact
+    @PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract Provider<FileSystemLocation> getInputArtifact()
+
+    private static boolean shouldStripJniZeroEntry(String name) {
+        if (!name.startsWith('org/jni_zero/') || !name.endsWith('.class')) {
+            return false
+        }
+        // IVS 1.47 bundles an older copy of the jni_zero annotation classes
+        // inside libs/webrtc.jar. flutter_webrtc/LiveKit ship newer copies of
+        // the same package. Keep IVS-only runtime helpers while removing only
+        // the overlapping annotation/metadata classes.
+        return name != 'org/jni_zero/JniInit.class' &&
+            name != 'org/jni_zero/JniUtil.class'
+    }
+
+    private static byte[] rewriteNestedWebRtcJar(byte[] input) {
+        def output = new ByteArrayOutputStream()
+        def source = new ZipInputStream(new ByteArrayInputStream(input))
+        def target = new ZipOutputStream(output)
+        ZipEntry entry
+        while ((entry = source.nextEntry) != null) {
+            def name = entry.name
+            def isSignature = name.startsWith('META-INF/') &&
+                (name.endsWith('.SF') ||
+                    name.endsWith('.RSA') ||
+                    name.endsWith('.DSA'))
+            if (shouldStripJniZeroEntry(name) || isSignature) {
+                source.closeEntry()
+                continue
+            }
+            def replacement = new ZipEntry(name)
+            if (entry.time >= 0) replacement.time = entry.time
+            target.putNextEntry(replacement)
+            source.transferTo(target)
+            target.closeEntry()
+            source.closeEntry()
+        }
+        source.close()
+        target.close()
+        return output.toByteArray()
+    }
+
+    @Override
+    void transform(TransformOutputs outputs) {
+        def input = inputArtifact.get().asFile
+        def outputName = input.name.replace(
+            '.aar',
+            '-flutter-compatible.aar',
+        )
+        def output = outputs.file(outputName)
+
+        if (!input.name.startsWith('ivs-broadcast-')) {
+            Files.copy(
+                input.toPath(),
+                output.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+            return
+        }
+
+        def source = new ZipInputStream(new FileInputStream(input))
+        def target = new ZipOutputStream(new FileOutputStream(output))
+        ZipEntry entry
+        while ((entry = source.nextEntry) != null) {
+            def replacement = new ZipEntry(entry.name)
+            if (entry.time >= 0) replacement.time = entry.time
+            target.putNextEntry(replacement)
+            if (entry.name == 'libs/webrtc.jar') {
+                target.write(rewriteNestedWebRtcJar(source.readAllBytes()))
+            } else {
+                source.transferTo(target)
+            }
+            target.closeEntry()
+            source.closeEntry()
+        }
+        source.close()
+        target.close()
+    }
+}
+
+group 'com.oneplusdream.flutter_realtime_media_ivs'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'com.android.library'
+
+def ivsJniCompatible = Attribute.of(
+    'com.oneplusdream.ivs.jni-zero-compatible',
+    Boolean,
+)
+
+android {
+    namespace 'com.oneplusdream.flutter_realtime_media_ivs'
+    compileSdk 37
+
+    defaultConfig {
+        minSdk 28
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+def compatibilityMarker =
+    'flutterRealtimeMediaIvsJniZeroCompatibilityRegistered'
+
+rootProject.allprojects { candidate ->
+    if (!candidate.extensions.extraProperties.has(compatibilityMarker)) {
+        candidate.extensions.extraProperties.set(compatibilityMarker, true)
+        candidate.dependencies.attributesSchema {
+            attribute(ivsJniCompatible)
+        }
+        candidate.dependencies.artifactTypes
+            .maybeCreate('aar')
+            .attributes
+            .attribute(ivsJniCompatible, false)
+        candidate.dependencies.registerTransform(StripIvsJniZeroTransform) {
+            from
+                .attribute(
+                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
+                    'aar',
+                )
+                .attribute(ivsJniCompatible, false)
+            to
+                .attribute(
+                    ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
+                    'aar',
+                )
+                .attribute(ivsJniCompatible, true)
+        }
+        candidate.configurations.configureEach { configuration ->
+            if (configuration.canBeResolved) {
+                configuration.attributes.attribute(
+                    ivsJniCompatible,
+                    true,
+                )
+            }
+        }
+    }
+}
+
+dependencies {
+    api('com.amazonaws:ivs-broadcast:1.47.0') {
+        artifact {
+            name = 'ivs-broadcast'
+            type = 'aar'
+            classifier = 'stages'
+        }
+    }
+}

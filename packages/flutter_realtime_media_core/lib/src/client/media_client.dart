@@ -103,12 +103,18 @@ class MediaClient {
     return _joinResponse(response);
   }
 
+  String? _normalizedOptionalProvider(Object? value) {
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    return normalized.isEmpty ? null : normalized;
+  }
+
   /// Returns rooms advertised by the backend for lightweight discovery.
   Future<List<MediaRoomSummary>> listRooms() => backend.listRooms();
 
   Future<MediaRoomSession> joinRoomIdentity({
     required String roomCode,
     required MediaIdentity identity,
+    String? roomOwnerCredential,
     MediaRole? role,
   }) async {
     final value = identity.normalized();
@@ -119,6 +125,7 @@ class MediaClient {
         userId: value.userId,
         displayName: value.displayName,
         deviceId: value.deviceId,
+        roomOwnerCredential: roomOwnerCredential,
       ),
     );
   }
@@ -151,12 +158,14 @@ class MediaClient {
     required String nickname,
     MediaRole role = MediaRole.participant,
     String? deviceId,
+    String? roomOwnerCredential,
   }) async {
     final response = await backend.joinRoom(
       role: role,
       roomCode: roomCode,
       nickname: nickname,
       deviceId: deviceId,
+      roomOwnerCredential: roomOwnerCredential,
     );
     return _joinResponse(response);
   }
@@ -181,6 +190,10 @@ class MediaClient {
       response: response,
       parseErrorMessage: 'Unable to parse backend join information.',
     );
+    final participantCredential =
+        response.json['participantCredential']?.toString().trim();
+    final roomOwnerCredential =
+        response.json['roomOwnerCredential']?.toString().trim();
 
     final session = factory.createSession(joinInfo);
     if (session case final MediaCredentialRefreshable refreshable) {
@@ -193,6 +206,7 @@ class MediaClient {
             _refreshCredentials(
               factory: factory,
               currentJoinInfo: currentJoinInfo,
+              participantCredential: participantCredential,
             ).whenComplete(() {
               if (identical(refreshInFlight, future)) refreshInFlight = null;
             });
@@ -205,6 +219,15 @@ class MediaClient {
       return MediaRoomSession.attach(
         roomCode: response.roomCode,
         participantId: joinInfo.participantId,
+        participantCredential:
+            participantCredential == null || participantCredential.isEmpty
+            ? null
+            : participantCredential,
+        roomOwnerCredential:
+            roomOwnerCredential == null || roomOwnerCredential.isEmpty
+            ? null
+            : roomOwnerCredential,
+        chatProvider: _normalizedOptionalProvider(response.json['chatProvider']),
         session: session,
         backend: backend,
         heartbeatInterval: config.heartbeatInterval,
@@ -227,12 +250,14 @@ class MediaClient {
   Future<MediaJoinInfo> _refreshCredentials({
     required MediaSessionFactory factory,
     required MediaJoinInfo currentJoinInfo,
+    String? participantCredential,
   }) async {
     try {
       final response = await backend.refreshCredentials(
         roomCode: currentJoinInfo.roomCode,
         participantId: currentJoinInfo.participantId,
         role: currentJoinInfo.role,
+        participantCredential: participantCredential,
       );
       final responseRole = response.json['role'];
       if (responseRole != null && MediaRole.tryParse(responseRole) == null) {

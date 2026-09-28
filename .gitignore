@@ -3,7 +3,19 @@
 *.log
 *.pyc
 *.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.orig
+*.rej
+.#*
+\#*\#
 .DS_Store
+
+# Flutter's local SwiftPM shim links to the installed SDK and is not portable.
+/packages/flutter_realtime_chat_ivs/ios/FlutterFramework/Flutter.xcframework
+/packages/flutter_realtime_media_ivs/ios/FlutterFramework/Flutter.xcframework
 .atom/
 .buildlog/
 .history

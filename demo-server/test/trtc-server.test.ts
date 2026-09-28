@@ -15,6 +15,7 @@ interface TrtcApiBody {
   role?: string;
   roomCode?: string;
   participantId?: string;
+  participantCredential?: string;
   displayName?: string;
   trtc?: {
     sdkAppId?: number;
@@ -117,6 +118,7 @@ test('assigns TRTC broadcast roles and refreshes credentials for the same attend
   assert.equal(viewer.status, 200);
   const refreshed = await post('/rooms/trtcHost01/credentials/refresh', {
     participantId: viewer.body.participantId,
+    participantCredential: viewer.body.participantCredential,
     role: 'viewer',
   });
   assert.equal(refreshed.status, 200);
@@ -128,6 +130,7 @@ test('assigns TRTC broadcast roles and refreshes credentials for the same attend
 
   const changedRole = await post('/rooms/trtcHost01/credentials/refresh', {
     participantId: viewer.body.participantId,
+    participantCredential: viewer.body.participantCredential,
     role: 'host',
   });
   assert.equal(changedRole.status, 403);
@@ -136,9 +139,10 @@ test('assigns TRTC broadcast roles and refreshes credentials for the same attend
 
   const wrongIdentity = await post('/rooms/trtcHost01/credentials/refresh', {
     participantId: 'unknown-user',
+    participantCredential: viewer.body.participantCredential,
     role: 'viewer',
   });
-  assert.equal(wrongIdentity.status, 403);
+  assert.equal(wrongIdentity.status, 404);
 
   const overviewResponse = await fetch(`${requireBaseUrl()}/api/overview`);
   const overview = await overviewResponse.json() as TrtcApiBody;

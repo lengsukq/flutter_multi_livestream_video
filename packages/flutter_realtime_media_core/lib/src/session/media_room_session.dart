@@ -25,6 +25,9 @@ class MediaRoomSession {
     this._heartbeatInterval, {
     required this.roomCode,
     required this.participantId,
+    this.participantCredential,
+    this.roomOwnerCredential,
+    this.chatProvider,
     required this.session,
   }) {
     _stateSubscription = session.states.listen(_onStateChanged);
@@ -36,6 +39,9 @@ class MediaRoomSession {
   static MediaRoomSession attach({
     required String roomCode,
     required String participantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+    String? chatProvider,
     required MediaSession session,
     required MediaBackendClient backend,
     required Duration heartbeatInterval,
@@ -44,11 +50,17 @@ class MediaRoomSession {
     heartbeatInterval,
     roomCode: roomCode,
     participantId: participantId,
+    participantCredential: participantCredential,
+    roomOwnerCredential: roomOwnerCredential,
+    chatProvider: chatProvider,
     session: session,
   );
 
   final String roomCode;
   final String participantId;
+  final String? participantCredential;
+  final String? roomOwnerCredential;
+  final String? chatProvider;
   final MediaSession session;
   final MediaBackendClient _backend;
   final Duration _heartbeatInterval;
@@ -93,7 +105,11 @@ class MediaRoomSession {
   /// Lists sanitized logical room participants. The backend remains the
   /// authority and rejects callers without room-management permission.
   Future<List<MediaRoomParticipantSummary>> listParticipants() => _backend
-      .listRoomParticipants(roomCode, requesterParticipantId: participantId);
+      .listRoomParticipants(
+        roomCode,
+        requesterParticipantId: participantId,
+        participantCredential: participantCredential,
+      );
 
   /// Removes a participant when the backend/provider supports true moderation.
   Future<void> removeParticipant(String targetParticipantId) =>
@@ -101,6 +117,7 @@ class MediaRoomSession {
         roomCode,
         requesterParticipantId: participantId,
         targetParticipantId: targetParticipantId,
+        participantCredential: participantCredential,
       );
 
   /// Closes the logical room for future joins using backend-authoritative
@@ -124,6 +141,7 @@ class MediaRoomSession {
       await _backend.closeRoomAsParticipant(
         roomCode,
         requesterParticipantId: participantId,
+        participantCredential: participantCredential,
       );
     } catch (_) {
       if (!_disposed && !_leaveNotified && !session.state.isTerminal) {

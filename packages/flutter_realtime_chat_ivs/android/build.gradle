@@ -1,0 +1,23 @@
+group 'com.oneplusdream.flutter_realtime_chat_ivs'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace 'com.oneplusdream.flutter_realtime_chat_ivs'
+    compileSdk 37
+
+    defaultConfig {
+        minSdk 21
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.amazonaws:ivs-chat-messaging:1.1.0'
+}
