@@ -25,7 +25,11 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
   String? _error;
 
   @override
-  void dispose() { _room.dispose(); _name.dispose(); super.dispose(); }
+  void dispose() {
+    _room.dispose();
+    _name.dispose();
+    super.dispose();
+  }
 
   HttpStandaloneChatProvisioner _provisioner() => HttpStandaloneChatProvisioner(
     ChatBackendConfig.fromUrl(widget.backendUrl),
@@ -34,9 +38,14 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
   Future<void> _open({required bool create}) async {
     if (_busy) return;
     final provisioner = _provisioner();
-    setState(() { _busy = true; _error = null; });
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
-      final displayName = _name.text.trim().isEmpty ? 'Chat user' : _name.text.trim();
+      final displayName = _name.text.trim().isEmpty
+          ? 'Chat user'
+          : _name.text.trim();
       final RealtimeChatRoom chatRoom;
       if (create) {
         chatRoom = await widget.sdk.createChatRoom(
@@ -55,17 +64,23 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
           displayName: displayName,
         );
       }
-      if (!mounted) { await chatRoom.dispose(); return; }
+      if (!mounted) {
+        await chatRoom.dispose();
+        return;
+      }
       _room.text = chatRoom.roomCode;
       try {
-        await Navigator.of(context).push<void>(MaterialPageRoute(
-          builder: (_) => RealtimeChatView(
-            session: chatRoom.session,
-            roomCode: chatRoom.roomCode,
-            title: 'Standalone Chat',
-            showAppBar: true,
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => RealtimeChatView(
+              session: chatRoom.session,
+              moderation: chatRoom.room.moderation,
+              roomCode: chatRoom.roomCode,
+              title: 'Standalone Chat',
+              showAppBar: true,
+            ),
           ),
-        ));
+        );
       } finally {
         await chatRoom.dispose();
       }
@@ -79,21 +94,138 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Standalone Chat')),
-    body: Center(child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 560),
-      child: ListView(padding: const EdgeInsets.all(20), children: [
-        const Text('Chat works independently from Meeting / Live. The demo server only provisions provider credentials.', style: TextStyle(color: Color(0xFF64748B))),
-        const SizedBox(height: 20),
-        TextField(controller: _room, decoration: const InputDecoration(labelText: 'Room code', border: OutlineInputBorder())),
-        const SizedBox(height: 12),
-        TextField(controller: _name, decoration: const InputDecoration(labelText: 'Display name', border: OutlineInputBorder())),
-        if (_error != null) ...[const SizedBox(height: 12), Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))],
-        const SizedBox(height: 16),
-        FilledButton.icon(onPressed: _busy ? null : () => _open(create: true), icon: const Icon(Icons.add_comment_rounded), label: const Text('Create chat room')),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(onPressed: _busy ? null : () => _open(create: false), icon: const Icon(Icons.login_rounded), label: const Text('Join chat room')),
-      ]),
-    )),
+    backgroundColor: Colors.transparent,
+    appBar: AppBar(
+      title: const Text('Standalone Chat'),
+      backgroundColor: Colors.white.withValues(alpha: .82),
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+    ),
+    body: RealtimeAmbientBackground(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              RealtimeGlassSurface(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(
+                          Icons.forum_outlined,
+                          color: RealtimeUiTokens.primary,
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Independent product chat',
+                            style: TextStyle(
+                              color: RealtimeUiTokens.text,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Chat works independently from Meeting / Live and uses the same ChatSession UI when embedded with media.',
+                      style: TextStyle(
+                        color: RealtimeUiTokens.textMuted,
+                        height: 1.45,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: _room,
+                      decoration: _inputDecoration('Room code'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _name,
+                      decoration: _inputDecoration('Display name'),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: RealtimeUiTokens.dangerSubtle,
+                          borderRadius: BorderRadius.circular(
+                            RealtimeUiTokens.controlRadius,
+                          ),
+                        ),
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(
+                            color: RealtimeUiTokens.danger,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: _busy ? null : () => _open(create: true),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: RealtimeUiTokens.primary,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            RealtimeUiTokens.controlRadius,
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.add_comment_rounded),
+                      label: const Text('Create chat room'),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : () => _open(create: false),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        side: const BorderSide(
+                          color: RealtimeUiTokens.borderStrong,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            RealtimeUiTokens.controlRadius,
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.login_rounded),
+                      label: const Text('Join chat room'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  InputDecoration _inputDecoration(String label) => InputDecoration(
+    labelText: label,
+    filled: true,
+    fillColor: Colors.white.withValues(alpha: .78),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+      borderSide: const BorderSide(color: RealtimeUiTokens.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+      borderSide: const BorderSide(color: RealtimeUiTokens.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+      borderSide: const BorderSide(color: RealtimeUiTokens.primary, width: 1.4),
+    ),
   );
 }

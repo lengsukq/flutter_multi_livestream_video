@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'media_provider_label.dart';
+import 'realtime_ui_style.dart';
 
 typedef MediaPreJoinCheckRunner = Future<MediaPreJoinResult> Function();
 
@@ -67,7 +68,34 @@ class _MediaPreJoinDialogState extends State<MediaPreJoinDialog> {
   Widget build(BuildContext context) {
     final result = _result;
     return AlertDialog(
-      title: Text(widget.title),
+      backgroundColor: Colors.white.withValues(alpha: .97),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+      ),
+      title: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: RealtimeUiTokens.primarySubtle,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.fact_check_outlined,
+              color: RealtimeUiTokens.primary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              widget.title,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
       content: SizedBox(
         width: 480,
         child: _loading
@@ -93,6 +121,14 @@ class _MediaPreJoinDialogState extends State<MediaPreJoinDialog> {
         if (!_loading && _error == null && result?.isReady == true)
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: RealtimeUiTokens.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.controlRadius,
+                ),
+              ),
+            ),
             child: const Text('Continue'),
           ),
       ],
@@ -139,9 +175,14 @@ class _ResultView extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: result.isReady
-              ? const Color(0xFFECFDF5)
-              : const Color(0xFFFEF2F2),
-          borderRadius: BorderRadius.circular(12),
+              ? RealtimeUiTokens.successSubtle
+              : RealtimeUiTokens.dangerSubtle,
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+          border: Border.all(
+            color: result.isReady
+                ? const Color(0xFFA7F3D0)
+                : const Color(0xFFFECACA),
+          ),
         ),
         child: Row(
           children: [
@@ -150,8 +191,8 @@ class _ResultView extends StatelessWidget {
                   ? Icons.check_circle_outline_rounded
                   : Icons.error_outline_rounded,
               color: result.isReady
-                  ? const Color(0xFF047857)
-                  : const Color(0xFFB91C1C),
+                  ? RealtimeUiTokens.success
+                  : RealtimeUiTokens.danger,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -193,8 +234,14 @@ class _CheckRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = _visualFor(check.status);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .72),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+        border: Border.all(color: RealtimeUiTokens.border),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

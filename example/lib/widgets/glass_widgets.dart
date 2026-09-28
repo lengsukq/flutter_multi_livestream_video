@@ -16,8 +16,8 @@ class GlassContainer extends StatelessWidget {
   const GlassContainer({
     super.key,
     required this.child,
-    this.borderRadius = 18,
-    this.blur = 12,
+    this.borderRadius = 22,
+    this.blur = 18,
     this.opacity = 0.95,
     this.padding,
     this.margin,
@@ -178,7 +178,7 @@ class GlassTextField extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: const Color(0xFFE2E8F0),
           width: 1,
@@ -255,7 +255,7 @@ class GlassGradientButton extends StatelessWidget {
                   Color(0xFFE2E8F0),
                 ],
               ),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: enabled
             ? [
                 BoxShadow(
@@ -269,7 +269,7 @@ class GlassGradientButton extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           onTap: enabled ? onPressed : null,
           child: Center(
             child: isLoading

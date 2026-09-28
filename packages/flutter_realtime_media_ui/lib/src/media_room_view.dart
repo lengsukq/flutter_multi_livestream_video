@@ -6,6 +6,7 @@ import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'media_provider_label.dart';
+import 'realtime_ui_style.dart';
 
 typedef MediaParticipantBuilder =
     Widget Function(
@@ -69,6 +70,111 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     });
   }
 
+  Future<void> _showRoomManagement() async {
+    final isLogicalOwner = widget.room.roomOwnerCredential?.isNotEmpty ?? false;
+    List<MediaRoomParticipantSummary> participants = const [];
+    Object? loadError;
+    if (isLogicalOwner || session.capabilities.canListParticipants) {
+      try {
+        participants = await widget.room.listParticipants();
+      } catch (error) {
+        loadError = error;
+      }
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white.withValues(alpha: .96),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              RealtimeSheetHeader(
+                title: 'Room management',
+                subtitle:
+                    'Provider: ${widget.room.providerId} · Role: ${widget.room.role.name}',
+              ),
+              if (loadError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    loadError.toString(),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              if (participants.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                ...participants.map(
+                  (participant) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        RealtimeUiTokens.controlRadius,
+                      ),
+                    ),
+                    leading: const CircleAvatar(
+                      backgroundColor: RealtimeUiTokens.primarySubtle,
+                      child: Icon(
+                        Icons.person_outline,
+                        color: RealtimeUiTokens.primary,
+                      ),
+                    ),
+                    title: Text(
+                      participant.displayName.isEmpty
+                          ? participant.participantId
+                          : participant.displayName,
+                    ),
+                    subtitle: Text(participant.role?.wireName ?? 'participant'),
+                    trailing:
+                        participant.participantId ==
+                                widget.room.participantId ||
+                            !session.capabilities.canRemoveParticipants
+                        ? null
+                        : IconButton(
+                            tooltip: 'Remove participant',
+                            icon: const Icon(Icons.person_remove_outlined),
+                            onPressed: () async {
+                              Navigator.pop(sheetContext);
+                              await _run(
+                                () => widget.room.removeParticipant(
+                                  participant.participantId,
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+              ],
+              if (isLogicalOwner || session.capabilities.canCloseRoom) ...[
+                const SizedBox(height: 12),
+                RealtimeDangerButton(
+                  onPressed: () async {
+                    Navigator.pop(sheetContext);
+                    await _run(widget.room.closeRoom);
+                    if (mounted) widget.onLeave?.call();
+                  },
+                  icon: Icons.stop_circle_outlined,
+                  label: widget.room.role == MediaRole.host
+                      ? 'Close room for everyone'
+                      : 'Close room',
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -94,6 +200,13 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           await showDialog<bool>(
             context: context,
             builder: (context) => AlertDialog(
+              backgroundColor: Colors.white.withValues(alpha: .97),
+              surfaceTintColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.cardRadius,
+                ),
+              ),
               title: const Text('Leave Meeting?'),
               content: const Text('Are you sure you want to disconnect?'),
               actions: [
@@ -104,7 +217,12 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC2626),
+                    backgroundColor: RealtimeUiTokens.danger,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(
+                        RealtimeUiTokens.controlRadius,
+                      ),
+                    ),
                   ),
                   child: const Text('Leave'),
                 ),
@@ -137,26 +255,28 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     builder: (context, snap) {
       final value = snap.data ?? session.snapshot;
       return Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 900;
-              final compact = constraints.maxWidth < 520;
-              return Column(
-                children: [
-                  _topBar(value, compact: compact),
-                  if (_error != null) _errorView(),
-                  Expanded(
-                    child: wide
-                        ? _wideContent(value, constraints)
-                        : _compactContent(value, constraints),
-                  ),
-                  if (_rtcDataOpen) _rtcData(),
-                  _controls(value),
-                ],
-              );
-            },
+        backgroundColor: Colors.transparent,
+        body: RealtimeAmbientBackground(
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 900;
+                final compact = constraints.maxWidth < 520;
+                return Column(
+                  children: [
+                    _topBar(value, compact: compact),
+                    if (_error != null) _errorView(),
+                    Expanded(
+                      child: wide
+                          ? _wideContent(value, constraints)
+                          : _compactContent(value, constraints),
+                    ),
+                    if (_rtcDataOpen) _rtcData(),
+                    _controls(value),
+                  ],
+                );
+              },
+            ),
           ),
         ),
       );
@@ -215,12 +335,11 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   Widget _topBar(MediaSnapshot value, {required bool compact}) {
     final mm = (_seconds ~/ 60).toString().padLeft(2, '0');
     final ss = (_seconds % 60).toString().padLeft(2, '0');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-      ),
+    return RealtimeGlassSurface(
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      radius: 20,
+      opacity: .88,
       child: Row(
         children: [
           _iconButton(Icons.arrow_back_ios_new_rounded, _leave),
@@ -241,6 +360,15 @@ class _MediaRoomViewState extends State<MediaRoomView> {
             _badge('$mm:$ss', Icons.circle),
             const SizedBox(width: 8),
           ],
+          if ((widget.room.roomOwnerCredential?.isNotEmpty ?? false) ||
+              (widget.room.role == MediaRole.host &&
+                  (session.capabilities.canListParticipants ||
+                      session.capabilities.canCloseRoom)))
+            IconButton(
+              tooltip: 'Manage room',
+              onPressed: _showRoomManagement,
+              icon: const Icon(Icons.admin_panel_settings_outlined),
+            ),
           _badge('${value.participants.length}', Icons.people_outline_rounded),
         ],
       ),
@@ -249,48 +377,24 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   Widget _providerBadge(String id) {
     final label = mediaProviderDisplayName(id);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEEF2FF),
-        borderRadius: BorderRadius.circular(9),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Color(0xFF4F46E5),
-          fontSize: 10.5,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    return RealtimePill(
+      label: label,
+      icon: Icons.hub_outlined,
+      foreground: RealtimeUiTokens.primary,
+      background: RealtimeUiTokens.primarySubtle,
     );
   }
 
-  Widget _badge(String text, IconData icon) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF1F5F9),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          text,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(width: 5),
-        Icon(icon, size: 12, color: const Color(0xFF64748B)),
-      ],
-    ),
-  );
+  Widget _badge(String text, IconData icon) =>
+      RealtimePill(label: text, icon: icon);
 
   Widget _errorView() => Container(
     margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-    padding: const EdgeInsets.all(10),
+    padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: const Color(0xFFFEF2F2),
-      borderRadius: BorderRadius.circular(10),
+      color: RealtimeUiTokens.dangerSubtle.withValues(alpha: .94),
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+      border: Border.all(color: const Color(0xFFFECACA)),
     ),
     child: Row(
       children: [
@@ -380,12 +484,13 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
     height: 160,
     decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: const Color(0xFFE2E8F0)),
+      color: Colors.white.withValues(alpha: .94),
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+      border: Border.all(color: RealtimeUiTokens.border),
+      boxShadow: RealtimeUiTokens.cardShadow,
     ),
     child: ClipRRect(
-      borderRadius: BorderRadius.circular(15),
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius - 2),
       child: MediaTrackView(
         renderer: widget.renderer,
         track: value.contentShareTrack,
@@ -404,20 +509,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         builder: (context, messageSnapshot) {
           final messages = messageSnapshot.data ?? chat.messages;
           _syncChatScroll(messages.length);
-          return Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x0A0F172A),
-                  blurRadius: 18,
-                  offset: Offset(0, 4),
-                ),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
+          return RealtimeGlassSurface(
+            radius: RealtimeUiTokens.cardRadius,
+            opacity: .92,
             child: Column(
               children: [
                 _chatHeader(connectionState, messages.length),
@@ -466,13 +560,15 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: const Color(0xFFEEF2FF),
-                borderRadius: BorderRadius.circular(11),
+                color: RealtimeUiTokens.primarySubtle,
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.compactRadius,
+                ),
               ),
               child: const Icon(
                 Icons.chat_bubble_outline_rounded,
                 size: 17,
-                color: Color(0xFF4F46E5),
+                color: RealtimeUiTokens.primary,
               ),
             ),
             const SizedBox(width: 10),
@@ -688,7 +784,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: RealtimeUiTokens.background,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
@@ -826,14 +922,11 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   Widget _rtcData() {
     if (!session.capabilities.canSendData) return const SizedBox.shrink();
-    return Container(
+    return RealtimeGlassSurface(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFCBD5E1)),
-      ),
+      radius: RealtimeUiTokens.controlRadius,
+      opacity: .88,
       child: Row(
         children: [
           const Padding(
@@ -880,14 +973,11 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         ? session as InteractiveMediaSession
         : null;
     final caps = value.capabilities;
-    return Container(
+    return RealtimeGlassSurface(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      radius: 26,
+      opacity: .90,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -969,17 +1059,24 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     bool endCall = false,
   }) => InkWell(
     onTap: action,
-    borderRadius: BorderRadius.circular(20),
+    borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
     child: Container(
       width: 44,
       height: 44,
       decoration: BoxDecoration(
         color: endCall
-            ? const Color(0xFFDC2626)
+            ? RealtimeUiTokens.danger
             : active
-            ? const Color(0xFFEEF2FF)
-            : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(20),
+            ? RealtimeUiTokens.primarySubtle
+            : Colors.white.withValues(alpha: .78),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+        border: Border.all(
+          color: endCall
+              ? RealtimeUiTokens.danger
+              : active
+              ? const Color(0xFFC7D2FE)
+              : RealtimeUiTokens.border,
+        ),
       ),
       child: Icon(
         icon,
@@ -987,8 +1084,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         color: endCall
             ? Colors.white
             : active
-            ? const Color(0xFF4F46E5)
-            : const Color(0xFF475569),
+            ? RealtimeUiTokens.primary
+            : RealtimeUiTokens.textMuted,
       ),
     ),
   );
@@ -1010,17 +1107,18 @@ class MediaParticipantTile extends StatelessWidget {
         : participant.displayName;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withValues(alpha: .94),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
         border: Border.all(
           color: participant.isSpeaking
               ? const Color(0xFF10B981)
-              : const Color(0xFFE2E8F0),
+              : RealtimeUiTokens.border,
           width: participant.isSpeaking ? 2 : 1,
         ),
+        boxShadow: RealtimeUiTokens.cardShadow,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius - 2),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -1032,11 +1130,11 @@ class MediaParticipantTile extends StatelessWidget {
                 alignment: Alignment.center,
                 child: CircleAvatar(
                   radius: 29,
-                  backgroundColor: const Color(0xFFEEF2FF),
+                  backgroundColor: RealtimeUiTokens.primarySubtle,
                   child: Text(
                     name.characters.first.toUpperCase(),
                     style: const TextStyle(
-                      color: Color(0xFF4F46E5),
+                      color: RealtimeUiTokens.primary,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1054,7 +1152,10 @@ class MediaParticipantTile extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: .94),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.compactRadius,
+                  ),
+                  border: Border.all(color: RealtimeUiTokens.border),
                 ),
                 child: Row(
                   children: [
