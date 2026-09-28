@@ -13,6 +13,15 @@ export interface ProviderCapability {
   note?: string;
 }
 
+export interface ChatRoomEntry {
+  chatProvider?: string;
+  chatRoomArn?: string;
+  roomCode: string;
+  createdAt: string;
+  attendees: RoomAttendee[];
+  lastHeartbeatMs: number;
+}
+
 export interface RoomAttendee {
   attendeeId: string;
   providerParticipantId?: string;
@@ -45,7 +54,7 @@ export interface ChatRoomBinding {
 }
 
 export interface IssueChatTokenInput {
-  entry: RoomEntry;
+  entry: ChatRoomEntry;
   attendee: RoomAttendee;
 }
 
@@ -74,7 +83,7 @@ export interface ChatProviderAdapter {
   metadata?(): Record<string, unknown>;
   createRoom(roomCode: string): Promise<ChatRoomBinding>;
   issueToken(input: IssueChatTokenInput): Promise<ChatProviderTokenResponse>;
-  closeRoom(entry: RoomEntry): Promise<void>;
+  closeRoom(entry: ChatRoomEntry): Promise<void>;
 }
 
 export interface ChimeMeeting {
@@ -93,7 +102,7 @@ export interface ChimeAttendee {
   Capabilities?: unknown;
 }
 
-export interface RoomEntry {
+export interface RoomEntry extends Partial<ChatRoomEntry> {
   provider: string;
   /** Public vendor identity. provider remains the concrete engine id. */
   vendor?: MediaVendorId;

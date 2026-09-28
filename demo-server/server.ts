@@ -28,6 +28,7 @@ import {
   publicVendorForEngine,
 } from './providers/aws.ts';
 import { ChatProviderRegistry } from './chat/chat-provider-registry.ts';
+import { ChatRoomDirectory } from './chat/chat-room-directory.ts';
 import {
   createIvsChatProvider,
   resolveIvsChatRegion,
@@ -317,6 +318,91 @@ const chimeProvider = createChimeProvider({
   contractVersion: CONTRACT_VERSION,
   normalizeUserId,
 });
+
+app.get('/chat/rooms', (_req, res) => {
+  res.json({
+    contractVersion: CONTRACT_VERSION,
+    rooms: chatRoomDirectory.list().map((entry) => ({
+      roomCode: entry.roomCode,
+      chatProvider: entry.chatProvider,
+      context: 'standalone',
+      createdAt: entry.createdAt,
+    })),
+  });
+});
+
+app.post('/chat/rooms', async (req, res) => {
+  try {
+    const providerId = String(
+      req.body?.chatProvider ?? activeChatProvider ?? '',
+    ).trim().toLowerCase();
+    if (!providerId) {
+      return contractError(
+        res,
+        400,
+        'provider-not-configured',
+        'Select a configured chat provider before creating a chat room.',
+      );
+    }
+    const provider = chatProviderRegistry.requireConfigured(providerId);
+    const requestedCode = String(req.body?.roomCode ?? '').trim();
+    const roomCode = requestedCode || generateRoomCode();
+    if (chatRoomDirectory.get(roomCode)) {
+      return contractError(res, 409, 'room-exists', 'The chat room code is already in use.');
+    }
+    const binding = await provider.createRoom(roomCode);
+    const now = Date.now();
+    const entry = chatRoomDirectory.add({
+      roomCode,
+      chatProvider: binding.chatProvider,
+      chatRoomArn: binding.chatRoomArn,
+      createdAt: new Date(now).toISOString(),
+      attendees: [],
+      lastHeartbeatMs: now,
+    });
+    res.status(201).json({
+      contractVersion: CONTRACT_VERSION,
+      roomCode: entry.roomCode,
+      chatProvider: entry.chatProvider,
+      context: 'standalone',
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('standalone chat room create failed', error);
+    contractError(res, 500, 'chat-room-create-failed', 'Unable to create the chat room.');
+  }
+});
+
+app.post('/chat/rooms/:code/join', async (req, res) => {
+  try {
+    const entry = chatRoomDirectory.get(req.params.code);
+    if (!entry || !entry.chatProvider) {
+      return contractError(res, 404, 'room-not-found', 'The requested chat room was not found.');
+    }
+    const provider = chatProviderRegistry.requireConfigured(entry.chatProvider);
+    const userId = normalizeUserId(req.body?.userId);
+    const displayName = normalizeDisplayName(req.body?.displayName ?? userId);
+    const role = parseRole(req.body?.role) ?? 'participant';
+    const participantId = `chat-${crypto.randomUUID()}`;
+    const attendee: RoomAttendee = {
+      attendeeId: participantId,
+      externalUserId: userId,
+      userId,
+      displayName,
+      role,
+      joinedAt: new Date().toISOString(),
+      lastHeartbeatMs: Date.now(),
+    };
+    entry.attendees.push(attendee);
+    entry.lastHeartbeatMs = Date.now();
+    const response = await provider.issueToken({ entry, attendee });
+    res.json({ ...response, context: 'standalone' });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('standalone chat join failed', error);
+    contractError(res, 500, 'chat-join-failed', 'Unable to join the chat room.');
+  }
+});
 const ivsProvider = createIvsProvider({
   env: process.env,
   contractVersion: CONTRACT_VERSION,
@@ -369,6 +455,7 @@ const chatProviderRegistry = new ChatProviderRegistry([
   }),
 ]);
 const roomDirectory = new RoomDirectory();
+const chatRoomDirectory = new ChatRoomDirectory();
 const events: Array<{ ts: string; type: string; message: string }> = [];
 
 if (INITIAL_PROVIDER !== AWS_VENDOR_ID) providerRegistry.require(INITIAL_PROVIDER);
@@ -752,6 +839,7 @@ app.post('/api/provider', requireSameOrigin, requireAdmin, (req, res) => {
 
 app.get('/api/overview', requireAdmin, (req, res) => {
   const allRooms = roomDirectory.entries();
+  const standaloneChatRooms = chatRoomDirectory.list();
   const providerList = providerMetadataForDashboard();
   const chatProviderList = chatProviderRegistry.metadata();
   res.json({
@@ -772,6 +860,18 @@ app.get('/api/overview', requireAdmin, (req, res) => {
     startedAt: new Date(STARTED_AT).toISOString(),
     roomCount: allRooms.length,
     attendeeCount: allRooms.reduce((count, entry) => count + entry.attendees.length, 0),
+    standaloneChatRoomCount: standaloneChatRooms.length,
+    standaloneChatAttendeeCount: standaloneChatRooms.reduce(
+      (count, entry) => count + entry.attendees.length,
+      0,
+    ),
+    standaloneChatRooms: standaloneChatRooms.map((entry) => ({
+      roomCode: entry.roomCode,
+      chatProvider: entry.chatProvider,
+      context: 'standalone',
+      createdAt: entry.createdAt,
+      attendeeCount: entry.attendees.length,
+    })),
     rooms: allRooms.map((entry) => summarizeRoom(entry, req)),
     events: events.slice(0, 100),
   });

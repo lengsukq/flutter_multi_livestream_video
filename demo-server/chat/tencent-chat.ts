@@ -8,7 +8,7 @@ import type {
   MediaRole,
   ProviderFactoryContext,
   RoomAttendee,
-  RoomEntry,
+  ChatRoomEntry,
 } from '../types.ts';
 import { ProviderOperationError } from '../providers/provider-registry.ts';
 
@@ -224,7 +224,7 @@ export function createTencentChatProvider({
         },
       };
     },
-    async closeRoom(entry: RoomEntry) {
+    async closeRoom(entry: ChatRoomEntry) {
       if (!api || entry.chatProvider !== 'tencent-chat' || !entry.chatRoomArn) {
         return;
       }

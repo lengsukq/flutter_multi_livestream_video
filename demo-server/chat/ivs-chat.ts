@@ -12,7 +12,7 @@ import type {
   MediaRole,
   ProviderFactoryContext,
   RoomAttendee,
-  RoomEntry,
+  ChatRoomEntry,
 } from '../types.ts';
 import { ProviderOperationError } from '../providers/provider-registry.ts';
 
@@ -271,7 +271,7 @@ export function createIvsChatProvider({
         fail('CreateChatToken', error);
       }
     },
-    async closeRoom(entry: RoomEntry) {
+    async closeRoom(entry: ChatRoomEntry) {
       if (!api || entry.chatProvider !== 'ivs-chat' || !entry.chatRoomArn) {
         return;
       }

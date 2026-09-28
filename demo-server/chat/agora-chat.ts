@@ -8,7 +8,7 @@ import type {
   MediaRole,
   ProviderFactoryContext,
   RoomAttendee,
-  RoomEntry,
+  ChatRoomEntry,
 } from '../types.ts';
 import { ProviderOperationError } from '../providers/provider-registry.ts';
 
@@ -282,7 +282,7 @@ export function createAgoraChatProvider({
         },
       };
     },
-    async closeRoom(entry: RoomEntry) {
+    async closeRoom(entry: ChatRoomEntry) {
       if (!api || entry.chatProvider !== 'agora-chat' || !entry.chatRoomArn) {
         return;
       }
