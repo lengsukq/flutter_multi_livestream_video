@@ -79,6 +79,49 @@ await room.session.sendData(
 room.recoveries.listen(print);
 ```
 
+## Pre-Join
+
+`MediaClient.runPreJoinCheck()` runs provider-neutral checks before a room is
+created or joined:
+
+```dart
+final result = await client.runPreJoinCheck(
+  role: MediaRole.participant,
+  requirements: const MediaPreJoinRequirements(
+    microphone: MediaPreJoinRequirement.required,
+    camera: MediaPreJoinRequirement.recommended,
+  ),
+);
+
+if (!result.isReady) {
+  for (final issue in result.blockingIssues) {
+    debugPrint(issue.message);
+  }
+}
+```
+
+`MediaPreJoinRequirement.required` maps to a blocking check,
+`recommended` maps to a warning, and `skipped` removes the check entirely.
+This severity mapping is preserved even when a provider does not implement a
+native probe or a probe fails with an unknown result.
+
+The Core runner always performs provider-neutral backend/provider checks first.
+Adapters can optionally implement `MediaPreJoinProbe` for native diagnostics.
+LiveKit currently uses this extension to enumerate microphone and camera
+devices before joining. A provider diagnostic that needs room credentials must
+return `unsupported` rather than create a room or consume normal join
+credentials.
+
+`GET /health` is optional diagnostics rather than a required media-backend
+endpoint. An HTTP 404/missing health endpoint does not make a compatible backend
+unusable. Transport failures and timeouts are blocking network failures, while
+an implemented health endpoint returning a real backend error such as 5xx is a
+blocking backend-health failure.
+
+The default `MediaPermissionProbe` reads current microphone/camera permission
+state only; it never requests permission. See
+[`PRE_JOIN_SETUP.md`](PRE_JOIN_SETUP.md) for Android/iOS host configuration.
+
 See [`SDK_CAPABILITY_MATRIX.md`](../../SDK_CAPABILITY_MATRIX.md) for the current provider
 matrix and the host room-management surface.
 

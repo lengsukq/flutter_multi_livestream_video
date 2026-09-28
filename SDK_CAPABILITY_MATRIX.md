@@ -13,6 +13,8 @@ platform or role.
 | Targeted data | Yes | No | No | No | No |
 | Unreliable data | Yes | No | No | No | No |
 | Device enumeration/selection | Yes, platform dependent | Audio output | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter |
+| Pre-Join native device probe | Mic/camera | No native probe | No native probe | No native probe | No native probe |
+| Pre-Join provider network probe | Unsupported without issued credentials | No native probe | No native probe | No native probe | No native probe |
 | Network stats | Yes | Not exposed by adapter | Yes | Yes | Not exposed by adapter |
 | Screen share | Yes for publishers | Not exposed by adapter | Deferred | Not exposed by adapter | Not exposed by adapter |
 | Host participant list | Backend + host role | Not available (no host role) | Backend + host role | Backend + host role | Backend + host role |
@@ -20,6 +22,29 @@ platform or role.
 | Host close room | Host via backend | Not available (no host role) | Host via backend | Host via backend | Host via backend |
 
 ## Provider-neutral APIs
+
+### Pre-Join
+
+`MediaClient.runPreJoinCheck()` provides a provider-neutral readiness result
+before room creation/join. Core checks backend reachability, target provider
+registration, permission state, device availability when available, and basic
+network reachability. Adapters may add checks through `MediaPreJoinProbe`.
+
+Pre-Join result semantics are intentionally stricter than feature discovery:
+
+- `required` + `failed` / `unsupported` / `unknown` is blocking.
+- `recommended` non-passing results are warnings.
+- `skipped` produces no check.
+- An adapter must never report `passed` for a diagnostic it did not actually
+  perform.
+- Provider-native network checks that require issued join credentials should
+  return `unsupported`; Pre-Join must not create a room just for diagnosis.
+
+Backend `GET /health` is optional diagnostics and is not required for Backend
+Contract compatibility. A missing endpoint can produce a warning while the
+basic HTTP path remains reachable. Transport/timeout errors are network
+failures; explicit errors from an implemented health endpoint remain backend
+failures.
 
 Room discovery is available through `MediaClient.listRooms()`. It returns
 `MediaRoomSummary` only; discovery never exposes user/device identity,
@@ -58,3 +83,8 @@ Declare only capabilities that the adapter actually implements. New provider
 features should be mapped to the provider-neutral models first; provider-only
 escape hatches may still be exposed by the adapter package for advanced use.
 Unsupported operations must return typed errors rather than silently succeed.
+
+For Pre-Join, implement `MediaPreJoinProbe` only when the adapter can perform a
+real diagnostic without joining a room. Return explicit `unsupported` or
+`unknown` checks for unavailable diagnostics and preserve the requirement
+severity supplied by Core.

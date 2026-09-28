@@ -64,6 +64,49 @@ final room = await client.createRoomAndJoinIdentity(
 );
 ```
 
+## Pre-Join before create/join
+
+Applications that want an SDK-level readiness screen can call
+`MediaClient.runPreJoinCheck()` before the normal create/join API:
+
+```dart
+final preJoin = await client.runPreJoinCheck(
+  role: MediaRole.participant,
+  providerId: knownProviderId, // optional
+  roomCode: existingRoomCode,  // optional
+  requirements: const MediaPreJoinRequirements(
+    microphone: MediaPreJoinRequirement.required,
+    camera: MediaPreJoinRequirement.recommended,
+  ),
+);
+
+if (!preJoin.isReady) {
+  // Show preJoin.blockingIssues and do not continue.
+}
+```
+
+When joining a discovered room, supplying its `providerId` avoids an extra
+provider-resolution lookup. If only `roomCode` is known, Core may use room
+discovery to resolve the backend-assigned provider. The Flutter business layer
+still does not select a vendor.
+
+The result deliberately distinguishes `passed`, `failed`, `unsupported`,
+and `unknown`. Required checks preserve blocking severity for all non-passing
+states; recommended checks remain warnings. Provider adapters may implement the
+optional `MediaPreJoinProbe`, but they must not create rooms or spend normal
+join credentials just to simulate a connectivity test.
+
+The backend `/health` route is only diagnostic. Backends that implement the
+normal room contract but omit `GET /health` remain compatible. HTTP 404 means
+the optional diagnostic is unavailable; transport/timeout failures mean the
+backend cannot currently be reached; an implemented endpoint returning a real
+error such as 5xx is a backend-health failure.
+
+The default microphone/camera permission probe uses `permission_handler`.
+See
+[`packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md`](packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md)
+for the required Android/iOS host settings.
+
 The backend returns the actual provider with the join credentials. Core resolves
 the matching adapter automatically. Business UI only needs room/user intent;
 provider choice does not appear in create/join calls.

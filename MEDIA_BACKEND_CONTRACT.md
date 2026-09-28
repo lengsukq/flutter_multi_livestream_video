@@ -257,6 +257,37 @@ registered in the room. Example success:
 Heartbeat failures surface on `MediaRoomSession.backendErrors` and never
 terminate healthy media.
 
+### `GET /health` (optional diagnostic)
+
+`GET /health` is **not required** to implement the room/join contract. It is a
+diagnostic endpoint used by `MediaDoctor`, Pre-Join, and the reference demo UI.
+A Java, Python, Node.js, Go, or other backend that implements the normal room
+endpoints remains compatible even when `/health` is absent.
+
+Recommended success shape:
+
+```json
+{
+  "contractVersion": 1,
+  "activeProvider": "livekit"
+}
+```
+
+Semantics used by Core:
+
+- HTTP 200 with a valid response: backend reachable and health check passed.
+- HTTP 404 / diagnostic not implemented: backend path is reachable, but health
+  diagnostics are unavailable. Pre-Join treats this as non-blocking.
+- Connection error, DNS failure, or timeout: backend is not reachable; Pre-Join
+  treats the network check as blocking.
+- An implemented endpoint that returns an explicit backend failure such as
+  401/403/5xx remains a backend-health failure and can block Pre-Join. The HTTP
+  response still proves that the network path itself is reachable.
+
+Do not make create/join behavior depend on the client first calling
+`GET /health`. It must remain safe for clients and compatible backends to skip
+this diagnostic entirely.
+
 ### `POST /rooms/{roomCode}/leave`
 
 Best-effort leave notification.

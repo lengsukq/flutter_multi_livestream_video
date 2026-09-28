@@ -78,6 +78,47 @@ Core → matching provider adapter
 The included `demo-server` exposes provider selection in its server UI. The
 Flutter demo itself does not need a provider selector.
 
+## Pre-Join checks
+
+Before creating or joining a room, applications can run the provider-neutral
+`MediaClient.runPreJoinCheck()` API. It can check backend reachability,
+registered provider availability, microphone/camera permission state, device
+availability, and basic network readiness without creating a media room.
+
+```dart
+final result = await client.runPreJoinCheck(
+  role: MediaRole.participant,
+  requirements: const MediaPreJoinRequirements(
+    microphone: MediaPreJoinRequirement.required,
+    camera: MediaPreJoinRequirement.recommended,
+  ),
+);
+
+if (!result.isReady) {
+  for (final issue in result.blockingIssues) {
+    debugPrint(issue.message);
+  }
+}
+```
+
+- `required`: failed, unsupported, or unknown checks block continuation.
+- `recommended`: problems are warnings and may continue.
+- `skipped`: the check is omitted.
+- Provider-specific diagnostics are optional through `MediaPreJoinProbe`.
+  LiveKit currently pre-enumerates microphone/camera devices; provider network
+  probes that would require issued room credentials report `unsupported`
+  instead of creating a room just to test connectivity.
+- `GET /health` is an optional diagnostic endpoint, not a mandatory backend
+  contract requirement. A missing endpoint such as HTTP 404 does not block
+  joining. Connection/timeout failures block; an implemented health endpoint
+  that explicitly returns an error such as 5xx is treated as a backend-health
+  failure.
+
+The default permission probe uses `permission_handler` only to inspect current
+permission state and never displays an OS permission prompt. Host application
+setup is documented in
+[`packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md`](packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md).
+
 ---
 
 ## Chime v3 compatibility package
@@ -423,6 +464,27 @@ Flutter App
    ▼
 Core → 对应 Provider Adapter
 ```
+
+## Pre-Join 加入前检查
+
+创建或加入房间前，可以调用 Provider 无关的
+`MediaClient.runPreJoinCheck()`。它不会为了检查而创建媒体房间，可统一检查
+后端可达性、目标 Provider 是否已注册、麦克风/摄像头权限、设备可用性以及基础
+网络状态。
+
+- `required`：检查失败、无法确认或 Provider 不支持时阻止继续。
+- `recommended`：作为警告展示，但允许继续。
+- `skipped`：完全跳过该检查。
+- Provider 可通过可选的 `MediaPreJoinProbe` 增强检查。LiveKit 当前可在入会前
+  枚举麦克风和摄像头；需要正式房间凭证才能执行的 Provider 网络探测会返回
+  `unsupported`，不会为了测试而消耗正常加入凭证。
+- `GET /health` 只是可选诊断接口，不是 Backend Contract 的强制要求。
+  后端没有实现该接口（例如返回 404）不会阻止入会；连接失败或超时会阻止，
+  已实现的 health 接口明确返回 5xx 等错误时则视为后端健康检查失败。
+
+默认权限探针只读取当前权限状态，不主动弹出系统授权框。Android/iOS 宿主配置
+见
+[`packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md`](packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md)。
 
 ---
 
