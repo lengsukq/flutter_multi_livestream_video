@@ -209,7 +209,8 @@ class _RoomFixture {
       roomCode: 'room-1',
       participantId: 'participant-1',
       session: media,
-      backend: backend,
+      presence: backend,
+      management: backend,
       heartbeatInterval: Duration.zero,
     );
   }

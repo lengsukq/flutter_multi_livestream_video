@@ -11,6 +11,14 @@ applications can add or remove providers without coupling business UI to a
 specific vendor. A backend is an optional control-plane integration, not the
 architectural center of the SDK.
 
+### Standalone Chat
+
+Product Chat is a first-class SDK domain: it can run by itself or be composed
+with Meeting / Live, while both paths use the same `ChatSession` contract.
+Applications can connect with a direct `ChatJoinInfo`, implement
+`StandaloneChatProvisioner` against any control plane, or use the demo HTTP
+provisioner. Long-lived provider secrets remain server-side.
+
 ## Core philosophy
 
 This repository follows these architectural rules:

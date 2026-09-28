@@ -1372,6 +1372,16 @@
       </div>
     </div>
 
+    <div class="card" style="margin-top:16px">
+      <div class="panel-badge">Standalone Chat</div>
+      <h2>独立聊天室</h2>
+      <p>Chat 可独立于 Meeting / Live 使用，也可继续作为音视频房间的 Attached Chat。新建独立聊天室使用上方当前 Chat Provider。</p>
+      <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px">
+        <div><b id="c-standalone-chat-rooms">–</b><div class="stat-subtitle">独立聊天室</div></div>
+        <div><b id="c-standalone-chat-attendees">–</b><div class="stat-subtitle">独立 Chat 参与者</div></div>
+      </div>
+    </div>
+
     <!-- KPI Metric Cards -->
     <div class="stats-grid">
       <div class="stat-card" style="--stat-bg: #ecfdf5; --stat-color: #059669;">
@@ -2084,6 +2094,8 @@
 
         document.getElementById('c-rooms').textContent = d.roomCount;
         document.getElementById('c-att').textContent = d.attendeeCount;
+        document.getElementById('c-standalone-chat-rooms').textContent = d.standaloneChatRoomCount || 0;
+        document.getElementById('c-standalone-chat-attendees').textContent = d.standaloneChatAttendeeCount || 0;
         document.getElementById('c-provider').textContent = providerName;
         document.getElementById('c-provider-sub').textContent = currentProvider.description || 'Realtime media provider';
         document.getElementById('room-badge-count').textContent = d.roomCount;

@@ -10,6 +10,7 @@ import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'provider_adapters.dart';
+import 'standalone_chat_demo.dart';
 import 'widgets/glass_widgets.dart';
 
 void main() {
@@ -156,6 +157,24 @@ class _JoinScreenState extends State<JoinScreen>
       _roomListRequestInFlight = false;
       if (!silent && mounted) setState(() {});
     }
+  }
+
+  Future<void> _openStandaloneChat() async {
+    if (_server.isEmpty) {
+      setState(() => _error = 'Enter your backend URL first.');
+      return;
+    }
+    final deviceId = await _deviceIdFuture;
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => StandaloneChatDemoPage(
+          backendUrl: _server,
+          sdk: _newRealtimeSdk(),
+          userId: deviceId,
+        ),
+      ),
+    );
   }
 
   @override
@@ -434,6 +453,12 @@ class _JoinScreenState extends State<JoinScreen>
                       _buildServerCard(),
                       const SizedBox(height: 16),
                       _buildActionTabsCard(),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : _openStandaloneChat,
+                        icon: const Icon(Icons.chat_bubble_outline_rounded),
+                        label: const Text('Standalone Chat'),
+                      ),
                       if (_error != null) ...[
                         const SizedBox(height: 16),
                         _buildErrorBanner(),

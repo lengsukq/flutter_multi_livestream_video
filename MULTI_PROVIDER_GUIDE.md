@@ -9,6 +9,15 @@ Frontend-first applications may construct `RealtimeSdk` without
 `backendUrl`, obtain `MediaJoinInfo` / `ChatJoinInfo` from their own
 credential service, and use `joinDirect` / `ChatClient.connect`.
 
+### Chat: attached or standalone
+
+Chat Provider selection is independent from Media Provider selection. The same
+`ChatSession` can be used as **Attached Chat** inside Meeting / Live or as a
+**Standalone Chat** room with no Media session. Standalone flows support direct
+`ChatJoinInfo`, custom `StandaloneChatProvisioner`, and the demo HTTP
+provisioner. RTC Data remains a media data-channel/debug capability and is not
+treated as Product Chat.
+
 ## Package layout
 
 ```text
