@@ -22,11 +22,9 @@ class ChatBackendJoinResponse {
 }
 
 class ChatBackendClient {
-  ChatBackendClient(
-    this.config, {
-    http.Client? httpClient,
-  }) : _httpClient = httpClient ?? http.Client(),
-       _ownsHttpClient = httpClient == null;
+  ChatBackendClient(this.config, {http.Client? httpClient})
+    : _httpClient = httpClient ?? http.Client(),
+      _ownsHttpClient = httpClient == null;
 
   final ChatBackendConfig config;
   final http.Client _httpClient;

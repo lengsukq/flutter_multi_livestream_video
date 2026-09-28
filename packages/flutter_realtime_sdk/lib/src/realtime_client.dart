@@ -18,7 +18,7 @@ typedef RealtimeChatClientFactory = ChatClient Function();
 /// that need to own media or product-chat orchestration themselves.
 class RealtimeClient {
   RealtimeClient({
-    required this.backendUrl,
+    this.backendUrl,
     required this.mediaAdapters,
     ChatRegistry? chatRegistry,
     RealtimeTokenProvider? tokenProvider,
@@ -27,10 +27,9 @@ class RealtimeClient {
   }) : chatRegistry = chatRegistry ?? ChatRegistry(),
        _tokenProvider = tokenProvider,
        _mediaClientFactory = mediaClientFactory,
-       _chatClientFactory = chatClientFactory,
-       assert(backendUrl != '');
+       _chatClientFactory = chatClientFactory;
 
-  final String backendUrl;
+  final String? backendUrl;
   final RealtimeMediaAdapters mediaAdapters;
   final ChatRegistry chatRegistry;
   final RealtimeTokenProvider? _tokenProvider;
@@ -39,11 +38,34 @@ class RealtimeClient {
 
   MediaClient newMediaClient() =>
       _mediaClientFactory?.call() ??
-      MediaClient(
-        backendUrl: backendUrl,
-        registry: mediaAdapters.registry,
-        tokenProvider: _tokenProvider,
+      (backendUrl == null
+          ? MediaClient.direct(registry: mediaAdapters.registry)
+          : MediaClient(
+              backendUrl: backendUrl!,
+              registry: mediaAdapters.registry,
+              tokenProvider: _tokenProvider,
+            ));
+
+  /// Adopts media joined from any trusted provisioning mechanism.
+  Future<RealtimeRoom> joinDirect(
+    MediaJoinInfo joinInfo, {
+    ChatJoinInfo? chatJoinInfo,
+    ChatCredentialProvider? chatCredentialProvider,
+  }) async {
+    final client = newMediaClient();
+    try {
+      final room = await client.join(joinInfo);
+      return await _resolveRoom(
+        client,
+        room,
+        directChatJoinInfo: chatJoinInfo,
+        directChatCredentialProvider: chatCredentialProvider,
       );
+    } catch (_) {
+      client.dispose();
+      rethrow;
+    }
+  }
 
   Future<RealtimeRoom> createRoomAndJoinIdentity({
     required MediaIdentity identity,
@@ -92,29 +114,50 @@ class RealtimeClient {
 
   Future<RealtimeRoom> _resolveRoom(
     MediaClient mediaClient,
-    MediaRoomSession room,
-  ) async {
+    MediaRoomSession room, {
+    ChatJoinInfo? directChatJoinInfo,
+    ChatCredentialProvider? directChatCredentialProvider,
+  }) async {
     ChatClient? chatClient;
     ChatRoomSession? productChatRoom;
     RtcDataChatSession? rtcChatRoom;
     try {
       final renderer = mediaAdapters.require(room.providerId).renderer;
       ChatSession? chat;
-      final productChatConfigured = room.chatProvider != null;
+      final productChatConfigured =
+          directChatJoinInfo != null || room.chatProvider != null;
       if (productChatConfigured) {
-        chatClient =
-            _chatClientFactory?.call() ??
-            ChatClient(
-              backendUrl: backendUrl,
-              registry: chatRegistry,
-              tokenProvider: _tokenProvider,
+        if (directChatJoinInfo != null) {
+          chatClient = ChatClient.direct(registry: chatRegistry);
+          productChatRoom = await chatClient.connect(
+            directChatJoinInfo,
+            credentialProvider: directChatCredentialProvider,
+          );
+        } else {
+          final url = backendUrl;
+          if (_chatClientFactory == null && url == null) {
+            throw const ChatError(
+              code: ChatErrorCode.unsupportedFeature,
+              message:
+                  'Product Chat is configured for this room, but no ChatClient '
+                  'factory or backend provisioning configuration was supplied.',
             );
-        productChatRoom = await chatClient.connectRoom(
-          roomCode: room.roomCode,
-          participantId: room.participantId,
-          participantCredential: room.participantCredential,
-        );
-        if (productChatRoom.session.providerId != room.chatProvider) {
+          }
+          chatClient =
+              _chatClientFactory?.call() ??
+              ChatClient(
+                backendUrl: url!,
+                registry: chatRegistry,
+                tokenProvider: _tokenProvider,
+              );
+          productChatRoom = await chatClient.connectRoom(
+            roomCode: room.roomCode,
+            participantId: room.participantId,
+            participantCredential: room.participantCredential,
+          );
+        }
+        if (room.chatProvider != null &&
+            productChatRoom.session.providerId != room.chatProvider) {
           throw ChatError(
             code: ChatErrorCode.invalidJoinInfo,
             message:

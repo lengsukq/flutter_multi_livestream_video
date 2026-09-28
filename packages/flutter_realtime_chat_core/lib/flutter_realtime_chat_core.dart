@@ -7,6 +7,7 @@ library;
 export 'src/client/chat_backend_client.dart';
 export 'src/client/chat_backend_config.dart';
 export 'src/client/chat_client.dart';
+export 'src/client/chat_provisioner.dart';
 export 'src/model/chat_capabilities.dart';
 export 'src/model/chat_error.dart';
 export 'src/model/chat_event.dart';

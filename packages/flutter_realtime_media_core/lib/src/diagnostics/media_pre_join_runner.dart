@@ -7,43 +7,55 @@ import 'media_pre_join_probe.dart';
 
 class MediaPreJoinRunner {
   const MediaPreJoinRunner({
-    required this.backend,
+    this.backend,
     required this.registry,
     required this.permissionProbe,
   });
 
-  final MediaBackendClient backend;
+  final MediaBackendClient? backend;
   final MediaRegistry registry;
   final MediaPermissionProbe permissionProbe;
 
   Future<MediaPreJoinResult> run(MediaPreJoinRequest request) async {
     final checks = <MediaPreJoinCheck>[];
     final requirements = request.effectiveRequirements;
-    final doctor = await MediaDoctor.check(
-      backend: backend,
-      registry: registry,
-    );
+    final doctor = backend == null
+        ? MediaDoctorReport([
+            MediaDoctorCheck(
+              id: 'providers',
+              status: registry.providerIds.isEmpty
+                  ? MediaDoctorStatus.fail
+                  : MediaDoctorStatus.pass,
+              message: registry.providerIds.isEmpty
+                  ? 'No provider adapters are registered.'
+                  : 'Registered adapters: ${registry.providerIds.join(', ')}.',
+            ),
+          ])
+        : await MediaDoctor.check(backend: backend!, registry: registry);
     final backendCheck = doctor.checkById('backend');
     final backendStatus = backendCheck?.status ?? MediaDoctorStatus.fail;
     final backendReachable = doctor.backendReachable;
 
-    checks.add(
-      MediaPreJoinCheck(
-        type: MediaPreJoinCheckType.backend,
-        status: switch (backendStatus) {
-          MediaDoctorStatus.pass => MediaPreJoinStatus.passed,
-          MediaDoctorStatus.warning => MediaPreJoinStatus.unknown,
-          MediaDoctorStatus.fail => MediaPreJoinStatus.failed,
-        },
-        severity: backendStatus == MediaDoctorStatus.fail
-            ? MediaPreJoinSeverity.blocking
-            : backendStatus == MediaDoctorStatus.warning
-            ? MediaPreJoinSeverity.warning
-            : MediaPreJoinSeverity.info,
-        message: backendCheck?.message ?? 'Backend check did not complete.',
-      ),
-    );
-    if (requirements.network != MediaPreJoinRequirement.skipped) {
+    if (backend != null) {
+      checks.add(
+        MediaPreJoinCheck(
+          type: MediaPreJoinCheckType.backend,
+          status: switch (backendStatus) {
+            MediaDoctorStatus.pass => MediaPreJoinStatus.passed,
+            MediaDoctorStatus.warning => MediaPreJoinStatus.unknown,
+            MediaDoctorStatus.fail => MediaPreJoinStatus.failed,
+          },
+          severity: backendStatus == MediaDoctorStatus.fail
+              ? MediaPreJoinSeverity.blocking
+              : backendStatus == MediaDoctorStatus.warning
+              ? MediaPreJoinSeverity.warning
+              : MediaPreJoinSeverity.info,
+          message: backendCheck?.message ?? 'Backend check did not complete.',
+        ),
+      );
+    }
+    if (backend != null &&
+        requirements.network != MediaPreJoinRequirement.skipped) {
       checks.add(
         MediaPreJoinCheck(
           type: MediaPreJoinCheckType.network,
@@ -98,7 +110,8 @@ class MediaPreJoinRunner {
 
     final roomCode = request.roomCode?.trim();
     if (roomCode != null && roomCode.isNotEmpty) {
-      if (!backendReachable) return null;
+      final backend = this.backend;
+      if (backend == null || !backendReachable) return null;
       try {
         final rooms = await backend.listRooms();
         for (final room in rooms) {

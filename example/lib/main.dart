@@ -221,8 +221,12 @@ class _JoinScreenState extends State<JoinScreen>
     if (!silent && mounted) setState(() => _testingServer = true);
     final client = _newClient();
     try {
+      final backend = client.backend;
+      if (backend == null) {
+        throw StateError('Demo server URL did not create a provisioning backend.');
+      }
       final report = await MediaDoctor.check(
-        backend: client.backend,
+        backend: backend,
         registry: _mediaRegistry,
       );
       final backendCheck = report.checkById('backend');

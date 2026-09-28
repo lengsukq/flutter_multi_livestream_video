@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
+import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 
 import 'provider_plugin.dart';
 import 'realtime_client.dart';
@@ -11,11 +12,11 @@ typedef RealtimeClientFactory = RealtimeClient Function();
 
 /// Lowest-cognitive-load application entry point.
 ///
-/// Provider selection is still backend-authoritative; plugins only declare
-/// which provider implementations this application binary can execute.
+/// Backend-selected rooms are supported, but a backend is not required for
+/// direct joins provisioned by the host application.
 class RealtimeSdk {
   RealtimeSdk({
-    required this.backendUrl,
+    this.backendUrl,
     required Iterable<RealtimeProviderPlugin> plugins,
     RealtimeTokenProvider? tokenProvider,
     RealtimeClientFactory? clientFactory,
@@ -23,7 +24,7 @@ class RealtimeSdk {
        _tokenProvider = tokenProvider,
        _clientFactory = clientFactory;
 
-  final String backendUrl;
+  final String? backendUrl;
   final RealtimePluginRegistry plugins;
   final RealtimeTokenProvider? _tokenProvider;
   final RealtimeClientFactory? _clientFactory;
@@ -70,6 +71,22 @@ class RealtimeSdk {
       roomMode: mode,
       role: role,
       roomCode: roomCode,
+    ),
+  );
+
+  /// Joins directly from provider-neutral media join information.
+  ///
+  /// The host application owns provisioning. This path does not require the
+  /// repository Backend Contract or demo-server.
+  Future<RealtimeRoom> joinDirect(
+    MediaJoinInfo joinInfo, {
+    ChatJoinInfo? chatJoinInfo,
+    ChatCredentialProvider? chatCredentialProvider,
+  }) => _guard(
+    () => createClient().joinDirect(
+      joinInfo,
+      chatJoinInfo: chatJoinInfo,
+      chatCredentialProvider: chatCredentialProvider,
     ),
   );
 

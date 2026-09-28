@@ -14,6 +14,7 @@ import 'media_backend_client.dart';
 import 'media_backend_config.dart';
 import 'media_backend_error.dart';
 import 'media_backend_transport.dart';
+import 'media_room_services.dart';
 
 /// High-level client for applications whose backend implements the media
 /// backend contract.
@@ -25,6 +26,21 @@ import 'media_backend_transport.dart';
 /// Keep this client alive until every [MediaRoomSession] created from it has
 /// been disposed: those sessions use its transport for heartbeat and leave.
 class MediaClient {
+  /// Creates a frontend-only media client.
+  ///
+  /// This entry point does not require the repository Backend Contract. Use
+  /// [join] with a [MediaJoinInfo] obtained from any trusted provisioning
+  /// mechanism. Backend-oriented create/discovery helpers are unavailable.
+  MediaClient.direct({
+    MediaRegistry? registry,
+    MediaPermissionProbe? permissionProbe,
+    this.provisioner,
+    this.discovery,
+  }) : config = null,
+       registry = registry ?? MediaRegistry.global,
+       backend = null,
+       permissionProbe = permissionProbe ?? const DefaultMediaPermissionProbe();
+
   MediaClient({
     required String backendUrl,
     MediaRegistry? registry,
@@ -48,18 +64,53 @@ class MediaClient {
        );
 
   MediaClient.withConfig(
-    this.config, {
+    MediaBackendConfig config, {
     MediaRegistry? registry,
     MediaBackendTransport? transport,
     MediaPermissionProbe? permissionProbe,
-  }) : registry = registry ?? MediaRegistry.global,
+  }) : config = config,
+       registry = registry ?? MediaRegistry.global,
        backend = MediaBackendClient(config, transport: transport),
-       permissionProbe = permissionProbe ?? const DefaultMediaPermissionProbe();
+       permissionProbe = permissionProbe ?? const DefaultMediaPermissionProbe(),
+       provisioner = null,
+       discovery = null;
 
-  final MediaBackendConfig config;
+  final MediaBackendConfig? config;
   final MediaRegistry registry;
-  final MediaBackendClient backend;
+  final MediaBackendClient? backend;
   final MediaPermissionProbe permissionProbe;
+  final MediaRoomProvisioner? provisioner;
+  final MediaRoomDiscovery? discovery;
+
+  /// Joins provider media directly from already provisioned join information.
+  ///
+  /// This is the frontend SDK-first path. Core validates the registered adapter
+  /// and role, then delegates to the provider client SDK without requiring the
+  /// repository demo backend.
+  Future<MediaRoomSession> join(MediaJoinInfo joinInfo) async {
+    final factory = registry.require(joinInfo.providerId);
+    if (!factory.supportedRoles.contains(joinInfo.role)) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message:
+            'The ${joinInfo.providerId} adapter does not support the '
+            '${joinInfo.role.wireName} role.',
+        providerId: joinInfo.providerId,
+      );
+    }
+    final session = factory.createSession(joinInfo);
+    try {
+      await session.join(joinInfo);
+      return MediaRoomSession.direct(
+        roomCode: joinInfo.roomCode,
+        participantId: joinInfo.participantId,
+        session: session,
+      );
+    } catch (_) {
+      await session.dispose();
+      rethrow;
+    }
+  }
 
   /// Runs provider-neutral checks without creating or joining a room.
   Future<MediaPreJoinResult> runPreJoinCheck({
@@ -67,19 +118,20 @@ class MediaClient {
     String? providerId,
     String? roomCode,
     MediaPreJoinRequirements? requirements,
-  }) =>
-      MediaPreJoinRunner(
-        backend: backend,
-        registry: registry,
-        permissionProbe: permissionProbe,
-      ).run(
-        MediaPreJoinRequest(
-          role: role,
-          providerId: providerId,
-          roomCode: roomCode,
-          requirements: requirements,
-        ),
-      );
+  }) {
+    return MediaPreJoinRunner(
+      backend: backend,
+      registry: registry,
+      permissionProbe: permissionProbe,
+    ).run(
+      MediaPreJoinRequest(
+        role: role,
+        providerId: providerId,
+        roomCode: roomCode,
+        requirements: requirements,
+      ),
+    );
+  }
 
   /// Creates a room and joins it as [nickname].
   ///
@@ -92,7 +144,7 @@ class MediaClient {
     String? roomCode,
     String? deviceId,
   }) async {
-    final response = await backend.createRoom(
+    final response = await _requireBackend('create rooms').createRoom(
       role: role,
       roomCode: roomCode,
       nickname: nickname,
@@ -107,7 +159,14 @@ class MediaClient {
   }
 
   /// Returns rooms advertised by the backend for lightweight discovery.
-  Future<List<MediaRoomSummary>> listRooms() => backend.listRooms();
+  Future<List<MediaRoomSummary>> listRooms() =>
+      (discovery ?? backend)?.listRooms() ??
+      Future<List<MediaRoomSummary>>.error(
+        const MediaError(
+          code: MediaErrorCode.unsupportedFeature,
+          message: 'Room discovery requires a MediaRoomDiscovery extension.',
+        ),
+      );
 
   Future<MediaRoomSession> joinRoomIdentity({
     required String roomCode,
@@ -116,8 +175,22 @@ class MediaClient {
     MediaRole? role,
   }) async {
     final value = identity.normalized();
+    final custom = provisioner;
+    if (custom != null) {
+      return _joinResponse(
+        await custom.join(
+          roomCode: roomCode,
+          identity: value,
+          role: role,
+          roomOwnerCredential: roomOwnerCredential,
+        ),
+        credentialRefresher: custom,
+      );
+    }
     return _joinResponse(
-      await backend.joinRoomWithIdentity(
+      await _requireBackend(
+        'provision room join credentials',
+      ).joinRoomWithIdentity(
         role: role,
         roomCode: roomCode,
         userId: value.userId,
@@ -135,8 +208,20 @@ class MediaClient {
     String? roomCode,
   }) async {
     final value = identity.normalized();
+    final custom = provisioner;
+    if (custom != null) {
+      return _joinResponse(
+        await custom.create(
+          identity: value,
+          roomMode: roomMode,
+          role: role,
+          roomCode: roomCode,
+        ),
+        credentialRefresher: custom,
+      );
+    }
     return _joinResponse(
-      await backend.createRoomWithIdentity(
+      await _requireBackend('create rooms').createRoomWithIdentity(
         role: role,
         roomMode: roomMode,
         roomCode: roomCode,
@@ -158,20 +243,36 @@ class MediaClient {
     String? deviceId,
     String? roomOwnerCredential,
   }) async {
-    final response = await backend.joinRoom(
-      role: role,
-      roomCode: roomCode,
-      nickname: nickname,
-      deviceId: deviceId,
-      roomOwnerCredential: roomOwnerCredential,
-    );
+    final response = await _requireBackend('provision room join credentials')
+        .joinRoom(
+          role: role,
+          roomCode: roomCode,
+          nickname: nickname,
+          deviceId: deviceId,
+          roomOwnerCredential: roomOwnerCredential,
+        );
     return _joinResponse(response);
   }
 
   /// Closes the backend transport. Room sessions must be disposed first.
-  void dispose() => backend.dispose();
+  void dispose() => backend?.dispose();
 
-  Future<MediaRoomSession> _joinResponse(MediaRoomJoinResponse response) async {
+  MediaBackendClient _requireBackend(String operation) {
+    final value = backend;
+    if (value != null) return value;
+    throw MediaError(
+      code: MediaErrorCode.unsupportedFeature,
+      message:
+          'Cannot $operation without a configured provisioning backend. '
+          'Use MediaClient.join(MediaJoinInfo) for the frontend-only path.',
+    );
+  }
+
+  Future<MediaRoomSession> _joinResponse(
+    MediaRoomJoinResponse response, {
+    MediaRoomProvisioner? credentialRefresher,
+  }) async {
+    final backend = this.backend;
     final factory = registry.require(response.providerId);
     if (!factory.supportedRoles.contains(response.role)) {
       throw MediaError(
@@ -207,6 +308,7 @@ class MediaClient {
               factory: factory,
               currentJoinInfo: currentJoinInfo,
               participantCredential: participantCredential,
+              provisioner: credentialRefresher,
             ).whenComplete(() {
               if (identical(refreshInFlight, future)) refreshInFlight = null;
             });
@@ -216,6 +318,13 @@ class MediaClient {
     }
     try {
       await session.join(joinInfo);
+      if (backend == null) {
+        return MediaRoomSession.direct(
+          roomCode: response.roomCode,
+          participantId: joinInfo.participantId,
+          session: session,
+        );
+      }
       return MediaRoomSession.attach(
         roomCode: response.roomCode,
         participantId: joinInfo.participantId,
@@ -232,13 +341,15 @@ class MediaClient {
         ),
         backendMetadata: response.json,
         session: session,
-        backend: backend,
-        heartbeatInterval: config.heartbeatInterval,
+        presence: backend,
+        management: backend,
+        heartbeatInterval:
+            config?.heartbeatInterval ?? const Duration(seconds: 30),
       );
     } catch (_) {
       await session.dispose();
       try {
-        await backend.leave(
+        await backend?.leave(
           response.roomCode,
           participantId: joinInfo.participantId,
         );
@@ -254,14 +365,24 @@ class MediaClient {
     required MediaSessionFactory factory,
     required MediaJoinInfo currentJoinInfo,
     String? participantCredential,
+    MediaRoomProvisioner? provisioner,
   }) async {
     try {
-      final response = await backend.refreshCredentials(
-        roomCode: currentJoinInfo.roomCode,
-        participantId: currentJoinInfo.participantId,
-        role: currentJoinInfo.role,
-        participantCredential: participantCredential,
-      );
+      final response = provisioner != null
+          ? await provisioner.refresh(
+              roomCode: currentJoinInfo.roomCode,
+              participantId: currentJoinInfo.participantId,
+              role: currentJoinInfo.role,
+              participantCredential: participantCredential,
+            )
+          : await _requireBackend(
+              'refresh backend-issued credentials',
+            ).refreshCredentials(
+              roomCode: currentJoinInfo.roomCode,
+              participantId: currentJoinInfo.participantId,
+              role: currentJoinInfo.role,
+              participantCredential: participantCredential,
+            );
       final responseRole = response.json['role'];
       if (responseRole != null && MediaRole.tryParse(responseRole) == null) {
         throw MediaError(

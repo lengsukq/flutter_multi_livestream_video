@@ -2,13 +2,62 @@
 
 **English** | [简体中文](#简体中文)
 
-Flutter Realtime Media is a provider-neutral Flutter media SDK architecture
-for real-time audio/video communication and one-to-many live sessions.
+Flutter Realtime Media is a **frontend SDK-first**, provider-neutral Flutter
+architecture for real-time audio/video, live sessions, and chat.
 
-The Flutter application works against one Core API while the application backend
-decides which media provider a room uses. Provider-specific SDKs live in optional
-adapter packages, so applications can add or remove providers without coupling
-business UI to a specific vendor.
+The Flutter application works against one Core API and optional provider
+adapters. Provider-specific SDKs live only in their adapter packages, so
+applications can add or remove providers without coupling business UI to a
+specific vendor. A backend is an optional control-plane integration, not the
+architectural center of the SDK.
+
+## Core philosophy
+
+This repository follows these architectural rules:
+
+1. **Frontend SDK-first.** Sessions, capabilities, events, rendering, UI, and
+   provider adapters belong to the Flutter SDK. The SDK must not require this
+   repository's `demo-server` in order to be useful.
+2. **Client-first, backend-when-required.** If a provider's client SDK can
+   safely perform an operation, its adapter should execute it directly. A
+   backend is used only when credentials, provider security rules, admin APIs,
+   or application policy genuinely require server-side execution.
+3. **Provider-neutral Core.** Core and shared UI never depend on Chime,
+   LiveKit, IVS, Agora, TRTC, ARTC, Tencent Chat, or any other provider SDK.
+   Provider-specific code stays inside optional adapter packages.
+4. **Backend optional, contracts pluggable.** Applications may obtain join
+   information and short-lived credentials from Node.js, Java, Python, Lambda,
+   their own API, callbacks, or another control plane. The included Backend
+   Contract and `demo-server` are reference implementations, not mandatory
+   infrastructure.
+5. **Secrets never move into Flutter.** Frontend-first does not mean
+   zero-backend at any cost. Long-lived access keys, app secrets, signing keys,
+   and admin credentials remain server-side whenever a provider requires them.
+6. **Media and Chat stay independently composable.** Meeting, Live, attached
+   Chat, standalone Chat, and RTC data are separate capabilities. A Media
+   Provider does not implicitly own the Chat Provider.
+7. **Capabilities describe reality.** Unsupported or conditional provider
+   behavior is exposed explicitly. The SDK must not emulate privileged
+   operations with insecure client-side conventions merely to make providers
+   look feature-equivalent.
+
+The intended dependency direction is:
+
+```text
+Application UI
+      |
+      v
+Flutter Realtime SDK / provider-neutral Core
+      |
+      +--> Provider Adapter --> Provider client SDK
+      |
+      +--> optional Credential / Provisioning / Presence / Management contract
+                              |
+                              +--> application backend or control plane
+```
+
+The SDK owns the frontend abstraction. The application backend only supplies
+the pieces that cannot or should not live in a client application.
 
 The repository currently supports **AWS**, **LiveKit**, **Agora**,
 **Tencent TRTC**, and **Alibaba Cloud ARTC**. AWS is exposed as one vendor:
@@ -113,6 +162,42 @@ their existing lower-level error contracts.
 Provider plugins are configuration, not routing. Adding a provider should
 normally require implementing its adapter package and registering one plugin;
 application room code must not branch on provider ids.
+
+### Frontend-first / custom provisioning
+
+`backendUrl` is optional. If your application already has a Java, Node.js,
+Python, Lambda, Firebase Function, or other credential service, return a
+provider-neutral `MediaJoinInfo` and join directly:
+
+```dart
+final sdk = RealtimeSdk(
+  plugins: [myProviderPlugin],
+);
+
+final joinInfo = await myApplicationApi.issueMediaCredentials();
+final room = await sdk.joinDirect(
+  joinInfo,
+  // Optional and independently provisioned:
+  chatJoinInfo: await myApplicationApi.issueChatCredentials(),
+  chatCredentialProvider: myApplicationApi.refreshChatCredentials,
+);
+```
+
+The same model applies to product Chat:
+
+```dart
+final chat = ChatClient.direct(registry: myChatRegistry);
+final chatRoom = await chat.connect(
+  await myApplicationApi.issueChatCredentials(),
+  credentialProvider: myApplicationApi.refreshChatCredentials,
+);
+```
+
+Direct sessions do not send heartbeat/leave requests to the repository
+`demo-server`. Logical-room presence and privileged management are optional
+extensions (`MediaRoomPresence` / `MediaRoomManagement`). The HTTP
+`MediaBackendClient` implements those extensions for the reference Backend
+Contract, but applications may supply another implementation.
 
 Backend Contract v1 remains authoritative and is validated by Core. A backend
 may additionally return a provider-neutral `requiredCapabilities` array in a

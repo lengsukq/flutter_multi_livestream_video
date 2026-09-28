@@ -4,6 +4,11 @@ Existing apps may continue using `flutter_aws_chime` directly. Apps that want
 backend-controlled provider selection register the adapters they support and
 use Core without choosing a provider per room.
 
+Backend-controlled routing is one supported strategy, not a requirement.
+Frontend-first applications may construct `RealtimeSdk` without
+`backendUrl`, obtain `MediaJoinInfo` / `ChatJoinInfo` from their own
+credential service, and use `joinDirect` / `ChatClient.connect`.
+
 ## Package layout
 
 ```text
@@ -97,6 +102,11 @@ For normal applications, use `RealtimeSdk.preJoin` before create/join and
 `RealtimeRoomView(room: room)` after it. Direct `MediaClient`,
 `ChatClient`, and `MediaRoomView` usage is intentionally retained for
 advanced diagnostics, custom orchestration, or fully custom UI.
+
+Pre-Join is also backend-optional. With an explicit provider id it can run
+local permission checks and adapter-native probes without any control plane.
+Backend health and room-discovery checks are appended only when a Backend
+Contract implementation is configured.
 
 The backend can optionally attach `requiredCapabilities` to a join response.
 These are product requirements, not provider selection hints. The SDK compares

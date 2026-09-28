@@ -1,8 +1,7 @@
 import 'dart:async';
 
 typedef ChatBackendTokenProvider = FutureOr<String?> Function();
-typedef ChatBackendHeadersProvider =
-    FutureOr<Map<String, String>> Function();
+typedef ChatBackendHeadersProvider = FutureOr<Map<String, String>> Function();
 
 class ChatBackendConfig {
   const ChatBackendConfig({

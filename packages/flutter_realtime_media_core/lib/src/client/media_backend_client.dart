@@ -9,6 +9,8 @@ import 'media_backend_config.dart';
 import 'media_backend_error.dart';
 import 'media_backend_transport.dart';
 import 'media_backend_transport_factory.dart';
+import '../session/media_room_extensions.dart';
+import 'media_room_services.dart';
 
 /// Contract version implemented by this client.
 const int mediaBackendContractVersion = 1;
@@ -52,7 +54,8 @@ class MediaRoomJoinResponse {
 ///
 /// See `MEDIA_BACKEND_CONTRACT.md`. A compatible backend may be written in any
 /// stack; it only has to implement the documented HTTP endpoints.
-class MediaBackendClient {
+class MediaBackendClient
+    implements MediaRoomPresence, MediaRoomManagement, MediaRoomDiscovery {
   MediaBackendClient(this.config, {MediaBackendTransport? transport})
     : _transport = transport ?? createDefaultMediaBackendTransport(),
       _ownsTransport = transport == null;
@@ -69,6 +72,7 @@ class MediaBackendClient {
   Future<Map<String, dynamic>> health() => _request('GET', '/health');
 
   /// Returns lightweight discoverable rooms without participant identity data.
+  @override
   Future<List<MediaRoomSummary>> listRooms() async {
     final data = await _request('GET', '/rooms/discover');
     final rawRooms = data['rooms'];
@@ -87,6 +91,41 @@ class MediaBackendClient {
         .where((room) => room.roomCode.isNotEmpty && room.providerId.isNotEmpty)
         .toList(growable: false);
   }
+
+  @override
+  Future<void> closeRoomManaged(
+    String roomCode, {
+    required String requesterParticipantId,
+    String? participantCredential,
+  }) => closeRoomAsParticipant(
+    roomCode,
+    requesterParticipantId: requesterParticipantId,
+    participantCredential: participantCredential,
+  );
+
+  @override
+  Future<void> removeParticipant(
+    String roomCode, {
+    required String requesterParticipantId,
+    required String targetParticipantId,
+    String? participantCredential,
+  }) => removeRoomParticipant(
+    roomCode,
+    requesterParticipantId: requesterParticipantId,
+    targetParticipantId: targetParticipantId,
+    participantCredential: participantCredential,
+  );
+
+  @override
+  Future<List<MediaRoomParticipantSummary>> listParticipants(
+    String roomCode, {
+    required String requesterParticipantId,
+    String? participantCredential,
+  }) => listRoomParticipants(
+    roomCode,
+    requesterParticipantId: requesterParticipantId,
+    participantCredential: participantCredential,
+  );
 
   Future<List<MediaRoomParticipantSummary>> listRoomParticipants(
     String roomCode, {
@@ -267,6 +306,7 @@ class MediaBackendClient {
     return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
   }
 
+  @override
   Future<void> heartbeat(String roomCode, {String? participantId}) async {
     final code = _required(roomCode, 'roomCode');
     await _post('/rooms/${Uri.encodeComponent(code)}/heartbeat', {
@@ -275,6 +315,7 @@ class MediaBackendClient {
     });
   }
 
+  @override
   Future<void> leave(String roomCode, {String? participantId}) async {
     final code = _required(roomCode, 'roomCode');
     await _post('/rooms/${Uri.encodeComponent(code)}/leave', {

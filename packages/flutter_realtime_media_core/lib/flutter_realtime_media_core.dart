@@ -1,6 +1,7 @@
 /// Provider-neutral Flutter SDK core for realtime audio/video sessions.
 ///
-/// This package contains no provider SDK dependency. Add an adapter package
+/// This package contains no provider SDK dependency and does not require the
+/// repository demo backend. Add an adapter package
 /// (`flutter_realtime_media_livekit`, and later Chime/Agora/TRTC/...)
 /// and register its `MediaSessionFactory` in a `MediaRegistry`.
 library;
@@ -11,6 +12,7 @@ export 'src/client/media_backend_error.dart';
 export 'src/client/media_backend_transport.dart';
 export 'src/client/media_backend_transport_factory.dart';
 export 'src/client/media_client.dart';
+export 'src/client/media_room_services.dart';
 export 'src/diagnostics/media_doctor.dart';
 export 'src/diagnostics/media_permission_probe.dart';
 export 'src/diagnostics/media_pre_join.dart';
@@ -42,6 +44,7 @@ export 'src/session/media_data_controller.dart';
 export 'src/session/media_stats_provider.dart';
 export 'src/session/media_join_info.dart';
 export 'src/session/media_room_session.dart';
+export 'src/session/media_room_extensions.dart';
 export 'src/session/media_session.dart';
 export 'src/session/media_session_factory.dart';
 export 'src/view/media_track_view.dart';

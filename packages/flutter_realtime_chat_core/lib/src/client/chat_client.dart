@@ -4,8 +4,13 @@ import '../session/chat_room_session.dart';
 import '../session/chat_session_factory.dart';
 import 'chat_backend_client.dart';
 import 'chat_backend_config.dart';
+import 'chat_provisioner.dart';
 
 class ChatClient {
+  ChatClient.direct({ChatRegistry? registry, this.provisioner})
+    : registry = registry ?? ChatRegistry.global,
+      backend = null;
+
   ChatClient({
     required String backendUrl,
     ChatRegistry? registry,
@@ -27,17 +32,62 @@ class ChatClient {
     ChatRegistry? registry,
     ChatBackendClient? backend,
   }) : registry = registry ?? ChatRegistry.global,
-       backend = backend ?? ChatBackendClient(config);
+       backend = backend ?? ChatBackendClient(config),
+       provisioner = null;
 
   final ChatRegistry registry;
-  final ChatBackendClient backend;
+  final ChatBackendClient? backend;
+  final ChatProvisioner? provisioner;
+
+  /// Connects directly using credentials provisioned by the host application.
+  ///
+  /// [credentialProvider] is optional for providers whose credentials do not
+  /// expire while connected. When supplied, adapters may request a fresh
+  /// [ChatJoinInfo] during reconnect without knowing how it was provisioned.
+  Future<ChatRoomSession> connect(
+    ChatJoinInfo joinInfo, {
+    ChatCredentialProvider? credentialProvider,
+  }) async {
+    final factory = registry.require(joinInfo.providerId);
+    final session = factory.createSession(joinInfo);
+    try {
+      await session.connect(joinInfo, credentialProvider: credentialProvider);
+      return ChatRoomSession(
+        roomCode: joinInfo.roomCode,
+        participantId: joinInfo.participantId,
+        userId: joinInfo.userId,
+        role: joinInfo.role,
+        session: session,
+      );
+    } catch (_) {
+      await session.dispose();
+      rethrow;
+    }
+  }
 
   Future<ChatRoomSession> connectRoom({
     required String roomCode,
     required String participantId,
     String? participantCredential,
   }) async {
+    final customProvisioner = provisioner;
     Future<ChatJoinInfo> credentials() async {
+      if (customProvisioner != null) {
+        return customProvisioner.provision(
+          roomCode: roomCode,
+          participantId: participantId,
+          participantCredential: participantCredential,
+        );
+      }
+      final backend = this.backend;
+      if (backend == null) {
+        throw const ChatError(
+          code: ChatErrorCode.unsupportedFeature,
+          message:
+              'connectRoom requires a ChatProvisioner or the optional HTTP '
+              'backend convenience layer.',
+        );
+      }
       final response = await backend.issueToken(
         roomCode: roomCode,
         participantId: participantId,
@@ -59,22 +109,8 @@ class ChatClient {
     }
 
     final joinInfo = await credentials();
-    final factory = registry.require(joinInfo.providerId);
-    final session = factory.createSession(joinInfo);
-    try {
-      await session.connect(joinInfo, credentialProvider: credentials);
-      return ChatRoomSession(
-        roomCode: joinInfo.roomCode,
-        participantId: joinInfo.participantId,
-        userId: joinInfo.userId,
-        role: joinInfo.role,
-        session: session,
-      );
-    } catch (_) {
-      await session.dispose();
-      rethrow;
-    }
+    return connect(joinInfo, credentialProvider: credentials);
   }
 
-  void dispose() => backend.dispose();
+  void dispose() => backend?.dispose();
 }

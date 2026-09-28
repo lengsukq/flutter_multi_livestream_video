@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import '../client/media_backend_client.dart';
 import '../client/media_backend_error.dart';
 import '../model/media_error.dart';
 import '../model/media_event.dart';
@@ -10,6 +9,7 @@ import '../model/media_room_participant_summary.dart';
 import '../model/media_snapshot.dart';
 import '../model/media_state.dart';
 import 'media_session.dart';
+import 'media_room_extensions.dart';
 
 /// High-level room lifecycle returned by `MediaClient`.
 ///
@@ -20,8 +20,22 @@ import 'media_session.dart';
 /// Backend presence failures are reported on [backendErrors] and never stop
 /// healthy media, exactly like the Chime `ChimeRoomSession`.
 class MediaRoomSession {
+  /// Creates a room wrapper without a Backend Contract dependency.
+  factory MediaRoomSession.direct({
+    required String roomCode,
+    required String participantId,
+    required MediaSession session,
+  }) => MediaRoomSession._(
+    null,
+    null,
+    Duration.zero,
+    roomCode: roomCode,
+    participantId: participantId,
+    session: session,
+  );
   MediaRoomSession._(
-    this._backend,
+    this._presence,
+    this._management,
     this._heartbeatInterval, {
     required this.roomCode,
     required this.participantId,
@@ -45,10 +59,12 @@ class MediaRoomSession {
     String? chatProvider,
     Map<String, dynamic> backendMetadata = const {},
     required MediaSession session,
-    required MediaBackendClient backend,
+    required MediaRoomPresence presence,
+    required MediaRoomManagement management,
     required Duration heartbeatInterval,
   }) => MediaRoomSession._(
-    backend,
+    presence,
+    management,
     heartbeatInterval,
     roomCode: roomCode,
     participantId: participantId,
@@ -64,11 +80,13 @@ class MediaRoomSession {
   final String? participantCredential;
   final String? roomOwnerCredential;
   final String? chatProvider;
+
   /// Provider-neutral backend response metadata retained for high-level
   /// orchestration such as capability negotiation.
   final Map<String, dynamic> backendMetadata;
   final MediaSession session;
-  final MediaBackendClient _backend;
+  final MediaRoomPresence? _presence;
+  final MediaRoomManagement? _management;
   final Duration _heartbeatInterval;
   final StreamController<MediaBackendError> _backendErrorController =
       StreamController<MediaBackendError>.broadcast();
@@ -110,8 +128,8 @@ class MediaRoomSession {
 
   /// Lists sanitized logical room participants. The backend remains the
   /// authority and rejects callers without room-management permission.
-  Future<List<MediaRoomParticipantSummary>> listParticipants() => _backend
-      .listRoomParticipants(
+  Future<List<MediaRoomParticipantSummary>> listParticipants() =>
+      _requireManagement('list room participants').listParticipants(
         roomCode,
         requesterParticipantId: participantId,
         participantCredential: participantCredential,
@@ -119,7 +137,7 @@ class MediaRoomSession {
 
   /// Removes a participant when the backend/provider supports true moderation.
   Future<void> removeParticipant(String targetParticipantId) =>
-      _backend.removeRoomParticipant(
+      _requireManagement('remove room participants').removeParticipant(
         roomCode,
         requesterParticipantId: participantId,
         targetParticipantId: targetParticipantId,
@@ -140,11 +158,12 @@ class MediaRoomSession {
   }
 
   Future<void> _closeRoom() async {
+    final management = _requireManagement('close the logical room');
     if (_disposed || _leaveNotified) return;
     _stopHeartbeat();
     await _heartbeatFuture;
     try {
-      await _backend.closeRoomAsParticipant(
+      await management.closeRoomManaged(
         roomCode,
         requesterParticipantId: participantId,
         participantCredential: participantCredential,
@@ -201,6 +220,7 @@ class MediaRoomSession {
   }
 
   void _startHeartbeat() {
+    if (_presence == null) return;
     if (_heartbeatInterval <= Duration.zero) return;
     _initialHeartbeatTimer = Timer(
       Duration.zero,
@@ -232,8 +252,10 @@ class MediaRoomSession {
   }
 
   Future<void> _sendHeartbeat() async {
+    final presence = _presence;
+    if (presence == null) return;
     try {
-      await _backend.heartbeat(roomCode, participantId: participantId);
+      await presence.heartbeat(roomCode, participantId: participantId);
     } on MediaBackendError catch (error) {
       _reportBackendError(error);
     }
@@ -318,6 +340,10 @@ class MediaRoomSession {
     final current = _leaveNotificationFuture;
     if (current != null) return current;
     if (_leaveNotified) return Future<void>.value();
+    if (_presence == null) {
+      _leaveNotified = true;
+      return Future<void>.value();
+    }
     _leaveNotified = true;
     late final Future<void> future;
     future = _sendLeaveBestEffort().whenComplete(() {
@@ -330,8 +356,10 @@ class MediaRoomSession {
   }
 
   Future<void> _sendLeaveBestEffort() async {
+    final presence = _presence;
+    if (presence == null) return;
     try {
-      await _backend.leave(roomCode, participantId: participantId);
+      await presence.leave(roomCode, participantId: participantId);
     } on MediaBackendError catch (error) {
       _reportBackendError(error);
     }
@@ -341,5 +369,17 @@ class MediaRoomSession {
     if (!_backendErrorController.isClosed) {
       _backendErrorController.add(error);
     }
+  }
+
+  MediaRoomManagement _requireManagement(String operation) {
+    final management = _management;
+    if (management != null) return management;
+    throw MediaError(
+      code: MediaErrorCode.unsupportedFeature,
+      message:
+          'Cannot $operation because this room was joined without a room '
+          'management executor.',
+      providerId: providerId,
+    );
   }
 }

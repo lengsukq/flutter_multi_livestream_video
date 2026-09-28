@@ -1,11 +1,12 @@
 import '../model/media_error.dart';
 import '../model/media_role.dart';
 
-/// Provider-specific join information returned by the application backend.
+/// Provider-specific join information supplied to a media adapter.
 ///
 /// The core layer only understands the provider id, room code, participant id,
 /// and role. Everything a provider SDK needs (URLs, tokens, media placement)
-/// travels inside [payload] and is parsed by the matching adapter.
+/// travels inside [payload]. Applications may obtain this value from their own
+/// backend, a credential callback, or another trusted provisioning mechanism.
 class MediaJoinInfo {
   MediaJoinInfo({
     required this.providerId,
