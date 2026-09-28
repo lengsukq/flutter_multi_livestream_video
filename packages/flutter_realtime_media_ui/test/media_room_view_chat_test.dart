@@ -70,6 +70,10 @@ void main() {
     await tester.tap(find.byIcon(Icons.chat_bubble_outline_rounded));
     await tester.pump();
     expect(
+      find.byWidgetPredicate((widget) => widget is ListView && widget.reverse),
+      findsOneWidget,
+    );
+    expect(
       find.byWidgetPredicate(
         (widget) =>
             widget is RichText && widget.text.toPlainText() == 'Alice: hello',

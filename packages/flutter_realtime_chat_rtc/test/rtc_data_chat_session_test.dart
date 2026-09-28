@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
@@ -36,6 +37,162 @@ void main() {
 
         await product.dispose();
         await room.dispose();
+      },
+    );
+
+    test(
+      'uses provider identity and receive order instead of claimed envelope identity',
+      () async {
+        final bus = _FakeDataBus();
+        final mediaA = _FakeMediaSession(
+          participantId: 'participant-a',
+          displayName: 'Alice',
+          bus: bus,
+        );
+        final mediaB = _FakeMediaSession(
+          participantId: 'participant-b',
+          displayName: 'Bob',
+          bus: bus,
+        );
+        final chatB = RtcDataChatSession.forSession(
+          session: mediaB,
+          roomCode: 'room',
+          participantId: 'participant-b',
+        );
+
+        bus.publishRaw(
+          sender: mediaA,
+          topic: rtcDataChatTopic,
+          message: jsonEncode({
+            'v': 1,
+            'type': 'chat',
+            'id': 'spoof-attempt',
+            'senderId': 'host-account',
+            'participantId': 'host-participant',
+            'displayName': 'Fake Host',
+            'message': 'hello',
+            'timestampMs': 4102444800000,
+          }),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        final message = chatB.messages.single;
+        expect(message.userId, 'participant-a');
+        expect(message.displayName, 'Alice');
+        expect(message.attributes['participantId'], 'participant-a');
+        expect(message.attributes['claimedParticipantId'], 'host-participant');
+        expect(message.attributes['claimedUserId'], 'host-account');
+        expect(message.attributes['claimedDisplayName'], 'Fake Host');
+        expect(message.attributes['claimedTimestampMs'], '4102444800000');
+        expect(
+          message.timestamp.isBefore(
+            DateTime.now().add(const Duration(minutes: 1)),
+          ),
+          isTrue,
+        );
+
+        await chatB.dispose();
+        await mediaA.dispose();
+        await mediaB.dispose();
+      },
+    );
+
+    test('seeds chat messages already present in the media snapshot', () async {
+      final bus = _FakeDataBus();
+      final mediaA = _FakeMediaSession(
+        participantId: 'participant-a',
+        displayName: 'Alice',
+        bus: bus,
+      );
+      final mediaB = _FakeMediaSession(
+        participantId: 'participant-b',
+        displayName: 'Bob',
+        bus: bus,
+      );
+
+      bus.publishRaw(
+        sender: mediaA,
+        topic: rtcDataChatTopic,
+        message: jsonEncode({
+          'v': 1,
+          'type': 'chat',
+          'id': 'before-attach',
+          'senderId': 'participant-a',
+          'participantId': 'participant-a',
+          'displayName': 'Alice',
+          'message': 'already here',
+          'timestampMs': 1,
+        }),
+      );
+
+      final chatB = RtcDataChatSession.forSession(
+        session: mediaB,
+        roomCode: 'room',
+        participantId: 'participant-b',
+      );
+      expect(chatB.messages, hasLength(1));
+      expect(chatB.messages.single.message, 'already here');
+      expect(chatB.messages.single.userId, 'participant-a');
+
+      await chatB.dispose();
+      await mediaA.dispose();
+      await mediaB.dispose();
+    });
+
+    test(
+      'reconnect catches messages received while chat was detached',
+      () async {
+        final bus = _FakeDataBus();
+        final mediaA = _FakeMediaSession(
+          participantId: 'participant-a',
+          displayName: 'Alice',
+          bus: bus,
+        );
+        final mediaB = _FakeMediaSession(
+          participantId: 'participant-b',
+          displayName: 'Bob',
+          bus: bus,
+        );
+        final chatB = RtcDataChatSession.forSession(
+          session: mediaB,
+          roomCode: 'room',
+          participantId: 'participant-b',
+        );
+
+        await chatB.disconnect();
+        bus.publishRaw(
+          sender: mediaA,
+          topic: rtcDataChatTopic,
+          message: jsonEncode({
+            'v': 1,
+            'type': 'chat',
+            'id': 'while-detached',
+            'senderId': 'participant-a',
+            'participantId': 'participant-a',
+            'displayName': 'Alice',
+            'message': 'catch me up',
+            'timestampMs': 1,
+          }),
+        );
+        expect(chatB.messages, isEmpty);
+
+        await chatB.connect(
+          ChatJoinInfo(
+            providerId: chatB.providerId,
+            roomCode: 'room',
+            participantId: 'participant-b',
+            userId: 'participant-b',
+            displayName: 'Bob',
+            role: ChatRole.participant,
+            json: const {},
+          ),
+        );
+        expect(chatB.messages, hasLength(1));
+        expect(chatB.messages.single.message, 'catch me up');
+
+        await chatB.dispose();
+        await mediaA.dispose();
+        await mediaB.dispose();
       },
     );
 
@@ -140,12 +297,13 @@ void main() {
         expect(chatB.messages, hasLength(1));
         expect(chatA.messages.single.message, 'hello Bob');
         expect(chatB.messages.single.message, 'hello Bob');
-        expect(chatB.messages.single.userId, 'user-a');
+        expect(chatB.messages.single.userId, 'participant-a');
         expect(chatB.messages.single.displayName, 'Alice');
         expect(chatB.messages.single.topic, rtcDataChatTopic);
         expect(chatB.messages.single.type, 'message');
         expect(chatB.messages.single.providerId, 'rtc-data:fake');
         expect(chatB.messages.single.attributes['mediaProviderId'], 'fake');
+        expect(chatB.messages.single.attributes['claimedUserId'], 'user-a');
 
         await chatB.sendMessage('hello Alice');
         await Future<void>.delayed(Duration.zero);
@@ -153,7 +311,7 @@ void main() {
         expect(chatA.messages, hasLength(2));
         expect(chatB.messages, hasLength(2));
         expect(chatA.messages.last.message, 'hello Alice');
-        expect(chatA.messages.last.userId, 'user-b');
+        expect(chatA.messages.last.userId, 'participant-b');
 
         await chatA.dispose();
         await chatB.dispose();
@@ -369,9 +527,9 @@ class _FakeMediaSession implements MediaSession, MediaDataMessenger {
     this.role = MediaRole.participant,
     this.canSendData = true,
     this.canReceiveData = true,
-    _FakeDataBus? bus,
-  }) : _bus = bus {
-    _bus?.register(this);
+    this.bus,
+  }) {
+    bus?.register(this);
     _snapshot = MediaSnapshot(
       state: MediaSessionState.connected,
       role: role,
@@ -391,7 +549,7 @@ class _FakeMediaSession implements MediaSession, MediaDataMessenger {
   final String displayName;
   final bool canSendData;
   final bool canReceiveData;
-  final _FakeDataBus? _bus;
+  final _FakeDataBus? bus;
   final StreamController<MediaSessionState> _states =
       StreamController<MediaSessionState>.broadcast(sync: true);
   final StreamController<MediaSnapshot> _snapshots =
@@ -450,7 +608,7 @@ class _FakeMediaSession implements MediaSession, MediaDataMessenger {
         providerId: providerId,
       );
     }
-    _bus?.publishRaw(sender: this, message: message, topic: topic);
+    bus?.publishRaw(sender: this, message: message, topic: topic);
   }
 
   @override
@@ -465,7 +623,7 @@ class _FakeMediaSession implements MediaSession, MediaDataMessenger {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-    _bus?.unregister(this);
+    bus?.unregister(this);
     _snapshot = _snapshot.copyWith(state: MediaSessionState.disposed);
     await _states.close();
     await _snapshots.close();

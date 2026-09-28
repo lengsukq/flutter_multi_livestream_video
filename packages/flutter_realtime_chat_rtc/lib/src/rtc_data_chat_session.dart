@@ -32,14 +32,13 @@ class RtcDataChatSession implements ChatSession {
 
   RtcDataChatSession.forSession({
     required MediaSession session,
-    required String roomCode,
+    required this.roomCode,
     required String participantId,
     String? userId,
     String? displayName,
     this.maxMessages = 200,
     this.topic = rtcDataChatTopic,
   }) : _media = session,
-       _roomCode = roomCode,
        _participantId = participantId,
        _mediaProviderId = session.providerId,
        _userId = _normalizedIdentity(userId, participantId),
@@ -62,10 +61,13 @@ class RtcDataChatSession implements ChatSession {
       throw ArgumentError.value(maxMessages, 'maxMessages', 'must be positive');
     }
     _attach();
+    _seedExistingMessages();
+    _setState(_mapState(_media.state));
   }
 
   static bool canAttach(MediaSession session) =>
-      session.supportsBidirectionalData;
+      session.supportsBidirectionalData &&
+      (session is MediaDataMessenger || session is MediaAdvancedDataMessenger);
 
   static RtcDataChatSession? tryAttach({
     required MediaRoomSession room,
@@ -84,8 +86,14 @@ class RtcDataChatSession implements ChatSession {
     );
   }
 
+  void _seedExistingMessages() {
+    for (final message in _media.snapshot.messages) {
+      _ingestMediaMessage(message, emitEvent: false);
+    }
+  }
+
   final MediaSession _media;
-  final String _roomCode;
+  final String roomCode;
   final String _participantId;
   final String _mediaProviderId;
   final String _userId;
@@ -105,6 +113,7 @@ class RtcDataChatSession implements ChatSession {
   ChatConnectionState _state;
   bool _disposed = false;
   int _messageSequence = 0;
+  int _lastTimelineTimestampMs = 0;
 
   @override
   String get providerId => 'rtc-data:$_mediaProviderId';
@@ -139,7 +148,7 @@ class RtcDataChatSession implements ChatSession {
   }) async {
     _ensureNotDisposed();
     if (joinInfo.providerId != providerId ||
-        joinInfo.roomCode != _roomCode ||
+        joinInfo.roomCode != roomCode ||
         joinInfo.participantId != _participantId ||
         joinInfo.role != role) {
       throw _error(
@@ -148,6 +157,7 @@ class RtcDataChatSession implements ChatSession {
       );
     }
     _attach();
+    _seedExistingMessages();
     _setState(_mapState(_media.state));
   }
 
@@ -159,13 +169,14 @@ class RtcDataChatSession implements ChatSession {
       throw _error(ChatErrorCode.invalidArgument, 'Message must not be empty.');
     }
 
-    final now = DateTime.now();
-    final id =
+    final now = _nextTimelineTimestamp();
+    final wireId =
         '$_participantId-${now.microsecondsSinceEpoch}-${_messageSequence++}';
+    final id = _canonicalMessageId(_participantId, wireId);
     final envelope = <String, Object?>{
       'v': _rtcDataChatEnvelopeVersion,
       'type': 'chat',
-      'id': id,
+      'id': wireId,
       'senderId': _userId,
       'participantId': _participantId,
       'displayName': _displayName,
@@ -187,7 +198,7 @@ class RtcDataChatSession implements ChatSession {
     _upsert(
       ChatMessage(
         id: id,
-        userId: _userId,
+        userId: _participantId,
         displayName: _displayName,
         message: value,
         timestamp: now,
@@ -200,6 +211,7 @@ class RtcDataChatSession implements ChatSession {
           'participantId': _participantId,
           'topic': topic,
           'local': 'true',
+          if (_userId != _participantId) 'claimedUserId': _userId,
         },
       ),
     );
@@ -258,7 +270,7 @@ class RtcDataChatSession implements ChatSession {
       },
     );
     _messageSubscription = _media.dataMessages.listen(
-      _onMediaMessage,
+      (message) => _ingestMediaMessage(message),
       onError: (Object error, StackTrace stackTrace) {
         if (_disposed) return;
         _events.add(
@@ -277,7 +289,7 @@ class RtcDataChatSession implements ChatSession {
     _messageSubscription = null;
   }
 
-  void _onMediaMessage(MediaMessage incoming) {
+  void _ingestMediaMessage(MediaMessage incoming, {bool emitEvent = true}) {
     if (_disposed || incoming.topic != topic) return;
     final raw = incoming.message.trim();
     if (raw.isEmpty) return;
@@ -296,50 +308,64 @@ class RtcDataChatSession implements ChatSession {
       return;
     }
 
-    final id = json['id']?.toString().trim() ?? '';
+    final wireId = json['id']?.toString().trim() ?? '';
     final message = json['message']?.toString() ?? '';
-    if (id.isEmpty || message.trim().isEmpty) return;
+    if (wireId.isEmpty || message.trim().isEmpty) return;
+
+    final providerParticipantId = incoming.participantId.trim();
+    final claimedParticipantId = json['participantId']?.toString().trim() ?? '';
+    final participantId = providerParticipantId.isNotEmpty
+        ? providerParticipantId
+        : claimedParticipantId;
+    if (participantId.isEmpty) return;
+
+    final id = _canonicalMessageId(participantId, wireId);
     if (_messages.any((item) => item.id == id)) return;
 
-    final participantId =
-        json['participantId']?.toString().trim().isNotEmpty == true
-        ? json['participantId'].toString().trim()
-        : incoming.participantId;
-    final senderId = json['senderId']?.toString().trim().isNotEmpty == true
-        ? json['senderId'].toString().trim()
+    final claimedUserId = json['senderId']?.toString().trim() ?? '';
+    final claimedDisplayName = json['displayName']?.toString().trim() ?? '';
+    final providerDisplayName = incoming.displayName.trim();
+    final displayName = providerDisplayName.isNotEmpty
+        ? providerDisplayName
         : participantId;
-    final displayName =
-        json['displayName']?.toString().trim().isNotEmpty == true
-        ? json['displayName'].toString().trim()
-        : (incoming.displayName.trim().isNotEmpty
-              ? incoming.displayName.trim()
-              : senderId);
-    final timestampMs = _readInt(json['timestampMs']) ?? incoming.timestampMs;
+    final claimedTimestampMs = _readInt(json['timestampMs']);
+    final timestamp = _nextTimelineTimestamp();
 
     _upsert(
       ChatMessage(
         id: id,
-        userId: senderId,
+        userId: participantId,
         displayName: displayName,
         message: message,
-        timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMs),
+        timestamp: timestamp,
         topic: incoming.topic,
         type: 'message',
         providerId: providerId,
         attributes: {
+          ...incoming.metadata,
           'transport': 'rtc-data',
           'mediaProviderId': incoming.providerId.isEmpty
               ? _mediaProviderId
               : incoming.providerId,
           'participantId': participantId,
           'topic': incoming.topic,
-          ...incoming.metadata,
+          if (claimedParticipantId.isNotEmpty &&
+              claimedParticipantId != participantId)
+            'claimedParticipantId': claimedParticipantId,
+          if (claimedUserId.isNotEmpty && claimedUserId != participantId)
+            'claimedUserId': claimedUserId,
+          if (claimedDisplayName.isNotEmpty &&
+              claimedDisplayName != displayName)
+            'claimedDisplayName': claimedDisplayName,
+          if (claimedTimestampMs != null)
+            'claimedTimestampMs': claimedTimestampMs.toString(),
         },
       ),
+      emitEvent: emitEvent,
     );
   }
 
-  void _upsert(ChatMessage message) {
+  void _upsert(ChatMessage message, {bool emitEvent = true}) {
     final existing = _messages.indexWhere((item) => item.id == message.id);
     final isNew = existing < 0;
     if (existing >= 0) {
@@ -357,10 +383,22 @@ class RtcDataChatSession implements ChatSession {
     if (!_messageSnapshots.isClosed) {
       _messageSnapshots.add(List.unmodifiable(_messages));
     }
-    if (isNew && !_events.isClosed) {
+    if (emitEvent && isNew && !_events.isClosed) {
       _events.add(ChatMessageReceived(message));
     }
   }
+
+  DateTime _nextTimelineTimestamp() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final next = now > _lastTimelineTimestampMs
+        ? now
+        : _lastTimelineTimestampMs + 1;
+    _lastTimelineTimestampMs = next;
+    return DateTime.fromMillisecondsSinceEpoch(next);
+  }
+
+  static String _canonicalMessageId(String participantId, String wireId) =>
+      '$participantId:$wireId';
 
   void _setState(ChatConnectionState next) {
     if (_state == next) return;

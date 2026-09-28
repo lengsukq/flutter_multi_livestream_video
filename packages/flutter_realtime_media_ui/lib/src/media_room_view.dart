@@ -385,10 +385,11 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                     constraints: const BoxConstraints(maxHeight: 132),
                     child: ListView.separated(
                       shrinkWrap: true,
+                      reverse: true,
                       itemCount: messages.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 6),
                       itemBuilder: (context, index) {
-                        final message = messages[index];
+                        final message = messages[messages.length - 1 - index];
                         return Align(
                           alignment: Alignment.centerLeft,
                           child: RichText(
@@ -465,10 +466,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   Widget _rtcData() {
-    final messenger = session is MediaDataMessenger
-        ? session as MediaDataMessenger
-        : null;
-    if (messenger == null) return const SizedBox.shrink();
+    if (!session.capabilities.canSendData) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -493,11 +491,11 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                 hintText: 'Debug data payload…',
                 border: InputBorder.none,
               ),
-              onSubmitted: (_) => _sendRtcData(messenger),
+              onSubmitted: (_) => _sendRtcData(),
             ),
           ),
           IconButton(
-            onPressed: () => _sendRtcData(messenger),
+            onPressed: _sendRtcData,
             icon: const Icon(Icons.send_rounded),
           ),
         ],
@@ -505,10 +503,15 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     );
   }
 
-  void _sendRtcData(MediaDataMessenger messenger) {
+  void _sendRtcData() {
     final text = _rtcDataMessage.text.trim();
     if (text.isEmpty) return;
-    _run(() => messenger.sendMessage(text, topic: 'debug')).then((_) {
+    _run(
+      () => session.sendData(
+        text,
+        options: const MediaSendOptions(topic: 'debug'),
+      ),
+    ).then((_) {
       if (mounted && _error == null) _rtcDataMessage.clear();
     });
   }
@@ -574,9 +577,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                 active: _chatOpen,
               ),
             ],
-            if (widget.config.showRtcDataMessages &&
-                session is MediaDataMessenger &&
-                caps.canSendData) ...[
+            if (widget.config.showRtcDataMessages && caps.canSendData) ...[
               const SizedBox(width: 8),
               _control(
                 Icons.data_object_rounded,

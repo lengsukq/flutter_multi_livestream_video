@@ -503,6 +503,7 @@ abstract class _AgoraMediaSession
     int timestampMs = sentTs > 0
         ? sentTs
         : DateTime.now().millisecondsSinceEpoch;
+    final metadata = <String, String>{};
     try {
       final decoded = jsonDecode(text);
       if (decoded is Map) {
@@ -514,7 +515,7 @@ abstract class _AgoraMediaSession
               ? map['topic'].toString().trim()
               : 'chat';
           final ts = map['timestampMs'];
-          if (ts is num) timestampMs = ts.toInt();
+          if (ts is num) metadata['senderTimestampMs'] = ts.toInt().toString();
         }
       }
     } catch (_) {
@@ -528,6 +529,7 @@ abstract class _AgoraMediaSession
       topic: topic,
       timestampMs: timestampMs,
       providerId: providerId,
+      metadata: metadata,
     );
     _messages.add(mediaMessage);
     _refreshSnapshot();
