@@ -110,6 +110,7 @@ abstract class _ArtcMediaSession
         canPublishVideo: true,
         canSwitchCamera: true,
         canSendData: true,
+        canReceiveData: true,
         canSubscribeVideo: true,
         maxDataMessageBytes: 1024,
       ),
@@ -118,6 +119,7 @@ abstract class _ArtcMediaSession
         canPublishVideo: true,
         canSwitchCamera: true,
         canSendData: true,
+        canReceiveData: true,
         canSubscribeVideo: true,
         maxDataMessageBytes: 1024,
         canListParticipants: true,
@@ -348,6 +350,7 @@ abstract class _ArtcMediaSession
       message: message,
       topic: topic,
       timestampMs: DateTime.now().millisecondsSinceEpoch,
+      providerId: providerId,
     );
     _appendMessage(item);
     _events.add(MediaMessageReceived(item));
@@ -539,6 +542,7 @@ abstract class _ArtcMediaSession
       message: content,
       topic: normalizedTopic,
       timestampMs: DateTime.now().millisecondsSinceEpoch,
+      providerId: providerId,
     );
     _appendMessage(item);
   }

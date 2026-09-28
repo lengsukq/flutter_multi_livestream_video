@@ -24,6 +24,7 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
     canSwitchCamera: !isViewer,
     canScreenShare: !isViewer,
     canSendData: true,
+    canReceiveData: true,
     canSubscribeVideo: true,
     canEnumerateAudioDevices: true,
     canEnumerateMicrophones: !isViewer,
@@ -606,6 +607,7 @@ abstract class LiveKitMediaSessionBase
         message: utf8.decode(event.data, allowMalformed: true),
         topic: event.topic?.trim().isNotEmpty == true ? event.topic! : 'data',
         timestampMs: DateTime.now().millisecondsSinceEpoch,
+        providerId: providerId,
       );
       _replaceSnapshot(
         _snapshot.copyWith(messages: [..._snapshot.messages, message]),

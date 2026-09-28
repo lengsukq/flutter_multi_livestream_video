@@ -17,6 +17,7 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
     return const MediaCapabilities(
       canSubscribeVideo: true,
       canSendData: false,
+      canReceiveData: true,
       canReportNetworkStats: true,
     );
   }
@@ -31,6 +32,7 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
     canSwitchCamera: canSwitchCamera,
     canScreenShare: false,
     canSendData: true,
+    canReceiveData: true,
     canSubscribeVideo: true,
     canEnumerateAudioDevices: false,
     canReportNetworkStats: true,
@@ -525,6 +527,7 @@ abstract class _AgoraMediaSession
       message: message,
       topic: topic,
       timestampMs: timestampMs,
+      providerId: providerId,
     );
     _messages.add(mediaMessage);
     _refreshSnapshot();

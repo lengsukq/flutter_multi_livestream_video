@@ -151,6 +151,7 @@ void main() {
         'hello',
         'ack',
       ]);
+      expect(session.snapshot.messages.first.providerId, 'artc');
       expect(engine.calls, contains('message:ack:chat'));
       expect(events.whereType<MediaMessageReceived>(), hasLength(1));
 
@@ -171,18 +172,21 @@ void main() {
     },
   );
 
-  test('host advertises backend room management but not native removal', () async {
-    final session = ArtcSessionFactory(
-      engineFactory: () async => _FakeArtcEngine(),
-    ).createSession(joinInfo(role: MediaRole.host));
-    await session.join(joinInfo(role: MediaRole.host));
+  test(
+    'host advertises backend room management but not native removal',
+    () async {
+      final session = ArtcSessionFactory(
+        engineFactory: () async => _FakeArtcEngine(),
+      ).createSession(joinInfo(role: MediaRole.host));
+      await session.join(joinInfo(role: MediaRole.host));
 
-    expect(session.capabilities.canListParticipants, isTrue);
-    expect(session.capabilities.canCloseRoom, isTrue);
-    expect(session.capabilities.canRemoveParticipants, isFalse);
-    expect(session.capabilities.maxDataMessageBytes, 1024);
-    await session.dispose();
-  });
+      expect(session.capabilities.canListParticipants, isTrue);
+      expect(session.capabilities.canCloseRoom, isTrue);
+      expect(session.capabilities.canRemoveParticipants, isFalse);
+      expect(session.capabilities.maxDataMessageBytes, 1024);
+      await session.dispose();
+    },
+  );
 
   test(
     'viewer surface is subscribe-only and receives but cannot send data',
@@ -198,6 +202,7 @@ void main() {
       expect(session.capabilities.canPublishAudio, isFalse);
       expect(session.capabilities.canPublishVideo, isFalse);
       expect(session.capabilities.canSendData, isFalse);
+      expect(session.capabilities.canReceiveData, isTrue);
       await expectLater(
         (session as BroadcastViewerSession).sendMessage('not allowed'),
         throwsA(

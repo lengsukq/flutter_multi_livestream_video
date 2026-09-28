@@ -334,11 +334,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   Widget _chat() {
     final chat = widget.chatSession;
     if (chat != null) return _productChat(chat);
-    final messenger = session is MediaDataMessenger
-        ? session as MediaDataMessenger
-        : null;
-    if (messenger == null) return const SizedBox.shrink();
-    return _legacyDataChat(messenger);
+    return const SizedBox.shrink();
   }
 
   Widget _productChat(ChatSession chat) => StreamBuilder<ChatConnectionState>(
@@ -416,6 +412,18 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                       },
                     ),
                   ),
+                ] else ...[
+                  const SizedBox(height: 8),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'No messages yet',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xFF94A3B8),
+                      ),
+                    ),
+                  ),
                 ],
                 Row(
                   children: [
@@ -452,44 +460,6 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     final text = _message.text.trim();
     if (text.isEmpty) return;
     _run(() => chat.sendMessage(text)).then((_) {
-      if (mounted && _error == null) _message.clear();
-    });
-  }
-
-  Widget _legacyDataChat(MediaDataMessenger messenger) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _message,
-              decoration: const InputDecoration(
-                hintText: 'Type a realtime data message…',
-                border: InputBorder.none,
-              ),
-              onSubmitted: (_) => _sendLegacyData(messenger),
-            ),
-          ),
-          IconButton(
-            onPressed: () => _sendLegacyData(messenger),
-            icon: const Icon(Icons.arrow_upward_rounded),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _sendLegacyData(MediaDataMessenger messenger) {
-    final text = _message.text.trim();
-    if (text.isEmpty) return;
-    _run(() => messenger.sendMessage(text)).then((_) {
       if (mounted && _error == null) _message.clear();
     });
   }
@@ -596,9 +566,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                 () => _run(() => interactive.setScreenShareEnabled(true)),
               ),
             ],
-            if (widget.config.showChat &&
-                (widget.chatSession != null ||
-                    (session is MediaDataMessenger && caps.canSendData))) ...[
+            if (widget.config.showChat && widget.chatSession != null) ...[
               const SizedBox(width: 8),
               _control(
                 Icons.chat_bubble_outline_rounded,
@@ -607,7 +575,6 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               ),
             ],
             if (widget.config.showRtcDataMessages &&
-                widget.chatSession != null &&
                 session is MediaDataMessenger &&
                 caps.canSendData) ...[
               const SizedBox(width: 8),

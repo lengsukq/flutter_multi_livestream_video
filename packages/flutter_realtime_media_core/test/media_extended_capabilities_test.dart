@@ -84,12 +84,15 @@ void main() {
     test('advanced data feature flags remain independently queryable', () {
       const capabilities = MediaCapabilities(
         canSendData: true,
+        canReceiveData: true,
         canTargetData: true,
         canSendUnreliableData: true,
         maxDataMessageBytes: 4096,
       );
 
       expect(capabilities.supports(MediaFeature.sendData), isTrue);
+      expect(capabilities.supports(MediaFeature.receiveData), isTrue);
+      expect(capabilities.canReceiveData, isTrue);
       expect(capabilities.supports(MediaFeature.targetedData), isTrue);
       expect(capabilities.supports(MediaFeature.unreliableData), isTrue);
       expect(capabilities.supports(MediaFeature.unorderedData), isFalse);

@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import '../model/media_error.dart';
+import '../model/media_event.dart';
+import '../model/media_message.dart';
 import '../model/media_send_options.dart';
 import 'interactive_media_session.dart';
 import 'media_session.dart';
@@ -10,6 +12,23 @@ abstract interface class MediaAdvancedDataMessenger {
     String message, {
     MediaSendOptions options = const MediaSendOptions(),
   });
+}
+
+/// Provider-neutral inbound realtime-data surface.
+///
+/// Adapters continue to emit [MediaMessageReceived] on [MediaSession.events].
+/// This extension exposes the same events as a dedicated message stream so
+/// product integrations do not need to inspect the generic event stream.
+extension MediaSessionDataReceive on MediaSession {
+  /// Incoming realtime data messages, in provider delivery order.
+  Stream<MediaMessage> get dataMessages => events
+      .where((event) => event is MediaMessageReceived)
+      .cast<MediaMessageReceived>()
+      .map((event) => event.message);
+
+  /// True only when this session can both send and receive realtime data.
+  bool get supportsBidirectionalData =>
+      capabilities.canSendData && capabilities.canReceiveData;
 }
 
 /// Optional hook for adapters whose provider limit applies to an encoded

@@ -36,6 +36,8 @@ dependencies:
     path: ../packages/flutter_realtime_media_ivs
   flutter_realtime_chat_core:
     path: ../packages/flutter_realtime_chat_core
+  flutter_realtime_chat_rtc:
+    path: ../packages/flutter_realtime_chat_rtc
   flutter_realtime_chat_ivs:
     path: ../packages/flutter_realtime_chat_ivs
 

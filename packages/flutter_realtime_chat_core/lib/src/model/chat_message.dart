@@ -5,6 +5,9 @@ class ChatMessage {
     required this.message,
     required this.timestamp,
     this.displayName = '',
+    this.topic = 'chat',
+    this.type = 'message',
+    this.providerId,
     this.attributes = const {},
   });
 
@@ -13,5 +16,8 @@ class ChatMessage {
   final String displayName;
   final String message;
   final DateTime timestamp;
+  final String topic;
+  final String type;
+  final String? providerId;
   final Map<String, String> attributes;
 }

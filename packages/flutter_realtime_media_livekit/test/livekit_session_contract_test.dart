@@ -14,6 +14,8 @@ void main() {
       expect(session.capabilities.canPublishVideo, isTrue);
       expect(session.capabilities.canSwitchCamera, isTrue);
       expect(session.capabilities.canScreenShare, isTrue);
+      expect(session.capabilities.canSendData, isTrue);
+      expect(session.capabilities.canReceiveData, isTrue);
       expect(session.capabilities.canSubscribeVideo, isTrue);
       expect(session.capabilities.canReportNetworkStats, isTrue);
       expect(session.capabilities.canTargetData, isTrue);
@@ -31,6 +33,7 @@ void main() {
       expect(session.capabilities.canPublishVideo, isFalse);
       expect(session.capabilities.canScreenShare, isFalse);
       expect(session.capabilities.canSubscribeVideo, isTrue);
+      expect(session.capabilities.canReceiveData, isTrue);
       expect(session.capabilities.canTargetData, isTrue);
     });
 

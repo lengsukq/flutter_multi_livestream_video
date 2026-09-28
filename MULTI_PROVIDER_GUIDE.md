@@ -17,7 +17,8 @@ flutter_realtime_media_core
   └─ flutter_realtime_media_chime   -> flutter_aws_chime
 
 flutter_realtime_chat_core
-  └─ flutter_realtime_chat_ivs      -> Amazon IVS Chat Messaging (Android/iOS)
+  ├─ flutter_realtime_chat_ivs      -> Amazon IVS Chat Messaging (Android/iOS)
+  └─ flutter_realtime_chat_rtc      -> bidirectional RTC data -> ChatSession fallback
 ```
 
 Provider SDKs never become dependencies of Core.
@@ -69,8 +70,17 @@ final room = await client.createRoomAndJoinIdentity(
 );
 ```
 
-Media and product chat are separate provider axes. If `room.chatProvider` is
-non-null after media join, attach chat using the media participant identity:
+Media and product chat are separate provider axes. User-facing chat should
+always be represented by `ChatSession`. Resolve it with this priority:
+
+1. if `room.chatProvider` is non-null, attach that independent product Chat;
+2. otherwise, if the media session has both `canSendData` and
+   `canReceiveData`, create `RtcDataChatSession` as a session-local fallback;
+3. otherwise, expose no Chat UI.
+
+A backend-selected product Chat failure must not silently downgrade to RTC
+fallback because that would change server-authoritative product semantics.
+Attach independent chat using the media participant identity:
 
 ```dart
 final chatClient = ChatClient(
@@ -87,9 +97,28 @@ final chatRoom = await chatClient.connectRoom(
 );
 ```
 
+When `room.chatProvider == null`, the fallback is local composition only:
+
+```dart
+final rtcChat = RtcDataChatSession.tryAttach(room: room);
+final ChatSession? chatSession = rtcChat;
+```
+
+The RTC adapter uses a dedicated versioned topic/envelope and maps incoming
+media messages into provider-neutral `ChatMessage` objects containing sender
+identity, display name, message, topic/type, timestamp, provider metadata, and
+message ids for echo deduplication. Its in-memory history lasts only for the
+current session. It does not add server-side history or moderation.
+
 The chat-token request never sends a client-selected chat role. The backend
 resolves the existing media participant and grants chat capabilities from the
 stored role.
+
+RTC Data Debug is intentionally separate from both product Chat and fallback
+Chat. `MediaRoomViewConfig(showRtcDataMessages: true)` exposes the raw
+`MediaDataMessenger` debug/control path without feeding those payloads into
+`ChatSession`. Chat permissions never alter `canPublishAudio` or
+`canPublishVideo`.
 
 ## Pre-Join before create/join
 

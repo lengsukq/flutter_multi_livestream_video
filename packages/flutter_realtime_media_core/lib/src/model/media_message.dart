@@ -6,6 +6,8 @@ class MediaMessage {
     required this.topic,
     required this.timestampMs,
     this.displayName = '',
+    this.providerId = '',
+    this.metadata = const {},
   });
 
   /// Sender participant identifier.
@@ -13,6 +15,9 @@ class MediaMessage {
 
   /// Sender display name when the provider exposes it.
   final String displayName;
+
+  /// Provider that produced the message, when known.
+  final String providerId;
 
   /// Message text.
   final String message;
@@ -22,6 +27,9 @@ class MediaMessage {
 
   /// Milliseconds since epoch.
   final int timestampMs;
+
+  /// Optional provider-neutral metadata preserved by adapters.
+  final Map<String, String> metadata;
 
   @override
   String toString() => 'MediaMessage($topic, from: $participantId, "$message")';

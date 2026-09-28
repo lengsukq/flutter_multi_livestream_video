@@ -117,6 +117,7 @@ void main() {
         'hello',
         'ack',
       ]);
+      expect(session.snapshot.messages.first.providerId, 'trtc');
       expect(events.whereType<MediaMessageReceived>(), hasLength(1));
       expect(engine.calls, contains('message:1'));
 

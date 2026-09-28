@@ -64,6 +64,12 @@ room codes must keep resolving to the provider that owns that room.
 If the server-selected provider is not configured, return
 `provider-not-configured` (HTTP `503`).
 
+`chatProvider` is authoritative when present. When it is absent, clients may
+optionally expose a local RTC Chat fallback if the selected media adapter
+declares both `canSendData` and `canReceiveData`. This fallback is not a backend
+provider binding and does not change this contract or grant additional media
+permissions.
+
 ## Endpoints
 
 ### `POST /rooms`

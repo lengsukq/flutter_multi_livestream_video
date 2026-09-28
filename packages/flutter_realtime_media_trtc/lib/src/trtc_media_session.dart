@@ -12,6 +12,7 @@ MediaCapabilities _publisherCapabilities(MediaRole role) => MediaCapabilities(
   canPublishVideo: true,
   canSwitchCamera: true,
   canSendData: true,
+  canReceiveData: true,
   canSubscribeVideo: true,
   canReportNetworkStats: true,
   maxDataMessageBytes: 1024,
@@ -21,6 +22,7 @@ MediaCapabilities _publisherCapabilities(MediaRole role) => MediaCapabilities(
 const _viewerCapabilities = MediaCapabilities(
   canSubscribeVideo: true,
   canSendData: false,
+  canReceiveData: true,
   canReportNetworkStats: true,
 );
 const _customMessageCommandId = 1;
@@ -485,6 +487,7 @@ abstract class _TrtcSessionBase
       message: message,
       topic: topic,
       timestampMs: DateTime.now().millisecondsSinceEpoch,
+      providerId: providerId,
     );
     _setSnapshot(
       _snapshot.copyWith(messages: [..._snapshot.messages, incoming]),
@@ -533,6 +536,7 @@ abstract class _TrtcSessionBase
         message: trimmed,
         topic: topic,
         timestampMs: DateTime.now().millisecondsSinceEpoch,
+        providerId: providerId,
       );
       _setSnapshot(
         _snapshot.copyWith(messages: [..._snapshot.messages, outgoing]),

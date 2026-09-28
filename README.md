@@ -11,8 +11,8 @@ adapter packages, so applications can add or remove providers without coupling
 business UI to a specific vendor.
 
 The repository currently supports **AWS Chime**, **LiveKit**, **Agora**,
-**Tencent TRTC**, and **Alibaba Cloud ARTC**. The original
-`flutter_aws_chime` v3 package remains available at the repository root for
+**Tencent TRTC**, **Alibaba Cloud ARTC**, and **Amazon IVS Real-Time**. The original
+`packages/flutter_aws_chime` v3 package remains available for
 existing Chime-only applications and is kept backward compatible.
 
 ## Packages
@@ -26,6 +26,10 @@ existing Chime-only applications and is kept backward compatible.
 | `flutter_realtime_media_chime` | AWS Chime adapter for Core | Implemented |
 | `flutter_realtime_media_trtc` | Optional Tencent TRTC RTC + host/viewer adapter | Implemented; real-device E2E optional |
 | `flutter_realtime_media_artc` | Optional Alibaba Cloud ARTC RTC + host/viewer adapter | Implemented; real-device E2E optional |
+| `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + host/viewer adapter | Android/iOS implemented |
+| `flutter_realtime_chat_core` | Provider-neutral product chat client/session contract | Implemented |
+| `flutter_realtime_chat_ivs` | Amazon IVS Chat adapter | Android/iOS implemented |
+| `flutter_realtime_chat_rtc` | Adapts bidirectional RTC data to `ChatSession` when no product Chat Provider is bound | Implemented |
 | `flutter_aws_chime` | Existing standalone Chime v3 Flutter plugin | Maintained for compatibility |
 
 Provider SDKs are dependencies of their own adapters, never of Core. Applications
@@ -38,20 +42,19 @@ front/back camera switching remains Android/iOS-only.
 
 ## Provider status
 
-| Provider | Real-time audio/video | One-to-many live | Status |
+| Provider | Meeting | Live / broadcast | Status |
 | --- | --- | --- | --- |
-| AWS Chime | Yes | — | Implemented |
+| AWS Chime | Yes | No (participant only) | Implemented |
 | LiveKit | Yes | Yes, host/viewer | Implemented |
 | Agora | Yes | Yes, host/viewer | Adapter implemented |
 | Tencent TRTC | Yes | Yes, host/viewer | Optional adapter implemented |
 | Alibaba Cloud ARTC | Yes | Yes, host/viewer | Optional adapter implemented |
-| Amazon IVS | — | Planned | Future live adapter |
+| Amazon IVS Real-Time | Yes | Yes, host/viewer | Android/iOS implemented |
 
 See [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md) for the unified API and
-backend-selected provider flow, and
-[`SDK_CAPABILITY_MATRIX.md`](SDK_CAPABILITY_MATRIX.md) for the runtime capability matrix
-covering devices, network statistics, data delivery, recovery, and host
-management.
+backend-selected provider flow. The detailed runtime capability matrix is
+available in [English](SDK_CAPABILITY_MATRIX.md) and
+[简体中文](SDK_CAPABILITY_MATRIX.zh-CN.md).
 
 ## Backend-selected provider flow
 
@@ -69,7 +72,8 @@ Application backend
    ├── Agora
    ├── AWS Chime
    ├── Tencent TRTC (optional)
-   └── Alibaba Cloud ARTC (optional)
+   ├── Alibaba Cloud ARTC (optional)
+   └── Amazon IVS Real-Time (optional)
    │
    ▼
 Core → matching provider adapter
@@ -77,6 +81,20 @@ Core → matching provider adapter
 
 The included `demo-server` exposes provider selection in its server UI. The
 Flutter demo itself does not need a provider selector.
+
+### Product Chat, RTC fallback Chat, and RTC Data Debug
+
+The ready-to-use UI consumes only `ChatSession` for user-facing chat. Resolution
+is explicit: when `room.chatProvider` is present, the app uses that product-chat
+provider only. When it is absent, `flutter_realtime_chat_rtc` may adapt the
+already-connected media session into a `ChatSession`, but only when both
+`canSendData` and `canReceiveData` are true. A configured product-chat failure
+does not silently fall back to RTC data.
+
+`showRtcDataMessages` remains a separate debug/control surface backed by
+`MediaDataMessenger`; its payloads are not injected into the Chat message list.
+Amazon IVS Real-Time has no RTC data transport and therefore has no RTC Chat
+fallback. Chat capability never grants microphone/camera publish permission.
 
 ## Pre-Join checks
 
@@ -412,7 +430,7 @@ Flutter App 统一依赖 Core 接口，房间实际使用哪一家媒体服务�
 
 当前仓库已经支持 **AWS Chime**、**LiveKit**、**Agora**、**腾讯云 TRTC**、
 **阿里云 ARTC** 和 **Amazon IVS Real-Time**。产品聊天是独立 Provider 轴，
-当前已通过 Chat Core 接入 **Amazon IVS Chat**。原有根目录
+当前已通过 Chat Core 接入 **Amazon IVS Chat**。原有
 `flutter_aws_chime` v3 包继续保留，供已有 Chime-only 项目兼容使用。
 
 ## 包结构
@@ -428,6 +446,7 @@ Flutter App 统一依赖 Core 接口，房间实际使用哪一家媒体服务�
 | `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + Host/Viewer Adapter | Android/iOS 已实现 |
 | `flutter_realtime_chat_core` | Provider 无关的产品聊天 Client/Session 契约 | 已实现 |
 | `flutter_realtime_chat_ivs` | Amazon IVS Chat Adapter | Android/iOS 已实现 |
+| `flutter_realtime_chat_rtc` | 无独立产品 Chat Provider 时，将完整双向 RTC Data 适配为 `ChatSession` | 已实现 |
 | `flutter_aws_chime` | 原有独立 Chime v3 Flutter 插件 | 兼容维护 |
 
 Core 不直接依赖任何供应商 SDK，供应商依赖仅存在于各自 Adapter 中。应用只添加并注册
@@ -439,12 +458,35 @@ Agora Adapter 支持 Android、iOS 和 macOS；macOS 通过 Agora 原生桌面�
 
 | Provider | 实时音视频 | 一对多直播 | 状态 |
 | --- | --- | --- | --- |
-| AWS Chime | 支持 | — | 已实现 |
+| AWS Chime | Meeting 支持 | 不支持（仅 participant） | 已实现 |
 | LiveKit | 支持 | 支持 Host/Viewer | 已实现 |
 | Agora 声网 | 支持 | 支持 Host/Viewer | Adapter 已实现 |
 | 腾讯云 TRTC | 支持 | 支持 Host/Viewer | 可选 Adapter 已实现 |
 | 阿里云 ARTC | 支持 | 支持 Host/Viewer | 可选 Adapter 已实现 |
 | Amazon IVS Real-Time | 支持 | 支持 Host/Viewer | Android/iOS 已实现 |
+
+## 音视频与直播能力
+
+Meeting 是多人双向音视频；Live / Broadcast 是一对多直播，房主发布音视频，观众订阅观看。
+所有列出的 Provider 均支持 Meeting；除 Chime 外，其余 Provider 支持房主/观众直播模式。
+
+| 音视频供应商 | Meeting | Live / Broadcast | RTC 数据消息 | 屏幕共享 | 房主管理 |
+| --- | --- | --- | --- | --- | --- |
+| LiveKit | 支持 | 支持房主/观众 | 支持，含定向和不可靠发送 | 发布者支持 | 可列出、移除参与者并关闭房间 |
+| AWS Chime | 支持 | 不支持，仅 participant | 支持，单条上限 2 KiB | Adapter 未提供 | 无房主角色 |
+| Agora | 支持 | 支持房主/观众 | 房主/participant 可发送，单条上限 1 KiB | 暂未实现 | 可列出参与者、关闭房间；不能服务端强制移除 |
+| 腾讯云 TRTC | 支持 | 支持房主/观众 | 房主/participant 可发送，单条上限 1 KiB | Adapter 未提供 | 可列出参与者、关闭房间；不能服务端强制移除 |
+| 阿里云 ARTC | 支持 | 支持房主/观众 | 房主/participant 可发送，单条上限 1 KiB | Adapter 未提供 | 可列出参与者、关闭房间；不能服务端强制移除 |
+| Amazon IVS Real-Time | 支持 | 支持房主/观众 | 不支持 RTC 数据消息 | Adapter 未提供 | 可列出参与者、通过 IVS 断开参与者并关闭房间 |
+
+产品聊天是独立于音视频 Provider 的能力。当前支持 Amazon IVS Chat，也可以关闭产品聊天；启用时可与
+上表任意音视频 Provider 配合。聊天支持收发实时消息，房主令牌支持删除消息和断开用户。若房间没有
+绑定独立 `chatProvider`，SDK 可在当前 Media Provider 同时具备 `canSendData` 和 `canReceiveData` 时，
+通过 `flutter_realtime_chat_rtc` 将 RTC Data 适配成统一 `ChatSession`。若服务端明确绑定了产品 Chat，
+则始终优先使用独立 Chat，连接失败时也不会偷偷改走 RTC fallback。RTC Data Debug 继续使用
+`MediaDataMessenger` 独立工作，不会进入 Chat 消息列表。IVS Real-Time 不支持 RTC Data，因此没有
+RTC fallback。聊天能力也不会提升 viewer 的音视频发布权限。完整设备、预加入检查、网络统计和恢复能力见
+[`SDK_CAPABILITY_MATRIX.zh-CN.md`](SDK_CAPABILITY_MATRIX.zh-CN.md)。
 
 统一 API 与后端选择 Provider 的完整说明见
 [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md)。

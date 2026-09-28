@@ -11,6 +11,7 @@ const _chimeCapabilities = MediaCapabilities(
   canPublishVideo: true,
   canSwitchCamera: true,
   canSendData: true,
+  canReceiveData: true,
   canSubscribeVideo: true,
   canEnumerateAudioDevices: true,
   canSelectAudioOutput: true,
@@ -334,6 +335,7 @@ class ChimeMediaSession
             message: message.message,
             topic: message.topic,
             timestampMs: message.timestampMs,
+            providerId: providerId,
           ),
         )
         .toList(growable: false);

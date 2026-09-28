@@ -184,6 +184,9 @@ class IvsChatSession implements ChatSession {
           raw['displayName']?.toString() ?? attributes['displayName'] ?? userId,
       message: content,
       timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMs),
+      topic: 'chat',
+      type: raw['type']?.toString() ?? 'message',
+      providerId: providerId,
       attributes: Map.unmodifiable(attributes),
     );
     final index = _messages.indexWhere((item) => item.id == id);

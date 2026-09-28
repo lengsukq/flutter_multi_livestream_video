@@ -232,6 +232,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_chat_rtc:
+    dependency: "direct main"
+    description:
+      path: "../packages/flutter_realtime_chat_rtc"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_media_agora:
     dependency: "direct main"
     description:

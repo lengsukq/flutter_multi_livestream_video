@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
 import 'package:flutter_realtime_chat_ivs/flutter_realtime_chat_ivs.dart';
 import 'package:flutter_realtime_media_artc/flutter_realtime_media_artc.dart';
 import 'package:flutter_realtime_media_agora/flutter_realtime_media_agora.dart';
@@ -426,6 +427,8 @@ class _JoinScreenState extends State<JoinScreen>
 
     ChatClient? chatClient;
     ChatRoomSession? chatRoom;
+    RtcDataChatSession? rtcChatSession;
+    ChatSession? activeChatSession;
     final chatProvider = room.chatProvider;
     if (chatProvider != null) {
       chatClient = _newChatClient();
@@ -444,6 +447,7 @@ class _JoinScreenState extends State<JoinScreen>
             providerId: chatProvider,
           );
         }
+        activeChatSession = chatRoom.session;
       } catch (error) {
         chatClient.dispose();
         chatClient = null;
@@ -451,9 +455,18 @@ class _JoinScreenState extends State<JoinScreen>
         debugPrint('Chat unavailable for room ${room.roomCode}: $error');
       }
     }
+    activeChatSession = resolveChatSessionWithRtcFallback(
+      room: room,
+      productChatConfigured: chatProvider != null,
+      productChatSession: chatRoom?.session,
+    );
+    if (activeChatSession is RtcDataChatSession) {
+      rtcChatSession = activeChatSession;
+    }
 
     if (!mounted) {
       await chatRoom?.dispose();
+      await rtcChatSession?.dispose();
       chatClient?.dispose();
       await room.dispose();
       client.dispose();
@@ -466,13 +479,14 @@ class _JoinScreenState extends State<JoinScreen>
           builder: (_) => MediaRoomView(
             room: room,
             renderer: renderer,
-            chatSession: chatRoom?.session,
+            chatSession: activeChatSession,
             config: const MediaRoomViewConfig(showRtcDataMessages: true),
           ),
         ),
       );
     } finally {
       await chatRoom?.dispose();
+      await rtcChatSession?.dispose();
       chatClient?.dispose();
       await room.dispose();
       client.dispose();

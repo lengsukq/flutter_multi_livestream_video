@@ -1,5 +1,7 @@
 # SDK Capability Matrix
 
+**English** | [简体中文](SDK_CAPABILITY_MATRIX.zh-CN.md)
+
 The application should branch on `MediaCapabilities` / `MediaFeature`, not
 on `providerId`. A provider may expose a smaller capability set on a specific
 platform or role.
@@ -8,7 +10,9 @@ platform or role.
 | --- | --- | --- | --- | --- | --- | --- |
 | Meeting audio/video | Yes | Yes | Yes | Yes | Yes | Yes |
 | Broadcast host/viewer | Yes | No (participant only) | Yes | Yes | Yes | Yes |
-| RTC data message | Yes | Yes | Host/participant | Host/participant | Host/participant | No |
+| RTC data send | Yes | Yes | Host/participant | Host/participant | Host/participant | No |
+| RTC data receive | Yes | Yes | Yes | Yes | Yes | No |
+| RTC Chat fallback | Yes when role can send | Yes | Host/participant | Host/participant | Host/participant | No |
 | SDK message-size limit | 15 KiB | 2 KiB | 1 KiB | 1 KiB | 1 KiB | — |
 | Targeted data | Yes | No | No | No | No | No |
 | Unreliable data | Yes | No | No | No | No | No |
@@ -36,9 +40,16 @@ It uses `ChatSession` / `ChatCapabilities` from
 | Automatic reconnect token refresh | Yes |
 | Provider-independent from media | Yes |
 
-RTC data messages remain a media transport feature. They may be useful for
-control/debug payloads but are not treated as product chat by the built-in UI
-when a `ChatSession` is attached.
+The built-in UI always consumes `ChatSession` for user-facing chat. If the
+backend binds a product-chat provider, that session is authoritative. If no
+product Chat Provider is bound, `flutter_realtime_chat_rtc` can create a
+session-local fallback only when the media session supports both RTC data send
+and receive. Product-chat connection failures do not auto-fallback.
+
+Raw RTC data remains a media transport feature and a separate Debug/control
+surface. `showRtcDataMessages` does not inject raw payloads into Chat. The RTC
+fallback keeps only current-session history and provides no server-side history
+or moderation. Chat capability is independent from audio/video publish rights.
 
 ## Provider-neutral APIs
 
@@ -85,6 +96,9 @@ values that the provider does not expose.
 `sendMessage(...)` remains compatible. `MediaSendOptions` describes topic,
 target participants, reliability, and ordering; Core validates requested
 semantics and message-size limits against `MediaCapabilities` before dispatch.
+Incoming provider data is exposed uniformly through `session.dataMessages`;
+`canReceiveData` is declared separately from `canSendData` so callers can
+distinguish send-only roles from full bidirectional transports.
 
 `MediaRoomSession.recoveries` normalizes reconnecting, recovered, and failed
 transitions without changing the logical participant identity. Provider

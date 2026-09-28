@@ -88,6 +88,7 @@ void main() {
       expect(host.capabilities.canPublishAudio, isTrue);
       expect(host.capabilities.canPublishVideo, isTrue);
       expect(host.capabilities.canSendData, isTrue);
+      expect(host.capabilities.canReceiveData, isTrue);
       expect(host.capabilities.canScreenShare, isFalse);
       expect(host.capabilities.canEnumerateAudioDevices, isFalse);
       expect(host.capabilities.canReportNetworkStats, isTrue);
@@ -108,6 +109,7 @@ void main() {
       expect(viewer.capabilities.canPublishAudio, isFalse);
       expect(viewer.capabilities.canPublishVideo, isFalse);
       expect(viewer.capabilities.canSendData, isFalse);
+      expect(viewer.capabilities.canReceiveData, isTrue);
       expect(viewer.capabilities.canReportNetworkStats, isTrue);
     });
   });

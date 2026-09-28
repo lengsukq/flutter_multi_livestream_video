@@ -1,0 +1,14 @@
+name: flutter_realtime_chat_rtc
+description: RTC data-channel fallback adapter for Flutter Realtime Chat.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+dependencies:
+  flutter_realtime_chat_core:
+    path: ../flutter_realtime_chat_core
+  flutter_realtime_media_core:
+    path: ../flutter_realtime_media_core
+dev_dependencies:
+  test: ^1.25.0
+

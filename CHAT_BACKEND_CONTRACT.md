@@ -2,7 +2,11 @@
 
 Product chat is independent from the media provider. A room can use any
 supported media provider and optionally bind a separate chat provider. RTC data
-messages are not a substitute for this contract.
+messages are not a substitute for this contract when `chatProvider` is bound.
+When no product Chat Provider is bound, a client may optionally adapt a fully
+bidirectional RTC data transport into a session-local `ChatSession` fallback;
+that path does not call this backend contract and does not provide server-side
+history or moderation.
 
 ## Versioning
 
@@ -73,7 +77,10 @@ only to that participant, and stores only a SHA-256 digest. A new join for that
 participant rotates the proof.
 
 If a room has no chat provider, the reference backend returns
-unsupported-feature. Unknown rooms or participants return typed errors.
+unsupported-feature. Clients may then decide whether their current media
+session supports the optional RTC Chat fallback. Unknown rooms or participants
+return typed errors. A failure while connecting a configured product Chat must
+not be interpreted as permission to silently switch to fallback.
 
 ## Room lifecycle
 

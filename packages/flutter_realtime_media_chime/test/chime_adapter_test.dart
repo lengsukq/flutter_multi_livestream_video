@@ -76,6 +76,8 @@ void main() {
       expect(session.capabilities.canPublishVideo, isTrue);
       expect(session.capabilities.canScreenShare, isFalse);
       expect(session.capabilities.canSelectAudioOutput, isTrue);
+      expect(session.capabilities.canSendData, isTrue);
+      expect(session.capabilities.canReceiveData, isTrue);
       expect(session.capabilities.maxDataMessageBytes, 2048);
       expect(session.capabilities.canReportNetworkStats, isFalse);
       await session.dispose();
@@ -109,6 +111,7 @@ void main() {
         expect(remote.videoTrack, isA<ChimeMediaVideoTrack>());
         expect(remote.isSpeaking, isTrue);
         expect(session.snapshot.messages.single.message, 'hello');
+        expect(session.snapshot.messages.single.providerId, 'chime');
         expect(events.whereType<MediaParticipantJoined>(), isNotEmpty);
         expect(events.whereType<MediaTrackPublished>(), isNotEmpty);
         expect(events.whereType<MediaSpeakingChanged>(), isNotEmpty);

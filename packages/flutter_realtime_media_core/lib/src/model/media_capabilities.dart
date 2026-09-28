@@ -11,6 +11,7 @@ class MediaCapabilities {
     this.canSwitchCamera = false,
     this.canScreenShare = false,
     this.canSendData = false,
+    this.canReceiveData = false,
     this.canSubscribeVideo = false,
     this.canEnumerateAudioDevices = false,
     this.canEnumerateMicrophones = false,
@@ -39,6 +40,7 @@ class MediaCapabilities {
         canPublishVideo: true,
         canSwitchCamera: true,
         canSendData: true,
+        canReceiveData: true,
         canSubscribeVideo: true,
         canEnumerateAudioDevices: true,
       );
@@ -51,19 +53,27 @@ class MediaCapabilities {
         canSwitchCamera: true,
         canScreenShare: true,
         canSendData: true,
+        canReceiveData: true,
         canSubscribeVideo: true,
         canEnumerateAudioDevices: true,
       );
 
   /// Broadcast viewer: subscribe and chat only, no media publishing.
-  const MediaCapabilities.broadcastViewer({bool canSendData = true})
-    : this(canSubscribeVideo: true, canSendData: canSendData);
+  const MediaCapabilities.broadcastViewer({
+    bool canSendData = true,
+    bool canReceiveData = true,
+  }) : this(
+         canSubscribeVideo: true,
+         canSendData: canSendData,
+         canReceiveData: canReceiveData,
+       );
 
   final bool canPublishAudio;
   final bool canPublishVideo;
   final bool canSwitchCamera;
   final bool canScreenShare;
   final bool canSendData;
+  final bool canReceiveData;
   final bool canSubscribeVideo;
   final bool canEnumerateAudioDevices;
   final bool canEnumerateMicrophones;
@@ -89,6 +99,7 @@ class MediaCapabilities {
     bool? canSwitchCamera,
     bool? canScreenShare,
     bool? canSendData,
+    bool? canReceiveData,
     bool? canSubscribeVideo,
     bool? canEnumerateAudioDevices,
     bool? canEnumerateMicrophones,
@@ -111,6 +122,7 @@ class MediaCapabilities {
     canSwitchCamera: canSwitchCamera ?? this.canSwitchCamera,
     canScreenShare: canScreenShare ?? this.canScreenShare,
     canSendData: canSendData ?? this.canSendData,
+    canReceiveData: canReceiveData ?? this.canReceiveData,
     canSubscribeVideo: canSubscribeVideo ?? this.canSubscribeVideo,
     canEnumerateAudioDevices:
         canEnumerateAudioDevices ?? this.canEnumerateAudioDevices,
@@ -135,6 +147,7 @@ class MediaCapabilities {
   String toString() =>
       'MediaCapabilities(audio: $canPublishAudio, video: $canPublishVideo, '
       'switchCamera: $canSwitchCamera, screenShare: $canScreenShare, '
-      'data: $canSendData, subscribeVideo: $canSubscribeVideo, '
+      'dataSend: $canSendData, dataReceive: $canReceiveData, '
+      'subscribeVideo: $canSubscribeVideo, '
       'networkStats: $canReportNetworkStats)';
 }
