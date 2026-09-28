@@ -18,6 +18,8 @@ flutter_realtime_media_core
 
 flutter_realtime_chat_core
   ├─ flutter_realtime_chat_ivs      -> Amazon IVS Chat Messaging (Android/iOS)
+  ├─ flutter_realtime_chat_tencent  -> Tencent Cloud Chat (Android/iOS in reference demo)
+  ├─ flutter_realtime_chat_agora    -> Agora Chat (Android/iOS)
   └─ flutter_realtime_chat_rtc      -> bidirectional RTC data -> ChatSession fallback
 ```
 
@@ -87,6 +89,8 @@ final chatClient = ChatClient(
   backendUrl: 'https://api.example.com',
   registry: ChatRegistry([
     const IvsChatSessionFactory(),
+    const TencentChatSessionFactory(),
+    const AgoraChatSessionFactory(), // Android/iOS
   ]),
   tokenProvider: () async => applicationToken,
 );
@@ -113,6 +117,14 @@ current session. It does not add server-side history or moderation.
 The chat-token request never sends a client-selected chat role. The backend
 resolves the existing media participant and grants chat capabilities from the
 stored role.
+
+The reference adapters currently support `ivs-chat`, `tencent-chat`, and
+`agora-chat`. Tencent maps an application room to a Tencent Chat Meeting group;
+Agora maps it to an Agora ChatRoom. Both adapters keep long-lived signing
+secrets on the backend and refresh short-lived client credentials through the
+same `ChatCredentialProvider` path. Their first version exposes reliable text
+send/receive but deliberately leaves moderator delete/kick unsupported until a
+provider-neutral server-side moderation contract is added.
 
 RTC Data Debug is intentionally separate from both product Chat and fallback
 Chat. `MediaRoomViewConfig(showRtcDataMessages: true)` exposes the raw
@@ -215,23 +227,32 @@ To enable Agora in the same server, also set `AGORA_APP_ID` and
 `AGORA_APP_CERTIFICATE` (normally in the ignored `demo-server/.env`).
 
 The public URL is `http://127.0.0.1:3000`. Open the existing dashboard and
-switch the **Media Provider** for new rooms between LiveKit, Agora, AWS Chime,
-Tencent TRTC, Alibaba ARTC, and Amazon IVS Real-Time. The **Chat Provider** is
+switch the **Media Provider** for new rooms between LiveKit, Agora, AWS,
+Tencent TRTC, and Alibaba ARTC. AWS is vendor-level routing: **Meeting uses
+Amazon Chime SDK**, while **Live uses Amazon IVS Real-Time**. The **Chat Provider** is
 selected independently; the reference backend supports Amazon IVS Chat or no
 product chat. Existing rooms keep both provider bindings assigned at creation.
+
+The public backend response uses `provider: "aws"` for AWS rooms and includes
+`engine: "chime" | "ivs"` for adapter resolution and diagnostics. Legacy
+`provider=chime` / `provider=ivs` selections remain accepted and normalize to
+AWS. Concrete Chime and IVS packages stay independent internally.
 For the local persisted dashboard state, an explicit Chat selection of
 `none` is a real value and takes precedence over `CHAT_DEFAULT_PROVIDER`
 after restart; the environment default is used only when no persisted Chat
-selection exists.
+selection exists. On Vercel, the dashboard can change Chat at runtime, but
+serverless instances do not share or persist that selection; cold starts fall
+back to `CHAT_DEFAULT_PROVIDER` (or `none` when unset).
 TRTC signing requires `TRTC_SDK_APP_ID` and
 `TRTC_SDK_SECRET_KEY` on the server; enable Advanced Permission Control in the
 Tencent RTC project. The Flutter package receives short-lived UserSig and room
 PrivateMapKey values only.
 
 Amazon IVS Real-Time uses the server IAM credential chain and
-`IVS_REALTIME_REGION` (or the configured AWS region). Amazon IVS Chat uses
-`IVS_CHAT_REGION` and the same server-side IAM model. Flutter receives only
-short-lived Stage/Chat tokens.
+`IVS_REALTIME_REGION` (or the configured AWS region). Amazon IVS Chat resolves
+its region from the optional `IVS_CHAT_REGION` override, `AWS_REGION`,
+`AWS_DEFAULT_REGION`, or the active AWS profile configuration. It uses the same
+server-side IAM model. Flutter receives only short-lived Stage/Chat tokens.
 
 The LiveKit server itself is managed by `bash scripts/livekit-dev.sh` and can remain
 running between tests.

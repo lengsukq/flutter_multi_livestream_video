@@ -5,6 +5,9 @@
 应用应根据 `MediaCapabilities` / `MediaFeature` 判断当前可用功能，而不是根据
 `providerId` 推断。不同平台和角色可能拥有不同的能力集合。
 
+AWS 对外统一展示为一个 Vendor，内部按模式路由：`Meeting -> Chime`、
+`Live -> IVS Real-Time`。下表中的 Chime / IVS Real-Time 表示 AWS 内部 Engine 的能力。
+
 | 能力 | LiveKit | Chime | Agora | TRTC | ARTC | IVS Real-Time |
 | --- | --- | --- | --- | --- | --- | --- |
 | Meeting 实时音视频 | 支持 | 支持 | 支持 | 支持 | 支持 | 支持 |
@@ -32,14 +35,15 @@ Chime 当前只提供 participant 角色，不支持房主/观众直播角色。
 产品聊天不由音视频 Provider 或 `MediaCapabilities` 决定，使用
 `flutter_realtime_chat_core` 的 `ChatSession` / `ChatCapabilities`。
 
-| 能力 | Amazon IVS Chat |
-| --- | --- |
-| 发送消息 | 支持 |
-| 接收实时消息 | 支持 |
-| 删除消息 | 房主/管理员令牌支持 |
-| 断开用户 | 房主/管理员令牌支持 |
-| 重连时自动刷新令牌 | 支持 |
-| 是否依赖音视频 Provider | 否，可独立选择 |
+| 能力 | Amazon IVS Chat | Tencent Cloud Chat | Agora Chat | RTC Data fallback |
+| --- | --- | --- | --- | --- |
+| 发送消息 | 支持 | 支持 | 支持 | Media 同时支持双向 Data 时支持 |
+| 接收实时消息 | 支持 | 支持 | 支持 | 支持 |
+| 删除消息 | 房主/管理员令牌支持 | 当前 Adapter 不开放 | 当前 Adapter 不开放 | 不支持 |
+| 断开用户 | 房主/管理员令牌支持 | 当前 Adapter 不开放 | 当前 Adapter 不开放 | 不支持 |
+| 重连时自动刷新凭证 | 支持 | 支持 UserSig 刷新 | 支持 Token 刷新 | 跟随 MediaSession |
+| 服务端消息历史 | IVS Chat 服务能力；Core v1 未提供历史分页 | Tencent Chat 服务能力；Core v1 未提供历史分页 | Agora Chat 服务能力；Core v1 未提供历史分页 | 仅当前会话内存 |
+| 是否依赖音视频 Provider | 否，可独立选择 | 否，可独立选择 | 否，可独立选择 | 是 |
 
 内置 UI 的用户聊天始终只消费 `ChatSession`。房间绑定独立产品 Chat Provider 时，
 该 `ChatSession` 始终优先；房间没有绑定产品 Chat 时，只有当前 MediaSession 同时支持

@@ -1,27 +1,41 @@
 PODS:
   - FlutterMacOS (1.0.0)
+  - HydraAsync (2.0.6)
+  - tencent_cloud_chat_sdk (8.0.0):
+    - FlutterMacOS
+    - HydraAsync
+    - TXIMSDK_Plus_Mac (= 9.1.7818)
   - tencent_rtc_sdk (10.4):
     - FlutterMacOS
     - TXLiteAVSDK_TRTC_Mac (= 13.5.21355)
+  - TXIMSDK_Plus_Mac (9.1.7818)
   - TXLiteAVSDK_TRTC_Mac (13.5.21355)
 
 DEPENDENCIES:
   - FlutterMacOS (from `Flutter/ephemeral`)
+  - tencent_cloud_chat_sdk (from `Flutter/ephemeral/.symlinks/plugins/tencent_cloud_chat_sdk/macos`)
   - tencent_rtc_sdk (from `Flutter/ephemeral/.symlinks/plugins/tencent_rtc_sdk/macos`)
 
 SPEC REPOS:
   trunk:
+    - HydraAsync
+    - TXIMSDK_Plus_Mac
     - TXLiteAVSDK_TRTC_Mac
 
 EXTERNAL SOURCES:
   FlutterMacOS:
     :path: Flutter/ephemeral
+  tencent_cloud_chat_sdk:
+    :path: Flutter/ephemeral/.symlinks/plugins/tencent_cloud_chat_sdk/macos
   tencent_rtc_sdk:
     :path: Flutter/ephemeral/.symlinks/plugins/tencent_rtc_sdk/macos
 
 SPEC CHECKSUMS:
   FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
+  HydraAsync: 8d589bd725b0224f899afafc9a396327405f8063
+  tencent_cloud_chat_sdk: 62850e2969a525306e7a29a70ae80008fd0d82cc
   tencent_rtc_sdk: 6aff0457a5c1c2e41ecd888ac1e596930dfa8ce9
+  TXIMSDK_Plus_Mac: 87fb2049b5772e8821504f826672e556e9ba61d4
   TXLiteAVSDK_TRTC_Mac: 160091f27024611ec1bfea8bc1cc6855b1572c97
 
 PODFILE CHECKSUM: f0c21717cb7ee9112f915044c74bfceb5b12e02a

@@ -20,8 +20,20 @@ import { createArtcProvider } from './providers/artc.ts';
 import { createChimeProvider } from './providers/chime.ts';
 import { createLiveKitProvider } from './providers/livekit.ts';
 import { createIvsProvider } from './providers/ivs.ts';
+import {
+  AWS_VENDOR_ID,
+  awsEngineForRoomMode,
+  awsVendorMetadata,
+  isAwsEngine,
+  publicVendorForEngine,
+} from './providers/aws.ts';
 import { ChatProviderRegistry } from './chat/chat-provider-registry.ts';
-import { createIvsChatProvider } from './chat/ivs-chat.ts';
+import {
+  createIvsChatProvider,
+  resolveIvsChatRegion,
+} from './chat/ivs-chat.ts';
+import { createTencentChatProvider } from './chat/tencent-chat.ts';
+import { createAgoraChatProvider } from './chat/agora-chat.ts';
 import {
   issueParticipantCredential,
   requireParticipantCredential,
@@ -58,7 +70,7 @@ const MEDIA_CONNECTIONS_ENABLED = parseBoolean(
   process.env.MEDIA_CONNECTIONS_ENABLED,
   !IS_VERCEL,
 );
-const INITIAL_PROVIDER = String(process.env.MEDIA_DEFAULT_PROVIDER ?? 'chime').trim().toLowerCase();
+const INITIAL_PROVIDER = String(process.env.MEDIA_DEFAULT_PROVIDER ?? 'aws').trim().toLowerCase();
 const INITIAL_CHAT_PROVIDER = String(process.env.CHAT_DEFAULT_PROVIDER ?? 'none').trim().toLowerCase();
 const STARTED_AT = Date.now();
 const EMPTY_CLOSE_AFTER_MS = Number(process.env.EMPTY_CLOSE_AFTER_MS ?? 90_000);
@@ -305,20 +317,14 @@ const chimeProvider = createChimeProvider({
   contractVersion: CONTRACT_VERSION,
   normalizeUserId,
 });
+const ivsProvider = createIvsProvider({
+  env: process.env,
+  contractVersion: CONTRACT_VERSION,
+  normalizeDisplayName,
+});
 
 app.post('/api/chat-provider', requireSameOrigin, requireAdmin, (req, res) => {
   const requested = String(req.body?.provider ?? '').trim().toLowerCase();
-  if (IS_VERCEL) {
-    const deploymentValue = INITIAL_CHAT_PROVIDER === 'none' ? null : INITIAL_CHAT_PROVIDER;
-    if ((requested === 'none' ? null : requested) !== deploymentValue) {
-      return contractError(
-        res,
-        409,
-        'provider-selection-is-deployment-config',
-        'Set CHAT_DEFAULT_PROVIDER in Vercel and redeploy to change the default chat provider.',
-      );
-    }
-  }
   try {
     if (requested === 'none' || requested === '') {
       activeChatProvider = null;
@@ -344,15 +350,54 @@ const providerRegistry = new ProviderRegistry([
   createAgoraProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
   createTrtcProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
   createArtcProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
-  createIvsProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
+  ivsProvider,
 ]);
+const ivsChatRegion = await resolveIvsChatRegion(process.env);
 const chatProviderRegistry = new ChatProviderRegistry([
-  createIvsChatProvider({ env: process.env, contractVersion: CONTRACT_VERSION }),
+  createIvsChatProvider({
+    env: process.env,
+    contractVersion: CONTRACT_VERSION,
+    resolvedRegion: ivsChatRegion,
+  }),
+  createTencentChatProvider({
+    env: process.env,
+    contractVersion: CONTRACT_VERSION,
+  }),
+  createAgoraChatProvider({
+    env: process.env,
+    contractVersion: CONTRACT_VERSION,
+  }),
 ]);
 const roomDirectory = new RoomDirectory();
 const events: Array<{ ts: string; type: string; message: string }> = [];
 
-providerRegistry.require(INITIAL_PROVIDER);
+if (INITIAL_PROVIDER !== AWS_VENDOR_ID) providerRegistry.require(INITIAL_PROVIDER);
+
+function engineProviderForSelection(providerId: string, roomMode: RoomMode): ProviderAdapter {
+  const engineId = providerId === AWS_VENDOR_ID
+    ? awsEngineForRoomMode(roomMode)
+    : providerId;
+  return providerRegistry.requireConfigured(engineId);
+}
+
+function publicProviderId(engineId: string): string {
+  return publicVendorForEngine(engineId);
+}
+
+function exposeVendorResponse<T extends { provider: string; [key: string]: unknown }>(
+  response: T,
+): T {
+  if (!isAwsEngine(response.provider)) return response;
+  const engine = response.provider;
+  return { ...response, provider: AWS_VENDOR_ID, vendor: AWS_VENDOR_ID, engine };
+}
+
+function providerMetadataForDashboard() {
+  return [
+    awsVendorMetadata(chimeProvider, ivsProvider),
+    ...providerRegistry.metadata().filter((item) => !isAwsEngine(item.id)),
+  ];
+}
 
 function logEvent(type: string, message: string): void {
   events.unshift({ ts: new Date().toISOString(), type, message });
@@ -473,20 +518,24 @@ function loadPersistedProvider(): string {
   // Vercel instances are ephemeral and may run concurrently. Deployment config
   // is the only reliable source for its default provider.
   if (IS_VERCEL) {
+    if (INITIAL_PROVIDER === AWS_VENDOR_ID) return AWS_VENDOR_ID;
     const initial = providerRegistry.require(INITIAL_PROVIDER);
-    return initial.isConfigured() ? initial.id : 'chime';
+    return initial.isConfigured() ? initial.id : AWS_VENDOR_ID;
   }
   try {
     const parsed = JSON.parse(readFileSync(PROVIDER_STATE_PATH, 'utf8')) as {
       provider?: unknown;
     };
+    if (parsed?.provider === AWS_VENDOR_ID) return AWS_VENDOR_ID;
+    if (isAwsEngine(parsed?.provider)) return AWS_VENDOR_ID;
     const provider = providerRegistry.get(parsed?.provider);
     if (provider?.isConfigured()) return provider.id;
   } catch (_) {
     // Missing/corrupt runtime state falls back to MEDIA_DEFAULT_PROVIDER.
   }
+  if (INITIAL_PROVIDER === AWS_VENDOR_ID || isAwsEngine(INITIAL_PROVIDER)) return AWS_VENDOR_ID;
   const initial = providerRegistry.require(INITIAL_PROVIDER);
-  return initial.isConfigured() ? initial.id : 'chime';
+  return initial.isConfigured() ? initial.id : AWS_VENDOR_ID;
 }
 
 function loadPersistedChatProvider(): string | null {
@@ -605,6 +654,10 @@ function summarizeRoom(entry: RoomEntry, req?: Request): RoomSummary {
   const providerSummary = provider.summarizeRoom(entry, { host });
   return {
     ...providerSummary,
+    provider: publicProviderId(entry.provider),
+    ...(isAwsEngine(entry.provider)
+      ? { vendor: AWS_VENDOR_ID, engine: entry.provider }
+      : {}),
     attendees: providerSummary.attendees.map((attendee) => ({
       attendeeId: attendee.attendeeId,
       ...(attendee.providerParticipantId
@@ -652,11 +705,13 @@ app.get('/', (_req, res) => {
 });
 
 app.get('/health', (_req, res) => {
-  const current = providerRegistry.require(activeProvider);
-  const providerList = providerRegistry.metadata();
+  const currentConfigured = activeProvider === AWS_VENDOR_ID
+    ? chimeProvider.isConfigured() || ivsProvider.isConfigured()
+    : providerRegistry.require(activeProvider).isConfigured();
+  const providerList = providerMetadataForDashboard();
   const chatProviderList = chatProviderRegistry.metadata();
   res.json({
-    ok: current.isConfigured(),
+    ok: currentConfigured,
     connectionsEnabled: MEDIA_CONNECTIONS_ENABLED,
     contractVersion: CONTRACT_VERSION,
     activeProvider,
@@ -680,12 +735,14 @@ app.post('/api/provider', requireSameOrigin, requireAdmin, (req, res) => {
     );
   }
   try {
-    const provider = providerRegistry.requireConfigured(req.body?.provider);
-    if (provider.id !== activeProvider) {
-      activeProvider = provider.id;
-      logEvent('provider-switch', `new rooms will use ${provider.id}`);
+    const requested = String(req.body?.provider ?? '').trim().toLowerCase();
+    const selected = isAwsEngine(requested) ? AWS_VENDOR_ID : requested;
+    if (selected !== AWS_VENDOR_ID) providerRegistry.requireConfigured(selected);
+    if (selected !== activeProvider) {
+      activeProvider = selected;
+      logEvent('provider-switch', `new rooms will use ${selected}`);
     }
-    persistActiveProviders(provider.id, activeChatProvider);
+    persistActiveProviders(selected, activeChatProvider);
     res.json({ ok: true, activeProvider });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
@@ -695,13 +752,12 @@ app.post('/api/provider', requireSameOrigin, requireAdmin, (req, res) => {
 
 app.get('/api/overview', requireAdmin, (req, res) => {
   const allRooms = roomDirectory.entries();
-  const providerList = providerRegistry.metadata();
+  const providerList = providerMetadataForDashboard();
   const chatProviderList = chatProviderRegistry.metadata();
   res.json({
     ok: true,
     connectionsEnabled: MEDIA_CONNECTIONS_ENABLED,
     providerSelectionEnabled: !IS_VERCEL,
-    chatProviderSelectionEnabled: !IS_VERCEL,
     activeProvider,
     activeChatProvider,
     providers: Object.fromEntries(providerList.map((item) => [item.id, item])),
@@ -788,17 +844,25 @@ app.post('/rooms', async (req, res) => {
       );
     }
 
-    const provider = providerRegistry.requireConfigured(activeProvider);
+    const provider = engineProviderForSelection(activeProvider, roomMode);
     assertRole(provider, role);
     if (roomMode === 'broadcast') {
       assertRole(provider, 'viewer');
     }
     const rawNickname = req.body?.displayName?.trim() || req.body?.nickname?.trim() || null;
     const created = await provider.createRoom({ roomCode, role });
-    if (activeChatProvider) {
+    created.entry.vendor = publicProviderId(provider.id);
+    created.entry.engine = provider.id;
+    created.response.vendor = publicProviderId(provider.id);
+    created.response.engine = provider.id;
+    const selectedChatProvider =
+      activeProvider === AWS_VENDOR_ID && roomMode === 'broadcast'
+        ? 'ivs-chat'
+        : activeChatProvider;
+    if (selectedChatProvider) {
       try {
         const chat = await chatProviderRegistry
-          .requireConfigured(activeChatProvider)
+          .requireConfigured(selectedChatProvider)
           .createRoom(roomCode);
         created.entry.chatProvider = chat.chatProvider;
         created.entry.chatRoomArn = chat.chatRoomArn;
@@ -825,7 +889,7 @@ app.post('/rooms', async (req, res) => {
     created.entry.lastHeartbeatMs = Date.now();
     logEvent('create', `room ${roomCode} created with ${provider.displayName}`);
 
-    if (!rawNickname) return res.json(created.response);
+    if (!rawNickname) return res.json(exposeVendorResponse(created.response));
 
     const userId = normalizeUserId(
       req.body?.userId ?? deviceId ?? rawNickname,
@@ -855,7 +919,7 @@ app.post('/rooms', async (req, res) => {
       response.participantId,
     );
     logEvent('join', `${response.displayName} created+joined room ${roomCode} via ${provider.displayName}`);
-    res.json(response);
+    res.json(exposeVendorResponse(response));
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     console.error('create room failed', error);
@@ -932,7 +996,7 @@ app.post('/rooms/:code/join', async (req, res) => {
       response.participantId,
     );
     logEvent('join', `${response.displayName} joined room ${entry.roomCode} via ${provider.displayName}`);
-    res.json(response);
+    res.json(exposeVendorResponse(response));
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     console.error('room join failed', error);
@@ -1029,7 +1093,7 @@ app.post('/rooms/:code/credentials/refresh', async (req, res) => {
       );
     }
     const response = await provider.refreshCredentials({ entry, participantId, role });
-    res.json(response);
+    res.json(exposeVendorResponse(response));
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     console.error('credential refresh failed', error);

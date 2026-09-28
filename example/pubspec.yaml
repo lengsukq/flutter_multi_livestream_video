@@ -42,6 +42,10 @@ dependencies:
     path: ../packages/flutter_realtime_chat_rtc
   flutter_realtime_chat_ivs:
     path: ../packages/flutter_realtime_chat_ivs
+  flutter_realtime_chat_tencent:
+    path: ../packages/flutter_realtime_chat_tencent
+  flutter_realtime_chat_agora:
+    path: ../packages/flutter_realtime_chat_agora
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -67,6 +71,8 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   config:
+    # IVS Media/Chat are SwiftPM-only. Agora Chat still comes from CocoaPods;
+    # the Podfile de-duplicates their shared aosl.framework at embed time.
     enable-swift-package-manager: true
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

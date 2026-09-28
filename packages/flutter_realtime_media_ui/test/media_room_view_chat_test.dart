@@ -7,6 +7,37 @@ import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('screen share control toggles start and stop', (tester) async {
+    final fixture = _RoomFixture(screenShare: true);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          config: const MediaRoomViewConfig(confirmBeforeLeave: false),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byIcon(Icons.screen_share_outlined), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.screen_share_outlined));
+    await tester.pump();
+
+    expect(fixture.media.screenShareCalls, <bool>[true]);
+    expect(find.byIcon(Icons.stop_screen_share_outlined), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.stop_screen_share_outlined));
+    await tester.pump();
+
+    expect(fixture.media.screenShareCalls, <bool>[true, false]);
+    expect(find.byIcon(Icons.screen_share_outlined), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await fixture.dispose();
+  });
+
   testWidgets('RTC data alone does not create a product Chat button', (
     tester,
   ) async {
@@ -139,9 +170,34 @@ void main() {
   });
 }
 
+class _FakeScreenShareTrack implements MediaVideoTrack {
+  const _FakeScreenShareTrack();
+
+  @override
+  String get id => 'screen-share';
+
+  @override
+  String get participantId => 'participant-1';
+
+  @override
+  bool get isLocal => true;
+
+  @override
+  bool get isScreenShare => true;
+
+  @override
+  int get width => 1280;
+
+  @override
+  int get height => 720;
+
+  @override
+  double get aspectRatio => width / height;
+}
+
 class _RoomFixture {
-  _RoomFixture()
-    : media = _FakeMediaSession(),
+  _RoomFixture({bool screenShare = false})
+    : media = _FakeMediaSession(screenShare: screenShare),
       backend = MediaBackendClient(
         MediaBackendConfig.fromUrl(
           'http://localhost',
@@ -185,13 +241,18 @@ class _FakeTransport implements MediaBackendTransport {
   void close() {}
 }
 
-class _FakeMediaSession implements MediaSession, MediaDataMessenger {
+class _FakeMediaSession implements InteractiveMediaSession {
+  _FakeMediaSession({this.screenShare = false});
+
+  final bool screenShare;
+  final List<bool> screenShareCalls = <bool>[];
   final StreamController<MediaSessionState> _states =
       StreamController<MediaSessionState>.broadcast();
   final StreamController<MediaSnapshot> _snapshots =
       StreamController<MediaSnapshot>.broadcast();
   final StreamController<MediaEvent> _events =
       StreamController<MediaEvent>.broadcast();
+  MediaSnapshot? _snapshot;
 
   @override
   String get providerId => 'fake';
@@ -201,14 +262,18 @@ class _FakeMediaSession implements MediaSession, MediaDataMessenger {
 
   @override
   MediaCapabilities get capabilities =>
-      const MediaCapabilities(canSendData: true, canReceiveData: true);
+      MediaCapabilities(
+        canSendData: true,
+        canReceiveData: true,
+        canScreenShare: screenShare,
+      );
 
   @override
   MediaSessionState get state => MediaSessionState.connected;
 
   @override
   MediaSnapshot get snapshot =>
-      MediaSnapshot(state: state, role: role, capabilities: capabilities);
+      _snapshot ?? MediaSnapshot(state: state, role: role, capabilities: capabilities);
 
   @override
   Stream<MediaSessionState> get states => _states.stream;
@@ -221,6 +286,38 @@ class _FakeMediaSession implements MediaSession, MediaDataMessenger {
 
   @override
   Future<void> sendMessage(String message, {String topic = 'chat'}) async {}
+
+  @override
+  Future<void> setMuted(bool muted) async {}
+
+  @override
+  Future<void> toggleMute() async {}
+
+  @override
+  Future<void> setVideoEnabled(bool enabled) async {}
+
+  @override
+  Future<void> setScreenShareEnabled(bool enabled) async {
+    screenShareCalls.add(enabled);
+    final next = MediaSnapshot(
+      state: state,
+      role: role,
+      capabilities: capabilities,
+      localScreenShareEnabled: enabled,
+      contentShareTrack: enabled ? const _FakeScreenShareTrack() : null,
+    );
+    _snapshot = next;
+    _snapshots.add(next);
+  }
+
+  @override
+  Future<void> switchCamera(MediaCameraPosition position) async {}
+
+  @override
+  Future<List<MediaAudioDevice>> listAudioDevices() async => const [];
+
+  @override
+  Future<void> selectAudioDevice(MediaAudioDevice device) async {}
 
   @override
   Future<void> join(MediaJoinInfo joinInfo) async {}

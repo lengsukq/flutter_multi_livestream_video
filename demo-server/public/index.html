@@ -1347,13 +1347,29 @@
       </div>
     </div>
 
-    <div class="card provider-panel">
-      <div class="provider-panel-info">
-        <div class="panel-badge">Chat Provider Routing</div>
-        <h2>新房间聊天服务调度</h2>
-        <p id="chat-provider-panel-note">聊天与音视频独立选择。关闭 Chat 时仍可使用媒体 Provider 自带的 RTC Data 作为调试能力，但不会作为产品聊天。</p>
+    <div class="card provider-panel provider-panel-with-matrix">
+      <div class="provider-panel-main">
+        <div class="provider-panel-info">
+          <div class="panel-badge">Chat Provider Routing</div>
+          <h2>新房间聊天服务调度</h2>
+          <p id="chat-provider-panel-note">聊天与音视频独立选择。关闭 Chat 时仍可使用媒体 Provider 自带的 RTC Data 作为调试能力，但不会作为产品聊天。</p>
+        </div>
+        <div class="provider-switcher" id="chat-provider-switcher"></div>
       </div>
-      <div class="provider-switcher" id="chat-provider-switcher"></div>
+      <div class="capability-matrix-section">
+        <div class="capability-matrix-heading">
+          <div>
+            <div class="capability-matrix-title">Chat 能力矩阵</div>
+            <div class="capability-matrix-subtitle">展示当前 Chat adapter 真正暴露给 ChatSession 的能力；“有条件”旁的 ? 可查看具体限制。</div>
+          </div>
+          <div class="capability-legend" aria-label="Chat 能力状态图例">
+            <span class="capability-legend-item"><span class="capability-state supported">支持</span></span>
+            <span class="capability-legend-item"><span class="capability-state conditional">有条件</span></span>
+            <span class="capability-legend-item"><span class="capability-state unsupported">不支持</span></span>
+          </div>
+        </div>
+        <div class="capability-matrix-scroll" id="chat-provider-capability-matrix"></div>
+      </div>
     </div>
 
     <!-- KPI Metric Cards -->
@@ -1490,7 +1506,6 @@
     let cachedEvents = [];
     let currentEventFilter = 'all';
     let providerSelectionEnabled = true;
-    let chatProviderSelectionEnabled = true;
 
     function toast(text, type = 'info') {
       const c = document.getElementById('toast-container');
@@ -1686,9 +1701,8 @@
       }
     }
 
-    function renderProviderCapabilityMatrix(activeProvider) {
-      const root = document.getElementById('provider-capability-matrix');
-      const providers = [...cachedProviders.values()];
+    function renderCapabilityMatrix(rootId, providers, activeProvider, emptyText) {
+      const root = document.getElementById(rootId);
       if (!root || providers.length === 0) return;
 
       const rows = new Map();
@@ -1703,7 +1717,7 @@
       }
 
       if (rows.size === 0) {
-        root.innerHTML = '<div class="empty-state" style="padding:18px;">暂无 Provider 能力元数据</div>';
+        root.innerHTML = '<div class="empty-state" style="padding:18px;">' + esc(emptyText) + '</div>';
         return;
       }
 
@@ -1731,6 +1745,15 @@
         const status = !provider.configured
           ? '未配置'
           : (active ? '当前使用' : '可选择');
+        const providerHelp = !provider.configured && provider.configurationError
+          ? '<button type="button" class="capability-help conditional" aria-label="查看 ' +
+            esc(provider.displayName || provider.id) +
+            ' 的配置要求" data-provider="' +
+            esc(provider.label || provider.displayName || provider.id) +
+            '" data-capability="配置要求" data-support="conditional" data-note="' +
+            esc(provider.configurationError) +
+            '" onclick="showCapabilityDetail(this)">?</button>'
+          : '';
         html +=
           '<div class="' +
           classes +
@@ -1738,6 +1761,7 @@
           esc(provider.description || provider.displayName) +
           '"><span>' +
           esc(provider.label || provider.displayName || provider.id) +
+          providerHelp +
           '</span><small>' +
           esc(status) +
           '</small></div>';
@@ -1793,6 +1817,24 @@
       root.innerHTML = html;
     }
 
+    function renderProviderCapabilityMatrix(activeProvider) {
+      renderCapabilityMatrix(
+        'provider-capability-matrix',
+        [...cachedProviders.values()],
+        activeProvider,
+        '暂无 Media Provider 能力元数据',
+      );
+    }
+
+    function renderChatProviderCapabilityMatrix(activeProvider) {
+      renderCapabilityMatrix(
+        'chat-provider-capability-matrix',
+        [...cachedChatProviders.values()],
+        activeProvider,
+        '暂无 Chat Provider 能力元数据',
+      );
+    }
+
     function renderProviderSwitcher(activeProvider) {
       const switcher = document.getElementById('provider-switcher');
       const providers = [...cachedProviders.values()];
@@ -1800,7 +1842,7 @@
         const active = provider.id === activeProvider;
         const accent = `hsl(${providerHue(provider.id)} 65% 45%)`;
         const title = !provider.configured
-          ? `${provider.displayName} 尚未完成服务端配置`
+          ? (provider.configurationError || `${provider.displayName} 尚未完成服务端配置`)
           : (!providerSelectionEnabled && !active
             ? '线上 Provider 由 MEDIA_DEFAULT_PROVIDER 环境变量配置'
             : `新房间使用 ${provider.displayName}`);
@@ -1836,22 +1878,21 @@
           ? '#94a3b8'
           : `hsl(${providerHue(provider.id)} 65% 45%)`;
         const title = !provider.configured
-          ? `${provider.displayName} 尚未完成服务端配置`
-          : (!chatProviderSelectionEnabled && !active
-            ? '线上 Chat Provider 由 CHAT_DEFAULT_PROVIDER 环境变量配置'
-            : (providerId
-              ? `新房间使用 ${provider.displayName}`
-              : '新房间不创建产品聊天服务'));
+          ? (provider.configurationError || `${provider.displayName} 尚未完成服务端配置`)
+          : (providerId
+            ? `新房间使用 ${provider.displayName}`
+            : '新房间不创建产品聊天服务');
         return `<button class="provider-opt${active ? ' active' : ''}"
           data-provider="${esc(provider.id)}"
           onclick="switchChatProvider(this.dataset.provider)"
           style="--provider-accent:${accent}"
           title="${esc(title)}"
-          ${provider.configured && (chatProviderSelectionEnabled || active) ? '' : 'disabled'}>
+          ${provider.configured ? '' : 'disabled'}>
           <span class="opt-dot" style="background:${accent}"></span>
           ${esc(provider.label || provider.displayName || provider.id)}
         </button>`;
       }).join('');
+      renderChatProviderCapabilityMatrix(activeProvider);
     }
 
     function eventTagClass(type) {
@@ -2011,7 +2052,6 @@
       try {
         const d = await api('/api/overview');
         providerSelectionEnabled = d.providerSelectionEnabled !== false;
-        chatProviderSelectionEnabled = d.chatProviderSelectionEnabled !== false;
         const providerList = d.providerList || Object.values(d.providers || {});
         const chatProviderList = d.chatProviderList || Object.values(d.chatProviders || {});
         cachedProviders = new Map(providerList.map(provider => [provider.id, provider]));
@@ -2036,9 +2076,7 @@
           ? '控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。'
           : '线上默认通道由 Vercel 的 MEDIA_DEFAULT_PROVIDER 环境变量决定；修改后需重新部署。';
         document.getElementById('chat-provider-panel-note').textContent =
-          chatProviderSelectionEnabled
-            ? '聊天与音视频独立选择。切换只影响后续新建房间；关闭 Chat 时不会创建产品聊天服务。'
-            : '线上默认 Chat Provider 由 Vercel 的 CHAT_DEFAULT_PROVIDER 环境变量决定；修改后需重新部署。';
+          '聊天与音视频独立选择。切换只影响后续新建房间；关闭 Chat 时不会创建产品聊天服务。Vercel Function 的选择只保存在当前实例，实例重启后会回到 CHAT_DEFAULT_PROVIDER（未设置则关闭），不同实例间也不会同步。';
         document.getElementById('region-tags').textContent =
           `${d.controlRegion} / ${d.mediaRegion}`;
         renderProviderSwitcher(d.activeProvider);

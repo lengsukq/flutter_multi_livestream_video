@@ -924,8 +924,15 @@ class _MediaRoomViewState extends State<MediaRoomView> {
             if (interactive != null && caps.canScreenShare) ...[
               const SizedBox(width: 8),
               _control(
-                Icons.screen_share_outlined,
-                () => _run(() => interactive.setScreenShareEnabled(true)),
+                value.localScreenShareEnabled
+                    ? Icons.stop_screen_share_outlined
+                    : Icons.screen_share_outlined,
+                () => _run(
+                  () => interactive.setScreenShareEnabled(
+                    !value.localScreenShareEnabled,
+                  ),
+                ),
+                active: value.localScreenShareEnabled,
               ),
             ],
             if (widget.config.showChat && widget.chatSession != null) ...[

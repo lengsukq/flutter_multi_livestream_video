@@ -6,6 +6,10 @@ The application should branch on `MediaCapabilities` / `MediaFeature`, not
 on `providerId`. A provider may expose a smaller capability set on a specific
 platform or role.
 
+AWS is presented as one public vendor. Its concrete engine is mode-dependent:
+`Meeting -> Chime`, `Live -> IVS Real-Time`. The Chime/IVS columns below describe
+the internal engine capabilities used by that AWS routing.
+
 | Capability | LiveKit | Chime | Agora | TRTC | ARTC | IVS Real-Time |
 | --- | --- | --- | --- | --- | --- | --- |
 | Meeting audio/video | Yes | Yes | Yes | Yes | Yes | Yes |
@@ -31,14 +35,15 @@ Product chat is not inferred from the media provider or `MediaCapabilities`.
 It uses `ChatSession` / `ChatCapabilities` from
 `flutter_realtime_chat_core`.
 
-| Capability | Amazon IVS Chat |
-| --- | --- |
-| Send message | Yes |
-| Receive live message | Yes |
-| Delete message | Host/moderator token |
-| Disconnect user | Host/moderator token |
-| Automatic reconnect token refresh | Yes |
-| Provider-independent from media | Yes |
+| Capability | Amazon IVS Chat | Tencent Cloud Chat | Agora Chat | RTC Data fallback |
+| --- | --- | --- | --- | --- |
+| Send message | Yes | Yes | Yes | When media has bidirectional data |
+| Receive live message | Yes | Yes | Yes | Yes |
+| Delete message | Host/moderator token | Not exposed by current adapter | Not exposed by current adapter | No |
+| Disconnect user | Host/moderator token | Not exposed by current adapter | Not exposed by current adapter | No |
+| Automatic credential refresh | Yes | UserSig refresh | Token refresh | Follows MediaSession |
+| Server history | Service capability; no Core v1 pagination API | Service capability; no Core v1 pagination API | Service capability; no Core v1 pagination API | Current-session memory only |
+| Provider-independent from media | Yes | Yes | Yes | No |
 
 The built-in UI always consumes `ChatSession` for user-facing chat. If the
 backend binds a product-chat provider, that session is authoritative. If no

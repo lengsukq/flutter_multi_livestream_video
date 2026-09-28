@@ -9,6 +9,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   iris_method_channel
   livekit_client
   permission_handler_windows
+  tencent_cloud_chat_sdk
   tencent_rtc_sdk
 )
 

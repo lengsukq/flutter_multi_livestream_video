@@ -18,6 +18,7 @@ interface ApiBody {
   activeProvider?: string;
   activeChatProvider?: string | null;
   provider?: string;
+  engine?: string;
   roomCode?: string;
   participantId?: string;
   participantCredential?: string;
@@ -36,6 +37,7 @@ interface ApiBody {
     string,
     {
       configured?: boolean;
+      engines?: Record<string, string>;
       capabilities?: Array<{ key?: string; support?: string }>;
     }
   >;
@@ -182,14 +184,10 @@ test('provider metadata is dynamic and unconfigured providers cannot be selected
     ),
     true,
   );
-  assert.equal(
-    overview.providers?.ivs?.capabilities?.some(
-      (capability) =>
-        capability.key === 'rtcDataSend' &&
-        capability.support === 'unsupported',
-    ),
-    true,
-  );
+  assert.equal(overview.providers?.chime, undefined);
+  assert.equal(overview.providers?.ivs, undefined);
+  assert.equal(overview.providers?.aws?.engines?.meeting, 'chime');
+  assert.equal(overview.providers?.aws?.engines?.broadcast, 'ivs');
 
   const unconfigured = await post('/api/provider', { provider: 'agora' });
   assert.equal(unconfigured.status, 503);
@@ -417,7 +415,7 @@ test('switching the active provider does not change an existing room provider', 
 
   const switched = await post('/api/provider', { provider: 'chime' });
   assert.equal(switched.status, 200);
-  assert.equal(switched.body.activeProvider, 'chime');
+  assert.equal(switched.body.activeProvider, 'aws');
 
   const joined = await post('/rooms/stickyRoom1/join', {
     userId: 'Guest',
@@ -426,12 +424,4 @@ test('switching the active provider does not change an existing room provider', 
   assert.equal(joined.body.provider, 'livekit');
   assert.equal(joined.body.roomCode, 'stickyRoom1');
 
-  const chimeUnsupportedRole = await post('/rooms', {
-    roomCode: 'chimeHost1',
-    nickname: 'Host',
-    roomMode: 'broadcast',
-  });
-  assert.equal(chimeUnsupportedRole.status, 400);
-  assert.ok(chimeUnsupportedRole.body.error);
-  assert.equal(chimeUnsupportedRole.body.error.code, 'unsupported-role');
 });

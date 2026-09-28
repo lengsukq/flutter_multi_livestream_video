@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
-import 'package:flutter_realtime_chat_ivs/flutter_realtime_chat_ivs.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,10 +34,7 @@ final _providerAdapters = createProviderAdapters();
 final MediaRegistry _mediaRegistry = _providerAdapters.registry;
 final Map<String, MediaTrackRenderer> _mediaRenderers =
     _providerAdapters.renderers;
-
-final ChatRegistry _chatRegistry = ChatRegistry([
-  const IvsChatSessionFactory(),
-]);
+final ChatRegistry _chatRegistry = _providerAdapters.chatRegistry;
 
 const String _defaultBackendUrl = String.fromEnvironment(
   'MEDIA_BACKEND_URL',
@@ -135,7 +131,10 @@ class _JoinScreenState extends State<JoinScreen>
 
   Future<void> _joinDiscoveredRoom(MediaRoomSummary room) async {
     _joinCodeController.text = room.roomCode;
-    await _joinRoom(providerId: room.providerId, roomMode: room.roomMode);
+    await _joinRoom(
+      providerId: room.engineId ?? room.providerId,
+      roomMode: room.roomMode,
+    );
   }
 
   Future<void> _refreshRooms({bool silent = false}) async {

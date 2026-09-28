@@ -37,6 +37,41 @@ target 'Runner' do
   end
 end
 
+# Agora RTC is resolved through SwiftPM while Agora Chat currently comes
+# through CocoaPods. Both carry the same dynamic aosl.framework. Agora RTC's
+# AgoraInfra 1.3.5 is within Chat's ~> 1.3.0 compatibility range, so the app
+# keeps the SwiftPM runtime and removes only CocoaPods' duplicate Runner embed.
+def remove_duplicate_agora_aosl_embed
+  support_dir = File.join(__dir__, 'Pods', 'Target Support Files', 'Pods-Runner')
+  return unless Dir.exist?(support_dir)
+
+  frameworks_script = File.join(support_dir, 'Pods-Runner-frameworks.sh')
+  if File.exist?(frameworks_script)
+    content = File.readlines(frameworks_script).reject do |line|
+      line.include?('ShengwangInfra_iOS/aosl.framework')
+    end.join
+    File.write(frameworks_script, content)
+  end
+
+  Dir.glob(File.join(support_dir, 'Pods-Runner-frameworks-*-input-files.xcfilelist')).each do |path|
+    content = File.readlines(path).reject do |line|
+      line.include?('ShengwangInfra_iOS/aosl.framework/aosl')
+    end.join
+    File.write(path, content)
+  end
+
+  Dir.glob(File.join(support_dir, 'Pods-Runner-frameworks-*-output-files.xcfilelist')).each do |path|
+    content = File.readlines(path).reject do |line|
+      line.include?('${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/aosl.framework')
+    end.join
+    File.write(path, content)
+  end
+end
+
+post_integrate do |_installer|
+  remove_duplicate_agora_aosl_embed
+end
+
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)

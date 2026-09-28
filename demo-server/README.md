@@ -189,7 +189,12 @@ setting `false`, then set it to `true` only when ready to accept connections.
 This demo server keeps room bindings and activity logs in process memory. Vercel
 Functions can run on different instances, so keep public connections paused
 until `RoomDirectory` is backed by shared persistent storage. The admin
-dashboard remains available while connections are paused.
+dashboard remains available while connections are paused. The Chat Provider can
+be changed from the dashboard on Vercel; that selection is held only in the
+current function instance and is neither shared across instances nor retained
+after a cold start. A cold start uses `CHAT_DEFAULT_PROVIDER` (or disables Chat
+when it is unset). Use shared persistent storage for a deployment-wide runtime
+selection.
 
 ## Env
 
@@ -203,6 +208,19 @@ dashboard remains available while connections are paused.
 | `MEDIA_ADMIN_PASSWORD` | unset | required on Vercel; protects the management dashboard and admin endpoints |
 | `MEDIA_CONNECTIONS_ENABLED` | `true` locally, `false` on Vercel | set `false` to reject room connection requests; Vercel requires a redeploy after changes |
 | `MEDIA_DEFAULT_PROVIDER` | `chime` | default provider for new rooms; on Vercel set this in the project environment |
+| `CHAT_DEFAULT_PROVIDER` | `none` | `none`, `ivs-chat`, `tencent-chat`, or `agora-chat`; dashboard changes are instance-local on Vercel |
+| `IVS_CHAT_REGION` | active AWS region | optional IVS Chat region override; otherwise uses `AWS_REGION`, `AWS_DEFAULT_REGION`, or the active AWS profile's configured region |
+| `TENCENT_CHAT_SDK_APP_ID` | unset | Tencent Chat SDKAppID returned to the client |
+| `TENCENT_CHAT_SECRET_KEY` | unset | server-only UserSig signing secret |
+| `TENCENT_CHAT_ADMIN_USER` | `administrator` | Tencent Chat app admin identifier used by REST APIs |
+| `TENCENT_CHAT_REST_HOST` | `https://console.tim.qq.com` | REST host; override for the SDKAppID data region (Singapore/Seoul/Tokyo/etc.) |
+| `TENCENT_CHAT_TOKEN_TTL_SECONDS` | `3600` | UserSig lifetime, clamped to 60 seconds–7 days |
+| `AGORA_CHAT_APP_KEY` | unset | Agora Chat App Key (`org#app`) returned to Android/iOS clients; REST URLs use the App ID path |
+| `AGORA_CHAT_REST_HOST` | unset | REST domain assigned by Agora Chat for the project |
+| `AGORA_CHAT_APP_ID` | `AGORA_APP_ID` | Chat token App ID; falls back to the RTC Agora App ID |
+| `AGORA_CHAT_APP_CERTIFICATE` | `AGORA_APP_CERTIFICATE` | server-only Chat token certificate; falls back to the RTC certificate |
+| `AGORA_CHAT_OWNER_USER` | `realtime_owner` | service account used as reference ChatRoom owner; demo server creates it if absent |
+| `AGORA_CHAT_TOKEN_TTL_SECONDS` | `3600` | Chat user token lifetime, clamped to 60–86400 seconds |
 | `LIVEKIT_URL` | unset | LiveKit Cloud/server WebSocket URL |
 | `LIVEKIT_API_KEY` | unset | server-side LiveKit API key |
 | `LIVEKIT_API_SECRET` | unset | server-side signing secret; keep it in the ignored `.env` |

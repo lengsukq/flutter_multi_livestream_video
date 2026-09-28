@@ -66,10 +66,48 @@ Response:
 }
 ~~~
 
+The `chat` object is provider-specific. Current reference adapters use these
+shapes in addition to Amazon IVS Chat:
+
+~~~json
+{
+  "chatProvider": "tencent-chat",
+  "chat": {
+    "sdkAppId": 1400000001,
+    "groupId": "rm_482913",
+    "providerUserId": "u_ab12...",
+    "userSig": "<short-lived-usersig>",
+    "capabilities": ["SEND_MESSAGE"],
+    "userSigExpirationTimeMs": 1790570600000
+  }
+}
+~~~
+
+~~~json
+{
+  "chatProvider": "agora-chat",
+  "chat": {
+    "appKey": "org#app",
+    "chatRoomId": "123456789",
+    "providerUserId": "u_cd34...",
+    "token": "<short-lived-chat-user-token>",
+    "capabilities": ["SEND_MESSAGE"],
+    "tokenExpirationTimeMs": 1790570600000
+  }
+}
+~~~
+
 For Amazon IVS Chat, participant/viewer receives SEND_MESSAGE. Host receives
 SEND_MESSAGE, DELETE_MESSAGE, and DISCONNECT_USER. Token duration is clamped to
 the AWS-supported 1-180 minute range. During reconnect, the native Chat SDK
 requests a fresh token through Dart instead of reusing a consumed token.
+
+Tencent Cloud Chat and Agora Chat currently receive SEND_MESSAGE only. Their
+managed services provide broader moderation APIs, but the current Flutter
+`ChatSession` adapter intentionally does not grant client-side delete/kick
+authority. Tencent reconnect refreshes UserSig and Agora reconnect renews the
+Chat user token through the same credential callback. Provider secrets and
+REST app/admin tokens never leave the backend.
 
 The participantCredential is not an AWS credential. The reference backend
 generates 32 random bytes per admitted participant, returns the opaque value

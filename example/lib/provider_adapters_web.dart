@@ -1,6 +1,8 @@
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_livekit/flutter_realtime_media_livekit.dart';
 import 'package:flutter_realtime_media_web/flutter_realtime_media_web.dart';
+import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+import 'package:flutter_realtime_chat_ivs/flutter_realtime_chat_ivs.dart';
 
 import 'provider_adapters_model.dart';
 
@@ -22,4 +24,5 @@ ProviderAdapters createProviderAdapters() => ProviderAdapters(
     'artc': ProviderWebTrackRenderer(),
     'ivs': ProviderWebTrackRenderer(),
   },
+  chatRegistry: ChatRegistry([const IvsChatSessionFactory()]),
 );

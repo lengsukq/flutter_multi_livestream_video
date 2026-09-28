@@ -35,6 +35,26 @@ export interface IvsChatApi {
   deleteRoom(roomArn: string): Promise<void>;
 }
 
+export async function resolveIvsChatRegion(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | null> {
+  const explicitRegion =
+    env.IVS_CHAT_REGION?.trim() ||
+    env.AWS_REGION?.trim() ||
+    env.AWS_DEFAULT_REGION?.trim();
+  if (explicitRegion) return explicitRegion;
+
+  let client: IvschatClient | undefined;
+  try {
+    client = new IvschatClient({});
+    return (await client.config.region()).trim() || null;
+  } catch (_) {
+    return null;
+  } finally {
+    client?.destroy();
+  }
+}
+
 export function normalizeIvsChatTokenDurationMinutes(raw: unknown): number {
   const parsed = Number(raw ?? 60);
   if (!Number.isFinite(parsed)) return 60;
@@ -144,11 +164,16 @@ export function createIvsChatProvider({
   env = process.env,
   contractVersion,
   api: injectedApi,
-}: ProviderFactoryContext & { api?: IvsChatApi }): ChatProviderAdapter {
+  resolvedRegion,
+}: ProviderFactoryContext & {
+  api?: IvsChatApi;
+  resolvedRegion?: string | null;
+}): ChatProviderAdapter {
   const region =
     env.IVS_CHAT_REGION?.trim() ||
     env.AWS_REGION?.trim() ||
     env.AWS_DEFAULT_REGION?.trim() ||
+    resolvedRegion?.trim() ||
     null;
   const durationMinutes = normalizeIvsChatTokenDurationMinutes(
     env.IVS_CHAT_TOKEN_TTL_MINUTES,
@@ -161,8 +186,29 @@ export function createIvsChatProvider({
     label: 'Amazon IVS Chat',
     description: 'AWS managed realtime chat',
     themeKey: 'ivs-chat',
+    capabilityMatrix: [
+      { key: 'sendMessage', label: 'Send message', support: 'supported' },
+      {
+        key: 'deleteMessage',
+        label: 'Delete message',
+        support: 'conditional',
+        note: 'Available to host credentials with the IVS DELETE_MESSAGE capability.',
+      },
+      {
+        key: 'disconnectUser',
+        label: 'Remove user',
+        support: 'conditional',
+        note: 'Available to host credentials with the IVS DISCONNECT_USER capability.',
+      },
+      {
+        key: 'history',
+        label: 'Server history',
+        support: 'unsupported',
+        note: 'The current IVS Chat adapter keeps only session-local message state.',
+      },
+    ],
     configurationError:
-      'Amazon IVS Chat is not configured. Set IVS_CHAT_REGION (or AWS_REGION) and provide AWS credentials through the server IAM credential chain.',
+      'Amazon IVS Chat is not configured. Set an AWS region through IVS_CHAT_REGION, AWS_REGION, AWS_DEFAULT_REGION, or the active AWS profile, and provide AWS credentials through the server IAM credential chain.',
     isConfigured: () => api != null,
     metadata: () => ({
       region,

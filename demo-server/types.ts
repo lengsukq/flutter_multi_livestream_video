@@ -1,5 +1,6 @@
 export type MediaRole = 'participant' | 'host' | 'viewer';
 export type RoomMode = 'meeting' | 'broadcast';
+export type MediaVendorId = 'aws' | string;
 export type ProviderCapabilitySupport =
   | 'supported'
   | 'conditional'
@@ -34,6 +35,7 @@ export interface ChatProviderMetadata {
   enabled: boolean;
   configured: boolean;
   capabilities?: ProviderCapability[];
+  engines?: Record<string, string>;
   [key: string]: unknown;
 }
 
@@ -93,6 +95,10 @@ export interface ChimeAttendee {
 
 export interface RoomEntry {
   provider: string;
+  /** Public vendor identity. provider remains the concrete engine id. */
+  vendor?: MediaVendorId;
+  /** Concrete media implementation used for this room. */
+  engine?: string;
   chatProvider?: string;
   chatRoomArn?: string;
   mediaClosed?: boolean;
@@ -146,6 +152,8 @@ export interface ChimeRoomEntry extends RoomEntry {
 export interface ProviderBaseResponse {
   contractVersion: number;
   provider: string;
+  vendor?: MediaVendorId;
+  engine?: string;
   role: MediaRole;
   roomCode: string;
   [key: string]: unknown;
@@ -158,6 +166,8 @@ export interface ProviderJoinResponse extends ProviderBaseResponse {
 
 export interface RoomSummary {
   provider: string;
+  vendor?: MediaVendorId;
+  engine?: string;
   chatProvider?: string;
   roomCode: string;
   roomMode?: RoomMode;

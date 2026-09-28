@@ -44,6 +44,14 @@ android {
             signingConfig signingConfigs.debug
         }
     }
+
+    packagingOptions {
+        jniLibs {
+            // Agora Chat/Hyphenate bundles libaosl.so and also pulls the aosl
+            // dependency that contains the same native library.
+            pickFirsts += ['**/libaosl.so']
+        }
+    }
 }
 
 flutter {

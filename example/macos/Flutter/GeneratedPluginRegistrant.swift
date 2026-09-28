@@ -12,6 +12,7 @@ import flutter_webrtc
 import iris_method_channel
 import livekit_client
 import shared_preferences_foundation
+import tencent_cloud_chat_sdk
 import tencent_rtc_sdk
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
@@ -22,5 +23,6 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   IrisMethodChannelPlugin.register(with: registry.registrar(forPlugin: "IrisMethodChannelPlugin"))
   LiveKitPlugin.register(with: registry.registrar(forPlugin: "LiveKitPlugin"))
   SharedPreferencesPlugin.register(with: registry.registrar(forPlugin: "SharedPreferencesPlugin"))
+  TencentCloudChatSdkPlugin.register(with: registry.registrar(forPlugin: "TencentCloudChatSdkPlugin"))
   TencentRTCCloud.register(with: registry.registrar(forPlugin: "TencentRTCCloud"))
 }

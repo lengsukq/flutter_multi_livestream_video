@@ -24,8 +24,12 @@ bridge before starting the app. This workspace maps Flutter's Chrome device to
 Microsoft Edge on macOS; adjust `CHROME_EXECUTABLE` in `.vscode/settings.json`
 on machines that use a different Chromium-based browser.
 
-The Web build bundles Amazon IVS Chat locally for rooms whose backend-selected
-Chat provider is IVS Chat. When no product Chat provider is configured, the app
+The Web build currently registers Amazon IVS Chat only. Tencent Cloud Chat's
+Flutter SDK can support Web, but it requires the additional Tencent JS runtime
+setup (`tim-js-sdk` / upload plugin), which this reference Web bridge does not
+install yet. Agora Chat's Flutter SDK is Android/iOS-only, so the reference app
+registers both `tencent-chat` and `agora-chat` on Android/iOS only. When no
+product Chat provider is configured, the app
 uses the same RTC data-chat fallback as native clients when the selected media
 provider supports bidirectional data; LiveKit supports this on Web.
 

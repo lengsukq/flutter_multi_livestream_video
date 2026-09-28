@@ -13,6 +13,7 @@ test('dashboard provider switcher is metadata-driven and its script parses', asy
   assert.match(html, /id="provider-capability-matrix"/);
   assert.match(html, /id="capability-detail-modal"/);
   assert.match(html, /id="chat-provider-switcher"/);
+  assert.match(html, /id="chat-provider-capability-matrix"/);
   assert.match(html, /d\.providerList/);
   assert.match(html, /d\.chatProviderList/);
   assert.match(html, /renderProviderSwitcher\(d\.activeProvider\)/);
@@ -24,6 +25,7 @@ test('dashboard provider switcher is metadata-driven and its script parses', asy
     html,
     /renderChatProviderSwitcher\(d\.activeChatProvider \|\| null\)/,
   );
+  assert.match(html, /renderChatProviderCapabilityMatrix\(activeProvider\)/);
   assert.match(html, /switchChatProvider\(this\.dataset\.provider\)/);
   assert.match(html, /CHAT_DEFAULT_PROVIDER/);
 

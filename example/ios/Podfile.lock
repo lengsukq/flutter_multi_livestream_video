@@ -1,4 +1,7 @@
 PODS:
+  - agora_chat_sdk_ios (1.4.0):
+    - Flutter
+    - HyphenateChat (= 4.16.3)
   - AliVCSDK_ARTC (7.11.0):
     - AliVCSDK_ARTC/Default (= 7.11.0)
   - AliVCSDK_ARTC/Default (7.11.0)
@@ -6,6 +9,10 @@ PODS:
   - flutter_realtime_media_artc (0.1.0):
     - AliVCSDK_ARTC (= 7.11.0)
     - Flutter
+  - HydraAsync (2.0.6)
+  - HyphenateChat (4.16.3):
+    - ShengwangInfra_iOS (~> 1.3.0)
+  - ShengwangInfra_iOS (1.3.16)
   - super_player (13.5.0):
     - Flutter
     - super_player/bare (= 13.5.0)
@@ -14,47 +21,68 @@ PODS:
   - super_player/professional (13.5.0):
     - Flutter
     - TXLiteAVSDK_Professional
+  - tencent_cloud_chat_sdk (8.0.0):
+    - Flutter
+    - HydraAsync
+    - TXIMSDK_Plus_iOS_XCFramework (~> 9.1.7818)
   - tencent_rtc_sdk (0.0.1):
     - Flutter
     - super_player/professional
     - TXCustomBeautyProcesserPlugin (= 1.0.2)
     - TXLiteAVSDK_Professional (= 13.5.21355)
   - TXCustomBeautyProcesserPlugin (1.0.2)
+  - TXIMSDK_Plus_iOS_XCFramework (9.1.7818)
   - TXLiteAVSDK_Professional (13.5.21355):
     - TXLiteAVSDK_Professional/Professional (= 13.5.21355)
   - TXLiteAVSDK_Professional/Professional (13.5.21355)
 
 DEPENDENCIES:
+  - agora_chat_sdk_ios (from `.symlinks/plugins/agora_chat_sdk_ios/ios`)
   - Flutter (from `Flutter`)
   - flutter_realtime_media_artc (from `.symlinks/plugins/flutter_realtime_media_artc/ios`)
   - super_player (from `.symlinks/plugins/super_player/ios`)
+  - tencent_cloud_chat_sdk (from `.symlinks/plugins/tencent_cloud_chat_sdk/ios`)
   - tencent_rtc_sdk (from `.symlinks/plugins/tencent_rtc_sdk/ios`)
 
 SPEC REPOS:
   trunk:
     - AliVCSDK_ARTC
+    - HydraAsync
+    - HyphenateChat
+    - ShengwangInfra_iOS
     - TXCustomBeautyProcesserPlugin
+    - TXIMSDK_Plus_iOS_XCFramework
     - TXLiteAVSDK_Professional
 
 EXTERNAL SOURCES:
+  agora_chat_sdk_ios:
+    :path: ".symlinks/plugins/agora_chat_sdk_ios/ios"
   Flutter:
     :path: Flutter
   flutter_realtime_media_artc:
     :path: ".symlinks/plugins/flutter_realtime_media_artc/ios"
   super_player:
     :path: ".symlinks/plugins/super_player/ios"
+  tencent_cloud_chat_sdk:
+    :path: ".symlinks/plugins/tencent_cloud_chat_sdk/ios"
   tencent_rtc_sdk:
     :path: ".symlinks/plugins/tencent_rtc_sdk/ios"
 
 SPEC CHECKSUMS:
+  agora_chat_sdk_ios: dab1789944511cb43153580d2b7e27b7ed375aef
   AliVCSDK_ARTC: 746ae545f16c74c519914e6b85afbebcf426a7fe
   Flutter: 71a624a5bc0c04062bf19101d501e466baf2fb47
   flutter_realtime_media_artc: 004884194e3ca98e4ebce7b3a25c58aac48020ef
+  HydraAsync: 8d589bd725b0224f899afafc9a396327405f8063
+  HyphenateChat: 97cf56506e2282722c0b3321a6968d9968bfeca7
+  ShengwangInfra_iOS: b72ce9eb087e6056e3f2bb8c4869c1f335a09267
   super_player: 5080d7232ba3c0536ae341e6980fc17bcc5cd47b
+  tencent_cloud_chat_sdk: 551c4206613f7bafc083e63895f886731d94c104
   tencent_rtc_sdk: 3932e0b18093c31c0f605aa3a5890830fe9f9d1b
   TXCustomBeautyProcesserPlugin: 099393b941cb40eda12b3a80bf6c0319957b1cfd
+  TXIMSDK_Plus_iOS_XCFramework: 5e451a76880a59c99d4abf77eef80b9adf4f8e6b
   TXLiteAVSDK_Professional: 914aa2e59545c8cdff80ab70c1bc8191c683ecfc
 
-PODFILE CHECKSUM: d16988f055294b37868e2c7ae343770a5ae0ddf6
+PODFILE CHECKSUM: 1f22f2987adfe2459939cf1dc007436da5a363cc
 
 COCOAPODS: 1.16.2

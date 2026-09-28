@@ -1,5 +1,18 @@
 declare module 'agora-token' {
   const agoraToken: {
+    ChatTokenBuilder: {
+      buildAppToken(
+        appId: string,
+        appCertificate: string,
+        expire: number,
+      ): string;
+      buildUserToken(
+        appId: string,
+        appCertificate: string,
+        userUuid: string,
+        expire: number,
+      ): string;
+    };
     RtcRole: {
       PUBLISHER: number;
       SUBSCRIBER: number;

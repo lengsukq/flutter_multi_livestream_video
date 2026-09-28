@@ -77,6 +77,12 @@ export class ChatProviderRegistry {
       themeKey: provider.themeKey || provider.id,
       enabled: provider.enabled !== false,
       configured: provider.isConfigured(),
+      ...(!provider.isConfigured() && provider.configurationError
+        ? { configurationError: provider.configurationError }
+        : {}),
+      ...(provider.capabilityMatrix
+        ? { capabilities: provider.capabilityMatrix }
+        : {}),
       ...(typeof provider.metadata === 'function' ? provider.metadata() : {}),
     }));
   }
