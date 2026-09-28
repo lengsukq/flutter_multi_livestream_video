@@ -1,4 +1,6 @@
 import '../model/chat_error.dart';
+import '../model/chat_role.dart';
+import '../model/chat_room_context.dart';
 import '../session/chat_join_info.dart';
 import '../session/chat_room_session.dart';
 import '../session/chat_session_factory.dart';
@@ -38,6 +40,60 @@ class ChatClient {
   final ChatRegistry registry;
   final ChatBackendClient? backend;
   final ChatProvisioner? provisioner;
+
+  StandaloneChatProvisioner get _standaloneProvisioner {
+    final value = provisioner;
+    if (value is StandaloneChatProvisioner) return value;
+    throw const ChatError(
+      code: ChatErrorCode.unsupportedFeature,
+      message:
+          'Standalone room creation/join requires a '
+          'StandaloneChatProvisioner.',
+    );
+  }
+
+  Future<ChatRoomSession> createStandaloneRoom({
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.host,
+    String? roomCode,
+  }) async {
+    final controller = _standaloneProvisioner;
+    final joinInfo = await controller.create(
+      userId: userId,
+      displayName: displayName,
+      role: role,
+      roomCode: roomCode,
+    );
+    return connect(
+      joinInfo,
+      credentialProvider: () => controller.join(
+        roomCode: joinInfo.roomCode,
+        userId: joinInfo.userId,
+        displayName: joinInfo.displayName,
+        role: joinInfo.role,
+      ),
+    );
+  }
+
+  Future<ChatRoomSession> joinStandaloneRoom({
+    required String roomCode,
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.participant,
+  }) async {
+    final controller = _standaloneProvisioner;
+    Future<ChatJoinInfo> credentials() => controller.join(
+      roomCode: roomCode,
+      userId: userId,
+      displayName: displayName,
+      role: role,
+    );
+    return connect(await credentials(), credentialProvider: credentials);
+  }
+
+  Future<List<ChatRoomSummary>> listStandaloneRooms() =>
+      _standaloneProvisioner.listRooms();
 
   /// Connects directly using credentials provisioned by the host application.
   ///

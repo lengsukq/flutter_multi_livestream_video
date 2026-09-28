@@ -13,6 +13,7 @@ export 'src/model/chat_error.dart';
 export 'src/model/chat_event.dart';
 export 'src/model/chat_message.dart';
 export 'src/model/chat_role.dart';
+export 'src/model/chat_room_context.dart';
 export 'src/model/chat_state.dart';
 export 'src/session/chat_join_info.dart';
 export 'src/session/chat_room_session.dart';

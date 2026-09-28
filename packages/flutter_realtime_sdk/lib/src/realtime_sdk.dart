@@ -7,6 +7,7 @@ import 'provider_plugin.dart';
 import 'realtime_client.dart';
 import 'realtime_error.dart';
 import 'realtime_room.dart';
+import 'realtime_chat_room.dart';
 
 typedef RealtimeClientFactory = RealtimeClient Function();
 
@@ -71,6 +72,48 @@ class RealtimeSdk {
       roomMode: mode,
       role: role,
       roomCode: roomCode,
+    ),
+  );
+
+  Future<RealtimeChatRoom> connectChatDirect(
+    ChatJoinInfo joinInfo, {
+    ChatCredentialProvider? credentialProvider,
+  }) => _guard(
+    () => createClient().connectChatDirect(
+      joinInfo,
+      credentialProvider: credentialProvider,
+    ),
+  );
+
+  Future<RealtimeChatRoom> createChatRoom({
+    required StandaloneChatProvisioner provisioner,
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.host,
+    String? roomCode,
+  }) => _guard(
+    () => createClient().createChatRoom(
+      provisioner: provisioner,
+      userId: userId,
+      displayName: displayName,
+      role: role,
+      roomCode: roomCode,
+    ),
+  );
+
+  Future<RealtimeChatRoom> joinChatRoom({
+    required StandaloneChatProvisioner provisioner,
+    required String roomCode,
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.participant,
+  }) => _guard(
+    () => createClient().joinChatRoom(
+      provisioner: provisioner,
+      roomCode: roomCode,
+      userId: userId,
+      displayName: displayName,
+      role: role,
     ),
   );
 

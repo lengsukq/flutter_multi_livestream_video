@@ -1,4 +1,6 @@
 import '../session/chat_join_info.dart';
+import '../model/chat_role.dart';
+import '../model/chat_room_context.dart';
 
 /// Resolves short-lived chat credentials without prescribing HTTP or a
 /// particular backend language/runtime.
@@ -8,6 +10,26 @@ abstract interface class ChatProvisioner {
     required String participantId,
     String? participantCredential,
   });
+}
+
+/// Optional control-plane contract for chat rooms that exist independently
+/// from any media meeting/live room.
+abstract interface class StandaloneChatProvisioner implements ChatProvisioner {
+  Future<ChatJoinInfo> create({
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.host,
+    String? roomCode,
+  });
+
+  Future<ChatJoinInfo> join({
+    required String roomCode,
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.participant,
+  });
+
+  Future<List<ChatRoomSummary>> listRooms();
 }
 
 typedef ChatProvisionCallback =

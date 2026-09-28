@@ -4,7 +4,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../model/chat_error.dart';
+import '../model/chat_role.dart';
+import '../model/chat_room_context.dart';
+import '../session/chat_join_info.dart';
 import 'chat_backend_config.dart';
+import 'chat_provisioner.dart';
 
 const chatBackendContractHeader = 'X-Realtime-Chat-Contract';
 const chatBackendContractVersion = 1;
@@ -19,6 +23,98 @@ class ChatBackendJoinResponse {
   final String providerId;
   final String roomCode;
   final Map<String, dynamic> json;
+}
+
+class HttpStandaloneChatProvisioner implements StandaloneChatProvisioner {
+  HttpStandaloneChatProvisioner(ChatBackendConfig config)
+    : _backend = ChatBackendClient(config);
+
+  final ChatBackendClient _backend;
+
+  @override
+  Future<ChatJoinInfo> create({
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.host,
+    String? roomCode,
+  }) async {
+    final created = await _backend._request(
+      'POST',
+      '/chat/rooms',
+      body: {
+        if (roomCode != null && roomCode.trim().isNotEmpty)
+          'roomCode': roomCode.trim(),
+      },
+    );
+    return join(
+      roomCode: created['roomCode']?.toString() ?? '',
+      userId: userId,
+      displayName: displayName,
+      role: role,
+    );
+  }
+
+  @override
+  Future<ChatJoinInfo> join({
+    required String roomCode,
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.participant,
+  }) async {
+    final data = await _backend._request(
+      'POST',
+      '/chat/rooms/${Uri.encodeComponent(roomCode.trim())}/join',
+      body: {
+        'userId': userId,
+        'displayName': displayName,
+        'role': role.wireName,
+      },
+    );
+    final providerId = data['chatProvider']?.toString().trim().toLowerCase() ?? '';
+    if (providerId.isEmpty) {
+      throw const ChatError(
+        code: ChatErrorCode.invalidJoinInfo,
+        message: 'Standalone chat response is missing chatProvider.',
+      );
+    }
+    return ChatJoinInfo(
+      providerId: providerId,
+      roomCode: data['roomCode']?.toString() ?? roomCode,
+      participantId: data['participantId']?.toString() ?? userId,
+      userId: data['userId']?.toString() ?? userId,
+      displayName: data['displayName']?.toString() ?? displayName,
+      role: ChatRole.tryParse(data['role']) ?? role,
+      json: data,
+      context: ChatRoomContext.standalone,
+    );
+  }
+
+  @override
+  Future<ChatJoinInfo> provision({
+    required String roomCode,
+    required String participantId,
+    String? participantCredential,
+  }) => join(
+    roomCode: roomCode,
+    userId: participantId,
+    displayName: participantId,
+  );
+
+  @override
+  Future<List<ChatRoomSummary>> listRooms() async {
+    final data = await _backend._request('GET', '/chat/rooms');
+    final raw = data['rooms'];
+    if (raw is! List) return const [];
+    return raw.whereType<Map>().map((item) {
+      final map = Map<String, dynamic>.from(item);
+      return ChatRoomSummary(
+        roomCode: map['roomCode']?.toString() ?? '',
+        providerId: map['chatProvider']?.toString() ?? '',
+      );
+    }).where((room) => room.roomCode.isNotEmpty).toList(growable: false);
+  }
+
+  void dispose() => _backend.dispose();
 }
 
 class ChatBackendClient {

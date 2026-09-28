@@ -1,4 +1,5 @@
 import '../model/chat_role.dart';
+import '../model/chat_room_context.dart';
 
 class ChatJoinInfo {
   const ChatJoinInfo({
@@ -9,6 +10,7 @@ class ChatJoinInfo {
     required this.displayName,
     required this.role,
     required this.json,
+    this.context = ChatRoomContext.attached,
   });
 
   final String providerId;
@@ -18,6 +20,7 @@ class ChatJoinInfo {
   final String displayName;
   final ChatRole role;
   final Map<String, dynamic> json;
+  final ChatRoomContext context;
 }
 
 typedef ChatCredentialProvider = Future<ChatJoinInfo> Function();

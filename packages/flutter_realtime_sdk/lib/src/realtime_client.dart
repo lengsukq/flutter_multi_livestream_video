@@ -7,6 +7,7 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'media_adapter.dart';
 import 'realtime_room.dart';
 import 'realtime_requirements.dart';
+import 'realtime_chat_room.dart';
 
 typedef RealtimeTokenProvider = Future<String?> Function();
 typedef RealtimeMediaClientFactory = MediaClient Function();
@@ -35,6 +36,86 @@ class RealtimeClient {
   final RealtimeTokenProvider? _tokenProvider;
   final RealtimeMediaClientFactory? _mediaClientFactory;
   final RealtimeChatClientFactory? _chatClientFactory;
+
+  ChatClient newChatClient({ChatProvisioner? provisioner}) =>
+      _chatClientFactory?.call() ??
+      (backendUrl == null
+          ? ChatClient.direct(
+              registry: chatRegistry,
+              provisioner: provisioner,
+            )
+          : ChatClient(
+              backendUrl: backendUrl!,
+              registry: chatRegistry,
+              tokenProvider: _tokenProvider,
+            ));
+
+  Future<RealtimeChatRoom> connectChatDirect(
+    ChatJoinInfo joinInfo, {
+    ChatCredentialProvider? credentialProvider,
+  }) async {
+    final client = ChatClient.direct(registry: chatRegistry);
+    try {
+      final room = await client.connect(
+        joinInfo,
+        credentialProvider: credentialProvider,
+      );
+      return RealtimeChatRoom(room: room, disposeClient: client.dispose);
+    } catch (_) {
+      client.dispose();
+      rethrow;
+    }
+  }
+
+  Future<RealtimeChatRoom> createChatRoom({
+    required StandaloneChatProvisioner provisioner,
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.host,
+    String? roomCode,
+  }) async {
+    final client = ChatClient.direct(
+      registry: chatRegistry,
+      provisioner: provisioner,
+    );
+    try {
+      final room = await client.createStandaloneRoom(
+        userId: userId,
+        displayName: displayName,
+        role: role,
+        roomCode: roomCode,
+      );
+      return RealtimeChatRoom(room: room, disposeClient: client.dispose);
+    } catch (_) {
+      client.dispose();
+      rethrow;
+    }
+  }
+
+  Future<RealtimeChatRoom> joinChatRoom({
+    required StandaloneChatProvisioner provisioner,
+    required String roomCode,
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.participant,
+  }) async {
+    final client = ChatClient.direct(
+      registry: chatRegistry,
+      provisioner: provisioner,
+    );
+    try {
+      final room = await client.joinStandaloneRoom(
+        roomCode: roomCode,
+        userId: userId,
+        displayName: displayName,
+        role: role,
+      );
+      return RealtimeChatRoom(room: room, disposeClient: client.dispose);
+    } catch (_) {
+      client.dispose();
+      rethrow;
+    }
+  }
 
   MediaClient newMediaClient() =>
       _mediaClientFactory?.call() ??
