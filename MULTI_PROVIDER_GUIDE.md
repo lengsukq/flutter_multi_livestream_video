@@ -25,6 +25,14 @@ flutter_realtime_chat_core
 
 Provider SDKs never become dependencies of Core.
 
+The recommended application entry point is the separate
+`flutter_realtime_sdk` orchestration package. `RealtimeProviderPlugin`
+co-locates provider metadata, media factory/renderer, and optional Product Chat
+factory. `RealtimeSdk` then combines those plugins with backend-authoritative
+provider selection, Product Chat resolution, RTC Chat fallback, aggregated
+room events/state, unified high-level errors, and room lifecycle. Core clients
+remain available as lower-level APIs.
+
 Core does not maintain a platform whitelist for registered adapters. If an app
 registers an adapter, Core will attempt to use it on the current Flutter target
 instead of rejecting the room up front. Provider/native SDKs remain responsible
@@ -47,33 +55,57 @@ The reference backend also owns role assignment. New clients create either a
 ## One Flutter API, multiple providers
 
 ```dart
-final registry = MediaRegistry([
-  const AgoraSessionFactory(),
-  const LiveKitSessionFactory(),
-  const TrtcSessionFactory(),
-  const ArtcSessionFactory(),
-  const IvsSessionFactory(),
-  ChimeSessionFactory(),
-]);
-
-final client = MediaClient(
+final sdk = RealtimeSdk(
   backendUrl: 'https://api.example.com',
-  registry: registry,
+  plugins: [
+    RealtimeProviderPlugin(
+      id: 'agora',
+      metadata: const RealtimeProviderMetadata(displayName: 'Agora'),
+      mediaFactory: const AgoraSessionFactory(),
+      renderer: const AgoraTrackRenderer(),
+    ),
+    RealtimeProviderPlugin(
+      id: 'livekit',
+      metadata: const RealtimeProviderMetadata(displayName: 'LiveKit'),
+      mediaFactory: const LiveKitSessionFactory(),
+      renderer: const LiveKitTrackRenderer(),
+    ),
+  ],
   tokenProvider: () async => applicationToken,
 );
 
-final room = await client.createRoomAndJoinIdentity(
-  role: MediaRole.participant,
-  identity: const MediaIdentity(
+final room = await sdk.createRoom(
+  user: const MediaIdentity(
     userId: 'account-123',
     displayName: 'Leo',
     deviceId: 'install-abc',
   ),
 );
+
+try {
+  final page = RealtimeRoomView(room: room);
+  room.events.listen((event) {
+    // RealtimeMediaEvent / RealtimeChatEvent / RealtimeStateChanged /
+    // RealtimeBackendFailure
+  });
+} finally {
+  await room.dispose();
+}
 ```
 
+For normal applications, use `RealtimeSdk.preJoin` before create/join and
+`RealtimeRoomView(room: room)` after it. Direct `MediaClient`,
+`ChatClient`, and `MediaRoomView` usage is intentionally retained for
+advanced diagnostics, custom orchestration, or fully custom UI.
+
+The backend can optionally attach `requiredCapabilities` to a join response.
+These are product requirements, not provider selection hints. The SDK compares
+them with the capabilities of the actually resolved media/chat sessions and
+rejects unsupported combinations explicitly.
+
 Media and product chat are separate provider axes. User-facing chat should
-always be represented by `ChatSession`. Resolve it with this priority:
+always be represented by `ChatSession`. `RealtimeSdk` resolves it with
+this priority:
 
 1. if `room.chatProvider` is non-null, attach that independent product Chat;
 2. otherwise, if the media session has both `canSendData` and
@@ -82,7 +114,8 @@ always be represented by `ChatSession`. Resolve it with this priority:
 
 A backend-selected product Chat failure must not silently downgrade to RTC
 fallback because that would change server-authoritative product semantics.
-Attach independent chat using the media participant identity:
+Advanced applications that intentionally use the lower-level clients can still
+attach independent chat using the media participant identity:
 
 ```dart
 final chatClient = ChatClient(

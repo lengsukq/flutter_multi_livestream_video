@@ -20,6 +20,7 @@ existing Chime-only applications and is kept backward compatible.
 
 | Package | Purpose | Status |
 | --- | --- | --- |
+| `flutter_realtime_sdk` | Recommended high-level Media + Chat + renderer + lifecycle orchestration | Implemented |
 | `flutter_realtime_media_core` | Provider-neutral session, capability, event, backend and rendering contracts | Implemented |
 | `flutter_realtime_media_ui` | Provider-neutral ready-to-use meeting UI driven by Core capabilities | Implemented |
 | `flutter_realtime_media_livekit` | LiveKit RTC + host/viewer adapter | Implemented |
@@ -42,6 +43,82 @@ its iOS CocoaPod does not link into simulator builds. Provider choice remains
 with the backend. The Agora adapter supports Android, iOS, and macOS; desktop
 camera rendering and media control use Agora's native macOS bridge, while
 front/back camera switching remains Android/iOS-only.
+
+## Recommended SDK entry point
+
+Applications should normally use `flutter_realtime_sdk`. Register each
+available implementation as a self-describing `RealtimeProviderPlugin`, then
+create one `RealtimeSdk`. Backend room responses still select the actual
+provider; plugins only declare what the application binary can execute.
+`RealtimeRoom` resolves the media renderer, backend-selected Product Chat,
+RTC-data Chat fallback (only when no Product Chat is configured), joint
+lifecycle cleanup, and aggregated room state/events.
+
+```dart
+final sdk = RealtimeSdk(
+  backendUrl: backendUrl,
+  plugins: [
+    RealtimeProviderPlugin(
+      id: 'my-provider',
+      metadata: const RealtimeProviderMetadata(
+        displayName: 'My Provider',
+      ),
+      mediaFactory: myProviderFactory,
+      renderer: myProviderRenderer,
+      chatFactory: myOptionalChatFactory,
+    ),
+  ],
+  tokenProvider: () async => applicationToken,
+);
+
+final room = await sdk.joinRoom(
+  roomCode: roomCode,
+  user: const MediaIdentity(
+    userId: 'user-123',
+    displayName: 'Alice',
+  ),
+);
+
+try {
+  // The built-in UI consumes the resolved room directly.
+  final page = RealtimeRoomView(room: room);
+  room.events.listen((event) {
+    // One provider-neutral stream for media, chat, state and backend failures.
+  });
+} finally {
+  await room.dispose();
+}
+```
+
+Pre-Join is also available on the facade and owns its temporary low-level
+client automatically:
+
+```dart
+final report = await sdk.preJoin(
+  roomCode: roomCode,
+  role: MediaRole.participant,
+);
+```
+
+See `example/lib/minimal_sdk_example.dart` for the shortest complete
+navigation example. The main example remains a full showcase for room
+discovery, Pre-Join, Meeting/Live and the server dashboard.
+
+`RealtimeSdk` maps high-level failures to `RealtimeException` with a stable
+`RealtimeErrorCode`, while retaining `providerId`, the original `cause`,
+`recoverable`, and a small `suggestedAction` hint. `RealtimeClient`,
+`MediaClient`, and `ChatClient` remain supported escape hatches and retain
+their existing lower-level error contracts.
+
+Provider plugins are configuration, not routing. Adding a provider should
+normally require implementing its adapter package and registering one plugin;
+application room code must not branch on provider ids.
+
+Backend Contract v1 remains authoritative and is validated by Core. A backend
+may additionally return a provider-neutral `requiredCapabilities` array in a
+join response. The high-level SDK verifies those requirements against the
+resolved media/product-chat session and fails with a typed unsupported-feature
+error instead of silently degrading. See `MEDIA_BACKEND_CONTRACT.md`.
 
 ## Provider status
 
