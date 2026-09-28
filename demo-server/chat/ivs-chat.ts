@@ -194,6 +194,11 @@ export function createIvsChatProvider({
         support: 'conditional',
         note: 'Available to host credentials with the IVS DELETE_MESSAGE capability.',
       },
+      { key: 'memberList', label: 'Member list', support: 'conditional', note: 'Standalone demo rooms expose the authenticated logical member list to the host.' },
+      { key: 'closeRoom', label: 'Close room', support: 'supported', note: 'Standalone host closes the provider room through the control plane.' },
+      { key: 'muteMember', label: 'Mute member', support: 'unsupported', note: 'IVS Chat token capabilities do not provide provider-enforced per-member mute in this adapter.' },
+      { key: 'banMember', label: 'Ban member', support: 'unsupported', note: 'Rejoin blocking is not implemented; disconnect and ban are intentionally distinct.' },
+      { key: 'manageRoles', label: 'Manage roles', support: 'unsupported', note: 'Role changes require issuing new credentials and are not emulated.' },
       {
         key: 'disconnectUser',
         label: 'Remove user',

@@ -1,19 +1,19 @@
 import crypto from 'node:crypto';
 
-import type { RoomEntry } from './types.ts';
+import type { ChatRoomEntry, RoomEntry } from './types.ts';
 
 function hashRoomOwnerCredential(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-export function issueRoomOwnerCredential(entry: RoomEntry): string {
+export function issueRoomOwnerCredential(entry: RoomEntry | ChatRoomEntry): string {
   const credential = crypto.randomBytes(32).toString('base64url');
   entry.roomOwnerCredentialHash = hashRoomOwnerCredential(credential);
   return credential;
 }
 
 export function matchesRoomOwnerCredential(
-  entry: RoomEntry,
+  entry: RoomEntry | ChatRoomEntry,
   rawCredential: unknown,
 ): boolean {
   const credential = String(rawCredential ?? '').trim();

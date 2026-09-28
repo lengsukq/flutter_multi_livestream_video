@@ -167,6 +167,11 @@ export function createTencentChatProvider({
         support: 'unsupported',
         note: 'The current provider-neutral adapter does not expose Tencent moderation operations.',
       },
+      { key: 'memberList', label: 'Member list', support: 'conditional', note: 'Standalone demo rooms expose the authenticated logical member list to the host.' },
+      { key: 'closeRoom', label: 'Close room', support: 'supported', note: 'Standalone host closes the provider group through the control plane.' },
+      { key: 'muteMember', label: 'Mute member', support: 'unsupported', note: 'Not exposed by the current provider-neutral Tencent adapter.' },
+      { key: 'banMember', label: 'Ban member', support: 'unsupported', note: 'Not exposed by the current provider-neutral Tencent adapter.' },
+      { key: 'manageRoles', label: 'Manage roles', support: 'unsupported', note: 'Not exposed by the current provider-neutral Tencent adapter.' },
       {
         key: 'disconnectUser',
         label: 'Remove user',

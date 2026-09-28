@@ -20,6 +20,7 @@ export interface ChatRoomEntry {
   createdAt: string;
   attendees: RoomAttendee[];
   lastHeartbeatMs: number;
+  roomOwnerCredentialHash?: string;
 }
 
 export interface RoomAttendee {

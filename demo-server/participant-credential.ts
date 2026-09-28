@@ -1,14 +1,14 @@
 import crypto from 'node:crypto';
 
 import { ProviderOperationError } from './providers/provider-registry.ts';
-import type { RoomAttendee, RoomEntry } from './types.ts';
+import type { ChatRoomEntry, RoomAttendee, RoomEntry } from './types.ts';
 
 function hashParticipantCredential(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
 export function issueParticipantCredential(
-  entry: RoomEntry,
+  entry: RoomEntry | ChatRoomEntry,
   participantId: string,
 ): string {
   const attendee = entry.attendees.find(
@@ -27,7 +27,7 @@ export function issueParticipantCredential(
 }
 
 export function requireParticipantCredential(
-  entry: RoomEntry,
+  entry: RoomEntry | ChatRoomEntry,
   participantId: string,
   rawCredential: unknown,
 ): RoomAttendee {

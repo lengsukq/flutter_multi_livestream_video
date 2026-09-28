@@ -47,6 +47,7 @@ import { ProviderOperationError, ProviderRegistry } from './providers/provider-r
 import { RoomDirectory } from './providers/room-directory.ts';
 import { createTrtcProvider } from './providers/trtc.ts';
 import type {
+  ChatRoomEntry,
   ChimeRoomEntry,
   MediaRole,
   ProviderAdapter,
@@ -133,7 +134,11 @@ function bindLogicalIdentity(
   entry.attendees = entry.attendees.filter((attendee) => {
     if (attendee.attendeeId === participantId) return true;
     if (attendee.role === 'host') {
-      return role !== 'host';
+      if (role === 'host') return false;
+      // A normal join must not evict the logical owner merely by reusing its
+      // public user id. The same device may replace its stale logical entry
+      // without gaining host authority.
+      return !(deviceId && attendee.deviceId === deviceId);
     }
     return (
       attendee.userId !== userId &&
@@ -319,6 +324,85 @@ const chimeProvider = createChimeProvider({
   normalizeUserId,
 });
 
+function requireStandaloneChatHost(entry: ChatRoomEntry, body: Record<string, unknown>): RoomAttendee {
+  const participantId = String(body.requesterParticipantId ?? '').trim();
+  const attendee = requireParticipantCredential(
+    entry,
+    participantId,
+    body.participantCredential,
+  );
+  if (attendee.role !== 'host') {
+    throw new ProviderOperationError(403, 'forbidden', 'Chat management requires the host role.');
+  }
+  return attendee;
+}
+
+app.post('/chat/rooms/:code/members', (req, res) => {
+  try {
+    const entry = chatRoomDirectory.get(req.params.code);
+    if (!entry) {
+      return contractError(res, 404, 'room-not-found', 'The requested chat room was not found.');
+    }
+    requireStandaloneChatHost(entry, req.body ?? {});
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      roomCode: entry.roomCode,
+      members: entry.attendees.map((item) => ({
+        userId: item.userId ?? item.externalUserId,
+        displayName: item.displayName ?? item.externalUserId,
+        role: item.role ?? 'participant',
+      })),
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    throw error;
+  }
+});
+
+app.post('/chat/rooms/:code/manage/close', async (req, res) => {
+  try {
+    const entry = chatRoomDirectory.get(req.params.code);
+    if (!entry || !entry.chatProvider) {
+      return contractError(res, 404, 'room-not-found', 'The requested chat room was not found.');
+    }
+    requireStandaloneChatHost(entry, req.body ?? {});
+    const provider = chatProviderRegistry.requireConfigured(entry.chatProvider);
+    await provider.closeRoom(entry);
+    chatRoomDirectory.remove(entry.roomCode);
+    res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('standalone chat close failed', error);
+    contractError(res, 500, 'chat-room-close-failed', 'Unable to close the chat room.');
+  }
+});
+
+app.post('/chat/rooms/:code/credentials', async (req, res) => {
+  try {
+    const entry = chatRoomDirectory.get(req.params.code);
+    if (!entry || !entry.chatProvider) {
+      return contractError(res, 404, 'room-not-found', 'The requested chat room was not found.');
+    }
+    const participantId = String(req.body?.participantId ?? '').trim();
+    const attendee = requireParticipantCredential(
+      entry,
+      participantId,
+      req.body?.participantCredential,
+    );
+    const provider = chatProviderRegistry.requireConfigured(entry.chatProvider);
+    const response = await provider.issueToken({ entry, attendee });
+    res.json({
+      ...response,
+      participantCredential: String(req.body?.participantCredential ?? '').trim(),
+      context: 'standalone',
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('standalone chat credential refresh failed', error);
+    contractError(res, 500, 'chat-credential-refresh-failed', 'Unable to refresh chat credentials.');
+  }
+});
+
 app.get('/chat/rooms', (_req, res) => {
   res.json({
     contractVersion: CONTRACT_VERSION,
@@ -360,6 +444,28 @@ app.post('/chat/rooms', async (req, res) => {
       attendees: [],
       lastHeartbeatMs: now,
     });
+    const userId = String(req.body?.userId ?? '').trim();
+    if (userId) {
+      const displayName = normalizeDisplayName(req.body?.displayName ?? userId);
+      const participantId = `chat-${crypto.randomUUID()}`;
+      const attendee: RoomAttendee = {
+        attendeeId: participantId,
+        externalUserId: userId,
+        userId,
+        displayName,
+        role: 'host',
+        joinedAt: new Date(now).toISOString(),
+        lastHeartbeatMs: now,
+      };
+      entry.attendees.push(attendee);
+      const participantCredential = issueParticipantCredential(entry, participantId);
+      const response = await provider.issueToken({ entry, attendee });
+      return res.status(201).json({
+        ...response,
+        participantCredential,
+        context: 'standalone',
+      });
+    }
     res.status(201).json({
       contractVersion: CONTRACT_VERSION,
       roomCode: entry.roomCode,
@@ -382,7 +488,9 @@ app.post('/chat/rooms/:code/join', async (req, res) => {
     const provider = chatProviderRegistry.requireConfigured(entry.chatProvider);
     const userId = normalizeUserId(req.body?.userId);
     const displayName = normalizeDisplayName(req.body?.displayName ?? userId);
-    const role = parseRole(req.body?.role) ?? 'participant';
+    // Public joins are never allowed to self-promote to host. The creator gets
+    // host credentials atomically from POST /chat/rooms.
+    const role: MediaRole = 'participant';
     const participantId = `chat-${crypto.randomUUID()}`;
     const attendee: RoomAttendee = {
       attendeeId: participantId,
@@ -396,7 +504,8 @@ app.post('/chat/rooms/:code/join', async (req, res) => {
     entry.attendees.push(attendee);
     entry.lastHeartbeatMs = Date.now();
     const response = await provider.issueToken({ entry, attendee });
-    res.json({ ...response, context: 'standalone' });
+    const participantCredential = issueParticipantCredential(entry, participantId);
+    res.json({ ...response, participantCredential, context: 'standalone' });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     console.error('standalone chat join failed', error);
@@ -978,10 +1087,11 @@ app.post('/rooms', async (req, res) => {
     }
     created.entry.roomMode = roomMode;
     created.response.roomMode = roomMode;
-    const roomOwnerCredential =
-      roomMode === 'broadcast'
-        ? issueRoomOwnerCredential(created.entry)
-        : null;
+    // Room ownership is a logical SDK/control-plane role and is independent
+    // from the provider media role. This lets meeting providers such as Chime
+    // keep their native participant role while the creator can still manage
+    // the logical room.
+    const roomOwnerCredential = issueRoomOwnerCredential(created.entry);
     if (roomOwnerCredential) {
       created.response.roomOwnerCredential = roomOwnerCredential;
     }
@@ -1012,7 +1122,7 @@ app.post('/rooms', async (req, res) => {
       userId,
       rawNickname,
       deviceId,
-      role,
+      'host',
     );
     response.participantCredential = issueParticipantCredential(
       created.entry,
