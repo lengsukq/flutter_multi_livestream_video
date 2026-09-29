@@ -117,11 +117,24 @@ credential JSON through the same facade without importing provider JoinInfo
 types:
 
 ```dart
-final room = await sdk.joinWithCredentials(
-  mediaProviderId: mediaProvider,
-  mediaJoinPayload: mediaCredentialJson,
-  chatProviderId: chatProvider,
-  chatJoinPayload: chatCredentialJson,
+final realtime = Realtime.standard();
+
+final connection = await realtime.open(
+  RealtimeRequest.join(
+    type: RealtimeExperience.meeting,
+    roomCode: roomCode,
+    user: const RealtimeUser(id: 'user-123', name: 'Alice'),
+    source: RealtimeSource.credentials(
+      media: RealtimeCredentials(
+        providerId: mediaProvider,
+        payload: mediaCredentialJson,
+      ),
+      chat: RealtimeCredentials(
+        providerId: chatProvider,
+        payload: chatCredentialJson,
+      ),
+    ),
+  ),
 );
 ```
 
@@ -132,7 +145,7 @@ Private or customized providers remain supported without changing the default
 application API:
 
 ```dart
-final sdk = RealtimeSdk.standard(
+final realtime = Realtime.standard(
   backendUrl: backendUrl,
   additionalPlugins: [myProviderPlugin],
 );
@@ -160,12 +173,12 @@ existing Chime-only applications and is kept backward compatible.
 | `flutter_realtime_media_livekit` | LiveKit RTC + host/viewer adapter | Implemented |
 | `flutter_realtime_media_agora` | Agora RTC + host/viewer adapter | Implemented; real-service E2E optional |
 | `flutter_realtime_media_chime` | AWS Chime adapter for Core | Implemented |
-| `flutter_realtime_media_aws_desktop` | Internal macOS WebKit transport shared by AWS Chime/IVS engines | Implemented; bundled by `flutter_realtime_sdk` |
+| `flutter_realtime_media_aws_desktop` | Internal macOS WebKit transport shared by AWS Chime/IVS media and IVS Chat | Implemented; bundled by `flutter_realtime_sdk` |
 | `flutter_realtime_media_trtc` | Optional Tencent TRTC RTC + host/viewer adapter | Implemented; real-device E2E optional |
 | `flutter_realtime_media_artc` | Optional Alibaba Cloud ARTC RTC + host/viewer adapter | Android/iOS/Web implemented; macOS bridge requires the official Mac framework |
 | `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + host/viewer adapter | Android/iOS native; macOS via the internal AWS desktop transport |
 | `flutter_realtime_chat_core` | Provider-neutral product chat client/session contract | Implemented |
-| `flutter_realtime_chat_ivs` | Amazon IVS Chat adapter | Android/iOS/Web implemented |
+| `flutter_realtime_chat_ivs` | Amazon IVS Chat adapter | Android/iOS/Web native adapters; macOS via the internal AWS desktop WebKit transport |
 | `flutter_realtime_chat_tencent` | Tencent Cloud Chat adapter | Implemented; SDK-backed multi-platform adapter |
 | `flutter_realtime_chat_agora` | Agora Chat adapter | Android/iOS/macOS/Web implemented |
 | `flutter_realtime_chat_rtc` | Adapts bidirectional RTC data to `ChatSession` when no product Chat Provider is bound | Implemented |
@@ -190,60 +203,96 @@ front/back camera switching remains Android/iOS-only.
 ## Recommended SDK entry point
 
 Applications should normally use `flutter_realtime_sdk` through
-`RealtimeSdk.standard()`. The SDK detects the runtime target and resolves the
-correct built-in Media and Chat driver internally. Backend room responses still
-select the actual provider; direct provisioning may also name the provider
-explicitly. `RealtimeRoom` resolves the media renderer, backend-selected
-Product Chat, RTC-data Chat fallback (only when no Product Chat is configured),
-joint lifecycle cleanup, and aggregated room state/events.
+`Realtime.standard()`. It is the simplified application facade over
+`RealtimeSdk`: Meeting, Live, standalone Chat, backend provisioning, and
+direct short-lived credentials all use the same `open(...)` entry point. The
+SDK detects the runtime target and resolves the correct built-in Media and Chat
+driver internally. Backend room responses still select the actual provider;
+direct provisioning may also name the public provider explicitly.
 
 ```dart
-final sdk = RealtimeSdk.standard(
+final realtime = Realtime.standard(
   backendUrl: backendUrl,
   tokenProvider: () async => applicationToken,
 );
 
-final room = await sdk.joinRoom(
-  roomCode: roomCode,
-  user: const MediaIdentity(
-    userId: 'user-123',
-    displayName: 'Alice',
+final connection = await realtime.open(
+  RealtimeRequest.join(
+    type: RealtimeExperience.meeting,
+    roomCode: roomCode,
+    user: const RealtimeUser(
+      id: 'user-123',
+      name: 'Alice',
+    ),
   ),
 );
 
 try {
-  // The built-in UI consumes the resolved room directly.
-  final page = RealtimeRoomView(room: room);
-  room.events.listen((event) {
+  final page = RealtimeRoomView(room: connection.mediaRoom!);
+  connection.events.listen((event) {
     // One provider-neutral stream for media, chat, state and backend failures.
   });
 } finally {
-  await room.dispose();
+  await connection.dispose();
 }
 ```
 
-Pre-Join is also available on the facade and owns its temporary low-level
-client automatically:
+Creating a Meeting only changes the request action:
 
 ```dart
-final report = await sdk.preJoin(
+final connection = await realtime.open(
+  RealtimeRequest.create(
+    type: RealtimeExperience.meeting,
+    user: const RealtimeUser(id: 'user-123', name: 'Alice'),
+  ),
+);
+```
+
+Live and standalone Chat use the same API:
+
+```dart
+final live = await realtime.open(
+  RealtimeRequest.join(
+    type: RealtimeExperience.live,
+    roomCode: liveRoomCode,
+    user: const RealtimeUser(id: 'viewer-1', name: 'Viewer'),
+  ),
+);
+
+final chat = await realtime.open(
+  RealtimeRequest.join(
+    type: RealtimeExperience.chat,
+    roomCode: chatRoomCode,
+    user: const RealtimeUser(id: 'user-123', name: 'Alice'),
+  ),
+);
+```
+
+AWS stays public as `aws`: Meeting is routed internally to Chime and Live is
+routed internally to IVS. Application code does not select those engines.
+
+Pre-Join, discovery, and diagnostics remain on the same facade:
+
+```dart
+final report = await realtime.preJoin(
   roomCode: roomCode,
   role: MediaRole.participant,
 );
 
-final rooms = await sdk.listRooms();
-final backendReport = await sdk.diagnoseBackend();
+final rooms = await realtime.listRooms();
+final chatRooms = await realtime.listChatRooms();
+final backendReport = await realtime.diagnoseBackend();
 ```
 
-See `example/lib/minimal_sdk_example.dart` for the shortest complete
-navigation example. The main example remains a full showcase for room
-discovery, Pre-Join, Meeting/Live and the server dashboard.
+See `example/lib/minimal_sdk_example.dart` for the shortest complete facade
+example. `example/lib/advanced_sdk_example.dart` keeps the lower-level
+`RealtimeSdk` flow for applications that need custom orchestration.
 
-`RealtimeSdk` maps high-level failures to `RealtimeException` with a stable
-`RealtimeErrorCode`, while retaining `providerId`, the original `cause`,
-`recoverable`, and a small `suggestedAction` hint. `RealtimeClient`,
-`MediaClient`, and `ChatClient` remain supported escape hatches and retain
-their existing lower-level error contracts.
+`Realtime` and `RealtimeSdk` map high-level failures to
+`RealtimeException` with a stable `RealtimeErrorCode`, while retaining
+`providerId`, the original `cause`, `recoverable`, and a small
+`suggestedAction` hint. `RealtimeSdk`, `RealtimeClient`, `MediaClient`,
+and `ChatClient` remain supported advanced escape hatches.
 
 Provider plugins are configuration, not routing. Adding a provider should
 normally require implementing its adapter package and registering one plugin;
@@ -252,33 +301,57 @@ application room code must not branch on provider ids.
 ### Frontend-first / custom provisioning
 
 `backendUrl` is optional. If your application already has a Java, Node.js,
-Python, Lambda, Firebase Function, or other credential service, return a
-provider-neutral `MediaJoinInfo` and join directly:
+Python, Lambda, Firebase Function, or other credential service, return
+short-lived credential JSON and keep the same facade:
 
 ```dart
-final sdk = RealtimeSdk.standard(
+final realtime = Realtime.standard(
   additionalPlugins: [myProviderPlugin],
 );
 
-final joinInfo = await myApplicationApi.issueMediaCredentials();
-final room = await sdk.joinDirect(
-  joinInfo,
-  // Optional and independently provisioned:
-  chatJoinInfo: await myApplicationApi.issueChatCredentials(),
-  chatCredentialProvider: myApplicationApi.refreshChatCredentials,
+final connection = await realtime.open(
+  RealtimeRequest.join(
+    type: RealtimeExperience.meeting,
+    roomCode: roomCode,
+    user: const RealtimeUser(id: 'user-123', name: 'Alice'),
+    source: RealtimeSource.credentials(
+      media: RealtimeCredentials(
+        providerId: mediaProvider,
+        payload: await myApplicationApi.issueMediaCredentials(),
+      ),
+      chat: RealtimeCredentials(
+        providerId: chatProvider,
+        payload: await myApplicationApi.issueChatCredentials(),
+      ),
+      chatCredentialProvider: () async => RealtimeCredentials(
+        providerId: chatProvider,
+        payload: await myApplicationApi.refreshChatCredentials(),
+      ),
+    ),
+  ),
 );
 ```
 
-The same SDK facade can parse short-lived Product Chat credentials without
-exposing a provider-specific adapter registry:
+Standalone direct Chat is the same shape without media credentials:
 
 ```dart
-final chatRoom = await sdk.connectChatWithCredentials(
-  providerId: chatProvider,
-  joinPayload: await myApplicationApi.issueChatCredentials(),
-  credentialProvider: myApplicationApi.refreshChatCredentials,
+final chat = await realtime.open(
+  RealtimeRequest.join(
+    type: RealtimeExperience.chat,
+    roomCode: roomCode,
+    user: const RealtimeUser(id: 'user-123', name: 'Alice'),
+    source: RealtimeSource.credentials(
+      chat: RealtimeCredentials(
+        providerId: chatProvider,
+        payload: await myApplicationApi.issueChatCredentials(),
+      ),
+    ),
+  ),
 );
 ```
+
+Applications that already own `MediaJoinInfo` / `ChatJoinInfo` objects can
+use the advanced `RealtimeSdk.joinDirect(...)` APIs unchanged.
 
 Direct sessions do not send heartbeat/leave requests to the repository
 `demo-server`. Logical-room presence and privileged management are optional
@@ -491,7 +564,7 @@ See the [AWS Chime SDK guide to creating meetings](https://docs.aws.amazon.com/c
 }
 ```
 
-## Quick start
+## Chime v3 quick start
 
 If your application backend implements [`BACKEND_CONTRACT.md`](BACKEND_CONTRACT.md),
 the high-level client handles HTTP, `JoinInfo`, heartbeat, and best-effort leave
@@ -710,12 +783,12 @@ SDK 内置 Flutter UI 目前提供 English 与简体中文两套文案，覆盖 
 | `flutter_realtime_media_livekit` | LiveKit RTC + Host/Viewer Adapter | 已实现 |
 | `flutter_realtime_media_agora` | Agora RTC + Host/Viewer Adapter | 已实现；真实服务 E2E 可选 |
 | `flutter_realtime_media_chime` | AWS Chime Core Adapter | 已实现 |
-| `flutter_realtime_media_aws_desktop` | AWS Chime/IVS 共用的 SDK 内部 macOS WebKit Transport | 已实现，由 `flutter_realtime_sdk` 自动带入 |
+| `flutter_realtime_media_aws_desktop` | AWS Chime/IVS 音视频和 IVS Chat 共用的 SDK 内部 macOS WebKit Transport | 已实现，由 `flutter_realtime_sdk` 自动带入 |
 | `flutter_realtime_media_trtc` | 可选的腾讯云 TRTC RTC + Host/Viewer Adapter | 已实现；真实设备 E2E 可选 |
 | `flutter_realtime_media_artc` | 可选的阿里云 ARTC RTC + Host/Viewer Adapter | Android/iOS/Web 已实现；macOS 需随发布包提供官方 Mac framework |
 | `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + Host/Viewer Adapter | Android/iOS 原生；macOS 通过 SDK 内部 AWS Desktop Transport |
 | `flutter_realtime_chat_core` | Provider 无关的产品聊天 Client/Session 契约 | 已实现 |
-| `flutter_realtime_chat_ivs` | Amazon IVS Chat Adapter | Android/iOS/Web 已实现 |
+| `flutter_realtime_chat_ivs` | Amazon IVS Chat Adapter | Android/iOS/Web 原生接入；macOS 复用 AWS 桌面 WebKit Transport |
 | `flutter_realtime_chat_tencent` | Tencent Cloud Chat Adapter | 已实现；跟随腾讯 Chat SDK 多平台能力 |
 | `flutter_realtime_chat_agora` | Agora Chat Adapter | Android/iOS/macOS/Web 已实现 |
 | `flutter_realtime_chat_rtc` | 无独立产品 Chat Provider 时，将完整双向 RTC Data 适配为 `ChatSession` | 已实现 |

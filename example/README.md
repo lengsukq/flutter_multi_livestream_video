@@ -1,9 +1,11 @@
 # Realtime Media example
 
 This is the repository's single Flutter demo app and a usage sample for the
-public `flutter_realtime_sdk` package. It creates `RealtimeSdk.standard()` and
-uses SDK methods for room listing, diagnostics, create/join, Pre-Join, and
-Chat. It does not register adapters or branch on the current platform. The
+public `flutter_realtime_sdk` package. It creates the simplified
+`Realtime.standard()` facade for room listing,
+diagnostics, create/join, Pre-Join, Meeting/Live, and standalone Chat. All
+connection flows go through `Realtime.open(RealtimeRequest)`. It does not
+register adapters or branch on the current platform. The
 `demo-server` may select the provider for newly-created rooms and returns
 short-lived join information; the SDK routes that provider to its built-in
 driver and reports unsupported capabilities explicitly.
