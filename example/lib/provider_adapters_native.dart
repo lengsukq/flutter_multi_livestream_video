@@ -26,10 +26,13 @@ ProviderAdapters createProviderAdapters() => ProviderAdapters(
       metadata: const RealtimeProviderMetadata(displayName: 'Agora'),
       mediaFactory: const AgoraSessionFactory(),
       renderer: AgoraTrackRenderer(),
-      chatFactory: Platform.isAndroid || Platform.isIOS
-          ? const AgoraChatSessionFactory()
-          : null,
     ),
+    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)
+      const RealtimeProviderPlugin(
+        id: 'agora-chat',
+        metadata: RealtimeProviderMetadata(displayName: 'Agora Chat'),
+        chatFactory: AgoraChatSessionFactory(),
+      ),
     const RealtimeProviderPlugin(
       id: 'livekit',
       metadata: RealtimeProviderMetadata(displayName: 'LiveKit'),
@@ -53,10 +56,15 @@ ProviderAdapters createProviderAdapters() => ProviderAdapters(
       metadata: RealtimeProviderMetadata(displayName: 'Amazon IVS'),
       mediaFactory: IvsSessionFactory(),
       renderer: IvsTrackRenderer(),
-      chatFactory: IvsChatSessionFactory(),
     ),
+    if (Platform.isAndroid || Platform.isIOS)
+      const RealtimeProviderPlugin(
+        id: 'ivs-chat',
+        metadata: RealtimeProviderMetadata(displayName: 'Amazon IVS Chat'),
+        chatFactory: IvsChatSessionFactory(),
+      ),
     const RealtimeProviderPlugin(
-      id: 'tencent',
+      id: 'tencent-chat',
       metadata: RealtimeProviderMetadata(displayName: 'Tencent Chat'),
       chatFactory: TencentChatSessionFactory(),
     ),

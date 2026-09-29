@@ -1,4 +1,6 @@
 PODS:
+  - flutter_realtime_chat_agora (0.1.0):
+    - FlutterMacOS
   - FlutterMacOS (1.0.0)
   - HydraAsync (2.0.6)
   - tencent_cloud_chat_sdk (8.0.0):
@@ -12,6 +14,7 @@ PODS:
   - TXLiteAVSDK_TRTC_Mac (13.5.21355)
 
 DEPENDENCIES:
+  - flutter_realtime_chat_agora (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_chat_agora/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - tencent_cloud_chat_sdk (from `Flutter/ephemeral/.symlinks/plugins/tencent_cloud_chat_sdk/macos`)
   - tencent_rtc_sdk (from `Flutter/ephemeral/.symlinks/plugins/tencent_rtc_sdk/macos`)
@@ -23,6 +26,8 @@ SPEC REPOS:
     - TXLiteAVSDK_TRTC_Mac
 
 EXTERNAL SOURCES:
+  flutter_realtime_chat_agora:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_chat_agora/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
   tencent_cloud_chat_sdk:
@@ -31,6 +36,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/tencent_rtc_sdk/macos
 
 SPEC CHECKSUMS:
+  flutter_realtime_chat_agora: be5633842da785001a7cba516b6ce5df45b238f5
   FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
   HydraAsync: 8d589bd725b0224f899afafc9a396327405f8063
   tencent_cloud_chat_sdk: 62850e2969a525306e7a29a70ae80008fd0d82cc

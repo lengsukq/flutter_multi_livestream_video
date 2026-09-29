@@ -148,9 +148,11 @@ class TencentChatSession implements ChatSession, ChatSessionIdentity {
     onError: (code, message) => _events.add(
       ChatFailureEvent(
         ChatError(
-          code: code == 403
-              ? ChatErrorCode.forbidden
-              : ChatErrorCode.nativeError,
+          code: switch (code) {
+            401 => ChatErrorCode.unauthorized,
+            403 => ChatErrorCode.forbidden,
+            _ => ChatErrorCode.nativeError,
+          },
           message: message,
           providerId: providerId,
           details: {'nativeCode': code},

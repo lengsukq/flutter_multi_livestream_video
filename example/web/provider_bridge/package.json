@@ -5,14 +5,18 @@
   "description": "Pinned browser SDKs used by Flutter realtime media and chat Web adapters.",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "test": "node --test src/*.test.js"
   },
   "dependencies": {
+    "@tencentcloud/chat": "3.3.0",
     "agora-rtc-sdk-ng": "4.24.8",
+    "agora-chat": "1.4.0",
     "aliyun-rtc-sdk": "7.3.5",
     "amazon-chime-sdk-js": "3.32.0",
     "amazon-ivs-chat-messaging": "1.0.2",
     "amazon-ivs-web-broadcast": "1.38.1",
+    "tim-upload-plugin": "1.3.0",
     "trtc-sdk-v5": "5.19.2"
   },
   "devDependencies": {

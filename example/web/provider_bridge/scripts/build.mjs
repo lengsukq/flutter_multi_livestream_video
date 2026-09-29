@@ -8,6 +8,10 @@ const rootDir = resolve(scriptDir, '..');
 const nodeModules = join(rootDir, 'node_modules');
 const distDir = join(rootDir, 'dist');
 const vendorsDir = join(distDir, 'vendors');
+const agoraChatMacOSAssetsDir = resolve(
+  rootDir,
+  '../../../packages/flutter_realtime_chat_agora/macos/Resources',
+);
 
 await rm(distDir, { recursive: true, force: true });
 await mkdir(vendorsDir, { recursive: true });
@@ -71,8 +75,25 @@ await build({
 
 await build({
   absWorkingDir: rootDir,
-  entryPoints: ['src/ivs-chat-entry.js'],
-  outfile: join(vendorsDir, 'amazon-ivs-chat-messaging.js'),
+  entryPoints: ['src/chat-provider-entry.js'],
+  outfile: join(vendorsDir, 'realtime-chat-provider-bridge.js'),
+  bundle: true,
+  platform: 'browser',
+  format: 'iife',
+  target: ['es2020'],
+  minify: true,
+  legalComments: 'eof',
+});
+
+await mkdir(agoraChatMacOSAssetsDir, { recursive: true });
+const agoraChatMacOSBridgePath = join(
+  agoraChatMacOSAssetsDir,
+  'agora_chat_macos.js',
+);
+await build({
+  absWorkingDir: rootDir,
+  entryPoints: ['src/agora-chat-macos-entry.js'],
+  outfile: agoraChatMacOSBridgePath,
   bundle: true,
   platform: 'browser',
   format: 'iife',
@@ -85,19 +106,22 @@ await cp(join(rootDir, 'src/bridge.js'), join(distDir, 'media-provider-bridge.js
 
 const licensesDir = join(distDir, 'licenses');
 await mkdir(licensesDir, { recursive: true });
-for (const packageName of [
-  'agora-rtc-sdk-ng',
-  'aliyun-rtc-sdk',
-  'amazon-chime-sdk-js',
-  'amazon-ivs-chat-messaging',
-  'amazon-ivs-web-broadcast',
-  'trtc-sdk-v5',
-  'eventemitter3',
+for (const [packageName, licensePrefix] of [
+  ['@tencentcloud/chat', 'tencent-cloud-chat'],
+  ['tim-upload-plugin', 'tim-upload-plugin'],
+  ['agora-chat', 'agora-chat'],
+  ['agora-rtc-sdk-ng', 'agora-rtc-sdk-ng'],
+  ['aliyun-rtc-sdk', 'aliyun-rtc-sdk'],
+  ['amazon-chime-sdk-js', 'amazon-chime-sdk-js'],
+  ['amazon-ivs-chat-messaging', 'amazon-ivs-chat-messaging'],
+  ['amazon-ivs-web-broadcast', 'amazon-ivs-web-broadcast'],
+  ['trtc-sdk-v5', 'trtc-sdk-v5'],
+  ['eventemitter3', 'eventemitter3'],
 ]) {
   const packageDir = join(nodeModules, packageName);
   for (const name of ['LICENSE', 'LICENSE.txt', 'NOTICE']) {
     try {
-      await cp(join(packageDir, name), join(licensesDir, `${packageName}-${name}`));
+      await cp(join(packageDir, name), join(licensesDir, `${licensePrefix}-${name}`));
     } catch (error) {
       if (error.code !== 'ENOENT') throw error;
     }

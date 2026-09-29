@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <script src="agora_chat_macos.js"></script>
+    <script>
+      async function guardedInvoke(method, args) {
+        const bridge = globalThis.AgoraChatBridge;
+        if (!bridge || typeof bridge[method] !== 'function') {
+          throw new Error(`Agora Chat bridge method ${method} is unavailable.`);
+        }
+        return await bridge[method](...args);
+      }
+    </script>
+  </body>
+</html>

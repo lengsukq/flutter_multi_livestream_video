@@ -53,8 +53,9 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
     ChatJoinInfo joinInfo, {
     ChatCredentialProvider? credentialProvider,
   }) async {
-    if (_disposed)
+    if (_disposed) {
       throw _error(ChatErrorCode.invalidState, 'Chat session is disposed.');
+    }
     if (_state != ChatConnectionState.disconnected &&
         _state != ChatConnectionState.failed) {
       throw _error(
@@ -139,9 +140,11 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
     onError: (code, message) => _events.add(
       ChatFailureEvent(
         ChatError(
-          code: code == 403
-              ? ChatErrorCode.forbidden
-              : ChatErrorCode.nativeError,
+          code: switch (code) {
+            401 => ChatErrorCode.unauthorized,
+            403 => ChatErrorCode.forbidden,
+            _ => ChatErrorCode.nativeError,
+          },
           message: message,
           providerId: providerId,
           details: {'nativeCode': code},

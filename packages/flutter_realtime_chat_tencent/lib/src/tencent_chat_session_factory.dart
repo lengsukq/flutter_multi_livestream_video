@@ -1,7 +1,7 @@
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 
 import 'tencent_chat_engine.dart';
-import 'tencent_chat_engine_native.dart';
+import 'tencent_chat_engine_factory.dart';
 import 'tencent_chat_join_info.dart';
 import 'tencent_chat_session.dart';
 

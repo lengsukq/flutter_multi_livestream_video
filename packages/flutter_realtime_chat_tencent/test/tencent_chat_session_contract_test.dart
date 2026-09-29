@@ -31,14 +31,22 @@ class _FakeEngine implements TencentChatEngine {
   Future<void> dispose() async => calls.add('dispose');
 }
 
-Map<String, dynamic> _joinJson({String sig = 'sig-1'}) => {
+Map<String, dynamic> _joinJson({
+  String sig = 'sig-1',
+  String role = 'host',
+  String participantId = 'participant-1',
+  String userId = 'logical-user-1',
+  String displayName = 'Tencent User',
+}) => {
   'contractVersion': 1,
   'chatProvider': 'tencent-chat',
   'roomCode': '123456',
-  'participantId': 'participant-1',
-  'userId': 'logical-user-1',
-  'displayName': 'Tencent User',
-  'role': 'host',
+  'participantId': participantId,
+  'userId': userId,
+  'displayName': displayName,
+  'role': role,
+  'participantCredential': 'proof-$participantId',
+  'context': 'standalone',
   'chat': {
     'sdkAppId': 1400000001,
     'groupId': 'rm_123456',
@@ -51,7 +59,100 @@ Map<String, dynamic> _joinJson({String sig = 'sig-1'}) => {
   },
 };
 
+class _FakeStandaloneProvisioner implements StandaloneChatProvisioner {
+  @override
+  Future<ChatJoinInfo> create({
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.host,
+    String? roomCode,
+  }) async => _generic(
+    role: role,
+    participantId: 'participant-1',
+    userId: userId,
+    displayName: displayName,
+  );
+
+  @override
+  Future<ChatJoinInfo> join({
+    required String roomCode,
+    required String userId,
+    required String displayName,
+    ChatRole role = ChatRole.participant,
+  }) async => _generic(
+    role: role,
+    participantId: 'participant-2',
+    userId: userId,
+    displayName: displayName,
+  );
+
+  @override
+  Future<ChatJoinInfo> provision({
+    required String roomCode,
+    required String participantId,
+    String? participantCredential,
+  }) async => _generic(
+    role: ChatRole.host,
+    participantId: participantId,
+    userId: 'logical-user-1',
+    displayName: 'Tencent User',
+  );
+
+  @override
+  Future<List<ChatRoomSummary>> listRooms() async => const [];
+
+  ChatJoinInfo _generic({
+    required ChatRole role,
+    required String participantId,
+    required String userId,
+    required String displayName,
+  }) {
+    final json = _joinJson(
+      role: role.wireName,
+      participantId: participantId,
+      userId: userId,
+      displayName: displayName,
+    );
+    return ChatJoinInfo(
+      providerId: 'tencent-chat',
+      roomCode: '123456',
+      participantId: participantId,
+      userId: userId,
+      displayName: displayName,
+      role: role,
+      json: json,
+      context: ChatRoomContext.standalone,
+    );
+  }
+}
+
 void main() {
+  test(
+    'standalone ChatClient parses Tencent credentials before session creation',
+    () async {
+      final engine = _FakeEngine();
+      final factory = TencentChatSessionFactory(
+        engineFactory: () async => engine,
+      );
+      final client = ChatClient.direct(
+        registry: ChatRegistry([factory]),
+        provisioner: _FakeStandaloneProvisioner(),
+      );
+
+      final room = await client.createStandaloneRoom(
+        userId: 'logical-user-1',
+        displayName: 'Tencent User',
+        roomCode: '123456',
+      );
+
+      expect(room.session.providerId, 'tencent-chat');
+      expect(engine.calls, contains('connect:sig-1'));
+
+      await room.dispose();
+      client.dispose();
+    },
+  );
+
   test('Tencent adapter exposes send but not unsafe moderation', () async {
     final engine = _FakeEngine();
     final factory = TencentChatSessionFactory(

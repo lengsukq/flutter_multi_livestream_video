@@ -15,6 +15,12 @@ dependencies:
     path: ../flutter_realtime_chat_core
   agora_chat_sdk: ^1.4.0
 
+flutter:
+  plugin:
+    platforms:
+      macos:
+        pluginClass: AgoraChatMacOSPlugin
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

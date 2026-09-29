@@ -5,29 +5,29 @@ import 'dart:js_interop_unsafe';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core_web.dart';
 
-import 'ivs_chat_engine.dart';
-import 'ivs_chat_join_info.dart';
+import 'agora_chat_engine.dart';
+import 'agora_chat_join_info.dart';
 
 @JS('globalThis')
 external JSObject get _globalThis;
 
-Future<IvsChatEngine> createPlatformIvsChatEngine() async =>
-    _WebIvsChatEngine();
+Future<AgoraChatEngine> createPlatformAgoraChatEngine() async =>
+    _AgoraChatWebEngine();
 
-class _WebIvsChatEngine implements IvsChatEngine {
-  _WebIvsChatEngine()
-    : _runtime = WebChatRuntime<IvsChatJoinInfo>(
-        providerId: IvsChatJoinInfo.providerIdValue,
-        driverFactory: _IvsChatWebDriver.new,
+class _AgoraChatWebEngine implements AgoraChatEngine {
+  _AgoraChatWebEngine()
+    : _runtime = WebChatRuntime<AgoraChatJoinInfo>(
+        providerId: AgoraChatJoinInfo.providerIdValue,
+        driverFactory: _AgoraChatWebDriver.new,
       );
 
-  final WebChatRuntime<IvsChatJoinInfo> _runtime;
+  final WebChatRuntime<AgoraChatJoinInfo> _runtime;
 
   @override
   Future<void> connect(
-    IvsChatJoinInfo info,
-    IvsChatEngineEvents events, {
-    IvsChatTokenProvider? tokenProvider,
+    AgoraChatJoinInfo info,
+    AgoraChatEngineEvents events, {
+    AgoraChatTokenProvider? tokenProvider,
   }) => _runtime.connect(
     info,
     WebChatDriverEvents(
@@ -59,26 +59,27 @@ class _WebIvsChatEngine implements IvsChatEngine {
   Future<void> dispose() => _runtime.dispose();
 }
 
-class _IvsChatWebDriver implements WebChatDriver<IvsChatJoinInfo> {
+class _AgoraChatWebDriver implements WebChatDriver<AgoraChatJoinInfo> {
   static final Map<String, WebChatDriverEvents> _handlers = {};
-  static final Map<String, WebChatTokenProvider<IvsChatJoinInfo>>
+  static final Map<String, WebChatTokenProvider<AgoraChatJoinInfo>>
   _tokenProviders = {};
   static bool _callbacksInstalled = false;
   static int _nextSessionId = 0;
 
-  _IvsChatWebDriver()
+  _AgoraChatWebDriver()
     : _sessionId =
-          'ivs_chat_${DateTime.now().microsecondsSinceEpoch}_${_nextSessionId++}';
+          'agora_chat_${DateTime.now().microsecondsSinceEpoch}_${_nextSessionId++}';
 
   final String _sessionId;
   bool _created = false;
 
   @override
   Future<void> connect(
-    IvsChatJoinInfo info,
+    AgoraChatJoinInfo info,
     WebChatDriverEvents events, {
-    WebChatTokenProvider<IvsChatJoinInfo>? tokenProvider,
+    WebChatTokenProvider<AgoraChatJoinInfo>? tokenProvider,
   }) async {
+    _info = info;
     _installCallbacks();
     _handlers[_sessionId] = events;
     if (tokenProvider != null) _tokenProviders[_sessionId] = tokenProvider;
@@ -96,29 +97,54 @@ class _IvsChatWebDriver implements WebChatDriver<IvsChatJoinInfo> {
           .toDart;
     } catch (error) {
       throw mapWebChatError(
-        IvsChatJoinInfo.providerIdValue,
-        'Unable to connect to Amazon IVS Chat.',
+        AgoraChatJoinInfo.providerIdValue,
+        'Unable to connect to Agora Chat.',
         error,
       );
     }
   }
 
   @override
-  Future<void> sendMessage(String message) =>
-      _command('sendMessage', {'message': message});
+  Future<void> sendMessage(String message) {
+    final info = _activeInfo;
+    return _command('sendMessage', {
+      'message': message,
+      'userId': info.userId,
+      'displayName': info.displayName,
+      'participantId': info.participantId,
+    });
+  }
+
+  AgoraChatJoinInfo get _activeInfo {
+    final info = _info;
+    if (!_created || info == null) {
+      throw const ChatError(
+        code: ChatErrorCode.invalidState,
+        message: 'Agora Chat Web driver is not connected.',
+        providerId: AgoraChatJoinInfo.providerIdValue,
+      );
+    }
+    return info;
+  }
+
+  AgoraChatJoinInfo? _info;
 
   @override
-  Future<void> deleteMessage(String messageId) =>
-      _command('deleteMessage', {'messageId': messageId});
+  Future<void> deleteMessage(String messageId) async => throw UnsupportedError(
+    'Agora Chat moderator message deletion is not enabled by this adapter.',
+  );
 
   @override
-  Future<void> disconnectUser(String userId) =>
-      _command('disconnectUser', {'userId': userId});
+  Future<void> disconnectUser(String userId) async => throw UnsupportedError(
+    'Agora Chat moderator user removal is not enabled by this adapter.',
+  );
 
   @override
   Future<void> disconnect() async {
     if (!_created) return;
-    await _command('disconnect', const {});
+    await _bridge
+        .callMethod<JSPromise<JSAny?>>('disconnect'.toJS, _sessionId.toJS)
+        .toDart;
   }
 
   @override
@@ -133,12 +159,17 @@ class _IvsChatWebDriver implements WebChatDriver<IvsChatJoinInfo> {
       _handlers.remove(_sessionId);
       _tokenProviders.remove(_sessionId);
       _created = false;
+      _info = null;
     }
   }
 
   Future<void> _command(String name, Map<String, Object?> arguments) async {
     if (!_created) {
-      throw StateError('IVS Chat Web driver is not connected.');
+      throw const ChatError(
+        code: ChatErrorCode.invalidState,
+        message: 'Agora Chat Web driver is not connected.',
+        providerId: AgoraChatJoinInfo.providerIdValue,
+      );
     }
     await _bridge
         .callMethod<JSPromise<JSAny?>>(
@@ -151,20 +182,20 @@ class _IvsChatWebDriver implements WebChatDriver<IvsChatJoinInfo> {
   }
 
   static JSObject get _bridge {
-    if (!_globalThis.has('IvsChatMessagingBridge')) {
+    if (!_globalThis.has('AgoraChatBridge')) {
       throw const ChatError(
         code: ChatErrorCode.unsupportedPlatform,
         message:
             'The local chat provider bridge has not been loaded. Follow the Web setup instructions.',
-        providerId: IvsChatJoinInfo.providerIdValue,
+        providerId: AgoraChatJoinInfo.providerIdValue,
       );
     }
-    return _globalThis['IvsChatMessagingBridge'] as JSObject;
+    return _globalThis['AgoraChatBridge'] as JSObject;
   }
 
   static void _installCallbacks() {
     if (_callbacksInstalled) return;
-    _globalThis['__flutterIvsChatOnEvent'] =
+    _globalThis['__flutterAgoraChatOnEvent'] =
         ((JSString sessionId, JSString type, JSString payload) {
           final events = _handlers[sessionId.toDart];
           if (events == null) return;
@@ -195,30 +226,24 @@ class _IvsChatWebDriver implements WebChatDriver<IvsChatJoinInfo> {
                 events.onError?.call(
                   (event['code'] as num?)?.toInt() ?? -1,
                   event['message']?.toString() ??
-                      'Amazon IVS Chat reported an error.',
+                      'Agora Chat reported an error.',
                 );
             }
           } catch (_) {
             // Ignore malformed SDK events and keep the browser event loop alive.
           }
         }).toJS;
-    _globalThis['__flutterIvsChatRequestToken'] = ((JSString sessionId) {
+    _globalThis['__flutterAgoraChatRequestToken'] = ((JSString sessionId) {
       final provider = _tokenProviders[sessionId.toDart];
       if (provider == null) {
         return Future<JSString>.error(
-          StateError('No IVS Chat token refresh provider is configured.'),
+          StateError('No Agora Chat token refresh provider is configured.'),
         ).toJS;
       }
       return provider()
-          .then((info) => jsonEncode(_tokenPayload(info)).toJS)
+          .then((info) => jsonEncode({'token': info.token}).toJS)
           .toJS;
     }).toJS;
     _callbacksInstalled = true;
   }
-
-  static Map<String, Object?> _tokenPayload(IvsChatJoinInfo info) => {
-    'token': info.token,
-    'tokenExpirationTimeMs': info.tokenExpirationTimeMs,
-    'sessionExpirationTimeMs': info.sessionExpirationTimeMs,
-  };
 }

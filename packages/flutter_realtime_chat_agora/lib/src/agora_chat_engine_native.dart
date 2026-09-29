@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:agora_chat_sdk/agora_chat_sdk.dart';
 
 import 'agora_chat_engine.dart';
+import 'agora_chat_engine_macos.dart' as macos;
 import 'agora_chat_join_info.dart';
 
-Future<AgoraChatEngine> createDefaultAgoraChatEngine() async =>
-    _AgoraSdkChatEngine();
+Future<AgoraChatEngine> createPlatformAgoraChatEngine() async =>
+    Platform.isMacOS
+    ? macos.createMacOSAgoraChatEngine()
+    : _AgoraSdkChatEngine();
 
 class _AgoraSdkChatEngine implements AgoraChatEngine {
   static const _handlerId = 'flutter_realtime_chat_agora';

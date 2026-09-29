@@ -4,19 +4,67 @@ import 'dart:convert';
 import 'package:tencent_cloud_chat_sdk/enum/V2TimAdvancedMsgListener.dart';
 import 'package:tencent_cloud_chat_sdk/enum/V2TimSDKListener.dart';
 import 'package:tencent_cloud_chat_sdk/enum/log_level_enum.dart';
-import 'package:tencent_cloud_chat_sdk/tencent_im_sdk_plugin.dart';
+import 'package:tencent_cloud_chat_sdk/tencent_cloud_chat_sdk_platform_interface.dart';
+import 'package:tencent_cloud_chat_sdk/utils/const.dart';
+import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core_web.dart';
 
 import 'tencent_chat_engine.dart';
 import 'tencent_chat_join_info.dart';
 
 Future<TencentChatEngine> createPlatformTencentChatEngine() async =>
-    _TencentSdkChatEngine();
+    _TencentWebChatEngine();
 
-class _TencentSdkChatEngine implements TencentChatEngine {
-  TencentChatEngineEvents _events = const TencentChatEngineEvents();
-  TencentChatTokenProvider? _tokenProvider;
+class _TencentWebChatEngine implements TencentChatEngine {
+  _TencentWebChatEngine()
+    : _runtime = WebChatRuntime<TencentChatJoinInfo>(
+        providerId: TencentChatJoinInfo.providerIdValue,
+        driverFactory: _TencentChatWebDriver.new,
+      );
+
+  final WebChatRuntime<TencentChatJoinInfo> _runtime;
+
+  @override
+  Future<void> connect(
+    TencentChatJoinInfo info,
+    TencentChatEngineEvents events, {
+    TencentChatTokenProvider? tokenProvider,
+  }) => _runtime.connect(
+    info,
+    WebChatDriverEvents(
+      onConnecting: events.onConnecting,
+      onConnected: events.onConnected,
+      onDisconnected: events.onDisconnected,
+      onMessage: events.onMessage,
+      onMessageDeleted: events.onMessageDeleted,
+      onUserDisconnected: events.onUserDisconnected,
+      onError: events.onError,
+    ),
+    tokenProvider: tokenProvider,
+  );
+
+  @override
+  Future<void> sendMessage(String message) => _runtime.sendMessage(message);
+
+  @override
+  Future<void> deleteMessage(String messageId) =>
+      _runtime.deleteMessage(messageId);
+
+  @override
+  Future<void> disconnectUser(String userId) => _runtime.disconnectUser(userId);
+
+  @override
+  Future<void> disconnect() => _runtime.disconnect();
+
+  @override
+  Future<void> dispose() => _runtime.dispose();
+}
+
+class _TencentChatWebDriver implements WebChatDriver<TencentChatJoinInfo> {
+  WebChatDriverEvents _events = const WebChatDriverEvents();
+  WebChatTokenProvider<TencentChatJoinInfo>? _tokenProvider;
   TencentChatJoinInfo? _info;
   V2TimAdvancedMsgListener? _messageListener;
+  String? _messageListenerId;
   bool _initialized = false;
   bool _loggedIn = false;
   bool _joinedGroup = false;
@@ -24,13 +72,14 @@ class _TencentSdkChatEngine implements TencentChatEngine {
   bool _disposed = false;
   bool _refreshing = false;
 
-  dynamic get _manager => TencentImSDKPlugin.v2TIMManager;
+  TencentCloudChatSdkPlatform get _manager =>
+      TencentCloudChatSdkPlatform.instance;
 
   @override
   Future<void> connect(
     TencentChatJoinInfo info,
-    TencentChatEngineEvents events, {
-    TencentChatTokenProvider? tokenProvider,
+    WebChatDriverEvents events, {
+    WebChatTokenProvider<TencentChatJoinInfo>? tokenProvider,
   }) async {
     if (_disposed) throw StateError('Tencent Chat engine is disposed.');
     _events = events;
@@ -40,7 +89,8 @@ class _TencentSdkChatEngine implements TencentChatEngine {
 
     final initResult = await _manager.initSDK(
       sdkAppID: info.sdkAppId,
-      loglevel: LogLevelEnum.V2TIM_LOG_INFO,
+      loglevel: LogLevelEnum.V2TIM_LOG_INFO.index,
+      uiPlatform: TencentIMSDKCONST.Flutter,
       listener: V2TimSDKListener(
         onConnecting: () => _events.onConnecting?.call(true),
         onConnectSuccess: () {
@@ -72,7 +122,7 @@ class _TencentSdkChatEngine implements TencentChatEngine {
         if (id.isNotEmpty) _events.onMessageDeleted?.call(id);
       },
     );
-    await _manager.getMessageManager().addAdvancedMsgListener(
+    _messageListenerId = await _manager.addAdvancedMsgListener(
       listener: _messageListener!,
     );
 
@@ -82,7 +132,7 @@ class _TencentSdkChatEngine implements TencentChatEngine {
       groupType: 'Meeting',
     );
     // 10013 means the user is already in the group. Treat that as success.
-    if ((joinResult.code ?? -1) != 0 && (joinResult.code ?? -1) != 10013) {
+    if (joinResult.code != 0 && joinResult.code != 10013) {
       _requireSuccess(joinResult, 'join Tencent Chat group');
     }
     _joinedGroup = true;
@@ -93,8 +143,7 @@ class _TencentSdkChatEngine implements TencentChatEngine {
   @override
   Future<void> sendMessage(String message) async {
     final info = _requireInfo();
-    final messageManager = _manager.getMessageManager();
-    final created = await messageManager.createTextMessage(text: message);
+    final created = await _manager.createTextMessage(text: message);
     _requireSuccess(created, 'create Tencent Chat message');
     final id = created.data?.id?.toString().trim() ?? '';
     if (id.isEmpty) {
@@ -105,7 +154,7 @@ class _TencentSdkChatEngine implements TencentChatEngine {
       'displayName': info.displayName,
       'participantId': info.participantId,
     });
-    final result = await messageManager.sendMessage(
+    final result = await _manager.sendMessage(
       id: id,
       receiver: '',
       groupID: info.groupId,
@@ -131,29 +180,25 @@ class _TencentSdkChatEngine implements TencentChatEngine {
       try {
         await _manager.quitGroup(groupID: info.groupId);
       } catch (_) {
-        // Group cleanup is best-effort. Logging out below is authoritative
-        // for this client session.
+        // Group cleanup is best-effort; keep cleaning the rest of the session.
       }
       _joinedGroup = false;
     }
-    final listener = _messageListener;
-    if (listener != null) {
+    final listenerId = _messageListenerId;
+    if (listenerId != null) {
       try {
-        await _manager.getMessageManager().removeAdvancedMsgListener(
-          listener: listener,
-        );
+        await _manager.removeAdvancedMsgListener(uuid: listenerId);
       } catch (_) {
-        // Continue cleanup even if the native listener was already removed.
+        // Continue cleanup if the listener was already removed.
       }
+      _messageListenerId = null;
       _messageListener = null;
     }
     if (_loggedIn) {
       try {
         await _manager.logout();
       } catch (_) {
-        // A failed join can leave the native SDK in a partially logged-in
-        // state. Disposal must still continue so the next attempt starts
-        // cleanly.
+        // A failed join can leave the SDK partially logged in.
       }
       _loggedIn = false;
     }
@@ -161,6 +206,7 @@ class _TencentSdkChatEngine implements TencentChatEngine {
       _connected = false;
       _events.onDisconnected?.call('clientDisconnect');
     }
+    _info = null;
   }
 
   @override
@@ -171,7 +217,7 @@ class _TencentSdkChatEngine implements TencentChatEngine {
       try {
         await _manager.unInitSDK();
       } catch (_) {
-        // Best-effort native teardown. The Dart engine is disposed either way.
+        // Best-effort SDK teardown; the Dart engine is disposed either way.
       }
       _initialized = false;
     }
@@ -260,11 +306,10 @@ class _TencentSdkChatEngine implements TencentChatEngine {
   }
 
   TencentChatJoinInfo _requireInfo() {
-    final info = _info;
-    if (!_connected || info == null) {
+    if (!_connected || _info == null) {
       throw StateError('Tencent Chat engine is not connected.');
     }
-    return info;
+    return _info!;
   }
 
   void _requireSuccess(dynamic result, String operation) {
