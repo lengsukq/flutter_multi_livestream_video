@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
-import 'media_provider_label.dart';
 import 'realtime_strings.dart';
 
 /// Shared visual language for the built-in Realtime SDK surfaces.
@@ -34,15 +33,15 @@ abstract final class RealtimeUiTokens {
   static const dangerBorder = Color(0xFFFECDD3);
 
   /// Unified large border radius hierarchy across the entire SDK.
-  static const sheetRadius = 32.0;
-  static const dockRadius = 30.0;
-  static const cardRadius = 28.0;
-  static const controlRadius = 22.0;
-  static const compactRadius = 16.0;
+  static const sheetRadius = 24.0;
+  static const dockRadius = 16.0;
+  static const cardRadius = 16.0;
+  static const controlRadius = 14.0;
+  static const compactRadius = 12.0;
   static const pillRadius = 999.0;
 
-  static const blur = 24.0;
-  static const subtleBlur = 16.0;
+  static const blur = 14.0;
+  static const subtleBlur = 8.0;
 
   static const pagePadding = 16.0;
   static const sectionGap = 16.0;
@@ -252,33 +251,44 @@ class RealtimeAmbientBackground extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => ColoredBox(
-    color: RealtimeUiTokens.background,
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        const Positioned(
-          left: -110,
-          top: -130,
-          child: _AmbientOrb(size: 380, color: Color(0xFFD9E2FF)),
-        ),
-        const Positioned(
-          right: -120,
-          top: 80,
-          child: _AmbientOrb(size: 320, color: Color(0xFFEDE9FE)),
-        ),
-        const Positioned(
-          left: -60,
-          bottom: 120,
-          child: _AmbientOrb(size: 290, color: Color(0xFFE0F2FE)),
-        ),
-        const Positioned(
-          right: -110,
-          bottom: -140,
-          child: _AmbientOrb(size: 400, color: Color(0xFFDBEAFE)),
-        ),
-        child,
-      ],
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: ColoredBox(
+      color: RealtimeUiTokens.background,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const RepaintBoundary(
+            child: IgnorePointer(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Positioned(
+                    left: -110,
+                    top: -130,
+                    child: _AmbientOrb(size: 380, color: Color(0xFFD9E2FF)),
+                  ),
+                  Positioned(
+                    right: -120,
+                    top: 80,
+                    child: _AmbientOrb(size: 320, color: Color(0xFFEDE9FE)),
+                  ),
+                  Positioned(
+                    left: -60,
+                    bottom: 120,
+                    child: _AmbientOrb(size: 290, color: Color(0xFFE0F2FE)),
+                  ),
+                  Positioned(
+                    right: -110,
+                    bottom: -140,
+                    child: _AmbientOrb(size: 400, color: Color(0xFFDBEAFE)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
     ),
   );
 }
@@ -340,8 +350,8 @@ class _RealtimeGlassPressableState extends State<RealtimeGlassPressable> {
   }
 }
 
-/// Core frosted glass surface with Gaussian blur, translucent gradient fill,
-/// specular border highlight, and soft elevation shadow.
+/// Core frosted glass surface with translucent gradient fill,
+/// specular border highlight, soft elevation shadow, and optional Gaussian blur.
 class RealtimeGlassSurface extends StatelessWidget {
   const RealtimeGlassSurface({
     super.key,
@@ -350,7 +360,7 @@ class RealtimeGlassSurface extends StatelessWidget {
     this.margin,
     this.radius = RealtimeUiTokens.cardRadius,
     this.opacity = .82,
-    this.blur = RealtimeUiTokens.blur,
+    this.blur = 0,
     this.shadow = true,
     this.borderColor = RealtimeUiTokens.border,
     this.fillColor,
@@ -370,9 +380,7 @@ class RealtimeGlassSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget content = AnimatedContainer(
-      duration: RealtimeUiTokens.animNormal,
-      curve: Curves.easeOutCubic,
+    Widget content = Container(
       padding: padding ?? EdgeInsets.zero,
       decoration: BoxDecoration(
         color: fillColor?.withValues(alpha: opacity),
@@ -407,10 +415,12 @@ class RealtimeGlassSurface extends StatelessWidget {
       padding: margin ?? EdgeInsets.zero,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: content,
-        ),
+        child: blur > 0
+            ? BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+                child: content,
+              )
+            : content,
       ),
     );
 
@@ -691,83 +701,85 @@ class _RealtimeGlassTextFieldState extends State<RealtimeGlassTextField> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedContainer(
-    duration: RealtimeUiTokens.animNormal,
-    curve: Curves.easeOutCubic,
-    decoration: BoxDecoration(
-      color: _focused
-          ? Colors.white.withValues(alpha: 0.96)
-          : Colors.white.withValues(alpha: 0.72),
-      borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-      border: Border.all(
-        color: _focused ? RealtimeUiTokens.primary : RealtimeUiTokens.border,
-        width: _focused ? 1.5 : 1.1,
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: AnimatedContainer(
+      duration: RealtimeUiTokens.animNormal,
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: _focused
+            ? Colors.white.withValues(alpha: 0.96)
+            : Colors.white.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+        border: Border.all(
+          color: _focused ? RealtimeUiTokens.primary : RealtimeUiTokens.border,
+          width: _focused ? 1.5 : 1.1,
+        ),
+        boxShadow: _focused
+            ? [
+                BoxShadow(
+                  color: RealtimeUiTokens.primary.withValues(alpha: 0.12),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : const [],
       ),
-      boxShadow: _focused
-          ? [
-              BoxShadow(
-                color: RealtimeUiTokens.primary.withValues(alpha: 0.12),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-            ]
-          : const [],
-    ),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-    child: Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: widget.controller,
-            focusNode: _focusNode,
-            enabled: widget.enabled,
-            keyboardType: widget.keyboardType,
-            textCapitalization: widget.textCapitalization,
-            onChanged: widget.onChanged,
-            onSubmitted: widget.onSubmitted,
-            style: const TextStyle(
-              color: RealtimeUiTokens.text,
-              fontSize: 14.5,
-              fontWeight: FontWeight.w600,
-            ),
-            decoration: InputDecoration(
-              labelText: widget.label,
-              labelStyle: TextStyle(
-                color: _focused
-                    ? RealtimeUiTokens.primary
-                    : RealtimeUiTokens.textMuted,
-                fontSize: 13,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: _focusNode,
+              enabled: widget.enabled,
+              keyboardType: widget.keyboardType,
+              textCapitalization: widget.textCapitalization,
+              onChanged: widget.onChanged,
+              onSubmitted: widget.onSubmitted,
+              style: const TextStyle(
+                color: RealtimeUiTokens.text,
+                fontSize: 14.5,
                 fontWeight: FontWeight.w600,
               ),
-              hintText: widget.hintText,
-              hintStyle: const TextStyle(
-                color: Color(0xFF94A3B8),
-                fontSize: 13.5,
-                fontWeight: FontWeight.w400,
+              decoration: InputDecoration(
+                labelText: widget.label,
+                labelStyle: TextStyle(
+                  color: _focused
+                      ? RealtimeUiTokens.primary
+                      : RealtimeUiTokens.textMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                hintText: widget.hintText,
+                hintStyle: const TextStyle(
+                  color: Color(0xFF94A3B8),
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w400,
+                ),
+                prefixIcon: widget.prefixIcon != null
+                    ? Icon(
+                        widget.prefixIcon,
+                        color: _focused
+                            ? RealtimeUiTokens.primary
+                            : const Color(0xFF6366F1),
+                        size: 19,
+                      )
+                    : null,
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
               ),
-              prefixIcon: widget.prefixIcon != null
-                  ? Icon(
-                      widget.prefixIcon,
-                      color: _focused
-                          ? RealtimeUiTokens.primary
-                          : const Color(0xFF6366F1),
-                      size: 19,
-                    )
-                  : null,
-              filled: false,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
             ),
           ),
-        ),
-        if (widget.suffix != null) ...[
-          const SizedBox(width: 6),
-          widget.suffix!,
+          if (widget.suffix != null) ...[
+            const SizedBox(width: 6),
+            widget.suffix!,
+          ],
         ],
-      ],
+      ),
     ),
   );
 }
@@ -1043,7 +1055,6 @@ class RealtimeRoomCard extends StatelessWidget {
     final isBroadcast = room.roomMode == MediaRoomMode.broadcast;
     final strings = RealtimeStrings.of(context);
     final modeLabel = isBroadcast ? strings.live : strings.meeting;
-    final providerLabel = mediaProviderDisplayName(room.providerId);
 
     return RealtimeGlassSurface(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1093,11 +1104,7 @@ class RealtimeRoomCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  strings.roomSummary(
-                    modeLabel,
-                    providerLabel,
-                    room.attendeeCount,
-                  ),
+                  strings.roomCardSummary(modeLabel, room.attendeeCount),
                   style: const TextStyle(
                     fontSize: 11.5,
                     color: RealtimeUiTokens.textMuted,
@@ -1232,18 +1239,14 @@ Future<T?> showRealtimeGlassBottomSheet<T>({
   backgroundColor: Colors.transparent,
   barrierColor: const Color(0xFF0F172A).withValues(alpha: 0.32),
   elevation: 0,
-  builder: (sheetContext) => ClipRRect(
-    borderRadius: const BorderRadius.vertical(
-      top: Radius.circular(RealtimeUiTokens.sheetRadius),
-    ),
-    child: BackdropFilter(
-      filter: ImageFilter.blur(
-        sigmaX: RealtimeUiTokens.blur,
-        sigmaY: RealtimeUiTokens.blur,
+  builder: (sheetContext) => RepaintBoundary(
+    child: ClipRRect(
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(RealtimeUiTokens.sheetRadius),
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: RealtimeUiTokens.glassGradient(opacity: 0.92),
+          gradient: RealtimeUiTokens.glassGradient(opacity: 0.94),
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(RealtimeUiTokens.sheetRadius),
           ),

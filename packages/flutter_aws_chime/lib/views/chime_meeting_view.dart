@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -34,7 +33,6 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
   static const _cardRadius = 28.0;
   static const _controlRadius = 22.0;
   static const _compactRadius = 16.0;
-  static const _blur = 24.0;
 
   late final PageController _pageController;
   int _page = 0;
@@ -126,10 +124,9 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
     double opacity = 0.86,
   }) => Padding(
     padding: margin ?? EdgeInsets.zero,
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: _blur, sigmaY: _blur),
+    child: RepaintBoundary(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: opacity),
@@ -506,45 +503,46 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
               left: 10,
               right: 10,
               bottom: 10,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(_compactRadius),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.90),
+                  borderRadius: BorderRadius.circular(_compactRadius),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.90),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.84),
-                      borderRadius: BorderRadius.circular(_compactRadius),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.90),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF0F172A),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (attendee.isMuted)
-                          const Icon(
-                            Icons.mic_off_rounded,
-                            color: Color(0xFFDC2626),
-                            size: 15,
-                          ),
-                      ],
-                    ),
-                  ),
+                    if (attendee.isMuted)
+                      const Icon(
+                        Icons.mic_off_rounded,
+                        color: Color(0xFFDC2626),
+                        size: 15,
+                      ),
+                  ],
                 ),
               ),
             ),
@@ -717,15 +715,14 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
       context: context,
       backgroundColor: Colors.transparent,
       elevation: 0,
-      builder: (context) => ClipRRect(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(_sheetRadius),
-        ),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: _blur, sigmaY: _blur),
+      builder: (context) => RepaintBoundary(
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(_sheetRadius),
+          ),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.92),
+              color: Colors.white.withValues(alpha: 0.94),
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(_sheetRadius),
               ),
@@ -790,15 +787,14 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
       isScrollControlled: true,
       elevation: 0,
       builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) => ClipRRect(
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(_sheetRadius),
-          ),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: _blur, sigmaY: _blur),
+        builder: (context, setSheetState) => RepaintBoundary(
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(_sheetRadius),
+            ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.92),
+                color: Colors.white.withValues(alpha: 0.94),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(_sheetRadius),
                 ),
