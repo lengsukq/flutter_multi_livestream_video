@@ -88,6 +88,11 @@ class _NativeIvsEngine implements IvsEngine {
       'userId': info.participantId,
       'displayName': info.displayName,
       'role': info.role.wireName,
+      'stageArn': info.stageArn,
+      'tokenParticipantId': info.tokenParticipantId,
+      'capabilities': info.capabilities,
+      'expiresAtMs': info.expiresAtMs,
+      if (info.region != null) 'region': info.region,
     });
   }
 

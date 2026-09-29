@@ -1,11 +1,34 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'artc_join_info.dart';
 
 typedef ArtcEngineFactory = Future<ArtcEngine> Function();
+typedef ArtcAvailabilityProbe = Future<bool> Function();
+
+/// Returns whether the native ARTC runtime required by this platform is
+/// actually available.
+///
+/// Android/iOS ship their provider dependency normally. macOS uses an
+/// optional Alibaba framework bundled by the SDK distribution, so the native
+/// plugin reports whether that framework was discovered at runtime.
+Future<bool> probeNativeArtcAvailability() async {
+  if (kIsWeb) return false;
+  if (defaultTargetPlatform != TargetPlatform.macOS) return true;
+  try {
+    return await _NativeArtcEngine._methodChannel.invokeMethod<bool>(
+          'isAvailable',
+        ) ??
+        false;
+  } on MissingPluginException {
+    return false;
+  } on PlatformException {
+    return false;
+  }
+}
 
 /// Internal seam around the native ARTC engine. Fakes implement this for
 /// offline adapter tests; app code normally uses [createNativeArtcEngine].
@@ -158,6 +181,7 @@ class _NativeArtcEngine implements ArtcEngine {
         code: switch (error.code) {
           'permission_denied' => MediaErrorCode.permissionDenied,
           'invalid_state' => MediaErrorCode.invalidState,
+          'unsupported_platform' => MediaErrorCode.unsupportedPlatform,
           'unsupported_feature' => MediaErrorCode.unsupportedFeature,
           'invalid_join_info' => MediaErrorCode.invalidJoinInfo,
           _ => MediaErrorCode.nativeError,

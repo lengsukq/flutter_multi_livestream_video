@@ -13,6 +13,8 @@ dependencies:
     sdk: flutter
   flutter_aws_chime:
     path: ../flutter_aws_chime
+  flutter_realtime_media_aws_desktop:
+    path: ../flutter_realtime_media_aws_desktop
   flutter_realtime_media_core:
     path: ../flutter_realtime_media_core
 

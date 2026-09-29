@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../models/meeting_snapshot.dart';
 
-/// Renders one native AWS Chime video tile on iOS or Android.
+/// Renders one AWS Chime video tile on iOS, Android, or macOS.
 class MeetingVideoTileView extends StatelessWidget {
   const MeetingVideoTileView({super.key, required this.tile});
 
@@ -16,12 +16,13 @@ class MeetingVideoTileView extends StatelessWidget {
   Widget build(BuildContext context) {
     if (kIsWeb ||
         (defaultTargetPlatform != TargetPlatform.iOS &&
-            defaultTargetPlatform != TargetPlatform.android)) {
+            defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.macOS)) {
       return const ColoredBox(
         color: Colors.black,
         child: Center(
           child: Text(
-            'Chime video is available on iOS and Android.',
+            'Chime video is unavailable on this platform.',
             style: TextStyle(color: Colors.white70),
           ),
         ),
@@ -30,6 +31,14 @@ class MeetingVideoTileView extends StatelessWidget {
 
     if (defaultTargetPlatform == TargetPlatform.iOS) {
       return UiKitView(
+        viewType: 'videoTile',
+        creationParams: tile.tileId,
+        creationParamsCodec: const StandardMessageCodec(),
+      );
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      return AppKitView(
         viewType: 'videoTile',
         creationParams: tile.tileId,
         creationParamsCodec: const StandardMessageCodec(),

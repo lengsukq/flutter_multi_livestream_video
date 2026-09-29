@@ -92,10 +92,12 @@ class ChimeNativeChannel {
   void _ensureSupportedPlatform() {
     if (kIsWeb ||
         (defaultTargetPlatform != TargetPlatform.iOS &&
-            defaultTargetPlatform != TargetPlatform.android)) {
+            defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.macOS)) {
       throw const ChimeException(
         code: ChimeErrorCode.unsupportedPlatform,
-        message: 'AWS Chime meetings are supported on iOS and Android only.',
+        message:
+            'AWS Chime meetings are supported on iOS, Android, and macOS.',
       );
     }
   }

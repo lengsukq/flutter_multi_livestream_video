@@ -37,6 +37,11 @@ class ArtcTrackRenderer extends MediaTrackRenderer {
         creationParams: creationParams,
         creationParamsCodec: const StandardMessageCodec(),
       ),
+      TargetPlatform.macOS => AppKitView(
+        viewType: viewType,
+        creationParams: creationParams,
+        creationParamsCodec: const StandardMessageCodec(),
+      ),
       _ => const SizedBox.expand(),
     };
   }

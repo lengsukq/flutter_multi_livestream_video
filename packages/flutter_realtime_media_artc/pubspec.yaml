@@ -25,3 +25,5 @@ flutter:
         pluginClass: FlutterRealtimeMediaArtcPlugin
       ios:
         pluginClass: FlutterRealtimeMediaArtcPlugin
+      macos:
+        pluginClass: FlutterRealtimeMediaArtcPlugin

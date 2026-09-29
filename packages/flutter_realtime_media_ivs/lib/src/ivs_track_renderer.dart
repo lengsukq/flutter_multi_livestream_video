@@ -36,6 +36,11 @@ class IvsTrackRenderer extends MediaTrackRenderer {
         creationParams: params,
         creationParamsCodec: const StandardMessageCodec(),
       ),
+      TargetPlatform.macOS => AppKitView(
+        viewType: viewType,
+        creationParams: params,
+        creationParamsCodec: const StandardMessageCodec(),
+      ),
       _ => const SizedBox.expand(),
     };
   }

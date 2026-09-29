@@ -168,4 +168,7 @@ dependencies {
             classifier = 'stages'
         }
     }
+    // The IVS AAR POM does not declare its OkHttp runtime dependency even
+    // though the SDK references okhttp3 classes directly.
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }

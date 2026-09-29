@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'ivs_engine.dart';
@@ -42,17 +43,17 @@ abstract class _IvsMediaSession
 
   @override
   MediaCapabilities get capabilities => switch (role) {
-    MediaRole.participant => const MediaCapabilities(
+    MediaRole.participant => MediaCapabilities(
       canPublishAudio: true,
       canPublishVideo: true,
-      canSwitchCamera: true,
+      canSwitchCamera: defaultTargetPlatform != TargetPlatform.macOS,
       canSubscribeVideo: true,
       canReportNetworkStats: true,
     ),
-    MediaRole.host => const MediaCapabilities(
+    MediaRole.host => MediaCapabilities(
       canPublishAudio: true,
       canPublishVideo: true,
-      canSwitchCamera: true,
+      canSwitchCamera: defaultTargetPlatform != TargetPlatform.macOS,
       canSubscribeVideo: true,
       canReportNetworkStats: true,
       canListParticipants: true,

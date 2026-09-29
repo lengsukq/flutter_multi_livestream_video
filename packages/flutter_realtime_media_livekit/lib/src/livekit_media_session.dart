@@ -919,8 +919,8 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
       }
       await _requireLocalParticipant().setScreenShareEnabled(
         enabled,
-        screenShareCaptureOptions: !kIsWeb &&
-                defaultTargetPlatform == TargetPlatform.iOS
+        screenShareCaptureOptions:
+            !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
             ? const lk.ScreenShareCaptureOptions(
                 useiOSBroadcastExtension: false,
               )

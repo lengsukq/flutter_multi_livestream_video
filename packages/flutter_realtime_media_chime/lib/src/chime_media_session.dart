@@ -1,15 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_aws_chime/flutter_aws_chime.dart' as chime;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'chime_join_info.dart';
 import 'chime_media_track.dart';
 
-const _chimeCapabilities = MediaCapabilities(
+MediaCapabilities get _chimeCapabilities => MediaCapabilities(
   canPublishAudio: true,
   canPublishVideo: true,
-  canSwitchCamera: true,
+  canSwitchCamera: defaultTargetPlatform != TargetPlatform.macOS,
   canSendData: true,
   canReceiveData: true,
   canSubscribeVideo: true,

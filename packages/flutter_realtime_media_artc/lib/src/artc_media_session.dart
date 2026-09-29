@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'artc_engine.dart';
@@ -108,7 +109,7 @@ abstract class _ArtcMediaSession
       MediaRole.participant => const MediaCapabilities(
         canPublishAudio: true,
         canPublishVideo: true,
-        canSwitchCamera: true,
+        canSwitchCamera: false,
         canSendData: true,
         canReceiveData: true,
         canSubscribeVideo: true,
@@ -117,7 +118,7 @@ abstract class _ArtcMediaSession
       MediaRole.host => const MediaCapabilities(
         canPublishAudio: true,
         canPublishVideo: true,
-        canSwitchCamera: true,
+        canSwitchCamera: false,
         canSendData: true,
         canReceiveData: true,
         canSubscribeVideo: true,
@@ -129,6 +130,10 @@ abstract class _ArtcMediaSession
         canSendData: false,
       ),
     };
+    if (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS) {
+      _capabilities = _capabilities.copyWith(canSwitchCamera: true);
+    }
     _setState(MediaSessionState.joining);
     try {
       _engine ??= await _engineFactory();

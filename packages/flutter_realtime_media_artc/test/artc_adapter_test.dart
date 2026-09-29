@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_artc/flutter_realtime_media_artc.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,6 +33,36 @@ Map<String, Object?> response({MediaRole role = MediaRole.participant}) => {
 };
 
 void main() {
+  test(
+    'macOS Pre-Join blocks when the optional ARTC framework is absent',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final factory = ArtcSessionFactory(
+        engineFactory: () async => _FakeArtcEngine(),
+        availabilityProbe: () async => false,
+      );
+
+      final result = await factory.runPreJoinProbe(
+        const MediaPreJoinProbeRequest(
+          providerId: 'artc',
+          role: MediaRole.participant,
+          requirements: MediaPreJoinRequirements(),
+        ),
+      );
+
+      expect(
+        result.checks.any(
+          (check) =>
+              check.type == MediaPreJoinCheckType.provider &&
+              check.status == MediaPreJoinStatus.unsupported &&
+              check.severity == MediaPreJoinSeverity.blocking,
+        ),
+        isTrue,
+      );
+    },
+  );
+
   test('parses provider credentials and maps roles to room modes', () {
     final factory = ArtcSessionFactory(
       engineFactory: () async => _FakeArtcEngine(),
