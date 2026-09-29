@@ -65,6 +65,32 @@
       padding-bottom: 80px;
     }
 
+    .language-switcher {
+      position: fixed;
+      top: 14px;
+      right: 16px;
+      z-index: 1100;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-pill);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: var(--shadow-sm);
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .language-switcher select {
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--text-main);
+      font: inherit;
+      cursor: pointer;
+    }
+
     .container {
       max-width: 1200px;
       margin: 0 auto;
@@ -287,6 +313,58 @@
       color: var(--text-muted);
       font-size: 13px;
       line-height: 1.5;
+    }
+
+    .standalone-chat-overview {
+      align-items: stretch;
+    }
+
+    .standalone-chat-overview .provider-panel-info {
+      flex: 1 1 520px;
+    }
+
+    .standalone-chat-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(150px, 1fr));
+      gap: 12px;
+      min-width: 330px;
+    }
+
+    .standalone-chat-stat {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 76px;
+      padding: 14px 16px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .standalone-chat-stat-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      background: var(--primary-subtle);
+      color: var(--primary);
+    }
+
+    .standalone-chat-stat-value {
+      font-size: 24px;
+      line-height: 1;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-bottom: 5px;
+    }
+
+    .standalone-chat-stat-label {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
     }
 
     .provider-switcher {
@@ -526,7 +604,7 @@
       font-size: 10px;
       font-weight: 800;
       line-height: 1;
-      cursor: pointer;
+      cursor: help;
       transition:
         border-color 0.15s ease,
         color 0.15s ease,
@@ -549,32 +627,26 @@
       background: #fffbeb;
     }
 
-    .capability-detail-box {
-      max-width: 460px;
+    .capability-tooltip {
+      position: fixed;
+      z-index: 10000;
+      max-width: min(320px, calc(100vw - 24px));
+      padding: 9px 12px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 8px;
+      background: #0f172a;
+      color: #f8fafc;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.5;
+      text-align: left;
+      white-space: normal;
+      pointer-events: none;
     }
 
-    .capability-detail-icon {
-      background: var(--primary-subtle);
-      color: var(--primary);
-    }
-
-    .capability-detail-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .capability-detail-chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 9px;
-      border-radius: var(--radius-pill);
-      background: var(--surface-subtle);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      font-size: 11px;
-      font-weight: 650;
+    .capability-tooltip[hidden] {
+      display: none;
     }
 
     /* KPI Stats Grid */
@@ -832,6 +904,105 @@
     .table-container.card {
       overflow: hidden;
       margin-bottom: 28px;
+    }
+
+    .standalone-chat-section-header {
+      margin-top: 2px;
+      margin-bottom: 12px;
+    }
+
+    .standalone-chat-section-header .section-title {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+
+    .standalone-chat-section-header .badge-count {
+      min-width: 24px;
+      height: 24px;
+      padding: 0 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #f1f5f9;
+      border-color: #dbe3ec;
+    }
+
+    .standalone-chat-table {
+      background: #ffffff;
+    }
+
+    .standalone-chat-table-note {
+      padding: 11px 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: #fbfcfe;
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .standalone-chat-table .table-responsive {
+      background: #ffffff;
+    }
+
+    .standalone-chat-table thead th {
+      padding-top: 12px;
+      padding-bottom: 12px;
+      background: #f8fafc;
+      color: #475569;
+      font-weight: 700;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .standalone-chat-table tbody td {
+      background: #ffffff;
+    }
+
+    .standalone-chat-table tbody tr:hover td {
+      background: #fbfcfe;
+    }
+
+    .standalone-chat-table-empty-cell {
+      padding: 0 !important;
+      background: #ffffff !important;
+    }
+
+    .standalone-chat-empty {
+      min-height: 136px;
+      padding: 24px 20px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      text-align: center;
+      background: #ffffff;
+    }
+
+    .standalone-chat-empty-icon {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 2px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      background: #f8fafc;
+      color: var(--text-tertiary);
+    }
+
+    .standalone-chat-empty-title {
+      color: var(--text-main);
+      font-size: 13.5px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .standalone-chat-empty-desc {
+      color: var(--text-tertiary);
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     .table-responsive {
@@ -1166,24 +1337,6 @@
       }
     }
 
-    function showCapabilityDetail(button) {
-      const modal = document.getElementById('capability-detail-modal');
-      const provider = button.dataset.provider || 'Provider';
-      const capability = button.dataset.capability || '能力';
-      const support = button.dataset.support || 'conditional';
-      const note = button.dataset.note || '暂无额外说明。';
-      document.getElementById('capability-detail-provider').textContent = provider;
-      document.getElementById('capability-detail-name').textContent = capability;
-      document.getElementById('capability-detail-status').textContent =
-        capabilityStateLabel(support);
-      document.getElementById('capability-detail-desc').textContent = note;
-      modal.classList.add('open');
-    }
-
-    function closeCapabilityDetail() {
-      document.getElementById('capability-detail-modal').classList.remove('open');
-    }
-
     @media (max-width: 768px) {
       header.card {
         flex-direction: column;
@@ -1201,6 +1354,10 @@
       .provider-panel-main {
         flex-direction: column;
         align-items: stretch;
+      }
+      .standalone-chat-stats {
+        width: 100%;
+        min-width: 0;
       }
       .provider-switcher {
         width: 100%;
@@ -1229,10 +1386,20 @@
       .stats-grid {
         grid-template-columns: 1fr;
       }
+      .standalone-chat-stats {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
+  <div class="language-switcher">
+    <label for="language-select">语言</label>
+    <select id="language-select" aria-label="语言" onchange="setLanguage(this.value)">
+      <option value="zh">中文</option>
+      <option value="en">English</option>
+    </select>
+  </div>
   <div id="toast-container"></div>
 
   <section class="auth-overlay" id="admin-login" aria-labelledby="login-title">
@@ -1263,29 +1430,6 @@
       <div class="modal-actions">
         <button class="btn btn-secondary btn-sm" onclick="closeConfirmModal()">取消</button>
         <button class="btn btn-primary btn-sm" style="background: var(--rose-color);" id="modal-confirm-btn">确认关闭</button>
-      </div>
-    </div>
-  </div>
-
-  <div
-    class="modal-overlay"
-    id="capability-detail-modal"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="capability-detail-title"
-    onclick="if (event.target === this) closeCapabilityDetail()"
-  >
-    <div class="modal-box capability-detail-box">
-      <div class="modal-icon capability-detail-icon">?</div>
-      <h3 class="modal-title" id="capability-detail-title">能力说明</h3>
-      <div class="capability-detail-meta">
-        <span class="capability-detail-chip" id="capability-detail-provider">Provider</span>
-        <span class="capability-detail-chip" id="capability-detail-name">能力</span>
-        <span class="capability-detail-chip" id="capability-detail-status">状态</span>
-      </div>
-      <p class="modal-desc" id="capability-detail-desc">暂无额外说明。</p>
-      <div class="modal-actions">
-        <button class="btn btn-primary btn-sm" onclick="closeCapabilityDetail()">知道了</button>
       </div>
     </div>
   </div>
@@ -1331,20 +1475,27 @@
         </div>
         <div class="provider-switcher" id="provider-switcher"></div>
       </div>
-      <div class="capability-matrix-section">
-        <div class="capability-matrix-heading">
+      <details class="capability-matrix-section" id="media-capability-details">
+        <summary class="capability-matrix-summary">
           <div>
             <div class="capability-matrix-title">当前 SDK 能力矩阵</div>
             <div class="capability-matrix-subtitle">展示本项目当前 adapter 能力，而不是厂商服务的理论全集；将鼠标悬停在单元格上可查看限制。</div>
           </div>
-          <div class="capability-legend" aria-label="能力状态图例">
-            <span class="capability-legend-item"><span class="capability-state supported">支持</span></span>
-            <span class="capability-legend-item"><span class="capability-state conditional">有条件</span></span>
-            <span class="capability-legend-item"><span class="capability-state unsupported">不支持</span></span>
+          <div class="capability-matrix-summary-actions">
+            <div class="capability-legend" aria-label="能力状态图例">
+              <span class="capability-legend-item"><span class="capability-state supported">支持</span></span>
+              <span class="capability-legend-item"><span class="capability-state conditional">有条件</span></span>
+              <span class="capability-legend-item"><span class="capability-state unsupported">不支持</span></span>
+            </div>
+            <span class="capability-matrix-chevron" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
           </div>
+        </summary>
+        <div class="capability-matrix-body">
+          <div class="capability-matrix-scroll" id="provider-capability-matrix"></div>
         </div>
-        <div class="capability-matrix-scroll" id="provider-capability-matrix"></div>
-      </div>
+      </details>
     </div>
 
     <div class="card provider-panel provider-panel-with-matrix">
@@ -1356,29 +1507,102 @@
         </div>
         <div class="provider-switcher" id="chat-provider-switcher"></div>
       </div>
-      <div class="capability-matrix-section">
-        <div class="capability-matrix-heading">
+      <details class="capability-matrix-section" id="chat-capability-details">
+        <summary class="capability-matrix-summary">
           <div>
             <div class="capability-matrix-title">Chat 能力矩阵</div>
             <div class="capability-matrix-subtitle">展示当前 Chat adapter 真正暴露给 ChatSession 的能力；“有条件”旁的 ? 可查看具体限制。</div>
           </div>
-          <div class="capability-legend" aria-label="Chat 能力状态图例">
-            <span class="capability-legend-item"><span class="capability-state supported">支持</span></span>
-            <span class="capability-legend-item"><span class="capability-state conditional">有条件</span></span>
-            <span class="capability-legend-item"><span class="capability-state unsupported">不支持</span></span>
+          <div class="capability-matrix-summary-actions">
+            <div class="capability-legend" aria-label="Chat 能力状态图例">
+              <span class="capability-legend-item"><span class="capability-state supported">支持</span></span>
+              <span class="capability-legend-item"><span class="capability-state conditional">有条件</span></span>
+              <span class="capability-legend-item"><span class="capability-state unsupported">不支持</span></span>
+            </div>
+            <span class="capability-matrix-chevron" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </span>
+          </div>
+        </summary>
+        <div class="capability-matrix-body">
+          <div class="capability-matrix-scroll" id="chat-provider-capability-matrix"></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card provider-panel standalone-chat-overview">
+      <div class="provider-panel-info">
+        <div class="panel-badge">Standalone Chat</div>
+        <h2>独立聊天室</h2>
+        <p>Chat 可独立于 Meeting / Live 使用，也可继续作为音视频房间的 Attached Chat。新建独立聊天室使用上方当前 Chat Provider。</p>
+      </div>
+      <div class="standalone-chat-stats">
+        <div class="standalone-chat-stat">
+          <div class="standalone-chat-stat-icon" aria-hidden="true">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M21 15a4 4 0 01-4 4H7l-4 3V7a4 4 0 014-4h10a4 4 0 014 4z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="standalone-chat-stat-value" id="c-standalone-chat-rooms">–</div>
+            <div class="standalone-chat-stat-label">独立聊天室</div>
           </div>
         </div>
-        <div class="capability-matrix-scroll" id="chat-provider-capability-matrix"></div>
+        <div class="standalone-chat-stat">
+          <div class="standalone-chat-stat-icon" aria-hidden="true">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+          </div>
+          <div>
+            <div class="standalone-chat-stat-value" id="c-standalone-chat-attendees">–</div>
+            <div class="standalone-chat-stat-label">独立 Chat 参与者</div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="card" style="margin-top:16px">
-      <div class="panel-badge">Standalone Chat</div>
-      <h2>独立聊天室</h2>
-      <p>Chat 可独立于 Meeting / Live 使用，也可继续作为音视频房间的 Attached Chat。新建独立聊天室使用上方当前 Chat Provider。</p>
-      <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px">
-        <div><b id="c-standalone-chat-rooms">–</b><div class="stat-subtitle">独立聊天室</div></div>
-        <div><b id="c-standalone-chat-attendees">–</b><div class="stat-subtitle">独立 Chat 参与者</div></div>
+    <div class="section-header standalone-chat-section-header">
+      <div class="section-title">
+        <span>独立聊天室会话</span>
+        <span class="badge-count" id="standalone-chat-room-badge-count">0</span>
+      </div>
+    </div>
+
+    <div class="card table-container standalone-chat-table">
+      <div class="standalone-chat-table-note">
+        当前表格直接读取所选 Chat Provider 的云端聊天室；Tencent Chat 仅展示本 Demo 创建的 Realtime room / 历史 rm_ 群。
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>房间号 / 云端群 ID</th>
+              <th>Chat Provider</th>
+              <th>云端成员数</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th>管理操作</th>
+            </tr>
+          </thead>
+          <tbody id="standalone-chat-rooms">
+            <tr>
+              <td colspan="6" class="standalone-chat-table-empty-cell">
+                <div class="standalone-chat-empty">
+                  <div class="standalone-chat-empty-icon" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15a4 4 0 01-4 4H7l-4 3V7a4 4 0 014-4h10a4 4 0 014 4z"/>
+                    </svg>
+                  </div>
+                  <div class="standalone-chat-empty-title">当前暂无云端聊天室</div>
+                  <div class="standalone-chat-empty-desc">可在 Flutter Demo 的“独立聊天”入口创建。</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -1497,7 +1721,7 @@
         <button class="filter-tab" onclick="setEventFilter('create', this)">创建</button>
         <button class="filter-tab" onclick="setEventFilter('join', this)">加入</button>
         <button class="filter-tab" onclick="setEventFilter('leave', this)">离开</button>
-        <button class="filter-tab" onclick="setEventFilter('delete', this)">关闭</button>
+        <button class="filter-tab" onclick="setEventFilter('delete', this)">已关闭</button>
       </div>
     </div>
 
@@ -1509,8 +1733,219 @@
   </div>
 
   <script>
+    const translationPairs = [
+      ['语言', 'Language'], ['中文', 'Chinese'],
+      ['Media Live Console · 智能直播控制台', 'Media Live Console · Smart Live Console'],
+      ['管理台登录', 'Dashboard Login'],
+      ['输入服务端配置的管理密码。登录成功后会签发仅供本机管理台使用的安全 Cookie。', 'Enter the admin password configured on the server. A secure cookie for this dashboard will be issued after sign-in.'],
+      ['管理密码', 'Admin password'], ['登录', 'Sign in'], ['登录中…', 'Signing in…'],
+      ['确认强制关闭房间？', 'Force close this room?'],
+      ['此操作会立即断开所有在线成员连接，销毁云端推拉流通道并停止计费。', 'This immediately disconnects everyone, removes the cloud media session, and stops further billing.'],
+      ['取消', 'Cancel'], ['确认关闭', 'Confirm close'], ['能力说明', 'Capability details'],
+      ['能力', 'Capability'], ['状态', 'Status'], ['暂无额外说明。', 'No additional details.'], ['知道了', 'Done'],
+      ['检查中', 'Checking…'], ['正在拉取节点拓扑...', 'Loading service topology…'],
+      ['Region: us-east-1 / ap-southeast-1', 'Regions: us-east-1 / ap-southeast-1'],
+      ['刷新', 'Refresh'], ['退出', 'Sign out'], ['正在读取连接服务状态…', 'Checking connection service status…'],
+      ['新房间媒体引擎调度', 'Media provider for new rooms'],
+      ['控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。', 'Choose the media provider for new rooms. Existing rooms stay with the provider selected when they were created.'],
+      ['当前 SDK 能力矩阵', 'SDK capability matrix'],
+      ['展示本项目当前 adapter 能力，而不是厂商服务的理论全集；将鼠标悬停在单元格上可查看限制。', 'Shows the capabilities exposed by this project’s adapters, not every capability offered by each vendor. Hover over a cell for limitations.'],
+      ['能力状态图例', 'Capability status legend'], ['支持', 'Supported'], ['有条件', 'Conditional'], ['不支持', 'Not supported'],
+      ['新房间聊天服务调度', 'Chat provider for new rooms'],
+      ['聊天与音视频独立选择。关闭 Chat 时仍可使用媒体 Provider 自带的 RTC Data 作为调试能力，但不会作为产品聊天。', 'Chat and media providers are selected independently. Disabling Chat leaves provider RTC Data available for debugging, but does not provide product chat.'],
+      ['Chat 能力矩阵', 'Chat capability matrix'],
+      ['展示当前 Chat adapter 真正暴露给 ChatSession 的能力；“有条件”旁的 ? 可查看具体限制。', 'Shows the capabilities exposed to ChatSession by the current Chat adapter. Select ? beside Conditional for details.'],
+      ['Chat 能力状态图例', 'Chat capability status legend'],
+      ['独立聊天室', 'Standalone chat rooms'],
+      ['Chat 可独立于 Meeting / Live 使用，也可继续作为音视频房间的 Attached Chat。新建独立聊天室使用上方当前 Chat Provider。', 'Chat can run independently or be attached to a Meeting or Live room. New standalone chat rooms use the selected Chat provider above.'],
+      ['独立 Chat 参与者', 'Standalone chat participants'], ['独立聊天室会话', 'Standalone chat sessions'],
+      ['房间号 / 云端群 ID', 'Room code / Cloud group ID'], ['聊天服务提供方', 'Chat Provider'], ['云端成员数', 'Cloud members'], ['创建时间', 'Created'], ['管理操作', 'Actions'],
+      ['本地已关联', 'Tracked locally'], ['云端遗留', 'Cloud orphan'], ['复制云端群 ID', 'Copy cloud group ID'],
+      ['当前暂无云端聊天室', 'No cloud chat rooms found'],
+      ['可在 Flutter Demo 的“独立聊天”入口创建。', 'Create one from the “Standalone Chat” entry in the Flutter demo.'],
+      ['当前表格直接读取所选 Chat Provider 的云端聊天室；Tencent Chat 仅展示本 Demo 创建的 Realtime room / 历史 rm_ 群。', 'This table reads cloud rooms directly from the selected Chat provider. For Tencent Chat, only Realtime room groups and legacy rm_ groups created by this demo are shown.'],
+      ['云端聊天室 {code} 已删除', 'Cloud chat room {code} was deleted'],
+      ['删除云端聊天室失败: {message}', 'Could not delete cloud chat room: {message}'],
+      ['当前暂无独立聊天室', 'No standalone chat rooms yet'], ['活跃房间总数', 'Active rooms'],
+      ['当前维持心跳连接中的会议室', 'Rooms with an active heartbeat'], ['当前参会人次', 'Connected participants'],
+      ['已签发且在线的流媒体参与者', 'Issued credentials with an active media connection'], ['默认接入通道', 'Default media provider'],
+      ['随控制台无缝切流', 'Switch providers from this dashboard'], ['服务持续运行', 'Service uptime'], ['服务已平稳启动', 'Service started successfully'],
+      ['房间号（4-12位数字/字母，留空系统随机分配）', 'Room code (4–12 letters or digits; leave blank to generate one)'],
+      ['随机生成一个房间号', 'Generate a random room code'],
+      ['🎲 随机', '🎲 Generate'], ['创建房间', 'Create room'], ['5 秒自动同步监控状态', 'Monitoring refreshes every 5 seconds'],
+      ['实时房间会话', 'Live room sessions'], ['搜索房间号 / 成员...', 'Search room code or member…'],
+      ['房间号 / 标识', 'Room code / ID'], ['通道 Provider', 'Media provider'], ['在线人数', 'Online'], ['参会成员', 'Participants'], ['心跳 / 状态', 'Heartbeat / status'],
+      ['当前暂无活跃房间，可通过上方快速创建', 'No active rooms. Create one above.'], ['系统事件审计流', 'System event log'],
+      ['全部', 'All'], ['创建', 'Created'], ['加入', 'Joined'], ['离开', 'Left'], ['已关闭', 'Closed'], ['关闭', 'Close'],
+      ['日志数据初始化中...', 'Loading event log…'], ['暂无对应事件流记录', 'No matching events'],
+      ['没有找到符合条件的房间', 'No rooms match your search'], ['活跃在线', 'Online'], ['无在线成员', 'No online members'], ['暂无成员', 'No members yet'],
+      ['复制房号', 'Copy room code'], ['分享链接', 'Share link'],
+      ['当前暂无独立聊天室。可在 Flutter Demo 的“独立聊天”入口创建。', 'No standalone chat rooms. Create one from the “Standalone Chat” entry in the Flutter demo.'],
+      ['登录已过期，请重新登录。', 'Your session expired. Please sign in again.'], ['已退出登录', 'You have signed out'],
+      ['管理登录尚未配置，请在服务端设置 MEDIA_ADMIN_PASSWORD。', 'Admin login is not configured. Set MEDIA_ADMIN_PASSWORD on the server.'],
+      ['请输入管理密码登录。', 'Enter the admin password to sign in.'],
+      ['关闭 Chat', 'Disable Chat'], ['不为新房间创建产品聊天服务', 'Do not create a product chat service for new rooms'],
+      ['当前使用', 'In use'], ['可选择', 'Available'], ['未配置', 'Not configured'],
+      ['暂无 Media Provider 能力元数据', 'No Media provider capability metadata'], ['暂无 Chat Provider 能力元数据', 'No Chat provider capability metadata'],
+      ['新房间媒体通道已切换为 <b>{label}</b>', 'Media provider for new rooms changed to <b>{label}</b>'],
+      ['Provider 切换失败: {message}', 'Could not switch provider: {message}'],
+      ['新房间聊天服务已切换为 <b>{label}</b>', 'Chat provider for new rooms changed to <b>{label}</b>'],
+      ['新房间产品聊天已关闭', 'Product chat for new rooms is disabled'],
+      ['Chat Provider 切换失败: {message}', 'Could not switch Chat provider: {message}'],
+      ['线上 Provider 由 MEDIA_DEFAULT_PROVIDER 环境变量配置', 'The production provider is configured by MEDIA_DEFAULT_PROVIDER'],
+      ['新房间使用 {provider}', 'New rooms will use {provider}'], ['新房间不创建产品聊天服务', 'New rooms will not get a product chat service'],
+      [' 的配置要求', ' configuration requirements'], [' 的能力说明', ' capability details'],
+      ['连接服务开启', 'Connections enabled'], ['连接服务已暂停', 'Connections paused'], ['连接服务已开启。', 'Connections are enabled.'], ['连接服务已暂停。', 'Connections are paused.'],
+      ['线上默认通道由 Vercel 的 MEDIA_DEFAULT_PROVIDER 环境变量决定；修改后需重新部署。', 'The default production provider comes from MEDIA_DEFAULT_PROVIDER in Vercel. Redeploy after changing it.'],
+      ['聊天与音视频独立选择。切换只影响后续新建房间；关闭 Chat 时不会创建产品聊天服务。Vercel Function 的选择只保存在当前实例，实例重启后会回到 CHAT_DEFAULT_PROVIDER（未设置则关闭），不同实例间也不会同步。', 'Chat and media providers are selected independently. Changes affect new rooms only. Disabling Chat prevents product chat from being created. On Vercel, the selection is local to this function instance and resets to CHAT_DEFAULT_PROVIDER (or disabled) after restart; instances do not share the selection.'],
+      ['启动于 {time}', 'Started at {time}'], ['刷新数据失败: {message}', 'Could not refresh data: {message}'],
+      ['✨ 房间 <b>{code}</b> 已成功创建', '✨ Room <b>{code}</b> created'], ['创建房间失败: {message}', 'Could not create room: {message}'],
+      ['强制关闭房间 {code}？', 'Force close room {code}?'],
+      ['确认关闭房间 {code}？此操作将立即断开所有在线成员的音视频连接并清理云端会话。', 'Close room {code}? This immediately disconnects all participants and removes the cloud session.'],
+      ['关闭独立聊天室 {code}？', 'Close standalone chat room {code}?'],
+      ['确认关闭独立聊天室 {code}？此操作会清理对应 Chat Provider 的云端聊天室，并让现有客户端失去该聊天室连接。', 'Close standalone chat room {code}? This removes the cloud chat room and disconnects its current clients.'],
+      ['房间 {code} 已强制关闭', 'Room {code} was force closed'], ['关闭房间失败: {message}', 'Could not close room: {message}'],
+      ['独立聊天室 {code} 已关闭', 'Standalone chat room {code} was closed'], ['关闭独立聊天室失败: {message}', 'Could not close standalone chat room: {message}'],
+      ['已复制房间号 <b>{code}</b> 到剪贴板', 'Copied room code <b>{code}</b> to clipboard'], ['房间号: {code}', 'Room code: {code}'],
+      ['已复制入会深度链接到剪贴板', 'Copied join link to clipboard'], ['链接: {link}', 'Link: {link}'],
+      ['加入时间: {time}{role}', 'Joined: {time}{role}'], [' · 设备: {device}', ' · Device: {device}'],
+      ['{seconds}s 前心跳', 'Heartbeat {seconds}s ago'], ['能力', 'Capability'], ['配置要求', 'Configuration'],
+      ['会议模式', 'Meeting mode'], ['直播主持', 'Live host'], ['直播观看', 'Live viewer'], ['麦克风发布', 'Publish microphone'],
+      ['摄像头发布', 'Publish camera'], ['屏幕共享', 'Screen sharing'], ['RTC Data 发送', 'Send RTC Data'], ['RTC Data 接收', 'Receive RTC Data'],
+      ['Web 音视频', 'Web audio/video'], ['凭证自动刷新', 'Automatic credential refresh'], ['主持人移除成员', 'Host removes participants'], ['主持人关闭房间', 'Host closes room'],
+      ['发送消息', 'Send message'], ['删除消息', 'Delete message'], ['成员列表', 'Member list'], ['关闭聊天室', 'Close room'],
+      ['禁言成员', 'Mute member'], ['封禁成员', 'Ban member'], ['管理角色', 'Manage roles'], ['移除用户', 'Remove user'], ['服务端历史记录', 'Server history'],
+      ['meeting participant / live host 可发布，viewer 仅订阅。', 'Meeting participants and live hosts can publish; viewers can only subscribe.'],
+      ['participant / host 可发布，viewer 仅订阅。', 'Participants and hosts can publish; viewers can only subscribe.'],
+      ['participant / host 可发送，viewer 仅接收。', 'Participants and hosts can send; viewers can only receive.'],
+      ['当前 Web Bridge 支持；原生 Flutter adapter 暂未暴露。', 'Available in the Web bridge; the native Flutter adapter does not expose it yet.'],
+      ['Web Bridge 支持内容共享；当前原生 Flutter Chime adapter 未暴露该能力。', 'The Web bridge supports content sharing; the native Flutter Chime adapter does not expose it yet.'],
+      ['Web Bridge 支持，但角色仍仅限 participant。', 'Available in the Web bridge, but roles are limited to participants.'], ['当前没有 host 角色控制面。', 'There is no host role control plane yet.'],
+      ['通过阿里云 Web SDK Bridge 接入。', 'Uses the Alibaba Cloud Web SDK bridge.'], ['通过官方 Agora Web SDK Bridge 接入。', 'Uses the official Agora Web SDK bridge.'],
+      ['通过官方 TRTC Web SDK Bridge 接入。', 'Uses the official TRTC Web SDK bridge.'], ['通过 Amazon IVS Web Broadcast SDK Bridge 接入。', 'Uses the Amazon IVS Web Broadcast SDK bridge.'],
+      ['媒体服务调度', 'Media Provider Routing'], ['聊天服务调度', 'Chat Provider Routing'], ['独立聊天', 'Standalone Chat'], ['服务提供方', 'Provider'],
+      ['host 可关闭当前逻辑房间。', 'The host can close the logical room.'], ['host 可移除远端成员。', 'The host can remove remote participants.'],
+      ['host 可关闭房间。', 'The host can close the room.'], ['host 可通过 IVS DisconnectParticipant 移除成员。', 'The host can remove participants with IVS DisconnectParticipant.'],
+      ['host 具备 SDK 房间关闭能力；服务端房间为逻辑房间。', 'The host can close the SDK room; the server room is logical.'],
+      ['participant / host 支持；移动 Web 浏览器受 LiveKit SDK 限制。', 'Supported for participants and hosts; mobile browsers are limited by the LiveKit SDK.'],
+      ['当前后端仅开放 participant 会议房间。', 'The current backend only exposes participant meeting rooms.'],
+      ['AWS Meeting 通过 Amazon Chime SDK 提供会议能力。', 'AWS Meeting routes to Amazon Chime SDK.'],
+      ['AWS Live 将主持人和嘉宾接入 Amazon IVS Real-Time Publisher。', 'AWS Live routes hosts/guests to Amazon IVS Real-Time publishers.'],
+      ['AWS Live 观众通过 Amazon IVS Real-Time 订阅媒体，不发布本地媒体。', 'AWS Live viewers subscribe through Amazon IVS Real-Time without publishing local media.'],
+      ['AWS Meeting routes to Amazon Chime SDK; Live uses Amazon IVS Real-Time.', 'AWS Meeting uses Amazon Chime SDK; Live uses Amazon IVS Real-Time.'],
+      ['Amazon Chime 媒体面', 'Amazon Chime media plane'], ['阿里云实时音视频与互动直播', 'Alibaba Cloud real-time audio/video and interactive live streaming'],
+      ['腾讯云 TRTC 实时音视频', 'Tencent Cloud TRTC real-time audio/video'], ['Agora RTC 全球实时网络', 'Agora RTC global real-time network'],
+      ['WebRTC 原生流集群', 'Native WebRTC streaming cluster'], ['阿里云 ARTC', 'Alibaba Cloud ARTC'], ['AWS Chime SDK', 'AWS Chime SDK'], ['Agora RTC', 'Agora RTC'],
+      ['关闭 Chat', 'Disable Chat'], ['AWS managed realtime chat', 'AWS managed real-time chat'],
+      ['Tencent Cloud managed persistent group chat', 'Tencent Cloud managed persistent group chat'], ['Agora managed persistent chat rooms', 'Agora managed persistent chat rooms'],
+      ['可由包含 IVS DELETE_MESSAGE 能力的主持人凭证使用。', 'Available to host credentials with the IVS DELETE_MESSAGE capability.'],
+      ['独立 Demo 房间会向主持人显示经过身份验证的逻辑成员列表。', 'Standalone demo rooms expose the authenticated logical member list to the host.'],
+      ['独立房间主持人通过控制面关闭服务提供方房间。', 'The standalone room host closes the provider room through the control plane.'],
+      ['当前 adapter 的 IVS Chat Token 能力不支持服务端强制单人禁言。', 'IVS Chat token capabilities do not provide provider-enforced per-member mute in this adapter.'],
+      ['尚未实现重新加入拦截；断开连接与封禁是不同操作。', 'Rejoin blocking is not implemented; disconnect and ban are intentionally distinct.'],
+      ['更改角色需要重新签发凭证，当前不会模拟此操作。', 'Role changes require issuing new credentials and are not emulated.'],
+      ['当前通用 adapter 未开放 Tencent 的内容管理操作。', 'The current provider-neutral adapter does not expose Tencent moderation operations.'],
+      ['当前通用 Tencent adapter 未开放此功能。', 'Not exposed by the current provider-neutral Tencent adapter.'],
+      ['当前通用 adapter 未开放 Agora 的内容管理操作。', 'The current provider-neutral adapter does not expose Agora moderation operations.'],
+      ['当前通用 Agora adapter 未开放此功能。', 'Not exposed by the current provider-neutral Agora adapter.'],
+      ['当前 IVS Chat adapter 只保留本次会话中的消息状态。', 'The current IVS Chat adapter keeps only session-local message state.'],
+      ['Tencent Chat 会保存群消息，但 Core v1 尚未在 ChatSession 中提供历史消息分页。', 'Tencent Chat persists group messages, but ChatSession history pagination is not part of Core v1.'],
+      ['Agora Chat 支持服务端历史记录，但 Core v1 尚未在 ChatSession 中提供历史消息分页。', 'Agora Chat supports server history, but ChatSession history pagination is not part of Core v1.'],
+      ['新房间角色由 roomMode 自动分配', 'Room roles are assigned automatically from roomMode'],
+      ['查看 {provider} 的配置要求', 'View {provider} configuration requirements'],
+      ['查看 {provider} {capability} 的能力说明', 'View {provider} {capability} capability details'],
+      ['{provider} 尚未完成服务端配置', '{provider} is not configured on the server'],
+      ['Chat Off', 'Chat disabled'], ['Unknown', 'Unknown'],
+      ['尚未配置 LiveKit。请设置 LIVEKIT_URL、LIVEKIT_API_KEY 和 LIVEKIT_API_SECRET。', 'LiveKit is not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET.'],
+      ['尚未配置 ARTC。请设置 ARTC_APP_ID 和 ARTC_APP_KEY。', 'ARTC is not configured. Set ARTC_APP_ID and ARTC_APP_KEY.'],
+      ['尚未配置 Agora。请设置 AGORA_APP_ID 和 AGORA_APP_CERTIFICATE。', 'Agora is not configured. Set AGORA_APP_ID and AGORA_APP_CERTIFICATE.'],
+      ['尚未配置 TRTC。请设置 TRTC_SDK_APP_ID 和 TRTC_SDK_SECRET_KEY。', 'TRTC is not configured. Set TRTC_SDK_APP_ID and TRTC_SDK_SECRET_KEY.'],
+      ['ARTC_TOKEN_TTL_SECONDS 必须在 60–86400 秒之间。', 'ARTC_TOKEN_TTL_SECONDS must be between 60 and 86400.'],
+      ['尚未配置 Amazon IVS Real-Time。请设置 IVS_REALTIME_REGION（或 AWS_REGION），并通过服务器 IAM 凭证链提供 AWS 凭证。', 'Amazon IVS Real-Time is not configured. Set IVS_REALTIME_REGION (or AWS_REGION) and provide AWS credentials through the server IAM credential chain.'],
+      ['尚未配置 Amazon IVS Chat。请设置 AWS 区域和服务器 IAM 凭证。', 'Amazon IVS Chat is not configured. Set an AWS region and provide credentials through the server IAM credential chain.'],
+      ['尚未配置 Tencent Chat。请设置 TENCENT_CHAT_SDK_APP_ID 和 TENCENT_CHAT_SECRET_KEY。', 'Tencent Chat is not configured. Set TENCENT_CHAT_SDK_APP_ID and TENCENT_CHAT_SECRET_KEY.'],
+      ['尚未配置 Agora Chat。请设置聊天服务密钥、REST 地址和 App ID/Certificate。', 'Agora Chat is not configured. Set its app key, REST host, App ID, and certificate.'],
+      ['AWS Meeting 使用 Amazon Chime SDK；Live 使用 Amazon IVS Real-Time。', 'Meeting uses Amazon Chime SDK; Live uses Amazon IVS Real-Time.'],
+      ['AWS WebRTC 实时 Stage', 'AWS WebRTC real-time stage'],
+      ['AWS 托管实时聊天', 'AWS managed realtime chat'], ['腾讯云托管持久群聊', 'Tencent Cloud managed persistent group chat'],
+      ['Agora 托管持久聊天室', 'Agora managed persistent chat rooms'],
+      ['关闭 Chat', 'Disable Chat'],
+      ['Chat 已关闭', 'Chat disabled'],
+      ['LiveKit 尚未配置。请设置 LIVEKIT_URL、LIVEKIT_API_KEY 和 LIVEKIT_API_SECRET。', 'LiveKit is not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET.'],
+      ['尚未配置 Amazon IVS Real-Time。请设置 IVS_REALTIME_REGION（或 AWS_REGION）并通过服务器 IAM 凭证链提供 AWS 凭证。', 'Amazon IVS Real-Time is not configured. Set IVS_REALTIME_REGION (or AWS_REGION) and provide AWS credentials through the server IAM credential chain.'],
+      ['尚未配置 Amazon IVS Chat。请设置 IVS_CHAT_REGION 或 AWS 区域，并通过服务器 IAM 凭证链提供 AWS 凭证。', 'Amazon IVS Chat is not configured. Set IVS_CHAT_REGION (or an AWS region) and provide AWS credentials through the server IAM credential chain.'],
+      ['尚未配置 Tencent Chat。请设置 TENCENT_CHAT_SDK_APP_ID 和 TENCENT_CHAT_SECRET_KEY；TENCENT_CHAT_ADMIN_USER 默认为 administrator。', 'Tencent Chat is not configured. Set TENCENT_CHAT_SDK_APP_ID and TENCENT_CHAT_SECRET_KEY; TENCENT_CHAT_ADMIN_USER defaults to administrator.'],
+      ['尚未配置 Agora Chat。请设置 AGORA_CHAT_APP_KEY、AGORA_CHAT_REST_HOST 和 AGORA_CHAT_APP_ID/AGORA_CHAT_APP_CERTIFICATE（或复用 AGORA_APP_ID/AGORA_APP_CERTIFICATE）。', 'Agora Chat is not configured. Set AGORA_CHAT_APP_KEY, AGORA_CHAT_REST_HOST, and AGORA_CHAT_APP_ID/AGORA_CHAT_APP_CERTIFICATE (or reuse AGORA_APP_ID/AGORA_APP_CERTIFICATE).'],
+      ['已签发凭证的 IVS DISCONNECT_USER 权限可使用此功能。', 'Available to host credentials with the IVS DISCONNECT_USER capability.'],
+      ['Amazon IVS Chat 只在当前会话中保留消息状态。', 'The current IVS Chat adapter keeps only session-local message state.'],
+      ['Amazon IVS Chat 是 AWS 托管实时聊天服务', 'AWS managed realtime chat'],
+      ['Tencent Cloud 托管持久群聊服务', 'Tencent Cloud managed persistent group chat'],
+      ['Agora 托管持久聊天室服务', 'Agora managed persistent chat rooms'],
+      ['AWS Meeting 使用 Amazon Chime SDK，Live 使用 Amazon IVS Real-Time。', 'Meeting uses Amazon Chime SDK; Live uses Amazon IVS Real-Time.'],
+      ['⏱ {hours} 小时 {minutes} 分钟', '{hours}h {minutes}m'],
+      ['{minutes} 分钟', '{minutes} min'],
+      ['🟢 活跃在线', '🟢 Online'],
+      ['<strong>连接服务已开启。</strong> 如需暂停公网入会，请在 Vercel 项目环境变量中将 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>false</code> 并重新部署。', '<strong>Connections are enabled.</strong> To pause public room access, set <code>MEDIA_CONNECTIONS_ENABLED</code> to <code>false</code> in Vercel and redeploy.'],
+      ['<strong>连接服务已暂停。</strong> 房间创建、加入、续期和心跳请求都会返回 503。恢复时将 Vercel 环境变量 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>true</code> 并重新部署。', '<strong>Connections are paused.</strong> Room creation, joining, credential refresh, and heartbeat requests return 503. To resume, set <code>MEDIA_CONNECTIONS_ENABLED</code> to <code>true</code> in Vercel and redeploy.'],
+      ['尚未配置 Amazon IVS Chat。请通过 IVS_CHAT_REGION、AWS_REGION、AWS_DEFAULT_REGION 或当前 AWS profile 设置区域，并通过服务器 IAM 凭证链提供 AWS 凭证。', 'Amazon IVS Chat is not configured. Set an AWS region through IVS_CHAT_REGION, AWS_REGION, AWS_DEFAULT_REGION, or the active AWS profile, and provide AWS credentials through the server IAM credential chain.'],
+    ];
+    const zhToEn = new Map(translationPairs);
+    const enToZh = new Map(translationPairs.map(([zh, en]) => [en, zh]));
+    let currentLanguage = (() => {
+      try {
+        const saved = localStorage.getItem('demo-dashboard-language');
+        if (saved === 'zh' || saved === 'en') return saved;
+      } catch (_) { }
+      return navigator.language?.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+    })();
+
+    function t(value, values = {}) {
+      const source = String(value ?? '');
+      let result = currentLanguage === 'en'
+        ? (zhToEn.get(source) || source)
+        : (enToZh.get(source) || source);
+      for (const [key, replacement] of Object.entries(values)) {
+        result = result.replaceAll(`{${key}}`, String(replacement));
+      }
+      return result;
+    }
+
+    function applyLanguage(root = document.body) {
+      document.documentElement.lang = currentLanguage === 'zh' ? 'zh-CN' : 'en';
+      document.title = t('Media Live Console · 智能直播控制台');
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        if (node.parentElement?.closest('script, style')) continue;
+        const raw = node.nodeValue || '';
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        const translated = t(trimmed);
+        if (translated !== trimmed) node.nodeValue = raw.replace(trimmed, translated);
+      }
+      for (const attribute of ['placeholder', 'title', 'aria-label']) {
+        root.querySelectorAll(`[${attribute}]`).forEach((element) => {
+          const value = element.getAttribute(attribute);
+          if (value) element.setAttribute(attribute, t(value));
+        });
+      }
+      const selector = document.getElementById('language-select');
+      if (selector) selector.value = currentLanguage;
+    }
+
+    function setLanguage(language) {
+      currentLanguage = language === 'zh' ? 'zh' : 'en';
+      try { localStorage.setItem('demo-dashboard-language', currentLanguage); } catch (_) { }
+      applyLanguage();
+      renderRoomsTable();
+      renderStandaloneChatRoomsTable();
+      renderEvents();
+      if (!document.getElementById('dashboard-root').classList.contains('auth-hidden')) refresh();
+    }
+
     let timer = null;
     let cachedRooms = [];
+    let cachedStandaloneChatRooms = [];
     let cachedProviders = new Map();
     let cachedChatProviders = new Map();
     let cachedEvents = [];
@@ -1530,11 +1965,13 @@
       }, 3500);
     }
 
-    async function api(path, opts) {
-      const r = await fetch(path, opts);
+    async function api(path, opts = {}) {
+      const headers = new Headers(opts.headers || {});
+      headers.set('Accept-Language', currentLanguage === 'zh' ? 'zh-CN' : 'en');
+      const r = await fetch(path, { ...opts, headers });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {
-        const error = new Error(d.error?.message || d.message || ('HTTP ' + r.status));
+        const error = new Error(d.error?.message || d.message || t('HTTP {status}', { status: r.status }));
         error.status = r.status;
         throw error;
       }
@@ -1581,7 +2018,7 @@
 
     async function logout() {
       try { await api('/api/admin/logout', { method: 'POST' }); } catch (_) { }
-      showLogin('已退出登录');
+      showLogin(t('已退出登录'));
     }
 
     async function initialize() {
@@ -1592,8 +2029,8 @@
         timer = setInterval(refresh, 5000);
       } catch (error) {
         showLogin(error.status === 503
-          ? '管理登录尚未配置，请在服务端设置 MEDIA_ADMIN_PASSWORD。'
-          : '请输入管理密码登录。');
+          ? t('管理登录尚未配置，请在服务端设置 MEDIA_ADMIN_PASSWORD。')
+          : t('请输入管理密码登录。'));
       }
     }
 
@@ -1607,7 +2044,8 @@
       if (!isoStr) return '—';
       try {
         const d = new Date(isoStr);
-        return d.toLocaleTimeString('zh-CN', { hour12: false }) + ' (' + d.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) + ')';
+        const locale = currentLanguage === 'zh' ? 'zh-CN' : 'en-US';
+        return d.toLocaleTimeString(locale, { hour12: false }) + ' (' + d.toLocaleDateString(locale, { month: '2-digit', day: '2-digit' }) + ')';
       } catch {
         return esc(isoStr);
       }
@@ -1627,9 +2065,9 @@
         });
         await refresh();
         const label = providerLabel(d.activeProvider);
-        toast(`新房间媒体通道已切换为 <b>${label}</b>`, 'success');
+        toast(t('新房间媒体通道已切换为 <b>{label}</b>', { label }), 'success');
       } catch (e) {
-        toast('Provider 切换失败: ' + e.message, 'error');
+        toast(t('Provider 切换失败: {message}', { message: e.message }), 'error');
       }
     }
 
@@ -1644,12 +2082,12 @@
         const label = chatProviderLabel(d.activeChatProvider);
         toast(
           d.activeChatProvider
-            ? `新房间聊天服务已切换为 <b>${label}</b>`
-            : '新房间产品聊天已关闭',
+            ? t('新房间聊天服务已切换为 <b>{label}</b>', { label })
+            : t('新房间产品聊天已关闭'),
           'success'
         );
       } catch (e) {
-        toast('Chat Provider 切换失败: ' + e.message, 'error');
+        toast(t('Chat Provider 切换失败: {message}', { message: e.message }), 'error');
       }
     }
 
@@ -1665,7 +2103,7 @@
 
     function providerLabel(provider) {
       const info = providerInfo(provider);
-      return info.label || info.displayName || provider;
+      return t(info.label || info.displayName || provider);
     }
 
     function chatProviderInfo(provider) {
@@ -1689,7 +2127,7 @@
 
     function chatProviderLabel(provider) {
       const info = chatProviderInfo(provider);
-      return info.label || info.displayName || provider || '关闭 Chat';
+      return t(info.label || info.displayName || provider || '关闭 Chat');
     }
 
     function providerHue(provider) {
@@ -1703,13 +2141,106 @@
     function capabilityStateLabel(support) {
       switch (support) {
         case 'supported':
-          return '支持';
+          return t('支持');
         case 'conditional':
-          return '有条件';
+          return t('有条件');
         default:
-          return '不支持';
+          return t('不支持');
       }
     }
+
+    let hoveredCapabilityHelp = null;
+    let focusedCapabilityHelp = null;
+    let activeCapabilityTooltipTarget = null;
+    let capabilityTooltipElement = null;
+
+    function getCapabilityTooltipElement() {
+      if (capabilityTooltipElement) return capabilityTooltipElement;
+      capabilityTooltipElement = document.createElement('div');
+      capabilityTooltipElement.id = 'capability-help-tooltip';
+      capabilityTooltipElement.className = 'capability-tooltip';
+      capabilityTooltipElement.setAttribute('role', 'tooltip');
+      capabilityTooltipElement.hidden = true;
+      document.body.appendChild(capabilityTooltipElement);
+      return capabilityTooltipElement;
+    }
+
+    function updateCapabilityTooltip() {
+      if (hoveredCapabilityHelp && !hoveredCapabilityHelp.isConnected) {
+        hoveredCapabilityHelp = null;
+      }
+      if (focusedCapabilityHelp && !focusedCapabilityHelp.isConnected) {
+        focusedCapabilityHelp = null;
+      }
+      const button = focusedCapabilityHelp || hoveredCapabilityHelp;
+      const tooltip = getCapabilityTooltipElement();
+      if (!button || !button.isConnected || !button.dataset.note) {
+        if (activeCapabilityTooltipTarget) {
+          activeCapabilityTooltipTarget.removeAttribute('aria-describedby');
+        }
+        activeCapabilityTooltipTarget = null;
+        tooltip.hidden = true;
+        return;
+      }
+
+      if (activeCapabilityTooltipTarget !== button) {
+        if (activeCapabilityTooltipTarget) {
+          activeCapabilityTooltipTarget.removeAttribute('aria-describedby');
+        }
+        button.setAttribute('aria-describedby', tooltip.id);
+        activeCapabilityTooltipTarget = button;
+      }
+
+      tooltip.textContent = button.dataset.note;
+      tooltip.hidden = false;
+      const buttonRect = button.getBoundingClientRect();
+      const tooltipRect = tooltip.getBoundingClientRect();
+      const margin = 12;
+      let left = buttonRect.left + (buttonRect.width - tooltipRect.width) / 2;
+      left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+      let top = buttonRect.bottom + 8;
+      if (top + tooltipRect.height > window.innerHeight - margin) {
+        top = buttonRect.top - tooltipRect.height - 8;
+      }
+      top = Math.max(margin, Math.min(top, window.innerHeight - tooltipRect.height - margin));
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+    }
+
+    document.addEventListener('pointerover', event => {
+      const button = event.target.closest?.('.capability-help');
+      if (button) {
+        hoveredCapabilityHelp = button;
+        updateCapabilityTooltip();
+      }
+    });
+
+    document.addEventListener('pointerout', event => {
+      const button = event.target.closest?.('.capability-help');
+      if (button && button === hoveredCapabilityHelp && !button.contains(event.relatedTarget)) {
+        hoveredCapabilityHelp = null;
+        updateCapabilityTooltip();
+      }
+    });
+
+    document.addEventListener('focusin', event => {
+      const button = event.target.closest?.('.capability-help');
+      if (button) {
+        focusedCapabilityHelp = button;
+        updateCapabilityTooltip();
+      }
+    });
+
+    document.addEventListener('focusout', event => {
+      const button = event.target.closest?.('.capability-help');
+      if (button && button === focusedCapabilityHelp && !button.contains(event.relatedTarget)) {
+        focusedCapabilityHelp = null;
+        updateCapabilityTooltip();
+      }
+    });
+
+    window.addEventListener('resize', updateCapabilityTooltip);
+    window.addEventListener('scroll', updateCapabilityTooltip, true);
 
     function renderCapabilityMatrix(rootId, providers, activeProvider, emptyText) {
       const root = document.getElementById(rootId);
@@ -1721,13 +2252,13 @@
           if (!capability || !capability.key || rows.has(capability.key)) continue;
           rows.set(capability.key, {
             key: capability.key,
-            label: capability.label || capability.key,
+            label: t(capability.label || capability.key),
           });
         }
       }
 
       if (rows.size === 0) {
-        root.innerHTML = '<div class="empty-state" style="padding:18px;">' + esc(emptyText) + '</div>';
+        root.innerHTML = '<div class="empty-state" style="padding:18px;">' + esc(t(emptyText)) + '</div>';
         return;
       }
 
@@ -1742,7 +2273,7 @@
         '<div class="capability-matrix" style="--provider-count:' +
         providers.length +
         '">';
-      html += '<div class="capability-cell capability-provider capability-label">能力</div>';
+      html += '<div class="capability-cell capability-provider capability-label">' + esc(t('能力')) + '</div>';
 
       for (const provider of providers) {
         const active = provider.id === activeProvider;
@@ -1753,24 +2284,26 @@
           provider.configured ? '' : 'unconfigured',
         ].filter(Boolean).join(' ');
         const status = !provider.configured
-          ? '未配置'
-          : (active ? '当前使用' : '可选择');
+          ? t('未配置')
+          : (active ? t('当前使用') : t('可选择'));
         const providerHelp = !provider.configured && provider.configurationError
-          ? '<button type="button" class="capability-help conditional" aria-label="查看 ' +
-            esc(provider.displayName || provider.id) +
-            ' 的配置要求" data-provider="' +
-            esc(provider.label || provider.displayName || provider.id) +
-            '" data-capability="配置要求" data-support="conditional" data-note="' +
-            esc(provider.configurationError) +
-            '" onclick="showCapabilityDetail(this)">?</button>'
+          ? (() => {
+              const note = t(provider.configurationError);
+              const providerName = provider.displayName || provider.id;
+              return '<span class="capability-help conditional" role="img" tabindex="0" aria-label="' +
+                esc(t('查看 {provider} 的配置要求', { provider: providerName }) + '：' + note) +
+                '" data-note="' + esc(note) + '">?</span>';
+            })()
           : '';
+        const providerDescription = t(provider.description || provider.displayName);
         html +=
           '<div class="' +
           classes +
-          '" title="' +
-          esc(provider.description || provider.displayName) +
-          '"><span>' +
-          esc(provider.label || provider.displayName || provider.id) +
+          '"><span><span title="' +
+          esc(providerDescription) +
+          '">' +
+          esc(t(provider.label || provider.displayName || provider.id)) +
+          '</span>' +
           providerHelp +
           '</span><small>' +
           esc(status) +
@@ -1780,7 +2313,7 @@
       for (const row of rows.values()) {
         html +=
           '<div class="capability-cell capability-label">' +
-          esc(row.label) +
+          esc(t(row.label)) +
           '</div>';
         for (const provider of providers) {
           const capability = capabilityMaps.get(provider.id)?.get(row.key);
@@ -1791,24 +2324,17 @@
             active ? 'active-provider' : '',
             provider.configured ? '' : 'unconfigured',
           ].filter(Boolean).join(' ');
-          const note = capability?.note || '';
+          const note = t(capability?.note || '');
           const help =
             note
-              ? '<button type="button" class="capability-help ' +
+              ? '<span class="capability-help ' +
                 esc(support) +
-                '" aria-label="查看 ' +
-                esc(provider.displayName || provider.id) +
-                ' ' +
-                esc(row.label) +
-                ' 的能力说明" data-provider="' +
-                esc(provider.label || provider.displayName || provider.id) +
-                '" data-capability="' +
-                esc(row.label) +
-                '" data-support="' +
-                esc(support) +
-                '" data-note="' +
-                esc(note) +
-                '" onclick="showCapabilityDetail(this)">?</button>'
+                '" role="img" tabindex="0" aria-label="' +
+                esc(t('查看 {provider} {capability} 的能力说明', {
+                  provider: provider.displayName || provider.id,
+                  capability: row.label,
+                }) + '：' + note) +
+                '" data-note="' + esc(note) + '">?</span>'
               : '';
           html +=
             '<div class="' +
@@ -1825,6 +2351,7 @@
 
       html += '</div>';
       root.innerHTML = html;
+      updateCapabilityTooltip();
     }
 
     function renderProviderCapabilityMatrix(activeProvider) {
@@ -1852,10 +2379,10 @@
         const active = provider.id === activeProvider;
         const accent = `hsl(${providerHue(provider.id)} 65% 45%)`;
         const title = !provider.configured
-          ? (provider.configurationError || `${provider.displayName} 尚未完成服务端配置`)
+          ? t(provider.configurationError || '{provider} 尚未完成服务端配置', { provider: provider.displayName })
           : (!providerSelectionEnabled && !active
-            ? '线上 Provider 由 MEDIA_DEFAULT_PROVIDER 环境变量配置'
-            : `新房间使用 ${provider.displayName}`);
+            ? t('线上 Provider 由 MEDIA_DEFAULT_PROVIDER 环境变量配置')
+            : t('新房间使用 {provider}', { provider: provider.displayName }));
         return `<button class="provider-opt${active ? ' active' : ''}"
           data-provider="${esc(provider.id)}"
           onclick="switchProvider(this.dataset.provider)"
@@ -1863,7 +2390,7 @@
           title="${esc(title)}"
           ${provider.configured && (providerSelectionEnabled || active) ? '' : 'disabled'}>
           <span class="opt-dot" style="background:${accent}"></span>
-          ${esc(provider.label || provider.displayName || provider.id)}
+          ${esc(t(provider.label || provider.displayName || provider.id))}
         </button>`;
       }).join('');
       renderProviderCapabilityMatrix(activeProvider);
@@ -1888,10 +2415,10 @@
           ? '#94a3b8'
           : `hsl(${providerHue(provider.id)} 65% 45%)`;
         const title = !provider.configured
-          ? (provider.configurationError || `${provider.displayName} 尚未完成服务端配置`)
+          ? t(provider.configurationError || '{provider} 尚未完成服务端配置', { provider: provider.displayName })
           : (providerId
-            ? `新房间使用 ${provider.displayName}`
-            : '新房间不创建产品聊天服务');
+            ? t('新房间使用 {provider}', { provider: provider.displayName })
+            : t('新房间不创建产品聊天服务'));
         return `<button class="provider-opt${active ? ' active' : ''}"
           data-provider="${esc(provider.id)}"
           onclick="switchChatProvider(this.dataset.provider)"
@@ -1899,7 +2426,7 @@
           title="${esc(title)}"
           ${provider.configured ? '' : 'disabled'}>
           <span class="opt-dot" style="background:${accent}"></span>
-          ${esc(provider.label || provider.displayName || provider.id)}
+          ${esc(t(provider.label || provider.displayName || provider.id))}
         </button>`;
       }).join('');
       renderChatProviderCapabilityMatrix(activeProvider);
@@ -1950,7 +2477,7 @@
           </div>
         `).join('');
       } else {
-        ev.innerHTML = '<div class="event-line"><span class="event-msg" style="color: var(--text-tertiary);">暂无对应事件流记录</span></div>';
+        ev.innerHTML = '<div class="event-line"><span class="event-msg" style="color: var(--text-tertiary);">' + esc(t('暂无对应事件流记录')) + '</span></div>';
       }
     }
 
@@ -1973,7 +2500,7 @@
         tb.innerHTML = `<tr><td colspan="7">
           <div class="empty-state">
             <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-            <p>${query ? '没有找到符合条件的房间' : '当前暂无活跃房间，可通过上方快速创建'}</p>
+            <p>${query ? t('没有找到符合条件的房间') : t('当前暂无活跃房间，可通过上方快速创建')}</p>
           </div>
         </td></tr>`;
         return;
@@ -1981,31 +2508,33 @@
 
       tb.innerHTML = list.map(r => {
         const provider = providerInfo(r.provider);
-        const roomProviderLabel = provider.displayName || provider.label || r.provider;
+        const roomProviderLabel = t(provider.displayName || provider.label || r.provider);
         const roomChatProvider = chatProviderInfo(r.chatProvider);
         const roomChatProviderLabel = r.chatProvider
-          ? (roomChatProvider.displayName || roomChatProvider.label || r.chatProvider)
-          : 'Chat Off';
+          ? t(roomChatProvider.displayName || roomChatProvider.label || r.chatProvider)
+          : t('Chat 已关闭');
         const hue = providerHue(r.provider);
         const providerStyle = `background:hsl(${hue} 80% 97%);color:hsl(${hue} 58% 38%);border-color:hsl(${hue} 65% 86%)`;
         const chatHue = r.chatProvider ? providerHue(r.chatProvider) : 215;
         const chatProviderStyle = `background:hsl(${chatHue} 55% 97%);color:hsl(${chatHue} 42% 42%);border-color:hsl(${chatHue} 45% 88%)`;
-        const idleText = r.idleSec > 0 ? `${r.idleSec}s 前心跳` : '🟢 活跃在线';
+        const idleText = r.idleSec > 0
+          ? t('{seconds}s 前心跳', { seconds: r.idleSec })
+          : t('🟢 活跃在线');
         const attendeesHtml = r.attendees && r.attendees.length
           ? `<div class="attendee-chips">` + r.attendees.map(a => {
               const name = a.externalUserId || 'Guest';
               const initial = name.charAt(0).toUpperCase();
               const deviceHint = a.deviceId
-                ? ` · 设备: ${esc(a.deviceId.slice(0, 8))}…`
+                ? t(' · 设备: {device}', { device: esc(a.deviceId.slice(0, 8)) + '…' })
                 : '';
               return `
-                <span class="user-chip" title="加入时间: ${esc(a.joinedAt)}${deviceHint}">
+                <span class="user-chip" title="${esc(t('加入时间: {time}{role}', { time: a.joinedAt, role: deviceHint }))}">
                   <span class="user-chip-avatar">${esc(initial)}</span>
                   ${esc(name)}
                 </span>
               `;
             }).join('') + `</div>`
-          : `<span style="color: var(--text-tertiary); font-size: 13px;">无在线成员</span>`;
+          : `<span style="color: var(--text-tertiary); font-size: 13px;">${t('无在线成员')}</span>`;
 
         return `<tr>
           <td>
@@ -2040,15 +2569,95 @@
             <div class="action-cell">
               <button class="btn btn-subtle btn-sm" onclick="copyRoom('${esc(r.roomCode)}')">
                 <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
-                复制房号
+                ${t('复制房号')}
               </button>
               ${r.shareLink ? `
               <button class="btn btn-subtle btn-sm" onclick="copyLink('${esc(r.shareLink)}')">
                 <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-                分享链接
+                ${t('分享链接')}
               </button>` : ''}
               <button class="btn btn-danger-subtle" onclick="promptCloseRoom('${esc(r.roomCode)}')">
-                关闭
+                ${t('关闭')}
+              </button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderStandaloneChatRoomsTable() {
+      const tb = document.getElementById('standalone-chat-rooms');
+      const list = cachedStandaloneChatRooms || [];
+      document.getElementById('standalone-chat-room-badge-count').textContent = list.length;
+
+      if (!list.length) {
+        tb.innerHTML = `<tr><td colspan="6" class="standalone-chat-table-empty-cell">
+          <div class="standalone-chat-empty">
+            <div class="standalone-chat-empty-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a4 4 0 01-4 4H7l-4 3V7a4 4 0 014-4h10a4 4 0 014 4z"></path>
+              </svg>
+            </div>
+            <div class="standalone-chat-empty-title">${t('当前暂无云端聊天室')}</div>
+            <div class="standalone-chat-empty-desc">${t('可在 Flutter Demo 的“独立聊天”入口创建。')}</div>
+          </div>
+        </td></tr>`;
+        return;
+      }
+
+      tb.innerHTML = list.map(r => {
+        const provider = chatProviderInfo(r.chatProvider);
+        const providerLabel = t(provider.displayName || provider.label || r.chatProvider || 'Unknown');
+        const hue = providerHue(r.chatProvider || 'chat');
+        const providerStyle = `background:hsl(${hue} 55% 97%);color:hsl(${hue} 42% 42%);border-color:hsl(${hue} 45% 88%)`;
+        const remoteId = r.providerRoomId || '';
+        const displayCode = r.roomCode || '—';
+        const trackedLabel = r.tracked ? t('本地已关联') : t('云端遗留');
+        const trackedStyle = r.tracked
+          ? 'background:var(--emerald-bg);color:var(--emerald-color);border-color:var(--emerald-border)'
+          : 'background:#fff7ed;color:#c2410c;border-color:#fed7aa';
+
+        return `<tr>
+          <td>
+            <div class="room-code-tag">${esc(displayCode)}</div>
+            <div class="meeting-id-sub" title="${esc(remoteId)}">${esc(remoteId)}</div>
+          </td>
+          <td>
+            <span class="provider-pill" style="${providerStyle}">
+              ${esc(providerLabel)}
+            </span>
+          </td>
+          <td>
+            <span style="font-weight: 700; font-size: 15px; color: ${(r.memberCount || 0) > 0 ? 'var(--emerald-color)' : 'var(--text-tertiary)'}">
+              ${r.memberCount || 0}
+            </span>
+          </td>
+          <td>
+            <span class="provider-pill" style="${trackedStyle}">
+              ${esc(trackedLabel)}
+            </span>
+          </td>
+          <td style="font-size: 13px; color: var(--text-tertiary);">
+            ${r.createdAt ? formatTime(r.createdAt) : '—'}
+          </td>
+          <td>
+            <div class="action-cell">
+              ${r.roomCode ? `
+                <button class="btn btn-subtle btn-sm" onclick="copyRoom('${esc(r.roomCode)}')">
+                  ${t('复制房号')}
+                </button>
+              ` : `
+                <button class="btn btn-subtle btn-sm" onclick="copyRoom('${esc(remoteId)}')">
+                  ${t('复制云端群 ID')}
+                </button>
+              `}
+              <button
+                class="btn btn-danger-subtle"
+                data-provider="${esc(r.chatProvider || '')}"
+                data-room-id="${esc(remoteId)}"
+                data-room-code="${esc(r.roomCode || '')}"
+                onclick="promptCloseChatRoom(this)">
+                ${t('关闭')}
               </button>
             </div>
           </td>
@@ -2067,26 +2676,26 @@
         cachedProviders = new Map(providerList.map(provider => [provider.id, provider]));
         cachedChatProviders = new Map(chatProviderList.map(provider => [provider.id, provider]));
         const currentProvider = providerInfo(d.activeProvider);
-        const providerName = currentProvider.displayName || currentProvider.label || d.activeProvider;
+        const providerName = t(currentProvider.displayName || currentProvider.label || d.activeProvider);
         const currentChatProvider = chatProviderInfo(d.activeChatProvider);
         const chatProviderName = d.activeChatProvider
-          ? (currentChatProvider.displayName || currentChatProvider.label || d.activeChatProvider)
-          : '关闭 Chat';
+          ? t(currentChatProvider.displayName || currentChatProvider.label || d.activeChatProvider)
+          : t('Chat 已关闭');
         document.getElementById('header-meta').textContent =
-          `Media：${providerName} · Chat：${chatProviderName}`;
+          `Media: ${providerName} · Chat: ${chatProviderName}`;
         const status = document.getElementById('service-status');
         const banner = document.getElementById('connection-banner');
         status.classList.toggle('paused', !d.connectionsEnabled);
-        status.innerHTML = `<span class="pulse-dot"></span>${d.connectionsEnabled ? '连接服务开启' : '连接服务已暂停'}`;
+        status.innerHTML = `<span class="pulse-dot"></span>${d.connectionsEnabled ? t('连接服务开启') : t('连接服务已暂停')}`;
         banner.classList.toggle('enabled', Boolean(d.connectionsEnabled));
         banner.innerHTML = d.connectionsEnabled
-          ? '<strong>连接服务已开启。</strong> 如需暂停公网入会，请在 Vercel 项目环境变量中将 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>false</code> 并重新部署。'
-          : '<strong>连接服务已暂停。</strong> 房间创建、加入、续期和心跳请求都会返回 503。恢复时将 Vercel 环境变量 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>true</code> 并重新部署。';
+          ? t('<strong>连接服务已开启。</strong> 如需暂停公网入会，请在 Vercel 项目环境变量中将 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>false</code> 并重新部署。')
+          : t('<strong>连接服务已暂停。</strong> 房间创建、加入、续期和心跳请求都会返回 503。恢复时将 Vercel 环境变量 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>true</code> 并重新部署。');
         document.getElementById('provider-panel-note').textContent = providerSelectionEnabled
-          ? '控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。'
-          : '线上默认通道由 Vercel 的 MEDIA_DEFAULT_PROVIDER 环境变量决定；修改后需重新部署。';
+          ? t('控制端动态切换后续新建房间绑定的云厂商底层通道。已创建房间会始终沿用各自创建时的通道，互不干扰。')
+          : t('线上默认通道由 Vercel 的 MEDIA_DEFAULT_PROVIDER 环境变量决定；修改后需重新部署。');
         document.getElementById('chat-provider-panel-note').textContent =
-          '聊天与音视频独立选择。切换只影响后续新建房间；关闭 Chat 时不会创建产品聊天服务。Vercel Function 的选择只保存在当前实例，实例重启后会回到 CHAT_DEFAULT_PROVIDER（未设置则关闭），不同实例间也不会同步。';
+          t('聊天与音视频独立选择。切换只影响后续新建房间；关闭 Chat 时不会创建产品聊天服务。Vercel Function 的选择只保存在当前实例，实例重启后会回到 CHAT_DEFAULT_PROVIDER（未设置则关闭），不同实例间也不会同步。');
         document.getElementById('region-tags').textContent =
           `${d.controlRegion} / ${d.mediaRegion}`;
         renderProviderSwitcher(d.activeProvider);
@@ -2094,27 +2703,42 @@
 
         document.getElementById('c-rooms').textContent = d.roomCount;
         document.getElementById('c-att').textContent = d.attendeeCount;
-        document.getElementById('c-standalone-chat-rooms').textContent = d.standaloneChatRoomCount || 0;
-        document.getElementById('c-standalone-chat-attendees').textContent = d.standaloneChatAttendeeCount || 0;
         document.getElementById('c-provider').textContent = providerName;
-        document.getElementById('c-provider-sub').textContent = currentProvider.description || 'Realtime media provider';
+        document.getElementById('c-provider-sub').textContent = t(currentProvider.description || 'Realtime media provider');
         document.getElementById('room-badge-count').textContent = d.roomCount;
 
         const mins = Math.floor(d.uptimeSec / 60);
         const hours = Math.floor(mins / 60);
         document.getElementById('c-up').textContent =
-          hours > 0 ? `${hours}h ${mins % 60}m` : `${mins} min`;
+          hours > 0
+            ? t('⏱ {hours} 小时 {minutes} 分钟', { hours, minutes: mins % 60 })
+            : t('{minutes} 分钟', { minutes: mins });
         document.getElementById('c-started').textContent =
-          `启动于 ${formatTime(d.startedAt)}`;
+          t('启动于 {time}', { time: formatTime(d.startedAt) });
 
         cachedRooms = d.rooms || [];
+        const cloudChat = d.activeChatProvider
+          ? await api(
+              '/api/chat/cloud-rooms?provider=' +
+              encodeURIComponent(d.activeChatProvider),
+            )
+          : { rooms: [] };
+        cachedStandaloneChatRooms = cloudChat.rooms || [];
+        document.getElementById('c-standalone-chat-rooms').textContent =
+          cachedStandaloneChatRooms.length;
+        document.getElementById('c-standalone-chat-attendees').textContent =
+          cachedStandaloneChatRooms.reduce(
+            (sum, room) => sum + Number(room.memberCount || 0),
+            0,
+          );
         cachedEvents = d.events || [];
 
         renderRoomsTable();
+        renderStandaloneChatRoomsTable();
         renderEvents();
       } catch (e) {
-        if (e.status === 401) return showLogin('登录已过期，请重新登录。');
-        toast('刷新数据失败: ' + e.message, 'error');
+        if (e.status === 401) return showLogin(t('登录已过期，请重新登录。'));
+        toast(t('刷新数据失败: {message}', { message: e.message }), 'error');
       } finally {
         refreshBtn.style.opacity = '1';
       }
@@ -2131,19 +2755,32 @@
         });
         input.value = '';
         await refresh();
-        toast(`✨ 房间 <b>${d.roomCode}</b> 已成功创建`, 'success');
+        toast(t('✨ 房间 <b>{code}</b> 已成功创建', { code: d.roomCode }), 'success');
       } catch (e) {
-        toast('创建房间失败: ' + e.message, 'error');
+        toast(t('创建房间失败: {message}', { message: e.message }), 'error');
       }
     }
 
     let targetCloseRoomCode = null;
+    let targetCloseChatRoom = null;
 
     function promptCloseRoom(code) {
       targetCloseRoomCode = code;
-      document.getElementById('modal-title').textContent = `强制关闭房间 ${code}？`;
-      document.getElementById('modal-desc').textContent = `确认关闭房间 ${code}？此操作将立即断开所有在线成员的音视频连接并清理云端会话。`;
+      document.getElementById('modal-title').textContent = t('强制关闭房间 {code}？', { code });
+      document.getElementById('modal-desc').textContent = t('确认关闭房间 {code}？此操作将立即断开所有在线成员的音视频连接并清理云端会话。', { code });
       document.getElementById('modal-confirm-btn').onclick = executeCloseRoom;
+      document.getElementById('confirm-modal').classList.add('open');
+    }
+
+    function promptCloseChatRoom(button) {
+      const provider = button.dataset.provider || '';
+      const providerRoomId = button.dataset.roomId || '';
+      const roomCode = button.dataset.roomCode || '';
+      targetCloseChatRoom = { provider, providerRoomId, roomCode };
+      const label = roomCode || providerRoomId;
+      document.getElementById('modal-title').textContent = t('关闭独立聊天室 {code}？', { code: label });
+      document.getElementById('modal-desc').textContent = t('确认关闭独立聊天室 {code}？此操作会清理对应 Chat Provider 的云端聊天室，并让现有客户端失去该聊天室连接。', { code: label });
+      document.getElementById('modal-confirm-btn').onclick = executeCloseChatRoom;
       document.getElementById('confirm-modal').classList.add('open');
     }
 
@@ -2159,25 +2796,50 @@
       try {
         await api('/rooms/' + encodeURIComponent(code), { method: 'DELETE' });
         await refresh();
-        toast(`房间 ${code} 已强制关闭`, 'success');
+        toast(t('房间 {code} 已强制关闭', { code }), 'success');
       } catch (e) {
-        toast('关闭房间失败: ' + e.message, 'error');
+        toast(t('关闭房间失败: {message}', { message: e.message }), 'error');
+      }
+    }
+
+    async function executeCloseChatRoom() {
+      if (!targetCloseChatRoom) return;
+      const target = targetCloseChatRoom;
+      targetCloseChatRoom = null;
+      closeConfirmModal();
+      try {
+        await api(
+          '/api/chat/cloud-rooms/' +
+            encodeURIComponent(target.provider) +
+            '/' +
+            encodeURIComponent(target.providerRoomId),
+          { method: 'DELETE' },
+        );
+        await refresh();
+        toast(
+          t('云端聊天室 {code} 已删除', {
+            code: target.roomCode || target.providerRoomId,
+          }),
+          'success',
+        );
+      } catch (e) {
+        toast(t('删除云端聊天室失败: {message}', { message: e.message }), 'error');
       }
     }
 
     function copyRoom(code) {
       navigator.clipboard.writeText(code).then(() => {
-        toast(`已复制房间号 <b>${code}</b> 到剪贴板`, 'success');
+        toast(t('已复制房间号 <b>{code}</b> 到剪贴板', { code }), 'success');
       }).catch(() => {
-        toast(`房间号: ${code}`);
+        toast(t('房间号: {code}', { code }));
       });
     }
 
     function copyLink(link) {
       navigator.clipboard.writeText(link).then(() => {
-        toast(`已复制入会深度链接到剪贴板`, 'success');
+        toast(t('已复制入会深度链接到剪贴板'), 'success');
       }).catch(() => {
-        toast(`链接: ${link}`);
+        toast(t('链接: {link}', { link }));
       });
     }
 
@@ -2186,6 +2848,7 @@
       if (e.key === 'Enter') createRoom();
     });
 
+    applyLanguage();
     initialize();
   </script>
 </body>

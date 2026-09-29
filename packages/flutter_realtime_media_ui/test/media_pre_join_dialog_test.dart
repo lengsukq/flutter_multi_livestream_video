@@ -66,4 +66,36 @@ void main() {
     expect(find.text('Continue'), findsNothing);
     expect(find.text('Close'), findsOneWidget);
   });
+
+  testWidgets('pre-join UI follows zh-CN host locale', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh', 'CN'),
+        supportedLocales: RealtimeStrings.supportedLocales,
+        localizationsDelegates: RealtimeStrings.localizationsDelegates,
+        home: MediaPreJoinDialog(
+          runCheck: () async => const MediaPreJoinResult(
+            role: MediaRole.participant,
+            checks: [
+              MediaPreJoinCheck(
+                type: MediaPreJoinCheckType.backend,
+                status: MediaPreJoinStatus.passed,
+                severity: MediaPreJoinSeverity.blocking,
+                message: 'Backend reachable.',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('加入前检查'), findsOneWidget);
+    expect(find.text('可以继续'), findsOneWidget);
+    expect(find.text('后端'), findsOneWidget);
+    expect(find.text('通过'), findsOneWidget);
+    expect(find.text('继续'), findsOneWidget);
+    expect(find.text('重新检查'), findsOneWidget);
+  });
 }

@@ -11,16 +11,20 @@ test('dashboard provider switcher is metadata-driven and its script parses', asy
 
   assert.match(html, /id="provider-switcher"/);
   assert.match(html, /id="provider-capability-matrix"/);
-  assert.match(html, /id="capability-detail-modal"/);
+  assert.match(html, /id="media-capability-details"/);
   assert.match(html, /id="chat-provider-switcher"/);
   assert.match(html, /id="chat-provider-capability-matrix"/);
+  assert.match(html, /id="chat-capability-details"/);
+  assert.match(html, /id="standalone-chat-rooms"/);
+  assert.match(html, /renderStandaloneChatRoomsTable\(\)/);
+  assert.match(html, /promptCloseChatRoom\(this\)/);
+  assert.match(html, /\/api\/chat\/cloud-rooms/);
   assert.match(html, /d\.providerList/);
   assert.match(html, /d\.chatProviderList/);
   assert.match(html, /renderProviderSwitcher\(d\.activeProvider\)/);
   assert.match(html, /renderProviderCapabilityMatrix\(activeProvider\)/);
   assert.match(html, /provider\.capabilities/);
-  assert.match(html, /onclick="showCapabilityDetail\(this\)"/);
-  assert.match(html, /function showCapabilityDetail\(button\)/);
+  assert.match(html, /capabilityTooltipElement\.className = 'capability-tooltip'/);
   assert.match(
     html,
     /renderChatProviderSwitcher\(d\.activeChatProvider \|\| null\)/,
@@ -44,7 +48,25 @@ test('dashboard provider switcher is metadata-driven and its script parses', asy
 
   const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
   assert.ok(scriptMatch, 'dashboard inline script not found');
+  assert.match(scriptMatch[1]!, /function updateCapabilityTooltip\(\)/);
+  assert.match(scriptMatch[1]!, /function executeCloseChatRoom\(\)/);
   assert.doesNotThrow(() => new Function(scriptMatch[1]!));
+});
+
+test('dashboard cloud chat management routes require admin authentication', async () => {
+  const server = await readFile(
+    path.resolve(import.meta.dirname, '..', 'server.ts'),
+    'utf8',
+  );
+  assert.match(
+    server,
+    /app\.get\('\/api\/chat\/cloud-rooms', requireAdmin/,
+  );
+  assert.match(
+    server,
+    /'\/api\/chat\/cloud-rooms\/:provider\/:roomId'/,
+  );
+  assert.match(server, /provider\.deleteCloudRoom\(providerRoomId\)/);
 });
 
 test('chat-token route is protected by the shared room middleware', async () => {

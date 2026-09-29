@@ -16,10 +16,7 @@ Future<void> openMinimalRealtimeRoom({
 }) async {
   final room = await sdk.joinRoom(
     roomCode: roomCode,
-    user: MediaIdentity(
-      userId: participantId,
-      displayName: displayName,
-    ),
+    user: MediaIdentity(userId: participantId, displayName: displayName),
   );
   if (!context.mounted) {
     await room.dispose();

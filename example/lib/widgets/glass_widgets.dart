@@ -1,8 +1,21 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
-/// Reusable clean glass/card container with subtle border and elevation.
+/// Thin adapter forwarding to the SDK's built-in [RealtimeGlassSurface].
 class GlassContainer extends StatelessWidget {
+  const GlassContainer({
+    super.key,
+    required this.child,
+    this.borderRadius = RealtimeUiTokens.cardRadius,
+    this.blur = RealtimeUiTokens.blur,
+    this.opacity = 0.84,
+    this.padding,
+    this.margin,
+    this.borderColor,
+    this.fillColor,
+    this.onTap,
+  });
+
   final Widget child;
   final double borderRadius;
   final double blur;
@@ -13,219 +26,68 @@ class GlassContainer extends StatelessWidget {
   final Color? fillColor;
   final VoidCallback? onTap;
 
-  const GlassContainer({
-    super.key,
-    required this.child,
-    this.borderRadius = 22,
-    this.blur = 18,
-    this.opacity = 0.95,
-    this.padding,
-    this.margin,
-    this.borderColor,
-    this.fillColor,
-    this.onTap,
-  });
-
   @override
-  Widget build(BuildContext context) {
-    Widget content = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: fillColor ?? Colors.white.withValues(alpha: opacity),
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: Border.all(
-          color: borderColor ?? const Color(0xFFE2E8F0),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: child,
-    );
-
-    if (onTap != null) {
-      content = Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(borderRadius),
-          onTap: onTap,
-          child: content,
-        ),
-      );
-    }
-
-    return Container(
-      margin: margin,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: content,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => RealtimeGlassSurface(
+    radius: borderRadius,
+    blur: blur,
+    opacity: opacity,
+    padding: padding,
+    margin: margin,
+    borderColor: borderColor ?? RealtimeUiTokens.border,
+    fillColor: fillColor,
+    onTap: onTap,
+    child: child,
+  );
 }
 
-/// Ambient soft light mesh background for clean white aesthetic.
+/// Thin adapter forwarding to the SDK's built-in [RealtimeAmbientBackground].
 class AmbientBackground extends StatelessWidget {
-  final Widget child;
-
   const AmbientBackground({super.key, required this.child});
 
+  final Widget child;
+
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF8FAFC),
-      child: Stack(
-        children: [
-          // Top-left soft indigo ambient glow
-          Positioned(
-            top: -100,
-            left: -80,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFE0E7FF).withValues(alpha: 0.7),
-                    const Color(0xFFE0E7FF).withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Bottom-right soft sky ambient glow
-          Positioned(
-            bottom: -80,
-            right: -80,
-            child: Container(
-              width: 340,
-              height: 340,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFE0F2FE).withValues(alpha: 0.6),
-                    const Color(0xFFE0F2FE).withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Center-left gentle lavender tint
-          Positioned(
-            top: 260,
-            left: 20,
-            child: Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFFEDE9FE).withValues(alpha: 0.45),
-                    const Color(0xFFEDE9FE).withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Content
-          child,
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => RealtimeAmbientBackground(child: child);
 }
 
-/// Clean input field with rounded corners, subtle border, and high contrast.
+/// Thin adapter forwarding to the SDK's built-in [RealtimeGlassTextField].
 class GlassTextField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String? hintText;
-  final IconData? prefixIcon;
-  final TextInputType keyboardType;
-  final TextCapitalization textCapitalization;
-  final ValueChanged<String>? onChanged;
-
   const GlassTextField({
     super.key,
     required this.controller,
     required this.label,
     this.hintText,
     this.prefixIcon,
+    this.suffix,
     this.keyboardType = TextInputType.text,
     this.textCapitalization = TextCapitalization.none,
     this.onChanged,
   });
 
+  final TextEditingController controller;
+  final String label;
+  final String? hintText;
+  final IconData? prefixIcon;
+  final Widget? suffix;
+  final TextInputType keyboardType;
+  final TextCapitalization textCapitalization;
+  final ValueChanged<String>? onChanged;
+
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: 1,
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        textCapitalization: textCapitalization,
-        onChanged: onChanged,
-        style: const TextStyle(
-          color: Color(0xFF0F172A),
-          fontSize: 14.5,
-          fontWeight: FontWeight.w500,
-        ),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(
-            color: Color(0xFF64748B),
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-          hintText: hintText,
-          hintStyle: const TextStyle(
-            color: Color(0xFF94A3B8),
-            fontSize: 13.5,
-          ),
-          prefixIcon: prefixIcon != null
-              ? Icon(prefixIcon, color: const Color(0xFF4F46E5), size: 19)
-              : null,
-          border: InputBorder.none,
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 8),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => RealtimeGlassTextField(
+    controller: controller,
+    label: label,
+    hintText: hintText,
+    prefixIcon: prefixIcon,
+    suffix: suffix,
+    keyboardType: keyboardType,
+    textCapitalization: textCapitalization,
+    onChanged: onChanged,
+  );
 }
 
-/// Modern Primary Button with clean indigo gradient and crisp text.
+/// Thin adapter forwarding to the SDK's built-in [RealtimeGlassButton].
 class GlassGradientButton extends StatelessWidget {
-  final VoidCallback? onPressed;
-  final Widget child;
-  final IconData? icon;
-  final bool isLoading;
-
   const GlassGradientButton({
     super.key,
     required this.onPressed,
@@ -234,78 +96,16 @@ class GlassGradientButton extends StatelessWidget {
     this.isLoading = false,
   });
 
+  final VoidCallback? onPressed;
+  final Widget child;
+  final IconData? icon;
+  final bool isLoading;
+
   @override
-  Widget build(BuildContext context) {
-    final enabled = onPressed != null && !isLoading;
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        gradient: enabled
-            ? const LinearGradient(
-                colors: [
-                  Color(0xFF4F46E5),
-                  Color(0xFF6366F1),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : const LinearGradient(
-                colors: [
-                  Color(0xFFE2E8F0),
-                  Color(0xFFE2E8F0),
-                ],
-              ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: enabled
-            ? [
-                BoxShadow(
-                  color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
-                  blurRadius: 14,
-                  offset: const Offset(0, 5),
-                ),
-              ]
-            : [],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: enabled ? onPressed : null,
-          child: Center(
-            child: isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (icon != null) ...[
-                        Icon(
-                          icon,
-                          color: enabled ? Colors.white : const Color(0xFF94A3B8),
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      DefaultTextStyle(
-                        style: TextStyle(
-                          color: enabled ? Colors.white : const Color(0xFF94A3B8),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.2,
-                        ),
-                        child: child,
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => RealtimeGlassButton(
+    onPressed: onPressed,
+    icon: icon,
+    isLoading: isLoading,
+    child: child,
+  );
 }

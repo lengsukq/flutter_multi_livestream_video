@@ -8,6 +8,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   flutter_realtime_media_core:
     path: ../flutter_realtime_media_core
   flutter_realtime_chat_core:

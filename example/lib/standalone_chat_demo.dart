@@ -9,10 +9,14 @@ class StandaloneChatDemoPage extends StatefulWidget {
     required this.backendUrl,
     required this.sdk,
     required this.userId,
+    required this.displayName,
+    this.embedded = false,
   });
   final String backendUrl;
   final RealtimeSdk sdk;
   final String userId;
+  final String displayName;
+  final bool embedded;
 
   @override
   State<StandaloneChatDemoPage> createState() => _StandaloneChatDemoPageState();
@@ -20,15 +24,18 @@ class StandaloneChatDemoPage extends StatefulWidget {
 
 class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
   final _room = TextEditingController();
-  final _name = TextEditingController();
   bool _busy = false;
   String? _error;
 
   @override
   void dispose() {
     _room.dispose();
-    _name.dispose();
     super.dispose();
+  }
+
+  void _generateRandomCode() {
+    final code = '${100000 + (DateTime.now().millisecondsSinceEpoch % 900000)}';
+    setState(() => _room.text = code);
   }
 
   HttpStandaloneChatProvisioner _provisioner() => HttpStandaloneChatProvisioner(
@@ -37,31 +44,32 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
 
   Future<void> _open({required bool create}) async {
     if (_busy) return;
+    final strings = RealtimeStrings.of(context);
+    if (!create && _room.text.trim().isEmpty) {
+      setState(() => _error = strings.enterChatRoomCode);
+      return;
+    }
     final provisioner = _provisioner();
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final displayName = _name.text.trim().isEmpty
-          ? 'Chat user'
-          : _name.text.trim();
       final RealtimeChatRoom chatRoom;
       if (create) {
         chatRoom = await widget.sdk.createChatRoom(
           provisioner: provisioner,
           userId: widget.userId,
-          displayName: displayName,
+          displayName: widget.displayName,
           roomCode: _room.text.trim().isEmpty ? null : _room.text.trim(),
         );
       } else {
         final code = _room.text.trim();
-        if (code.isEmpty) throw ArgumentError('Enter a chat room code.');
         chatRoom = await widget.sdk.joinChatRoom(
           provisioner: provisioner,
           roomCode: code,
           userId: widget.userId,
-          displayName: displayName,
+          displayName: widget.displayName,
         );
       }
       if (!mounted) {
@@ -74,9 +82,9 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
           MaterialPageRoute(
             builder: (_) => RealtimeChatView(
               session: chatRoom.session,
-              moderation: chatRoom.room.moderation,
+              moderation: chatRoom.moderation,
               roomCode: chatRoom.roomCode,
-              title: 'Standalone Chat',
+              title: strings.standaloneChat,
               showAppBar: true,
             ),
           ),
@@ -93,139 +101,194 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Colors.transparent,
-    appBar: AppBar(
-      title: const Text('Standalone Chat'),
-      backgroundColor: Colors.white.withValues(alpha: .82),
-      surfaceTintColor: Colors.transparent,
-      elevation: 0,
-    ),
-    body: RealtimeAmbientBackground(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              RealtimeGlassSurface(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Row(
+  Widget build(BuildContext context) {
+    final strings = RealtimeStrings.of(context);
+    final content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: ListView(
+          shrinkWrap: widget.embedded,
+          physics: widget.embedded
+              ? const NeverScrollableScrollPhysics()
+              : null,
+          padding: widget.embedded
+              ? EdgeInsets.zero
+              : const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            if (!widget.embedded) ...[
+              Row(
+                children: [
+                  RealtimeGlassSurface(
+                    radius: RealtimeUiTokens.pillRadius,
+                    padding: EdgeInsets.zero,
+                    opacity: .82,
+                    shadow: false,
+                    child: IconButton(
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).backButtonTooltip,
+                      onPressed: _busy
+                          ? null
+                          : () => Navigator.of(context).maybePop(),
+                      icon: const Icon(
+                        Icons.arrow_back_rounded,
+                        color: RealtimeUiTokens.text,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.forum_outlined,
-                          color: RealtimeUiTokens.primary,
+                        Text(
+                          strings.standaloneChat,
+                          style: const TextStyle(
+                            color: RealtimeUiTokens.text,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Independent product chat',
-                            style: TextStyle(
-                              color: RealtimeUiTokens.text,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
+                        const SizedBox(height: 2),
+                        Text(
+                          strings.independentProductChat,
+                          style: const TextStyle(
+                            color: RealtimeUiTokens.textMuted,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Chat works independently from Meeting / Live and uses the same ChatSession UI when embedded with media.',
-                      style: TextStyle(
-                        color: RealtimeUiTokens.textMuted,
-                        height: 1.45,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+            ],
+            RealtimeGlassSurface(
+              radius: RealtimeUiTokens.cardRadius,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  RealtimeSheetHeader(
+                    title: strings.independentProductChat,
+                    subtitle: strings.independentProductChatDescription,
+                    icon: Icons.forum_outlined,
+                  ),
+                  const SizedBox(height: 22),
+                  RealtimeGlassTextField(
+                    controller: _room,
+                    label: strings.roomCode,
+                    prefixIcon: Icons.tag_rounded,
+                    suffix: RealtimePill(
+                      label: strings.randomCode,
+                      icon: Icons.casino_outlined,
+                      foreground: RealtimeUiTokens.primary,
+                      background: RealtimeUiTokens.primarySubtle,
+                      borderColor: RealtimeUiTokens.primaryBorder,
+                      onTap: _busy ? null : _generateRandomCode,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: RealtimeUiTokens.surfaceSubtle.withValues(
+                        alpha: .78,
                       ),
+                      borderRadius: BorderRadius.circular(
+                        RealtimeUiTokens.controlRadius,
+                      ),
+                      border: Border.all(color: RealtimeUiTokens.border),
                     ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _room,
-                      decoration: _inputDecoration('Room code'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _name,
-                      decoration: _inputDecoration('Display name'),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: RealtimeUiTokens.dangerSubtle,
-                          borderRadius: BorderRadius.circular(
-                            RealtimeUiTokens.controlRadius,
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.person_outline_rounded,
+                          color: RealtimeUiTokens.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.displayName,
+                                style: const TextStyle(
+                                  color: RealtimeUiTokens.text,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.userId,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: RealtimeUiTokens.textMuted,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(
-                            color: RealtimeUiTokens.danger,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 18),
-                    FilledButton.icon(
-                      onPressed: _busy ? null : () => _open(create: true),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: RealtimeUiTokens.primary,
-                        minimumSize: const Size.fromHeight(48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            RealtimeUiTokens.controlRadius,
-                          ),
-                        ),
-                      ),
-                      icon: const Icon(Icons.add_comment_rounded),
-                      label: const Text('Create chat room'),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : () => _open(create: false),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        side: const BorderSide(
-                          color: RealtimeUiTokens.borderStrong,
+                  ),
+                  if (_error != null) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: RealtimeUiTokens.dangerSubtle,
+                        borderRadius: BorderRadius.circular(
+                          RealtimeUiTokens.controlRadius,
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            RealtimeUiTokens.controlRadius,
-                          ),
+                        border: Border.all(
+                          color: RealtimeUiTokens.dangerBorder,
                         ),
                       ),
-                      icon: const Icon(Icons.login_rounded),
-                      label: const Text('Join chat room'),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(
+                          color: RealtimeUiTokens.danger,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
-                ),
+                  const SizedBox(height: 20),
+                  RealtimeGlassButton(
+                    onPressed: _busy ? null : () => _open(create: true),
+                    isLoading: _busy,
+                    icon: Icons.add_comment_rounded,
+                    child: Text(strings.createChatRoom),
+                  ),
+                  const SizedBox(height: 10),
+                  RealtimeGlassButton(
+                    onPressed: _busy ? null : () => _open(create: false),
+                    secondary: true,
+                    icon: Icons.login_rounded,
+                    child: Text(strings.joinChatRoom),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    ),
-  );
-
-  InputDecoration _inputDecoration(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: Colors.white.withValues(alpha: .78),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-      borderSide: const BorderSide(color: RealtimeUiTokens.border),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-      borderSide: const BorderSide(color: RealtimeUiTokens.border),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-      borderSide: const BorderSide(color: RealtimeUiTokens.primary, width: 1.4),
-    ),
-  );
+    );
+    if (widget.embedded) return content;
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: RealtimeAmbientBackground(child: SafeArea(child: content)),
+    );
+  }
 }

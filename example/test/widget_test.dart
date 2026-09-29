@@ -16,6 +16,8 @@ void main() {
 
     // Verify that the provider-neutral title and tabs are rendered.
     expect(find.text('Realtime Media'), findsOneWidget);
+    expect(find.text('Demo identity'), findsOneWidget);
+    expect(find.text('Display name'), findsOneWidget);
     expect(find.text('Join room'), findsNWidgets(2));
     expect(find.text('Create room'), findsOneWidget);
   });
