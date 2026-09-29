@@ -16,6 +16,10 @@ enum RealtimeErrorCode {
   providerNotConfigured,
   unsupportedPlatform,
   unsupportedFeature,
+  invalidCredential,
+  credentialExpired,
+  driverInitializationFailed,
+  webSdkUnavailable,
   permissionDenied,
   network,
   timeout,
@@ -102,20 +106,28 @@ RealtimeException mapRealtimeException(Object error, {String? providerId}) {
     );
   }
   if (error is MediaError) {
-    final code = switch (error.code) {
-      MediaErrorCode.invalidJoinInfo ||
-      MediaErrorCode.invalidArgument => RealtimeErrorCode.invalidArgument,
-      MediaErrorCode.invalidState ||
-      MediaErrorCode.sessionAlreadyActive ||
-      MediaErrorCode.sessionNotFound => RealtimeErrorCode.invalidState,
-      MediaErrorCode.permissionDenied => RealtimeErrorCode.permissionDenied,
-      MediaErrorCode.unsupportedPlatform =>
+    final reason = _structuredReason(error.details);
+    final code = switch ((error.code, reason)) {
+      (_, 'invalid-credential') => RealtimeErrorCode.invalidCredential,
+      (_, 'credential-expired') => RealtimeErrorCode.credentialExpired,
+      (_, 'driver-initialization-failed') =>
+        RealtimeErrorCode.driverInitializationFailed,
+      (_, 'web-sdk-unavailable') => RealtimeErrorCode.webSdkUnavailable,
+      (MediaErrorCode.invalidJoinInfo, _) ||
+      (MediaErrorCode.invalidArgument, _) => RealtimeErrorCode.invalidArgument,
+      (MediaErrorCode.invalidState, _) ||
+      (MediaErrorCode.sessionAlreadyActive, _) ||
+      (MediaErrorCode.sessionNotFound, _) => RealtimeErrorCode.invalidState,
+      (MediaErrorCode.permissionDenied, _) =>
+        RealtimeErrorCode.permissionDenied,
+      (MediaErrorCode.unsupportedPlatform, _) =>
         RealtimeErrorCode.unsupportedPlatform,
-      MediaErrorCode.unsupportedFeature => RealtimeErrorCode.unsupportedFeature,
-      MediaErrorCode.providerNotRegistered =>
+      (MediaErrorCode.unsupportedFeature, _) =>
+        RealtimeErrorCode.unsupportedFeature,
+      (MediaErrorCode.providerNotRegistered, _) =>
         RealtimeErrorCode.providerNotRegistered,
-      MediaErrorCode.nativeError => RealtimeErrorCode.providerError,
-      MediaErrorCode.unknown => RealtimeErrorCode.unknown,
+      (MediaErrorCode.nativeError, _) => RealtimeErrorCode.providerError,
+      (MediaErrorCode.unknown, _) => RealtimeErrorCode.unknown,
     };
     return RealtimeException(
       code: code,
@@ -128,25 +140,32 @@ RealtimeException mapRealtimeException(Object error, {String? providerId}) {
     );
   }
   if (error is ChatError) {
-    final code = switch (error.code) {
-      ChatErrorCode.invalidJoinInfo ||
-      ChatErrorCode.invalidArgument => RealtimeErrorCode.invalidArgument,
-      ChatErrorCode.invalidState => RealtimeErrorCode.invalidState,
-      ChatErrorCode.unauthorized => RealtimeErrorCode.unauthorized,
-      ChatErrorCode.forbidden => RealtimeErrorCode.forbidden,
-      ChatErrorCode.roomNotFound => RealtimeErrorCode.roomNotFound,
-      ChatErrorCode.providerNotRegistered =>
+    final reason = _structuredReason(error.details);
+    final code = switch ((error.code, reason)) {
+      (_, 'invalid-credential') => RealtimeErrorCode.invalidCredential,
+      (_, 'credential-expired') => RealtimeErrorCode.credentialExpired,
+      (_, 'driver-initialization-failed') =>
+        RealtimeErrorCode.driverInitializationFailed,
+      (_, 'web-sdk-unavailable') => RealtimeErrorCode.webSdkUnavailable,
+      (ChatErrorCode.invalidJoinInfo, _) ||
+      (ChatErrorCode.invalidArgument, _) => RealtimeErrorCode.invalidArgument,
+      (ChatErrorCode.invalidState, _) => RealtimeErrorCode.invalidState,
+      (ChatErrorCode.unauthorized, _) => RealtimeErrorCode.unauthorized,
+      (ChatErrorCode.forbidden, _) => RealtimeErrorCode.forbidden,
+      (ChatErrorCode.roomNotFound, _) => RealtimeErrorCode.roomNotFound,
+      (ChatErrorCode.providerNotRegistered, _) =>
         RealtimeErrorCode.providerNotRegistered,
-      ChatErrorCode.providerNotConfigured =>
+      (ChatErrorCode.providerNotConfigured, _) =>
         RealtimeErrorCode.providerNotConfigured,
-      ChatErrorCode.unsupportedPlatform =>
+      (ChatErrorCode.unsupportedPlatform, _) =>
         RealtimeErrorCode.unsupportedPlatform,
-      ChatErrorCode.unsupportedFeature => RealtimeErrorCode.unsupportedFeature,
-      ChatErrorCode.network => RealtimeErrorCode.network,
-      ChatErrorCode.timeout => RealtimeErrorCode.timeout,
-      ChatErrorCode.serverError => RealtimeErrorCode.serverError,
-      ChatErrorCode.nativeError => RealtimeErrorCode.providerError,
-      ChatErrorCode.unknown => RealtimeErrorCode.unknown,
+      (ChatErrorCode.unsupportedFeature, _) =>
+        RealtimeErrorCode.unsupportedFeature,
+      (ChatErrorCode.network, _) => RealtimeErrorCode.network,
+      (ChatErrorCode.timeout, _) => RealtimeErrorCode.timeout,
+      (ChatErrorCode.serverError, _) => RealtimeErrorCode.serverError,
+      (ChatErrorCode.nativeError, _) => RealtimeErrorCode.providerError,
+      (ChatErrorCode.unknown, _) => RealtimeErrorCode.unknown,
     };
     return RealtimeException(
       code: code,
@@ -177,6 +196,15 @@ RealtimeException mapRealtimeException(Object error, {String? providerId}) {
       cause: error,
     );
   }
+  if (error is UnsupportedError) {
+    return RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
+      message: error.message?.toString() ?? error.toString(),
+      providerId: providerId,
+      suggestedAction: 'check-capabilities',
+      cause: error,
+    );
+  }
   return RealtimeException(
     code: RealtimeErrorCode.unknown,
     message: error.toString(),
@@ -187,6 +215,10 @@ RealtimeException mapRealtimeException(Object error, {String? providerId}) {
 
 String? _suggestedAction(RealtimeErrorCode code) => switch (code) {
   RealtimeErrorCode.permissionDenied => 'request-permission',
+  RealtimeErrorCode.invalidCredential ||
+  RealtimeErrorCode.credentialExpired => 'refresh-provider-credentials',
+  RealtimeErrorCode.driverInitializationFailed => 'retry-driver-initialization',
+  RealtimeErrorCode.webSdkUnavailable => 'load-web-provider-sdk',
   RealtimeErrorCode.network ||
   RealtimeErrorCode.timeout ||
   RealtimeErrorCode.serverError => 'retry',
@@ -194,3 +226,8 @@ String? _suggestedAction(RealtimeErrorCode code) => switch (code) {
   RealtimeErrorCode.providerNotConfigured => 'configure-provider',
   _ => null,
 };
+
+String? _structuredReason(Object? details) {
+  if (details is! Map) return null;
+  return details['reason']?.toString().trim().toLowerCase();
+}

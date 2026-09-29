@@ -53,6 +53,7 @@ class ProviderWebBridge {
         code: MediaErrorCode.unsupportedPlatform,
         message:
             'The locally bundled browser media SDK bridge has not been loaded.',
+        details: {'reason': 'web-sdk-unavailable'},
       );
     }
     return _globalThis['MediaProviderBridge'] as JSObject;

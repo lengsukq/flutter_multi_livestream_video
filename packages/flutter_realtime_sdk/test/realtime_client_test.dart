@@ -1,14 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
-import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
-import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../flutter_realtime_media_core/test/support/fake_media_session.dart';
-import '../../flutter_realtime_media_core/test/support/fake_transport.dart';
+import 'support/fake_media_session.dart';
+import 'support/fake_transport.dart';
 
 void main() {
   group('RealtimeMediaAdapters', () {
@@ -37,6 +35,358 @@ void main() {
           ),
         ]),
         throwsArgumentError,
+      );
+    });
+
+    test(
+      'public vendor Pre-Join resolves the matching internal engine',
+      () async {
+        final meetingFactory = FakeMediaSessionFactory(
+          providerId: 'meeting-sdk',
+        );
+        final liveFactory = FakeMediaSessionFactory(providerId: 'live-sdk');
+        final sdk = RealtimeSdk.standard(
+          platformResolver: () => RealtimeRuntimePlatform.macos,
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.macos},
+              publicProviderId: 'vendor',
+              mediaRoomModes: const {MediaRoomMode.meeting},
+              plugin: RealtimeProviderPlugin(
+                id: 'meeting-sdk',
+                metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+                mediaFactory: meetingFactory,
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.macos},
+              publicProviderId: 'vendor',
+              mediaRoomModes: const {MediaRoomMode.broadcast},
+              plugin: RealtimeProviderPlugin(
+                id: 'live-sdk',
+                metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+                mediaFactory: liveFactory,
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+          ],
+        );
+
+        final meeting = await sdk.preJoin(
+          providerId: 'vendor',
+          role: MediaRole.participant,
+        );
+        final live = await sdk.preJoin(
+          providerId: 'vendor',
+          role: MediaRole.host,
+        );
+
+        expect(meeting.providerId, 'vendor');
+        expect(
+          meeting.check(MediaPreJoinCheckType.provider)?.status,
+          MediaPreJoinStatus.passed,
+        );
+        expect(live.providerId, 'vendor');
+        expect(
+          live.check(MediaPreJoinCheckType.provider)?.status,
+          MediaPreJoinStatus.passed,
+        );
+      },
+    );
+  });
+
+  group('RealtimeDriverRegistry', () {
+    test('built-in media and chat catalogs cover the five public targets', () {
+      const expected =
+          <
+            RealtimeRuntimePlatform,
+            ({Set<String> media, Set<String> chat, Set<String> public})
+          >{
+            RealtimeRuntimePlatform.android: (
+              media: {'livekit', 'agora', 'trtc', 'artc', 'chime', 'ivs'},
+              chat: {'agora-chat', 'ivs-chat', 'tencent-chat'},
+              public: {
+                'livekit',
+                'agora',
+                'trtc',
+                'artc',
+                'aws',
+                'agora-chat',
+                'ivs-chat',
+                'tencent-chat',
+              },
+            ),
+            RealtimeRuntimePlatform.ios: (
+              media: {'livekit', 'agora', 'trtc', 'artc', 'chime', 'ivs'},
+              chat: {'agora-chat', 'ivs-chat', 'tencent-chat'},
+              public: {
+                'livekit',
+                'agora',
+                'trtc',
+                'artc',
+                'aws',
+                'agora-chat',
+                'ivs-chat',
+                'tencent-chat',
+              },
+            ),
+            RealtimeRuntimePlatform.macos: (
+              media: {'livekit', 'agora', 'trtc', 'artc', 'chime', 'ivs'},
+              chat: {'agora-chat', 'tencent-chat'},
+              public: {
+                'livekit',
+                'agora',
+                'trtc',
+                'artc',
+                'aws',
+                'agora-chat',
+                'tencent-chat',
+              },
+            ),
+            RealtimeRuntimePlatform.windows: (
+              media: {'livekit', 'agora', 'trtc'},
+              chat: {'tencent-chat'},
+              public: {'livekit', 'agora', 'trtc', 'tencent-chat'},
+            ),
+            RealtimeRuntimePlatform.web: (
+              media: {'livekit', 'agora', 'trtc', 'artc', 'chime', 'ivs'},
+              chat: {'agora-chat', 'ivs-chat', 'tencent-chat'},
+              public: {
+                'livekit',
+                'agora',
+                'trtc',
+                'artc',
+                'aws',
+                'agora-chat',
+                'ivs-chat',
+                'tencent-chat',
+              },
+            ),
+          };
+
+      for (final entry in expected.entries) {
+        final registry = RealtimeDriverRegistry(
+          createDefaultRealtimeDrivers(),
+          platformResolver: () => entry.key,
+        );
+        if (!registry.drivers.any((driver) => driver.supports(entry.key))) {
+          // Native and Web catalogs are selected at compile time; the CI Web
+          // test runs this same assertion against the Web implementation.
+          continue;
+        }
+        final activeDrivers = registry.drivers
+            .where((driver) => driver.supports(entry.key))
+            .toList(growable: false);
+
+        expect(
+          activeDrivers
+              .where((driver) => driver.plugin.mediaFactory != null)
+              .map((driver) => driver.providerId)
+              .toSet(),
+          entry.value.media,
+          reason: '${entry.key.name} media directory',
+        );
+        expect(
+          activeDrivers
+              .where((driver) => driver.plugin.chatFactory != null)
+              .map((driver) => driver.providerId)
+              .toSet(),
+          entry.value.chat,
+          reason: '${entry.key.name} chat directory',
+        );
+        expect(
+          registry.supportedProviderIds().toSet(),
+          entry.value.public,
+          reason: '${entry.key.name} support listing',
+        );
+      }
+    });
+
+    test('selects the provider driver for the current runtime platform', () {
+      final androidFactory = FakeMediaSessionFactory(providerId: 'fake');
+      final webFactory = FakeMediaSessionFactory(providerId: 'fake');
+      final registry = RealtimeDriverRegistry([
+        RealtimeProviderDriver(
+          platforms: const {RealtimeRuntimePlatform.android},
+          plugin: RealtimeProviderPlugin(
+            id: 'fake',
+            metadata: const RealtimeProviderMetadata(displayName: 'Fake'),
+            mediaFactory: androidFactory,
+            renderer: const _FakeRenderer(),
+          ),
+        ),
+        RealtimeProviderDriver(
+          platforms: const {RealtimeRuntimePlatform.web},
+          plugin: RealtimeProviderPlugin(
+            id: 'fake',
+            metadata: const RealtimeProviderMetadata(displayName: 'Fake'),
+            mediaFactory: webFactory,
+            renderer: const _FakeRenderer(),
+          ),
+        ),
+      ], platformResolver: () => RealtimeRuntimePlatform.web);
+
+      final plugins = RealtimePluginRegistry(registry.resolvePlugins());
+
+      expect(plugins.media.registry.require('fake'), same(webFactory));
+      expect(registry.supportedProviderIds(), contains('fake'));
+    });
+
+    test(
+      'routes one public vendor to different media engines by room mode',
+      () {
+        final meetingFactory = FakeMediaSessionFactory(
+          providerId: 'meeting-sdk',
+        );
+        final liveFactory = FakeMediaSessionFactory(providerId: 'live-sdk');
+        final registry = RealtimeDriverRegistry([
+          RealtimeProviderDriver(
+            platforms: const {RealtimeRuntimePlatform.android},
+            publicProviderId: 'vendor',
+            mediaRoomModes: const {MediaRoomMode.meeting},
+            plugin: RealtimeProviderPlugin(
+              id: 'meeting-sdk',
+              metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+              mediaFactory: meetingFactory,
+              renderer: const _FakeRenderer(),
+            ),
+          ),
+          RealtimeProviderDriver(
+            platforms: const {RealtimeRuntimePlatform.android},
+            publicProviderId: 'vendor',
+            mediaRoomModes: const {MediaRoomMode.broadcast},
+            plugin: RealtimeProviderPlugin(
+              id: 'live-sdk',
+              metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+              mediaFactory: liveFactory,
+              renderer: const _FakeRenderer(),
+            ),
+          ),
+        ], platformResolver: () => RealtimeRuntimePlatform.android);
+
+        expect(registry.supportedProviderIds().toSet(), {'vendor'});
+        expect(
+          registry.resolveMediaEngine(
+            providerId: 'vendor',
+            roomMode: MediaRoomMode.meeting,
+          ),
+          'meeting-sdk',
+        );
+        expect(
+          registry.resolveMediaEngine(
+            providerId: 'vendor',
+            roomMode: MediaRoomMode.broadcast,
+          ),
+          'live-sdk',
+        );
+        expect(registry.publicProviderForEngine('meeting-sdk'), 'vendor');
+        expect(registry.publicProviderForEngine('live-sdk'), 'vendor');
+      },
+    );
+
+    test('known provider without a platform driver fails as unsupported', () {
+      final registry = RealtimeDriverRegistry([
+        RealtimeProviderDriver(
+          platforms: const {RealtimeRuntimePlatform.android},
+          plugin: RealtimeProviderPlugin(
+            id: 'fake',
+            metadata: const RealtimeProviderMetadata(displayName: 'Fake'),
+            mediaFactory: FakeMediaSessionFactory(providerId: 'fake'),
+            renderer: const _FakeRenderer(),
+          ),
+        ),
+      ], platformResolver: () => RealtimeRuntimePlatform.web);
+      final plugins = RealtimePluginRegistry(registry.resolvePlugins());
+
+      expect(registry.knowsProvider('fake'), isTrue);
+      expect(registry.supportsProvider('fake'), isFalse);
+      expect(
+        () => plugins.media.registry.require('fake').parseJoinInfo(const {}),
+        throwsA(
+          isA<MediaError>().having(
+            (error) => error.code,
+            'code',
+            MediaErrorCode.unsupportedPlatform,
+          ),
+        ),
+      );
+    });
+
+    test('keeps media and product chat providers independently selectable', () {
+      final registry = RealtimeDriverRegistry([
+        RealtimeProviderDriver(
+          platforms: const {RealtimeRuntimePlatform.web},
+          plugin: RealtimeProviderPlugin(
+            id: 'media-only',
+            metadata: const RealtimeProviderMetadata(displayName: 'Media'),
+            mediaFactory: FakeMediaSessionFactory(providerId: 'media-only'),
+            renderer: const _FakeRenderer(),
+          ),
+        ),
+        const RealtimeProviderDriver(
+          platforms: {RealtimeRuntimePlatform.web},
+          plugin: RealtimeProviderPlugin(
+            id: 'chat-only',
+            metadata: RealtimeProviderMetadata(displayName: 'Chat'),
+            chatFactory: _FakeChatFactory('chat-only'),
+          ),
+        ),
+      ], platformResolver: () => RealtimeRuntimePlatform.web);
+      final plugins = RealtimePluginRegistry(registry.resolvePlugins());
+
+      expect(plugins.media.registry.lookup('media-only'), isNotNull);
+      expect(plugins.chat.lookup('chat-only'), isNotNull);
+      expect(plugins.chat.lookup('media-only'), isNull);
+      expect(plugins.media.registry.lookup('chat-only'), isNull);
+    });
+
+    test('application plugin overrides a built-in platform driver', () {
+      final builtIn = FakeMediaSessionFactory(providerId: 'fake');
+      final custom = FakeMediaSessionFactory(providerId: 'fake');
+      final registry = RealtimeDriverRegistry([
+        RealtimeProviderDriver(
+          platforms: const {RealtimeRuntimePlatform.android},
+          plugin: RealtimeProviderPlugin(
+            id: 'fake',
+            metadata: const RealtimeProviderMetadata(displayName: 'Built-in'),
+            mediaFactory: builtIn,
+            renderer: const _FakeRenderer(),
+          ),
+        ),
+      ], platformResolver: () => RealtimeRuntimePlatform.web);
+
+      final plugins = RealtimePluginRegistry(
+        registry.resolvePlugins(
+          additionalPlugins: [
+            RealtimeProviderPlugin(
+              id: 'fake',
+              metadata: const RealtimeProviderMetadata(displayName: 'Custom'),
+              mediaFactory: custom,
+              renderer: const _FakeRenderer(),
+            ),
+          ],
+        ),
+      );
+
+      expect(plugins.media.registry.require('fake'), same(custom));
+      expect(plugins.require('fake').metadata.displayName, 'Custom');
+      expect(registry.supportsProvider('fake'), isTrue);
+      expect(
+        registry.supportsProvider('fake', RealtimeRuntimePlatform.web),
+        isTrue,
+      );
+      expect(
+        registry.supportsProvider('fake', RealtimeRuntimePlatform.ios),
+        isFalse,
+      );
+      expect(
+        registry.supportedProviderIds(RealtimeRuntimePlatform.web),
+        contains('fake'),
+      );
+      expect(
+        registry.supportedProviderIds(RealtimeRuntimePlatform.ios),
+        isNot(contains('fake')),
       );
     });
   });
@@ -96,6 +446,44 @@ void main() {
       expect(error.cause, same(source));
       expect(error.details, {'request': 'token'});
     });
+
+    test('maps structured driver and credential reasons', () {
+      const webSource = MediaError(
+        code: MediaErrorCode.unsupportedPlatform,
+        message: 'bridge missing',
+        providerId: 'agora',
+        details: {'reason': 'web-sdk-unavailable'},
+      );
+      const credentialSource = ChatError(
+        code: ChatErrorCode.unauthorized,
+        message: 'expired',
+        providerId: 'agora-chat',
+        details: {'reason': 'credential-expired'},
+      );
+      const chatWebSource = ChatError(
+        code: ChatErrorCode.unsupportedPlatform,
+        message: 'chat bridge missing',
+        providerId: 'agora-chat',
+        details: {'reason': 'web-sdk-unavailable'},
+      );
+
+      final web = mapRealtimeException(webSource);
+      final credential = mapRealtimeException(credentialSource);
+      final chatWeb = mapRealtimeException(chatWebSource);
+
+      expect(web.code, RealtimeErrorCode.webSdkUnavailable);
+      expect(web.suggestedAction, 'load-web-provider-sdk');
+      expect(credential.code, RealtimeErrorCode.credentialExpired);
+      expect(credential.suggestedAction, 'refresh-provider-credentials');
+      expect(chatWeb.code, RealtimeErrorCode.webSdkUnavailable);
+    });
+
+    test('maps UnsupportedError to the stable unsupported-feature code', () {
+      final error = mapRealtimeException(UnsupportedError('not implemented'));
+
+      expect(error.code, RealtimeErrorCode.unsupportedFeature);
+      expect(error.suggestedAction, 'check-capabilities');
+    });
   });
 
   group('RealtimeClient', () {
@@ -126,6 +514,8 @@ void main() {
       expect(room.providerId, 'fake');
       expect(room.renderer, same(renderer));
       expect(room.chat, isA<RtcDataChatSession>());
+      expect(room.usesRtcDataChat, isTrue);
+      expect(room.usesProductChat, isFalse);
       expect(room.state.isConnected, isTrue);
       expect(room.capabilities.canChat, isTrue);
       expect(factory.createdSessions.single.joinCount, 1);
@@ -183,6 +573,112 @@ void main() {
         expect(factory.createdSessions.single.disposeCount, 1);
       },
     );
+
+    test(
+      'public vendor direct join resolves an internal engine and stays public',
+      () async {
+        final meetingFactory = FakeMediaSessionFactory(
+          providerId: 'meeting-sdk',
+        );
+        final liveFactory = FakeMediaSessionFactory(providerId: 'live-sdk');
+        final sdk = RealtimeSdk.standard(
+          platformResolver: () => RealtimeRuntimePlatform.android,
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.android},
+              publicProviderId: 'vendor',
+              mediaRoomModes: const {MediaRoomMode.meeting},
+              plugin: RealtimeProviderPlugin(
+                id: 'meeting-sdk',
+                metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+                mediaFactory: meetingFactory,
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.android},
+              publicProviderId: 'vendor',
+              mediaRoomModes: const {MediaRoomMode.broadcast},
+              plugin: RealtimeProviderPlugin(
+                id: 'live-sdk',
+                metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+                mediaFactory: liveFactory,
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+          ],
+        );
+
+        final room = await sdk.joinWithCredentials(
+          mediaProviderId: 'vendor',
+          mediaJoinPayload: {
+            'provider': 'vendor',
+            'engine': 'meeting-sdk',
+            'roomMode': 'meeting',
+            'roomCode': 'room-1',
+            'participantId': 'user-1',
+            'role': 'participant',
+          },
+        );
+
+        expect(room.providerId, 'vendor');
+        expect(room.engineProviderId, 'meeting-sdk');
+        expect(meetingFactory.parsedPayloads.single['provider'], 'meeting-sdk');
+        expect(meetingFactory.parsedPayloads.single['engine'], 'meeting-sdk');
+        expect(liveFactory.parsedPayloads, isEmpty);
+        await room.dispose();
+      },
+    );
+
+    test('public vendor rejects a room mode and engine mismatch', () {
+      final sdk = RealtimeSdk.standard(
+        platformResolver: () => RealtimeRuntimePlatform.android,
+        drivers: [
+          RealtimeProviderDriver(
+            platforms: const {RealtimeRuntimePlatform.android},
+            publicProviderId: 'vendor',
+            mediaRoomModes: const {MediaRoomMode.meeting},
+            plugin: RealtimeProviderPlugin(
+              id: 'meeting-sdk',
+              metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+              mediaFactory: FakeMediaSessionFactory(providerId: 'meeting-sdk'),
+              renderer: const _FakeRenderer(),
+            ),
+          ),
+          RealtimeProviderDriver(
+            platforms: const {RealtimeRuntimePlatform.android},
+            publicProviderId: 'vendor',
+            mediaRoomModes: const {MediaRoomMode.broadcast},
+            plugin: RealtimeProviderPlugin(
+              id: 'live-sdk',
+              metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+              mediaFactory: FakeMediaSessionFactory(providerId: 'live-sdk'),
+              renderer: const _FakeRenderer(),
+            ),
+          ),
+        ],
+      );
+
+      expect(
+        () => sdk.parseMediaCredentials(
+          providerId: 'vendor',
+          joinPayload: {
+            'provider': 'vendor',
+            'engine': 'meeting-sdk',
+            'roomMode': 'broadcast',
+            'roomCode': 'room-1',
+            'participantId': 'user-1',
+          },
+        ),
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.invalidArgument,
+          ),
+        ),
+      );
+    });
 
     test(
       'cleans up joined media when renderer registration is missing',
@@ -298,6 +794,302 @@ void main() {
   });
 
   group('RealtimeSdk facade', () {
+    test(
+      'standard facade rejects a known provider on an unsupported platform',
+      () async {
+        var webAssetLoadCount = 0;
+        final sdk = RealtimeSdk.standard(
+          platformResolver: () => RealtimeRuntimePlatform.web,
+          webAssetsLoader:
+              ({
+                mediaProviderIds = const <String>[],
+                includeProductChat = false,
+                includeAllMediaProviders = false,
+              }) async {
+                webAssetLoadCount++;
+              },
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.android},
+              plugin: RealtimeProviderPlugin(
+                id: 'fake',
+                metadata: const RealtimeProviderMetadata(displayName: 'Fake'),
+                mediaFactory: FakeMediaSessionFactory(providerId: 'fake'),
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+          ],
+        );
+
+        await expectLater(
+          sdk.joinDirect(
+            MediaJoinInfo(
+              providerId: 'fake',
+              roomCode: 'room',
+              participantId: 'p1',
+              role: MediaRole.participant,
+            ),
+          ),
+          throwsA(
+            isA<RealtimeException>().having(
+              (error) => error.code,
+              'code',
+              RealtimeErrorCode.unsupportedPlatform,
+            ),
+          ),
+        );
+        expect(webAssetLoadCount, 0);
+      },
+    );
+
+    test(
+      'standard Pre-Join blocks a known provider without a platform driver',
+      () async {
+        final sdk = RealtimeSdk.standard(
+          platformResolver: () => RealtimeRuntimePlatform.web,
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.android},
+              plugin: RealtimeProviderPlugin(
+                id: 'fake',
+                metadata: const RealtimeProviderMetadata(displayName: 'Fake'),
+                mediaFactory: FakeMediaSessionFactory(providerId: 'fake'),
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+          ],
+        );
+
+        final result = await sdk.preJoin(providerId: 'fake');
+
+        expect(result.isReady, isFalse);
+        expect(
+          result.check(MediaPreJoinCheckType.provider)?.status,
+          MediaPreJoinStatus.unsupported,
+        );
+        expect(
+          result.check(MediaPreJoinCheckType.provider)?.severity,
+          MediaPreJoinSeverity.blocking,
+        );
+      },
+    );
+
+    test(
+      'parses and joins raw media credentials through the selected driver',
+      () async {
+        final webAssetLoads =
+            <({Set<String> providers, bool chat, bool all})>[];
+        final factory = FakeMediaSessionFactory(providerId: 'fake');
+        final sdk = RealtimeSdk.standard(
+          platformResolver: () => RealtimeRuntimePlatform.web,
+          webAssetsLoader:
+              ({
+                mediaProviderIds = const <String>[],
+                includeProductChat = false,
+                includeAllMediaProviders = false,
+              }) async {
+                webAssetLoads.add((
+                  providers: mediaProviderIds.toSet(),
+                  chat: includeProductChat,
+                  all: includeAllMediaProviders,
+                ));
+              },
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.web},
+              plugin: RealtimeProviderPlugin(
+                id: 'fake',
+                metadata: const RealtimeProviderMetadata(displayName: 'Fake'),
+                mediaFactory: factory,
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+          ],
+        );
+
+        final room = await sdk.joinWithCredentials(
+          mediaProviderId: 'fake',
+          mediaJoinPayload: {
+            'roomCode': 'room-1',
+            'participantId': 'user-1',
+            'role': 'participant',
+            'payload': {'token': 'short-lived'},
+          },
+        );
+
+        expect(room.providerId, 'fake');
+        expect(factory.parsedPayloads.single['provider'], 'fake');
+        expect(
+          (factory.parsedPayloads.single['payload'] as Map)['token'],
+          'short-lived',
+        );
+        expect(webAssetLoads, hasLength(1));
+        expect(webAssetLoads.single.providers, unorderedEquals(['fake']));
+        expect(webAssetLoads.single.chat, isFalse);
+        expect(webAssetLoads.single.all, isFalse);
+        await room.dispose();
+      },
+    );
+
+    test(
+      'custom plugin override is effective in SDK support checks and parsing',
+      () {
+        final builtinFactory = FakeMediaSessionFactory(providerId: 'fake');
+        final customFactory = FakeMediaSessionFactory(providerId: 'fake');
+        final sdk = RealtimeSdk.standard(
+          platformResolver: () => RealtimeRuntimePlatform.web,
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.android},
+              plugin: RealtimeProviderPlugin(
+                id: 'fake',
+                metadata: const RealtimeProviderMetadata(
+                  displayName: 'Built-in',
+                ),
+                mediaFactory: builtinFactory,
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+          ],
+          additionalPlugins: [
+            RealtimeProviderPlugin(
+              id: 'fake',
+              metadata: const RealtimeProviderMetadata(displayName: 'Custom'),
+              mediaFactory: customFactory,
+              renderer: const _FakeRenderer(),
+            ),
+          ],
+        );
+
+        expect(sdk.supportsProvider('fake'), isTrue);
+        expect(sdk.supportedProviderIds, contains('fake'));
+        final parsed = sdk.parseMediaCredentials(
+          providerId: 'fake',
+          joinPayload: {'roomCode': 'room-1', 'participantId': 'user-1'},
+        );
+        expect(parsed.providerId, 'fake');
+        expect(customFactory.parsedPayloads, hasLength(1));
+        expect(builtinFactory.parsedPayloads, isEmpty);
+      },
+    );
+
+    test('parses raw chat credentials independently from media provider', () {
+      final sdk = RealtimeSdk.standard(
+        platformResolver: () => RealtimeRuntimePlatform.web,
+        drivers: const [
+          RealtimeProviderDriver(
+            platforms: {RealtimeRuntimePlatform.web},
+            plugin: RealtimeProviderPlugin(
+              id: 'chat-only',
+              metadata: RealtimeProviderMetadata(displayName: 'Chat'),
+              chatFactory: _FakeChatFactory('chat-only'),
+            ),
+          ),
+        ],
+      );
+
+      final joinInfo = sdk.parseChatCredentials(
+        providerId: 'chat-only',
+        joinPayload: {
+          'roomCode': 'room-1',
+          'participantId': 'participant-1',
+          'userId': 'user-1',
+          'displayName': 'User',
+          'role': 'participant',
+        },
+      );
+
+      expect(joinInfo.providerId, 'chat-only');
+      expect(joinInfo.roomCode, 'room-1');
+      expect(joinInfo.userId, 'user-1');
+    });
+
+    test(
+      'loads only the selected Product Chat Web runtime before connect',
+      () async {
+        final loads = <({bool chat, bool all, Set<String> media})>[];
+        final sdk = RealtimeSdk.standard(
+          platformResolver: () => RealtimeRuntimePlatform.web,
+          webAssetsLoader:
+              ({
+                mediaProviderIds = const <String>[],
+                includeProductChat = false,
+                includeAllMediaProviders = false,
+              }) async {
+                loads.add((
+                  chat: includeProductChat,
+                  all: includeAllMediaProviders,
+                  media: mediaProviderIds.toSet(),
+                ));
+              },
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.web},
+              plugin: RealtimeProviderPlugin(
+                id: 'agora-chat',
+                metadata: const RealtimeProviderMetadata(
+                  displayName: 'Agora Chat',
+                ),
+                chatFactory: _FakeChatFactory('agora-chat'),
+              ),
+            ),
+          ],
+        );
+
+        final room = await sdk.connectChatWithCredentials(
+          providerId: 'agora-chat',
+          joinPayload: {
+            'roomCode': 'room-1',
+            'participantId': 'participant-1',
+            'userId': 'user-1',
+            'displayName': 'User',
+            'role': 'participant',
+          },
+        );
+
+        expect(loads, hasLength(1));
+        expect(loads.single.chat, isTrue);
+        expect(loads.single.all, isFalse);
+        expect(loads.single.media, isEmpty);
+        await room.dispose();
+      },
+    );
+
+    test('rejects credential payload that declares another provider', () {
+      final sdk = RealtimeSdk.standard(
+        platformResolver: () => RealtimeRuntimePlatform.web,
+        drivers: [
+          RealtimeProviderDriver(
+            platforms: const {RealtimeRuntimePlatform.web},
+            plugin: RealtimeProviderPlugin(
+              id: 'fake',
+              metadata: const RealtimeProviderMetadata(displayName: 'Fake'),
+              mediaFactory: FakeMediaSessionFactory(providerId: 'fake'),
+              renderer: const _FakeRenderer(),
+            ),
+          ),
+        ],
+      );
+
+      expect(
+        () => sdk.parseMediaCredentials(
+          providerId: 'fake',
+          joinPayload: {
+            'provider': 'other',
+            'roomCode': 'room-1',
+            'participantId': 'user-1',
+          },
+        ),
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.invalidArgument,
+          ),
+        ),
+      );
+    });
+
     test('runs provider-neutral Pre-Join through the facade', () async {
       final factory = FakeMediaSessionFactory();
       final transport = FakeTransport(
@@ -321,6 +1113,7 @@ void main() {
       );
       final sdk = RealtimeSdk(
         backendUrl: 'https://example.test',
+        webAssetsLoader: _skipWebAssets,
         plugins: [
           RealtimeProviderPlugin(
             id: 'fake',
@@ -365,6 +1158,7 @@ void main() {
       );
       final sdk = RealtimeSdk(
         backendUrl: 'https://example.test',
+        webAssetsLoader: _skipWebAssets,
         plugins: [
           RealtimeProviderPlugin(
             id: 'fake',
@@ -415,6 +1209,7 @@ void main() {
       );
       final sdk = RealtimeSdk(
         backendUrl: 'https://example.test',
+        webAssetsLoader: _skipWebAssets,
         plugins: [
           RealtimeProviderPlugin(
             id: 'fake',
@@ -543,6 +1338,77 @@ void main() {
   });
 }
 
+class _FakeChatFactory implements ChatSessionFactory {
+  const _FakeChatFactory(this.providerId);
+
+  @override
+  final String providerId;
+
+  @override
+  ChatJoinInfo parseJoinInfo(Map<String, dynamic> json) => ChatJoinInfo(
+    providerId: providerId,
+    roomCode: json['roomCode']?.toString() ?? '',
+    participantId: json['participantId']?.toString() ?? '',
+    userId: json['userId']?.toString() ?? '',
+    displayName: json['displayName']?.toString() ?? '',
+    role: ChatRole.tryParse(json['role']) ?? ChatRole.participant,
+    json: json,
+  );
+
+  @override
+  ChatSession createSession(ChatJoinInfo joinInfo) =>
+      _StubChatSession(providerId, joinInfo.role);
+}
+
+class _StubChatSession implements ChatSession {
+  const _StubChatSession(this.providerId, this.role);
+
+  @override
+  final String providerId;
+
+  @override
+  final ChatRole role;
+
+  @override
+  ChatCapabilities get capabilities => const ChatCapabilities();
+
+  @override
+  ChatConnectionState get state => ChatConnectionState.connected;
+
+  @override
+  List<ChatMessage> get messages => const [];
+
+  @override
+  Stream<ChatConnectionState> get states => const Stream.empty();
+
+  @override
+  Stream<List<ChatMessage>> get messageSnapshots => const Stream.empty();
+
+  @override
+  Stream<ChatEvent> get events => const Stream.empty();
+
+  @override
+  Future<void> connect(
+    ChatJoinInfo joinInfo, {
+    ChatCredentialProvider? credentialProvider,
+  }) async {}
+
+  @override
+  Future<void> sendMessage(String message) async {}
+
+  @override
+  Future<void> deleteMessage(String messageId) async {}
+
+  @override
+  Future<void> disconnectUser(String userId) async {}
+
+  @override
+  Future<void> disconnect() async {}
+
+  @override
+  Future<void> dispose() async {}
+}
+
 class _ModerationChatSession implements ChatSession, ChatSessionIdentity {
   _ModerationChatSession({this.canDisconnectUser = false});
 
@@ -666,3 +1532,9 @@ class _FakeRenderer extends MediaTrackRenderer {
   Widget buildView(BuildContext context, MediaVideoTrack track) =>
       const SizedBox.shrink();
 }
+
+Future<void> _skipWebAssets({
+  Iterable<String> mediaProviderIds = const [],
+  bool includeProductChat = false,
+  bool includeAllMediaProviders = false,
+}) async {}

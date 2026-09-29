@@ -7,8 +7,7 @@
       "request": "launch",
       "cwd": "${workspaceFolder}/example",
       "program": "${workspaceFolder}/example/lib/main.dart",
-      "deviceId": "chrome",
-      "preLaunchTask": "Build provider Web SDK bridge"
+      "deviceId": "chrome"
     }
   ]
 }

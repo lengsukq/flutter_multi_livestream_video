@@ -2,15 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build provider Web SDK bridge",
+      "label": "Regenerate bundled provider Web SDK assets",
       "type": "shell",
-      "command": "npm",
-      "args": [
-        "--prefix",
-        "${workspaceFolder}/example/web/provider_bridge",
-        "run",
-        "build"
-      ],
+      "command": "${workspaceFolder}/scripts/build_provider_web_assets.sh",
       "problemMatcher": []
     }
   ]

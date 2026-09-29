@@ -163,8 +163,8 @@ MediaCapabilities _capabilitiesFor(ProviderWebProfile profile, MediaRole role) {
     canPublishVideo: !isViewer,
     canSwitchCamera: !isViewer && profile.canSwitchCamera,
     canScreenShare: canScreenShare,
-    canSendData: false,
-    canReceiveData: false,
+    canSendData: !isViewer && profile.canSendData,
+    canReceiveData: profile.canReceiveData,
     canSubscribeVideo: true,
     canEnumerateAudioDevices: canEnumerateDevices,
     canEnumerateMicrophones: !isViewer && canEnumerateDevices,
@@ -174,7 +174,8 @@ MediaCapabilities _capabilitiesFor(ProviderWebProfile profile, MediaRole role) {
     canSelectAudioOutput: canSelectAudioOutput,
     canReportNetworkStats: profile.canReportNetworkStats,
     canListParticipants: role == MediaRole.host,
-    canRemoveParticipants: canManageParticipants && profile.canRemoveParticipants,
+    canRemoveParticipants:
+        canManageParticipants && profile.canRemoveParticipants,
     canCloseRoom: canManageParticipants,
   );
 }
@@ -491,11 +492,20 @@ abstract class ProviderWebSessionBase
 
   @override
   Future<void> sendMessage(String message, {String topic = 'chat'}) async {
-    throw MediaError(
-      code: MediaErrorCode.unsupportedFeature,
-      message: 'Realtime data messaging is not enabled in the Web adapter.',
-      providerId: providerId,
-    );
+    _ensureActive();
+    _requireCapability(capabilities.canSendData, 'sending data messages');
+    if (message.trim().isEmpty || topic.trim().isEmpty) {
+      throw MediaError(
+        code: MediaErrorCode.invalidArgument,
+        message: 'Message and topic must not be empty.',
+        providerId: providerId,
+      );
+    }
+    await _command('sendMessage', {
+      'message': message,
+      'topic': topic,
+      'lifetimeMs': 300000,
+    });
   }
 
   @override
@@ -568,6 +578,23 @@ abstract class ProviderWebSessionBase
         break;
       case 'stats':
         _updateStats(event);
+        break;
+      case 'message':
+        if (event['throttled'] == true) break;
+        final message = MediaMessage(
+          participantId: event['participantId']?.toString() ?? '',
+          displayName: event['displayName']?.toString() ?? '',
+          message: event['message']?.toString() ?? '',
+          topic: event['topic']?.toString() ?? 'chat',
+          timestampMs:
+              (event['timestampMs'] as num?)?.toInt() ??
+              DateTime.now().millisecondsSinceEpoch,
+          providerId: providerId,
+        );
+        _updateSnapshot(
+          _snapshot.copyWith(messages: [..._snapshot.messages, message]),
+        );
+        _emit(MediaMessageReceived(message));
         break;
       case 'error':
         final error = MediaError(

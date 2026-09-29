@@ -15,6 +15,8 @@ class ProviderWebProfile {
     this.canManageParticipants = true,
     this.canRemoveParticipants = false,
     this.supportsAudioOutputSelection = false,
+    this.canSendData = false,
+    this.canReceiveData = false,
   });
 
   final String providerId;
@@ -25,10 +27,12 @@ class ProviderWebProfile {
   final bool canManageParticipants;
   final bool canRemoveParticipants;
   final bool supportsAudioOutputSelection;
+  final bool canSendData;
+  final bool canReceiveData;
 
-  static ProviderWebProfile forProvider(String providerId) => switch (
-    providerId
-  ) {
+  static ProviderWebProfile forProvider(
+    String providerId,
+  ) => switch (providerId) {
     'chime' => const ProviderWebProfile(
       providerId: 'chime',
       supportedRoles: {MediaRole.participant},
@@ -37,23 +41,17 @@ class ProviderWebProfile {
       canReportNetworkStats: false,
       canManageParticipants: false,
       supportsAudioOutputSelection: true,
+      canSendData: true,
+      canReceiveData: true,
     ),
     'agora' => const ProviderWebProfile(
       providerId: 'agora',
-      supportedRoles: {
-        MediaRole.participant,
-        MediaRole.host,
-        MediaRole.viewer,
-      },
+      supportedRoles: {MediaRole.participant, MediaRole.host, MediaRole.viewer},
       supportsAudioOutputSelection: true,
     ),
     'ivs' => const ProviderWebProfile(
       providerId: 'ivs',
-      supportedRoles: {
-        MediaRole.participant,
-        MediaRole.host,
-        MediaRole.viewer,
-      },
+      supportedRoles: {MediaRole.participant, MediaRole.host, MediaRole.viewer},
       canRemoveParticipants: true,
     ),
     _ => ProviderWebProfile(

@@ -31,6 +31,25 @@ function normalizeMessage(message, session) {
 }
 
 export function createAgoraChatBridge(AC, root = globalThis) {
+  let agoraChat = AC;
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (
+      typeof agoraChat?.connection === 'function' &&
+      typeof agoraChat?.message?.create === 'function'
+    ) {
+      break;
+    }
+    agoraChat = agoraChat?.default;
+  }
+  if (
+    typeof agoraChat?.connection !== 'function' ||
+    typeof agoraChat?.message?.create !== 'function'
+  ) {
+    throw new TypeError(
+      'The bundled Agora Chat SDK does not expose connection and message APIs.',
+    );
+  }
+
   const sessions = new Map();
 
   function requireSession(id) {
@@ -85,7 +104,12 @@ export function createAgoraChatBridge(AC, root = globalThis) {
         throw new Error('Agora Chat join information is incomplete.');
       }
 
-      const connection = new AC.connection({ appKey: chat.appKey });
+      // The macOS plugin hosts this SDK in a file:// WKWebView. Agora Chat
+      // otherwise treats that origin as non-HTTPS and picks ws:// endpoints.
+      const connection = new agoraChat.connection({
+        appKey: chat.appKey,
+        https: true,
+      });
       const session = {
         id,
         connection,
@@ -160,7 +184,7 @@ export function createAgoraChatBridge(AC, root = globalThis) {
       if (command !== 'sendMessage') {
         throw new Error(`Unsupported Agora Chat operation ${command}.`);
       }
-      const message = AC.message.create({
+      const message = agoraChat.message.create({
         chatType: 'chatRoom',
         type: 'txt',
         to: session.chatRoomId,

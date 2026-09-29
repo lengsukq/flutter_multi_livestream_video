@@ -82,7 +82,7 @@ test('logs into the room, sends normalized text, refreshes token, and tears down
   const { bridge, events, calls, getConnection } = setup();
   await bridge.create('s1', credentials);
   const connection = getConnection();
-  assert.deepEqual(connection.options, { appKey: 'org#app' });
+  assert.deepEqual(connection.options, { appKey: 'org#app', https: true });
 
   await bridge.connect('s1');
   assert.deepEqual(connection.login, {

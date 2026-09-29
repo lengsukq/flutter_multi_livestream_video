@@ -15,12 +15,14 @@ import 'realtime_moderation.dart';
 class RealtimeRoom {
   RealtimeRoom({
     required this.media,
+    String? publicProviderId,
     required this.renderer,
     this.chat,
     ChatRoomSession? productChatRoom,
     RtcDataChatSession? rtcChatRoom,
     required void Function() disposeClients,
-  }) : _productChatRoom = productChatRoom,
+  }) : publicProviderId = publicProviderId ?? media.providerId,
+       _productChatRoom = productChatRoom,
        _rtcChatRoom = rtcChatRoom,
        _disposeClients = disposeClients {
     _mediaEventSubscription = media.session.events.listen(_onMediaEvent);
@@ -40,6 +42,7 @@ class RealtimeRoom {
   }
 
   final MediaRoomSession media;
+  final String publicProviderId;
   final MediaTrackRenderer renderer;
   final ChatSession? chat;
   final ChatRoomSession? _productChatRoom;
@@ -57,8 +60,11 @@ class RealtimeRoom {
   bool _disposed = false;
 
   String get roomCode => media.roomCode;
-  String get providerId => media.providerId;
+  String get providerId => publicProviderId;
+  String get engineProviderId => media.providerId;
   String? get chatProvider => media.chatProvider;
+  bool get usesProductChat => _productChatRoom != null;
+  bool get usesRtcDataChat => _rtcChatRoom != null;
   RealtimeRoomCapabilities get capabilities => RealtimeRoomCapabilities(
     media: media.session.capabilities,
     chat: chat?.capabilities,

@@ -12,6 +12,7 @@ import 'realtime_chat_room.dart';
 typedef RealtimeTokenProvider = Future<String?> Function();
 typedef RealtimeMediaClientFactory = MediaClient Function();
 typedef RealtimeChatClientFactory = ChatClient Function();
+typedef RealtimePublicProviderResolver = String Function(String engineId);
 
 /// Recommended application-level entry point for realtime rooms.
 ///
@@ -25,10 +26,12 @@ class RealtimeClient {
     RealtimeTokenProvider? tokenProvider,
     RealtimeMediaClientFactory? mediaClientFactory,
     RealtimeChatClientFactory? chatClientFactory,
+    RealtimePublicProviderResolver? publicProviderResolver,
   }) : chatRegistry = chatRegistry ?? ChatRegistry(),
        _tokenProvider = tokenProvider,
        _mediaClientFactory = mediaClientFactory,
-       _chatClientFactory = chatClientFactory;
+       _chatClientFactory = chatClientFactory,
+       _publicProviderResolver = publicProviderResolver;
 
   final String? backendUrl;
   final RealtimeMediaAdapters mediaAdapters;
@@ -36,6 +39,7 @@ class RealtimeClient {
   final RealtimeTokenProvider? _tokenProvider;
   final RealtimeMediaClientFactory? _mediaClientFactory;
   final RealtimeChatClientFactory? _chatClientFactory;
+  final RealtimePublicProviderResolver? _publicProviderResolver;
 
   ChatClient newChatClient({ChatProvisioner? provisioner}) =>
       _chatClientFactory?.call() ??
@@ -263,6 +267,8 @@ class RealtimeClient {
 
       return RealtimeRoom(
         media: room,
+        publicProviderId:
+            _publicProviderResolver?.call(room.providerId) ?? room.providerId,
         renderer: renderer,
         chat: chat,
         productChatRoom: productChatRoom,

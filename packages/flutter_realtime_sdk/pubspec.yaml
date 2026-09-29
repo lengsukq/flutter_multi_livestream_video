@@ -17,9 +17,38 @@ dependencies:
     path: ../flutter_realtime_chat_core
   flutter_realtime_chat_rtc:
     path: ../flutter_realtime_chat_rtc
+  flutter_realtime_media_agora:
+    path: ../flutter_realtime_media_agora
+  flutter_realtime_media_artc:
+    path: ../flutter_realtime_media_artc
+  flutter_realtime_media_aws_desktop:
+    path: ../flutter_realtime_media_aws_desktop
+  flutter_realtime_media_chime:
+    path: ../flutter_realtime_media_chime
+  flutter_realtime_media_ivs:
+    path: ../flutter_realtime_media_ivs
+  flutter_realtime_media_livekit:
+    path: ../flutter_realtime_media_livekit
+  flutter_realtime_media_trtc:
+    path: ../flutter_realtime_media_trtc
+  flutter_realtime_media_web:
+    path: ../flutter_realtime_media_web
+  flutter_realtime_chat_agora:
+    path: ../flutter_realtime_chat_agora
+  flutter_realtime_chat_ivs:
+    path: ../flutter_realtime_chat_ivs
+  flutter_realtime_chat_tencent:
+    path: ../flutter_realtime_chat_tencent
+  web: ^1.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
 flutter:
+  assets:
+    - assets/provider_web_runtime/
+    - assets/provider_web_runtime/licenses/
+    - assets/provider_web_runtime/vendors/
+    - assets/provider_web_runtime/vendors/trtc-assets/
+    - assets/provider_web_runtime/vendors/trtc-assets/mediapipe/
   uses-material-design: true

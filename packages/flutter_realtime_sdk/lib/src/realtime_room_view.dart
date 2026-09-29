@@ -12,12 +12,14 @@ class RealtimeRoomView extends StatelessWidget {
     super.key,
     required this.room,
     this.config = const MediaRoomViewConfig(),
+    this.header,
     this.participantBuilder,
     this.onLeave,
   });
 
   final RealtimeRoom room;
   final MediaRoomViewConfig config;
+  final Widget? header;
   final MediaParticipantBuilder? participantBuilder;
   final VoidCallback? onLeave;
 
@@ -28,6 +30,7 @@ class RealtimeRoomView extends StatelessWidget {
     chatSession: room.chat,
     chatModeration: room.chatModeration,
     config: config,
+    header: header,
     participantBuilder: participantBuilder,
     onLeave: onLeave,
   );

@@ -98,6 +98,9 @@ class MediaClient {
         providerId: joinInfo.providerId,
       );
     }
+    if (factory case final MediaSessionPreparer preparer) {
+      await preparer.prepareSession(joinInfo);
+    }
     final session = factory.createSession(joinInfo);
     try {
       await session.join(joinInfo);
@@ -296,6 +299,9 @@ class MediaClient {
         ?.toString()
         .trim();
 
+    if (factory case final MediaSessionPreparer preparer) {
+      await preparer.prepareSession(joinInfo);
+    }
     final session = factory.createSession(joinInfo);
     if (session case final MediaCredentialRefreshable refreshable) {
       Future<MediaJoinInfo>? refreshInFlight;
@@ -438,7 +444,11 @@ class MediaClient {
   }) {
     try {
       final adapterJson = Map<String, dynamic>.from(response.json)
-        ..putIfAbsent('provider', () => response.providerId)
+        // Vendor-aware backends may expose a public provider (for example
+        // aws) plus a concrete engine (chime/ivs). The resolved factory must
+        // always receive its own provider id while the original response stays
+        // available in backendMetadata.
+        ..['provider'] = response.providerId
         ..putIfAbsent('role', () => response.role.wireName)
         ..putIfAbsent('roomCode', () => response.roomCode);
       final joinInfo = factory.parseJoinInfo(adapterJson);

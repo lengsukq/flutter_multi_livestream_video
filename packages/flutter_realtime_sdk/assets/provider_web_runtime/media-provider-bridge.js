@@ -69,6 +69,7 @@
     session.tracks.set(track.id, track);
     const participant = addParticipant(session, participantId, null, isLocal);
     participant.isVideoEnabled = true;
+    if (!isScreenShare) participant.videoTrackId = track.id;
     publishSnapshot(session);
     return track;
   }
@@ -80,8 +81,27 @@
     const participant = session.participants.get(track.participantId);
     if (participant && ![...session.tracks.values()].some((item) => item.participantId === track.participantId)) {
       participant.isVideoEnabled = false;
+      delete participant.videoTrackId;
+    } else if (participant && participant.videoTrackId === track.id) {
+      const replacement = [...session.tracks.values()].find(
+        (item) => item.participantId === track.participantId && !item.isScreenShare,
+      );
+      participant.videoTrackId = replacement?.id;
+      if (!replacement) participant.isVideoEnabled = false;
     }
     publishSnapshot(session);
+  }
+
+  function emitMessage(session, { participantId, displayName, message, topic = 'chat', timestampMs = Date.now(), throttled = false }) {
+    emit(session, {
+      type: 'message',
+      participantId: String(participantId || ''),
+      displayName: String(displayName || participantId || ''),
+      message: String(message || ''),
+      topic: String(topic || 'chat'),
+      timestampMs: Number(timestampMs || Date.now()),
+      throttled: Boolean(throttled),
+    });
   }
 
   function publishSnapshot(session) {
@@ -420,7 +440,7 @@
   function createTrtcSession(session) {
     const info = providerBlock(session, 'trtc');
     const sdk = global.TRTC;
-    const trtc = sdk.create({ assetsPath: new URL('provider_bridge/dist/vendors/trtc-assets/', document.baseURI).toString() });
+    const trtc = sdk.create({ assetsPath: new URL('assets/packages/flutter_realtime_sdk/assets/provider_web_runtime/vendors/trtc-assets/', document.baseURI).toString() });
     const localVideoId = `trtc:video:${session.localParticipantId}`;
     const remoteTracks = new Map();
     const refreshLocalTrack = () => {
@@ -802,14 +822,57 @@
       connectionDidSuggestStop() { emitState(session, 'reconnecting', 'connection-did-suggest-stop'); },
     };
     audioVideo.addObserver(observer);
+    const presenceObserver = (attendeeId, present, externalUserId) => {
+      if (!attendeeId || attendeeId.includes('#')) return;
+      if (present) {
+        addParticipant(
+          session,
+          attendeeId,
+          externalUserId || attendeeId,
+          attendeeId === session.localParticipantId,
+        );
+        publishSnapshot(session);
+      } else {
+        removeParticipant(session, attendeeId);
+      }
+    };
+    audioVideo.realtimeSubscribeToAttendeeIdPresence(presenceObserver);
+    const dataTopic = 'chat';
+    const dataObserver = (dataMessage) => {
+      let message = '';
+      try {
+        if (typeof dataMessage.text === 'function') message = dataMessage.text();
+        else if (dataMessage.data) message = new TextDecoder().decode(dataMessage.data);
+      } catch (_) {
+        message = '';
+      }
+      emitMessage(session, {
+        participantId: dataMessage.senderAttendeeId,
+        displayName: dataMessage.senderExternalUserId,
+        message,
+        topic: dataMessage.topic || dataTopic,
+        timestampMs: dataMessage.timestampMs,
+        throttled: dataMessage.throttled,
+      });
+    };
+    audioVideo.realtimeSubscribeToReceiveDataMessage(dataTopic, dataObserver);
     session.meetingSession = meetingSession;
     session.driver = {
       async join() {
-        await audioVideo.start();
-        await audioVideo.startLocalAudio();
-        await audioVideo.startLocalVideoTile();
-        session.localMuted = false;
-        session.localVideoEnabled = true;
+        const [microphones, cameras] = await Promise.all([
+          audioVideo.listAudioInputDevices(),
+          audioVideo.listVideoInputDevices(),
+        ]);
+        if (microphones.length) {
+          await audioVideo.startAudioInput(microphones[0].deviceId);
+        }
+        if (cameras.length) {
+          await audioVideo.startVideoInput(cameras[0].deviceId);
+        }
+        audioVideo.start();
+        if (cameras.length) audioVideo.startLocalVideoTile();
+        session.localMuted = microphones.length === 0;
+        session.localVideoEnabled = cameras.length > 0;
         for (const tile of audioVideo.getAllVideoTiles()) observer.videoTileDidUpdate(tile.state());
       },
       async command(name, args) {
@@ -829,14 +892,22 @@
         }
         if (name === 'selectDevice' || name === 'selectAudioOutput') {
           const selected = args.device || args;
-          if (selected.kind === 'microphone') await audioVideo.chooseAudioInputDevice(selected.id);
-          if (selected.kind === 'camera') await audioVideo.chooseVideoInputDevice(selected.id);
+          if (selected.kind === 'microphone') await audioVideo.startAudioInput(selected.id);
+          if (selected.kind === 'camera') await audioVideo.startVideoInput(selected.id);
           if (selected.kind === 'audioOutput') await audioVideo.chooseAudioOutput(selected.id);
           return;
         }
         if (name === 'listDevices') {
           const [microphones, cameras, outputs] = await Promise.all([audioVideo.listAudioInputDevices(), audioVideo.listVideoInputDevices(), audioVideo.listAudioOutputDevices()]);
           return [...microphones.map((item) => ({ id: item.deviceId, label: item.label, groupId: item.groupId, kind: 'microphone' })), ...cameras.map((item) => ({ id: item.deviceId, label: item.label, groupId: item.groupId, kind: 'camera' })), ...outputs.map((item) => ({ id: item.deviceId, label: item.label, groupId: item.groupId, kind: 'audioOutput' }))];
+        }
+        if (name === 'sendMessage') {
+          const topic = String(args.topic || dataTopic);
+          const message = String(args.message || '');
+          const lifetimeMs = Number(args.lifetimeMs || 300000);
+          if (!message || !topic || lifetimeMs <= 0) throw new Error('Chime data message requires message, topic, and positive lifetimeMs.');
+          audioVideo.realtimeSendDataMessage(topic, message, lifetimeMs);
+          return;
         }
         throw new Error(`Chime does not support ${name}.`);
       },
@@ -847,7 +918,11 @@
       },
       detachVideo(track) { audioVideo.unbindVideoElement(track.native.tileId); },
       async leave() { audioVideo.stop(); await deviceController.destroy?.(); },
-      async dispose() { audioVideo.removeObserver(observer); },
+      async dispose() {
+        audioVideo.removeObserver(observer);
+        audioVideo.realtimeUnsubscribeToAttendeeIdPresence(presenceObserver);
+        audioVideo.realtimeUnsubscribeFromReceiveDataMessage(dataTopic);
+      },
       async getStats() { return null; },
     };
     return session;

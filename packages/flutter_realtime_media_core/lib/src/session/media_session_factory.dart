@@ -27,6 +27,14 @@ abstract class MediaSessionFactory {
   MediaSession createSession(MediaJoinInfo joinInfo);
 }
 
+/// Optional setup hook for SDK-owned platform resources needed by a factory.
+///
+/// [MediaClient] calls this after resolving a provider and before creating its
+/// session. Existing adapter factories do not need to implement this contract.
+abstract interface class MediaSessionPreparer {
+  Future<void> prepareSession(MediaJoinInfo joinInfo);
+}
+
 /// Registry of provider adapters available to an application.
 ///
 /// Registration is explicit: an app that only uses one provider never pulls in

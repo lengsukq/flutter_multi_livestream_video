@@ -20,10 +20,12 @@ class MediaDoctorReport {
   const MediaDoctorReport(
     this.checks, {
     this.activeProvider,
+    this.activeChatProvider,
     this.backendReachable = false,
   });
   final List<MediaDoctorCheck> checks;
   final String? activeProvider;
+  final String? activeChatProvider;
   final bool backendReachable;
 
   bool get healthy =>
@@ -47,6 +49,7 @@ class MediaDoctor {
   }) async {
     final checks = <MediaDoctorCheck>[];
     String? activeProvider;
+    String? activeChatProvider;
     var backendReachable = false;
     final providers = registry.providerIds.toList(growable: false);
     checks.add(
@@ -86,6 +89,12 @@ class MediaDoctor {
           ),
         );
       }
+      final activeChat = health['activeChatProvider']?.toString().trim();
+      if (activeChat != null &&
+          activeChat.isNotEmpty &&
+          activeChat.toLowerCase() != 'none') {
+        activeChatProvider = activeChat.toLowerCase();
+      }
     } on MediaBackendError catch (error) {
       final unreachable =
           error.code == MediaBackendErrorCode.network ||
@@ -117,6 +126,7 @@ class MediaDoctor {
     return MediaDoctorReport(
       List.unmodifiable(checks),
       activeProvider: activeProvider,
+      activeChatProvider: activeChatProvider,
       backendReachable: backendReachable,
     );
   }

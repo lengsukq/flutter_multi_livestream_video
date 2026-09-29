@@ -5,12 +5,17 @@ import { build } from 'esbuild';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(scriptDir, '..');
+const repoRoot = resolve(rootDir, '../../../..');
 const nodeModules = join(rootDir, 'node_modules');
 const distDir = join(rootDir, 'dist');
 const vendorsDir = join(distDir, 'vendors');
 const agoraChatMacOSAssetsDir = resolve(
-  rootDir,
-  '../../../packages/flutter_realtime_chat_agora/macos/Resources',
+  repoRoot,
+  'packages/flutter_realtime_chat_agora/macos/Resources',
+);
+const sdkAssetDir = resolve(
+  repoRoot,
+  'packages/flutter_realtime_sdk/assets/provider_web_runtime',
 );
 
 await rm(distDir, { recursive: true, force: true });
@@ -65,7 +70,9 @@ await build({
         'amazon-chime-sdk-js/build/task/PromoteToPrimaryMeetingTask.js',
       );
       builder.onResolve({ filter: /^\.\.$/ }, (args) =>
-        args.importer === meetingTask
+        args.importer.endsWith(
+          '/amazon-chime-sdk-js/build/task/PromoteToPrimaryMeetingTask.js',
+        )
           ? { path: join(rootDir, 'src/chime-index-shim.js') }
           : undefined,
       );
@@ -127,3 +134,6 @@ for (const [packageName, licensePrefix] of [
     }
   }
 }
+
+await rm(sdkAssetDir, { recursive: true, force: true });
+await cp(distDir, sdkAssetDir, { recursive: true });
