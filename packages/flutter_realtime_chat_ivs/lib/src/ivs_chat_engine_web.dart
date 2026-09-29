@@ -157,6 +157,7 @@ class _IvsChatWebDriver implements WebChatDriver<IvsChatJoinInfo> {
         message:
             'The local chat provider bridge has not been loaded. Follow the Web setup instructions.',
         providerId: IvsChatJoinInfo.providerIdValue,
+        details: {'reason': 'web-sdk-unavailable'},
       );
     }
     return _globalThis['IvsChatMessagingBridge'] as JSObject;

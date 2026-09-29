@@ -8,6 +8,14 @@ abstract class ChatSessionFactory {
   ChatSession createSession(ChatJoinInfo joinInfo);
 }
 
+/// Optional setup hook for SDK-owned platform resources needed by a factory.
+///
+/// [ChatClient] calls this after resolving a provider and before creating its
+/// session. Existing adapter factories do not need to implement this contract.
+abstract interface class ChatSessionPreparer {
+  Future<void> prepareSession(ChatJoinInfo joinInfo);
+}
+
 class ChatRegistry {
   ChatRegistry([Iterable<ChatSessionFactory> factories = const []]) {
     for (final factory in factories) {

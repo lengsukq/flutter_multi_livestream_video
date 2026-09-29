@@ -15,6 +15,12 @@ import { ProviderOperationError } from '../providers/provider-registry.ts';
 const { ChatTokenBuilder } = agoraToken;
 const DEFAULT_TOKEN_TTL_SECONDS = 3600;
 
+function isAgoraChatAppKey(value: string | null): value is string {
+  if (!value) return false;
+  const separator = value.indexOf('#');
+  return separator > 0 && separator === value.lastIndexOf('#') && separator < value.length - 1;
+}
+
 export interface AgoraChatApi {
   createRoom(name: string): Promise<string>;
   ensureUser(username: string): Promise<string>;
@@ -204,9 +210,13 @@ export function createAgoraChatProvider({
   const ttlSeconds = normalizeAgoraChatTokenTtl(
     env.AGORA_CHAT_TOKEN_TTL_SECONDS,
   );
+  const validAppKey = isAgoraChatAppKey(appKey);
+  const configurationError = appKey && !validAppKey
+    ? 'AGORA_CHAT_APP_KEY must be the Agora Chat App Key in OrgName#AppName format. Do not use the numeric Agora RTC App ID.'
+    : 'Agora Chat is not configured. Set AGORA_CHAT_APP_KEY, AGORA_CHAT_REST_HOST, and AGORA_CHAT_APP_ID/AGORA_CHAT_APP_CERTIFICATE (or reuse AGORA_APP_ID/AGORA_APP_CERTIFICATE).';
   const configured =
     injectedApi != null ||
-    Boolean(appId && appCertificate && appKey && restHost);
+    Boolean(appId && appCertificate && validAppKey && restHost);
   const api = injectedApi ??
     (configured && appId && appCertificate && restHost
       ? createRestApi({
@@ -223,8 +233,7 @@ export function createAgoraChatProvider({
     label: 'Agora Chat',
     description: 'Agora managed persistent chat rooms',
     themeKey: 'agora-chat',
-    configurationError:
-      'Agora Chat is not configured. Set AGORA_CHAT_APP_KEY, AGORA_CHAT_REST_HOST, and AGORA_CHAT_APP_ID/AGORA_CHAT_APP_CERTIFICATE (or reuse AGORA_APP_ID/AGORA_APP_CERTIFICATE).',
+    configurationError,
     capabilityMatrix: [
       { key: 'sendMessage', label: 'Send message', support: 'supported' },
       {
@@ -299,6 +308,16 @@ export function createAgoraChatProvider({
         return;
       }
       await api.deleteRoom(entry.chatRoomArn);
+    },
+    async deleteCloudRoom(providerRoomId) {
+      if (!api) {
+        throw new ProviderOperationError(
+          503,
+          'provider-not-configured',
+          'Agora Chat is not configured.',
+        );
+      }
+      await api.deleteRoom(providerRoomId);
     },
     async removeMember(entry, attendee) {
       if (

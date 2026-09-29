@@ -144,6 +144,9 @@ class ChatClient {
     ChatCredentialProvider? credentialProvider,
   }) async {
     final factory = registry.require(joinInfo.providerId);
+    if (factory case final ChatSessionPreparer preparer) {
+      await preparer.prepareSession(joinInfo);
+    }
     final session = factory.createSession(joinInfo);
     try {
       await session.connect(joinInfo, credentialProvider: credentialProvider);

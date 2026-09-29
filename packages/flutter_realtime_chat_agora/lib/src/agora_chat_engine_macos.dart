@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
-import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
-import 'package:flutter_realtime_chat_core/src/web/web_chat_runtime.dart';
+import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core_web.dart';
 
 import 'agora_chat_engine.dart';
 import 'agora_chat_join_info.dart';

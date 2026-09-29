@@ -12,7 +12,19 @@
         if (!bridge || typeof bridge[method] !== 'function') {
           throw new Error(`Agora Chat bridge method ${method} is unavailable.`);
         }
-        return await bridge[method](...args);
+        try {
+          return await bridge[method](...args);
+        } catch (error) {
+          const name = typeof error?.name === 'string' ? error.name : 'Error';
+          const message = typeof error?.message === 'string'
+            ? error.message
+            : String(error);
+          const code = error?.code ?? error?.type ?? error?.errorCode;
+          const codeText = code == null ? '' : ` (code ${String(code)})`;
+          return {
+            __flutterAgoraChatError: `${name}${codeText}: ${message}`,
+          };
+        }
       }
     </script>
   </body>

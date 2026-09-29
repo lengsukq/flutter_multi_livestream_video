@@ -188,6 +188,7 @@ class _AgoraChatWebDriver implements WebChatDriver<AgoraChatJoinInfo> {
         message:
             'The local chat provider bridge has not been loaded. Follow the Web setup instructions.',
         providerId: AgoraChatJoinInfo.providerIdValue,
+        details: {'reason': 'web-sdk-unavailable'},
       );
     }
     return _globalThis['AgoraChatBridge'] as JSObject;

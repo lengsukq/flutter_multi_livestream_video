@@ -83,18 +83,59 @@ public final class AgoraChatMacOSPlugin: NSObject, FlutterPlugin,
       }
       Task { @MainActor in
         do {
-          _ = try await webView.callAsyncJavaScript(
+          let value = try await webView.callAsyncJavaScript(
             "return await guardedInvoke(method, args)",
             arguments: ["method": method, "args": arguments],
             in: nil,
             contentWorld: .page
           )
+          if let outcome = value as? [String: Any],
+            let message = outcome["__flutterAgoraChatError"] as? String
+          {
+            result(
+              FlutterError(
+                code: "agora-chat-js",
+                message: "Agora Chat \(method) failed: \(message)",
+                details: ["operation": method]
+              )
+            )
+            return
+          }
           result(nil)
         } catch {
-          result(FlutterError(code: "agora-chat-js", message: error.localizedDescription, details: nil))
+          result(Self.javaScriptFailure(error, operation: method))
         }
       }
     }
+  }
+
+  private static func javaScriptFailure(_ error: Error, operation: String) -> FlutterError {
+    let nativeError = error as NSError
+    let userInfo = nativeError.userInfo
+    let message = userInfo["WKJavaScriptExceptionMessage"] as? String
+      ?? userInfo[NSLocalizedFailureReasonErrorKey] as? String
+      ?? nativeError.localizedDescription
+
+    var details: [String: Any] = [
+      "operation": operation,
+      "domain": nativeError.domain,
+      "code": nativeError.code,
+    ]
+    if let line = userInfo["WKJavaScriptExceptionLineNumber"] {
+      details["lineNumber"] = line
+    }
+    if let column = userInfo["WKJavaScriptExceptionColumnNumber"] {
+      details["columnNumber"] = column
+    }
+    if let sourceURL = userInfo["WKJavaScriptExceptionSourceURL"] as? String {
+      details["sourceURL"] = sourceURL
+    }
+
+    return FlutterError(
+      code: "agora-chat-js",
+      message: "Agora Chat \(operation) failed: \(message)",
+      details: details
+    )
   }
 
   private func ensureBridgeReady(completion: @escaping (Error?) -> Void) {

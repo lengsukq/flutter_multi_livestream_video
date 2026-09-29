@@ -418,33 +418,11 @@ void main() {
   });
 }
 
-MediaRoomSession _fakeRoom(_FakeMediaSession media) => MediaRoomSession.attach(
+MediaRoomSession _fakeRoom(_FakeMediaSession media) => MediaRoomSession.direct(
   roomCode: 'room',
   participantId: media.participantId,
   session: media,
-  backend: MediaBackendClient(
-    MediaBackendConfig.fromUrl(
-      'http://localhost',
-      heartbeatInterval: Duration.zero,
-    ),
-    transport: _FakeBackendTransport(),
-  ),
-  heartbeatInterval: Duration.zero,
 );
-
-class _FakeBackendTransport implements MediaBackendTransport {
-  @override
-  Future<MediaBackendTransportResponse> send({
-    required String method,
-    required Uri uri,
-    required Map<String, String> headers,
-    String? body,
-  }) async =>
-      const MediaBackendTransportResponse(statusCode: 200, body: '{"ok":true}');
-
-  @override
-  void close() {}
-}
 
 class _FakeProductChatSession implements ChatSession {
   final StreamController<ChatConnectionState> _states =

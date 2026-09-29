@@ -77,6 +77,7 @@ const chineseMessages: Record<string, string> = {
   'Amazon IVS Chat is not configured.': '尚未配置 Amazon IVS Chat。',
   'Tencent Chat is not configured. Set TENCENT_CHAT_SDK_APP_ID and TENCENT_CHAT_SECRET_KEY; TENCENT_CHAT_ADMIN_USER defaults to administrator.': '尚未配置 Tencent Chat。请设置 TENCENT_CHAT_SDK_APP_ID 和 TENCENT_CHAT_SECRET_KEY；TENCENT_CHAT_ADMIN_USER 默认为 administrator。',
   'Agora Chat is not configured. Set AGORA_CHAT_APP_KEY, AGORA_CHAT_REST_HOST, and AGORA_CHAT_APP_ID/AGORA_CHAT_APP_CERTIFICATE (or reuse AGORA_APP_ID/AGORA_APP_CERTIFICATE).': '尚未配置 Agora Chat。请设置 AGORA_CHAT_APP_KEY、AGORA_CHAT_REST_HOST 和 AGORA_CHAT_APP_ID/AGORA_CHAT_APP_CERTIFICATE（或复用 AGORA_APP_ID/AGORA_APP_CERTIFICATE）。',
+  'AGORA_CHAT_APP_KEY must be the Agora Chat App Key in OrgName#AppName format. Do not use the numeric Agora RTC App ID.': 'AGORA_CHAT_APP_KEY 格式错误。请使用 Agora Chat 的 App Key（OrgName#AppName），不要填写纯数字的 Agora RTC App ID。',
 };
 
 export function resolveDemoLanguage(acceptLanguage: string | undefined): DemoLanguage {
