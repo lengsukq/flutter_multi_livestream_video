@@ -1,13 +1,15 @@
 # Multi-provider Flutter media guide
 
-Existing apps may continue using `flutter_aws_chime` directly. Apps that want
-backend-controlled provider selection register the adapters they support and
-use Core without choosing a provider per room.
+Applications should normally depend on the full `flutter_realtime_sdk` package
+and use `RealtimeSdk.standard()`. They call one API on every supported target;
+the SDK owns driver registration, platform selection and lifecycle. Existing
+apps may continue using `flutter_aws_chime` or the lower-level Core packages.
 
 Backend-controlled routing is one supported strategy, not a requirement.
-Frontend-first applications may construct `RealtimeSdk` without
-`backendUrl`, obtain `MediaJoinInfo` / `ChatJoinInfo` from their own
-credential service, and use `joinDirect` / `ChatClient.connect`.
+Frontend-first applications may construct `RealtimeSdk.standard()` without
+`backendUrl`, obtain short-lived credentials from their own service, and call
+`joinWithCredentials` / `connectChatWithCredentials` without importing a
+provider adapter registry.
 
 ### Chat: attached or standalone
 
@@ -50,9 +52,12 @@ flutter_realtime_media_core
   ├─ flutter_realtime_media_livekit -> livekit_client
   ├─ flutter_realtime_media_agora   -> agora_rtc_engine
   ├─ flutter_realtime_media_trtc    -> tencent_rtc_sdk
-  ├─ flutter_realtime_media_artc    -> native AliVCSDK_ARTC (Android/iOS)
-  ├─ flutter_realtime_media_ivs     -> Amazon IVS Broadcast Stages (Android/iOS)
+  ├─ flutter_realtime_media_artc    -> AliVCSDK_ARTC (Android/iOS + conditional macOS)
+  ├─ flutter_realtime_media_ivs     -> Amazon IVS Broadcast Stages
   └─ flutter_realtime_media_chime   -> flutter_aws_chime
+
+flutter_realtime_media_aws_desktop
+  └─ SDK-internal macOS WebKit transport -> Chime JS / IVS Web Broadcast
 
 flutter_realtime_chat_core
   ├─ flutter_realtime_chat_ivs      -> Amazon IVS Chat Messaging (Android/iOS)
@@ -61,21 +66,69 @@ flutter_realtime_chat_core
   └─ flutter_realtime_chat_rtc      -> bidirectional RTC data -> ChatSession fallback
 ```
 
+The same code runs on every supported Flutter target. The backend response (or
+a direct `MediaJoinInfo` / `ChatJoinInfo`) still names the provider and
+contains that provider's short-lived credential payload. Only the platform
+implementation is hidden.
+
+If your credential service returns raw JSON, application code does not need to
+import provider-specific JoinInfo classes either:
+
+```dart
+final room = await sdk.joinWithCredentials(
+  mediaProviderId: response.mediaProvider,
+  mediaJoinPayload: response.mediaCredentials,
+  chatProviderId: response.chatProvider,
+  chatJoinPayload: response.chatCredentials,
+);
+```
+
+`parseMediaCredentials` and `parseChatCredentials` are also available when
+the application wants to inspect or stage credentials before connecting. The
+provider-specific payload shape remains unchanged: Agora still receives its
+app/channel/token fields, LiveKit its URL/token, TRTC its UserSig data, Chime
+its meeting/attendee response, and so on. The SDK centralizes driver selection
+and parsing rather than pretending all provider credentials have the same
+schema.
+
+Advanced applications can still override or extend the catalog:
+
+```dart
+final sdk = RealtimeSdk.standard(
+  backendUrl: backendUrl,
+  additionalPlugins: [myPrivateProviderPlugin],
+);
+```
+
 Provider SDKs never become dependencies of Core.
 
-The recommended application entry point is the separate
-`flutter_realtime_sdk` orchestration package. `RealtimeProviderPlugin`
-co-locates provider metadata, media factory/renderer, and optional Product Chat
-factory. `RealtimeSdk` then combines those plugins with backend-authoritative
-provider selection, Product Chat resolution, RTC Chat fallback, aggregated
-room events/state, unified high-level errors, and room lifecycle. Core clients
+On macOS, AWS is still consumed through the normal Chime/IVS adapters. The
+`flutter_realtime_media_aws_desktop` plugin is a transport implementation
+bundled by `flutter_realtime_sdk`; application code never imports it or
+chooses it. ARTC takes a different path: its macOS bridge targets Alibaba's
+official native Mac framework. This repository does not redistribute that
+binary, so an SDK distribution must bundle the official framework for ARTC
+macOS runtime support.
+
+The recommended application entry point is
+`flutter_realtime_sdk`. Use `RealtimeSdk.standard()` for the built-in
+providers. The SDK owns the default provider/platform driver catalog, detects
+the runtime target, and registers only the correct implementation. Business
+code may still select a provider or receive one from the backend, but it never
+chooses Web, Android, iOS, macOS, or Windows drivers.
+
+`RealtimeProviderPlugin` remains the advanced extension point. It co-locates
+provider metadata, media factory/renderer, and optional Product Chat factory,
+so applications can override a built-in provider or add a private provider
+without changing Core. `RealtimeClient`, `MediaClient`, and `ChatClient`
 remain available as lower-level APIs.
 
-Core does not maintain a platform whitelist for registered adapters. If an app
-registers an adapter, Core will attempt to use it on the current Flutter target
-instead of rejecting the room up front. Provider/native SDKs remain responsible
-for reporting genuinely unsupported targets, while feature-level differences
-continue to be exposed through `MediaCapabilities`.
+The high-level SDK keeps an explicit platform matrix. If a provider is known
+but has no driver for the current target, direct join fails with
+`unsupportedPlatform`, backend-selected join resolves to the same typed
+failure, and Pre-Join reports a blocking `unsupported` provider check.
+Feature-level differences inside a supported driver continue to be exposed
+through `MediaCapabilities` / `ChatCapabilities`.
 
 For optional functionality, application code should also stay provider-neutral:
 query `MediaCapabilities` / `MediaFeature`, then use the shared device,
@@ -93,22 +146,8 @@ The reference backend also owns role assignment. New clients create either a
 ## One Flutter API, multiple providers
 
 ```dart
-final sdk = RealtimeSdk(
+final sdk = RealtimeSdk.standard(
   backendUrl: 'https://api.example.com',
-  plugins: [
-    RealtimeProviderPlugin(
-      id: 'agora',
-      metadata: const RealtimeProviderMetadata(displayName: 'Agora'),
-      mediaFactory: const AgoraSessionFactory(),
-      renderer: const AgoraTrackRenderer(),
-    ),
-    RealtimeProviderPlugin(
-      id: 'livekit',
-      metadata: const RealtimeProviderMetadata(displayName: 'LiveKit'),
-      mediaFactory: const LiveKitSessionFactory(),
-      renderer: const LiveKitTrackRenderer(),
-    ),
-  ],
   tokenProvider: () async => applicationToken,
 );
 
@@ -251,17 +290,21 @@ See
 [`packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md`](packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md)
 for the required Android/iOS host settings.
 
-The backend returns the actual provider with the join credentials. Core resolves
-the matching adapter automatically. Business UI only needs room/user intent;
-provider choice does not appear in create/join calls.
+The backend returns the actual provider with the join credentials. The
+high-level SDK resolves the matching provider and current-platform driver
+automatically. Business UI only needs room/user intent and never branches on
+the runtime platform.
 
-TRTC and ARTC are optional adapter packages. Applications that do not use them
-do not add their packages or SDK dependencies; Core has no Tencent or Alibaba
-dependency and no default provider. The reference demo registers both alongside
-its other adapters, while each application's backend remains the source of
-provider selection for every room. ARTC requires Alibaba Maven repositories in
-Android dependency resolution and uses CocoaPods on iOS; its 7.11.0 iOS pod is
-device-only and does not support simulator linking.
+Applications that consume Core directly can still add only the adapter packages
+they need. Core itself has no Tencent, Alibaba, AWS, Agora, or LiveKit
+dependency. `flutter_realtime_sdk` intentionally acts as the batteries-included
+bundle for applications that prefer one frontend SDK package. The reference
+demo now uses that bundled path instead of maintaining its own native/Web
+adapter registration.
+Each application's backend remains the source of provider selection for every
+room when backend-controlled routing is used. ARTC requires Alibaba Maven
+repositories in Android dependency resolution and uses CocoaPods on iOS; its
+7.11.0 iOS pod is device-only and does not support simulator linking.
 
 ## Backend requirements
 
@@ -335,9 +378,10 @@ running between tests.
 
 ## Unified demo
 
-`example` exposes no provider selector. It registers the optional adapters once,
-sends only the backend URL, room/user information and role, and
-uses the provider returned by the backend to resolve the renderer/session.
+`example` exposes no provider selector or adapter registry. It calls the public
+`flutter_realtime_sdk` facade with the backend URL, room/user information and
+role; the SDK uses the provider returned by the backend to resolve the driver,
+renderer and session.
 
 Agora uses numeric UIDs so `participantId` is the decimal UID string. The
 Agora adapter supports participant/host RTC media, viewer subscribe-only

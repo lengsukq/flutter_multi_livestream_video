@@ -5,6 +5,68 @@
 应用应根据 `MediaCapabilities` / `MediaFeature` 判断当前可用功能，而不是根据
 `providerId` 推断。不同平台和角色可能拥有不同的能力集合。
 
+## 内置平台 Driver
+
+`RealtimeSdk.standard()` 内置并维护以下路由表。业务代码在所有平台调用同一套
+API，由 SDK 根据当前运行平台选择 Provider 实现。破折号表示 SDK 知道该 Provider，
+但当前平台没有内置 Driver，会明确返回 `unsupportedPlatform`。
+
+| 对外 Media Provider | Android | iOS | macOS | Windows | Web |
+| --- | --- | --- | --- | --- | --- |
+| LiveKit | 支持 | 支持 | 支持 | 支持 | 支持 |
+| Agora RTC | 支持 | 支持 | 支持 | 支持 | 支持 |
+| Tencent TRTC | 支持 | 支持 | 支持 | 支持 | 支持 |
+| Alibaba ARTC | 支持 | 支持 | 条件支持* | — | 支持 |
+| AWS | 支持 | 支持 | 支持** | — | 支持 |
+
+| Product Chat Provider | Android | iOS | macOS | Windows | Web |
+| --- | --- | --- | --- | --- | --- |
+| Agora Chat | 支持 | 支持 | 支持 | — | 支持 |
+| Tencent Cloud Chat | 支持 | 支持 | 支持 | 支持 | 支持 |
+| Amazon IVS Chat | 支持 | 支持 | — | — | 支持 |
+
+Linux 暂未注册到默认 Catalog。高级使用者仍可通过
+`RealtimeProviderPlugin` 增加或覆盖 Driver，而无需修改 Core。
+
+## 宿主应用要求
+
+当前全量 SDK Demo 的最低目标为 Android API 28+（compile SDK 37）、iOS
+15+、macOS 12+、Windows 10+，以及安全浏览器上下文中的标准 Flutter Web。
+Android 构建使用 Flutter 3.47+、Dart 3.12+ 和 Java 17。单独使用低层
+Adapter 包时，部分 Adapter 支持更低的 Android 版本。
+
+Android 插件 Manifest 声明所需的运行时权限。宿主 iOS/macOS 应用必须提供
+摄像头和麦克风用途说明；macOS 应用还需对应摄像头/麦克风 entitlement。
+Demo 已包含这些设置。浏览器会请求设备访问权限，Web 部署必须使用 HTTPS
+或 localhost。Pre-Join 和连接错误会通过 SDK 类型化诊断报告权限拒绝。
+
+ARTC 的 iOS 二进制支持真机目标，但无法链接 iOS Simulator；因此 CI 使用
+关闭代码签名的 iOS 设备目标构建。
+`条件支持*` 表示 ARTC macOS 原生桥已经实现并通过构建，但仓库不重新分发
+阿里官方 Mac framework；发布包未携带该 framework 时，Adapter 会明确返回
+`unsupportedPlatform`，不会伪装成可用。
+
+上表 Web 当前指标准 JavaScript Flutter Web 目标。`flutter build web`
+已验证通过，但现有 Tencent Cloud Chat 依赖仍使用 `dart:html`、`dart:js`
+以及 FFI 相关代码，因此 Flutter 的 Wasm dry-run 会报告不兼容；在上游依赖完成
+迁移之前，不应把当前整套 Web Driver 宣称为 Wasm-ready。
+
+macOS 已使用 CocoaPods 验证构建通过。AWS 的 `支持**` 表示完整 SDK 内部使用
+同一个 WebKit Runtime：Meeting 加载锁定版本的 Chime JS，Live 加载锁定版本的
+IVS Web Broadcast；业务代码仍只看到 `aws` 和统一 Dart API，不创建 WebView、
+不加载脚本。Flutter 当前会提示部分插件尚未提供 macOS Swift Package Manager
+支持；这是打包限制，不是本 SDK 的 Driver 路由失败。
+
+当前验证环境为 macOS：Android Debug APK、iOS 真机 Release（关闭签名）、
+macOS Release 以及标准 JavaScript Web 均已完成构建验证。上表中的 Windows
+组合已经注册到默认 Catalog，并有平台选择单测覆盖；但 macOS 主机无法执行
+Windows 原生构建。CI 配置了 Windows runner 构建；macOS 开发主机无法在本机生成
+Windows 构建结果。
+
+SDK 包自带 Web bridge 和锁定版本的供应商 JavaScript 资源。首次连接媒体或产品 Chat
+时由 facade 自动加载；应用不需要维护 script 标签、CDN 链接或单独执行 npm 构建。
+资源缺失或无法加载时返回 `webSdkUnavailable`。
+
 AWS 对外统一展示为一个 Vendor，内部按模式路由：`Meeting -> Chime`、
 `Live -> IVS Real-Time`。下表中的 Chime / IVS Real-Time 表示 AWS 内部 Engine 的能力。
 
@@ -18,7 +80,7 @@ AWS 对外统一展示为一个 Vendor，内部按模式路由：`Meeting -> Chi
 | 单条 RTC 消息上限 | 15 KiB | 2 KiB | 1 KiB | 1 KiB | 1 KiB | — |
 | 定向发送数据 | 支持 | 不支持 | 不支持 | 不支持 | 不支持 | 不支持 |
 | 不可靠数据发送 | 支持 | 不支持 | 不支持 | 不支持 | 不支持 | 不支持 |
-| 设备枚举/选择 | 支持，视平台而定 | 音频输出选择 | Adapter 未提供 | Adapter 未提供 | Adapter 未提供 | 麦克风/摄像头探测、切换摄像头 |
+| 设备枚举/选择 | 支持，视平台而定 | 音频输出选择 | Adapter 未提供 | Adapter 未提供 | Adapter 未提供 | 麦克风/摄像头探测；切换摄像头仅 Android/iOS |
 | 加入前原生设备探测 | 麦克风/摄像头 | 无 | 无 | 无 | 无 | 麦克风/摄像头 |
 | 加入前 Provider 网络探测 | 需要房间凭证时不支持 | 无 | 无 | 无 | 无 | 需要参与者令牌时不支持 |
 | 网络统计 | 支持 | Adapter 未提供 | 支持 | 支持 | Adapter 未提供 | 基础 RTC 统计 |

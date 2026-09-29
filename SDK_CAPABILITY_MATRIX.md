@@ -6,6 +6,77 @@ The application should branch on `MediaCapabilities` / `MediaFeature`, not
 on `providerId`. A provider may expose a smaller capability set on a specific
 platform or role.
 
+## Built-in platform drivers
+
+`RealtimeSdk.standard()` owns this routing table. Application code uses the
+same API on every target; the SDK resolves the provider implementation for the
+current runtime platform. A dash means the provider is known but the built-in
+SDK deliberately returns `unsupportedPlatform` on that target.
+
+| Public Media provider | Android | iOS | macOS | Windows | Web |
+| --- | --- | --- | --- | --- | --- |
+| LiveKit | Yes | Yes | Yes | Yes | Yes |
+| Agora RTC | Yes | Yes | Yes | Yes | Yes |
+| Tencent TRTC | Yes | Yes | Yes | Yes | Yes |
+| Alibaba ARTC | Yes | Yes | Conditional* | — | Yes |
+| AWS | Yes | Yes | Yes** | — | Yes |
+
+| Product Chat provider | Android | iOS | macOS | Windows | Web |
+| --- | --- | --- | --- | --- | --- |
+| Agora Chat | Yes | Yes | Yes | — | Yes |
+| Tencent Cloud Chat | Yes | Yes | Yes | Yes | Yes |
+| Amazon IVS Chat | Yes | Yes | — | — | Yes |
+
+Linux is not registered in the default catalog yet. Advanced applications can
+add or override drivers with `RealtimeProviderPlugin` without modifying Core.
+
+## Host application requirements
+
+The all-provider SDK Demo currently targets Android API 28+ (compile SDK 37),
+iOS 15+, macOS 12+, Windows 10+, and standard Flutter Web in a secure browser
+context. Use Flutter 3.47+, Dart 3.12+, and Java 17 for the Android build.
+Individual low-level adapter packages may support lower Android versions when
+used without the full SDK bundle.
+
+Android plugin manifests contribute the required runtime permissions. Host
+iOS/macOS apps must include camera and microphone usage descriptions; macOS
+apps also need camera/microphone entitlements. The example contains these
+settings. Browsers request device access from the user, and Web deployments
+must use HTTPS or localhost. Pre-Join and connection failures report denied
+permissions through the SDK's typed diagnostics.
+
+ARTC's iOS binary supports device builds but does not link into the iOS
+Simulator. CI therefore targets an iOS device build without codesigning.
+`Conditional*` means the ARTC macOS bridge is implemented and build-verified,
+but the repository does not redistribute Alibaba's official Mac framework.
+Without that framework the adapter fails explicitly with `unsupportedPlatform`.
+
+The Web entries currently refer to the standard JavaScript Flutter Web target.
+`flutter build web` is verified, but the current Tencent Cloud Chat dependency
+still uses `dart:html`, `dart:js`, and FFI-backed code paths, so Flutter's
+Wasm dry-run reports incompatibilities. Do not advertise the bundled Web stack
+as Wasm-ready until those upstream dependencies migrate.
+
+The macOS build is verified with CocoaPods. `Yes**` for AWS means the
+batteries-included SDK uses one internal WebKit runtime: Meeting loads the
+pinned Chime JS SDK and Live loads the pinned IVS Web Broadcast SDK. The same
+public `aws` provider and the same Dart session APIs are used; applications do
+not create a WebView or add JavaScript assets. Flutter currently warns that
+several plugins do not yet provide macOS Swift Package Manager support; this is
+a packaging limitation rather than a driver-routing failure.
+
+The current verification host is macOS: Android debug APK, iOS device Release
+without codesigning, macOS Release, and JavaScript Web builds are verified.
+Windows entries above are registered by the default catalog and covered by
+platform-selection tests. CI is configured to build the Windows example on a
+Windows runner; a macOS development host cannot produce a native Windows build
+result locally.
+
+The SDK package owns its Web bridge and pinned vendor JavaScript assets. The
+facade loads them on the first media or Product Chat connection; applications
+do not add script tags, CDN links, or a separate npm build step. Missing or
+unreachable bundled assets produce `webSdkUnavailable`.
+
 AWS is presented as one public vendor. Its concrete engine is mode-dependent:
 `Meeting -> Chime`, `Live -> IVS Real-Time`. The Chime/IVS columns below describe
 the internal engine capabilities used by that AWS routing.
@@ -20,7 +91,7 @@ the internal engine capabilities used by that AWS routing.
 | SDK message-size limit | 15 KiB | 2 KiB | 1 KiB | 1 KiB | 1 KiB | — |
 | Targeted data | Yes | No | No | No | No | No |
 | Unreliable data | Yes | No | No | No | No | No |
-| Device enumeration/selection | Yes, platform dependent | Audio output | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter | Mic/camera probe; camera switch |
+| Device enumeration/selection | Yes, platform dependent | Audio output | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter | Mic/camera probe; camera switch on Android/iOS |
 | Pre-Join native device probe | Mic/camera | No native probe | No native probe | No native probe | No native probe | Mic/camera |
 | Pre-Join provider network probe | Unsupported without issued credentials | No native probe | No native probe | No native probe | No native probe | Unsupported without participant token |
 | Network stats | Yes | Not exposed by adapter | Yes | Yes | Not exposed by adapter | Basic RTC stats |

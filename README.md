@@ -5,10 +5,12 @@
 Flutter Realtime Media is a **frontend SDK-first**, provider-neutral Flutter
 architecture for real-time audio/video, live sessions, and chat.
 
-The Flutter application works against one Core API and optional provider
-adapters. Provider-specific SDKs live only in their adapter packages, so
-applications can add or remove providers without coupling business UI to a
-specific vendor. A backend is an optional control-plane integration, not the
+The Flutter application works against one high-level API. Provider-specific
+SDKs live only in adapter packages, while `flutter_realtime_sdk` bundles the
+built-in adapters and selects the correct provider + runtime-platform driver
+internally. Business code can still choose a provider or consume the provider
+selected by its backend, but it does not branch on Web, Android, iOS, macOS, or
+Windows. A backend is an optional control-plane integration, not the
 architectural center of the SDK.
 
 ### Standalone Chat
@@ -106,6 +108,39 @@ Flutter Realtime SDK / provider-neutral Core
                               +--> application backend or control plane
 ```
 
+No platform branch is needed in application code. A known provider without a
+driver on the current target fails with `unsupportedPlatform`; Pre-Join
+reports the same condition as a blocking unsupported provider check.
+
+Applications with their own credential service can also pass raw provider
+credential JSON through the same facade without importing provider JoinInfo
+types:
+
+```dart
+final room = await sdk.joinWithCredentials(
+  mediaProviderId: mediaProvider,
+  mediaJoinPayload: mediaCredentialJson,
+  chatProviderId: chatProvider,
+  chatJoinPayload: chatCredentialJson,
+);
+```
+
+Media and Product Chat providers are parsed independently, so combinations such
+as Chime media + Tencent Chat remain valid.
+
+Private or customized providers remain supported without changing the default
+application API:
+
+```dart
+final sdk = RealtimeSdk.standard(
+  backendUrl: backendUrl,
+  additionalPlugins: [myProviderPlugin],
+);
+```
+
+The original `RealtimeSdk(plugins: ...)` constructor remains available for
+advanced applications that want complete control over registration.
+
 The SDK owns the frontend abstraction. The application backend only supplies
 the pieces that cannot or should not live in a client application.
 
@@ -125,9 +160,10 @@ existing Chime-only applications and is kept backward compatible.
 | `flutter_realtime_media_livekit` | LiveKit RTC + host/viewer adapter | Implemented |
 | `flutter_realtime_media_agora` | Agora RTC + host/viewer adapter | Implemented; real-service E2E optional |
 | `flutter_realtime_media_chime` | AWS Chime adapter for Core | Implemented |
+| `flutter_realtime_media_aws_desktop` | Internal macOS WebKit transport shared by AWS Chime/IVS engines | Implemented; bundled by `flutter_realtime_sdk` |
 | `flutter_realtime_media_trtc` | Optional Tencent TRTC RTC + host/viewer adapter | Implemented; real-device E2E optional |
-| `flutter_realtime_media_artc` | Optional Alibaba Cloud ARTC RTC + host/viewer adapter | Implemented; real-device E2E optional |
-| `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + host/viewer adapter | Android/iOS implemented |
+| `flutter_realtime_media_artc` | Optional Alibaba Cloud ARTC RTC + host/viewer adapter | Android/iOS/Web implemented; macOS bridge requires the official Mac framework |
+| `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + host/viewer adapter | Android/iOS native; macOS via the internal AWS desktop transport |
 | `flutter_realtime_chat_core` | Provider-neutral product chat client/session contract | Implemented |
 | `flutter_realtime_chat_ivs` | Amazon IVS Chat adapter | Android/iOS/Web implemented |
 | `flutter_realtime_chat_tencent` | Tencent Cloud Chat adapter | Implemented; SDK-backed multi-platform adapter |
@@ -135,38 +171,35 @@ existing Chime-only applications and is kept backward compatible.
 | `flutter_realtime_chat_rtc` | Adapts bidirectional RTC data to `ChatSession` when no product Chat Provider is bound | Implemented |
 | `flutter_aws_chime` | Existing standalone Chime v3 Flutter plugin | Maintained for compatibility |
 
-Provider SDKs are dependencies of their own adapters, never of Core. Applications
-add and register only the adapters they need. Optional SDKs are downloaded only
-when their adapter is added. ARTC 7.11.0 supports Android and iOS device builds;
-its iOS CocoaPod does not link into simulator builds. Provider choice remains
-with the backend. The Agora adapter supports Android, iOS, and macOS; desktop
-camera rendering and media control use Agora's native macOS bridge, while
+Provider SDKs are dependencies of their own adapters, never of Core.
+Applications that use Core directly may still add only the adapters they need.
+Applications that use the recommended `flutter_realtime_sdk` entry point get
+the built-in adapter bundle and platform driver catalog automatically. AWS
+macOS support is internal to that bundle: Meeting uses Chime JS and Live uses
+IVS Web Broadcast inside one SDK-owned WebKit runtime, so host applications do
+not load scripts or branch on platform. ARTC 7.11.0 supports Android and iOS
+device builds; its iOS CocoaPod does not link into simulator builds. The macOS
+ARTC bridge is also implemented, but the repository intentionally does not
+redistribute Alibaba's Mac framework; an SDK distribution must bundle the
+official framework before ARTC can join on macOS. Provider choice remains with
+the backend. Windows routing is covered by SDK selection tests but is not
+natively build-verified on this macOS development host. Agora desktop camera
+rendering and media control use the provider desktop implementation, while
 front/back camera switching remains Android/iOS-only.
 
 ## Recommended SDK entry point
 
-Applications should normally use `flutter_realtime_sdk`. Register each
-available implementation as a self-describing `RealtimeProviderPlugin`, then
-create one `RealtimeSdk`. Backend room responses still select the actual
-provider; plugins only declare what the application binary can execute.
-`RealtimeRoom` resolves the media renderer, backend-selected Product Chat,
-RTC-data Chat fallback (only when no Product Chat is configured), joint
-lifecycle cleanup, and aggregated room state/events.
+Applications should normally use `flutter_realtime_sdk` through
+`RealtimeSdk.standard()`. The SDK detects the runtime target and resolves the
+correct built-in Media and Chat driver internally. Backend room responses still
+select the actual provider; direct provisioning may also name the provider
+explicitly. `RealtimeRoom` resolves the media renderer, backend-selected
+Product Chat, RTC-data Chat fallback (only when no Product Chat is configured),
+joint lifecycle cleanup, and aggregated room state/events.
 
 ```dart
-final sdk = RealtimeSdk(
+final sdk = RealtimeSdk.standard(
   backendUrl: backendUrl,
-  plugins: [
-    RealtimeProviderPlugin(
-      id: 'my-provider',
-      metadata: const RealtimeProviderMetadata(
-        displayName: 'My Provider',
-      ),
-      mediaFactory: myProviderFactory,
-      renderer: myProviderRenderer,
-      chatFactory: myOptionalChatFactory,
-    ),
-  ],
   tokenProvider: () async => applicationToken,
 );
 
@@ -197,6 +230,9 @@ final report = await sdk.preJoin(
   roomCode: roomCode,
   role: MediaRole.participant,
 );
+
+final rooms = await sdk.listRooms();
+final backendReport = await sdk.diagnoseBackend();
 ```
 
 See `example/lib/minimal_sdk_example.dart` for the shortest complete
@@ -220,8 +256,8 @@ Python, Lambda, Firebase Function, or other credential service, return a
 provider-neutral `MediaJoinInfo` and join directly:
 
 ```dart
-final sdk = RealtimeSdk(
-  plugins: [myProviderPlugin],
+final sdk = RealtimeSdk.standard(
+  additionalPlugins: [myProviderPlugin],
 );
 
 final joinInfo = await myApplicationApi.issueMediaCredentials();
@@ -233,12 +269,13 @@ final room = await sdk.joinDirect(
 );
 ```
 
-The same model applies to product Chat:
+The same SDK facade can parse short-lived Product Chat credentials without
+exposing a provider-specific adapter registry:
 
 ```dart
-final chat = ChatClient.direct(registry: myChatRegistry);
-final chatRoom = await chat.connect(
-  await myApplicationApi.issueChatCredentials(),
+final chatRoom = await sdk.connectChatWithCredentials(
+  providerId: chatProvider,
+  joinPayload: await myApplicationApi.issueChatCredentials(),
   credentialProvider: myApplicationApi.refreshChatCredentials,
 );
 ```
@@ -259,12 +296,11 @@ error instead of silently degrading. See `MEDIA_BACKEND_CONTRACT.md`.
 
 | Provider | Meeting | Live / broadcast | Status |
 | --- | --- | --- | --- |
-| AWS Chime | Yes | No (participant only) | Implemented |
+| AWS | Yes via Chime | Yes via IVS Real-Time | Implemented on Android/iOS/Web/macOS; Chime/IVS remain internal engines |
 | LiveKit | Yes | Yes, host/viewer | Implemented |
 | Agora | Yes | Yes, host/viewer | Adapter implemented |
 | Tencent TRTC | Yes | Yes, host/viewer | Optional adapter implemented |
-| Alibaba Cloud ARTC | Yes | Yes, host/viewer | Optional adapter implemented |
-| Amazon IVS Real-Time | Yes | Yes, host/viewer | Android/iOS implemented |
+| Alibaba Cloud ARTC | Yes | Yes, host/viewer | Android/iOS/Web implemented; macOS requires official framework |
 
 See [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md) for the unified API and
 backend-selected provider flow. The detailed runtime capability matrix is
@@ -285,10 +321,11 @@ Application backend
    │ selects provider
    ├── LiveKit
    ├── Agora
-   ├── AWS Chime
+   ├── AWS
+   │   ├── Meeting → Chime
+   │   └── Live → IVS Real-Time
    ├── Tencent TRTC (optional)
-   ├── Alibaba Cloud ARTC (optional)
-   └── Amazon IVS Real-Time (optional)
+   └── Alibaba Cloud ARTC (optional)
    │
    ▼
 Core → matching provider adapter
@@ -673,9 +710,10 @@ SDK 内置 Flutter UI 目前提供 English 与简体中文两套文案，覆盖 
 | `flutter_realtime_media_livekit` | LiveKit RTC + Host/Viewer Adapter | 已实现 |
 | `flutter_realtime_media_agora` | Agora RTC + Host/Viewer Adapter | 已实现；真实服务 E2E 可选 |
 | `flutter_realtime_media_chime` | AWS Chime Core Adapter | 已实现 |
+| `flutter_realtime_media_aws_desktop` | AWS Chime/IVS 共用的 SDK 内部 macOS WebKit Transport | 已实现，由 `flutter_realtime_sdk` 自动带入 |
 | `flutter_realtime_media_trtc` | 可选的腾讯云 TRTC RTC + Host/Viewer Adapter | 已实现；真实设备 E2E 可选 |
-| `flutter_realtime_media_artc` | 可选的阿里云 ARTC RTC + Host/Viewer Adapter | 已实现；真实设备 E2E 可选 |
-| `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + Host/Viewer Adapter | Android/iOS 已实现 |
+| `flutter_realtime_media_artc` | 可选的阿里云 ARTC RTC + Host/Viewer Adapter | Android/iOS/Web 已实现；macOS 需随发布包提供官方 Mac framework |
+| `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + Host/Viewer Adapter | Android/iOS 原生；macOS 通过 SDK 内部 AWS Desktop Transport |
 | `flutter_realtime_chat_core` | Provider 无关的产品聊天 Client/Session 契约 | 已实现 |
 | `flutter_realtime_chat_ivs` | Amazon IVS Chat Adapter | Android/iOS/Web 已实现 |
 | `flutter_realtime_chat_tencent` | Tencent Cloud Chat Adapter | 已实现；跟随腾讯 Chat SDK 多平台能力 |
@@ -683,21 +721,24 @@ SDK 内置 Flutter UI 目前提供 English 与简体中文两套文案，覆盖 
 | `flutter_realtime_chat_rtc` | 无独立产品 Chat Provider 时，将完整双向 RTC Data 适配为 `ChatSession` | 已实现 |
 | `flutter_aws_chime` | 原有独立 Chime v3 Flutter 插件 | 兼容维护 |
 
-Core 不直接依赖任何供应商 SDK，供应商依赖仅存在于各自 Adapter 中。应用只添加并注册
-自己要用的适配包。ARTC 7.11.0 支持 Android 和 iOS 真机；当前 iOS CocoaPod 不支持模拟器链接。
-Agora Adapter 支持 Android、iOS 和 macOS；macOS 通过 Agora 原生桌面桥接完成音视频与渲染，
-前后摄像头切换仍仅在 Android/iOS 开放。
+Core 不直接依赖任何供应商 SDK，供应商依赖仅存在于各自 Adapter 中。推荐使用
+`flutter_realtime_sdk` 获取完整内置 Driver。AWS 的 macOS Meeting/Live 由 SDK 内部
+同一个 WebKit Runtime 分别承载 Chime JS / IVS Web Broadcast，业务 App 不需要加载脚本。
+ARTC 7.11.0 支持 Android 和 iOS 真机；当前 iOS CocoaPod 不支持模拟器链接。macOS ARTC
+桥已实现，但仓库不重新分发阿里官方 Mac framework，发布 SDK 时需将官方 framework 放入
+对应 Adapter；缺失时会明确返回 `unsupportedPlatform`。Agora Adapter 支持 Android、
+iOS 和 macOS；macOS 通过 Agora 原生桌面桥接完成音视频与渲染，前后摄像头切换仍仅在
+Android/iOS 开放。
 
 ## Provider 状态
 
 | Provider | 实时音视频 | 一对多直播 | 状态 |
 | --- | --- | --- | --- |
-| AWS Chime | Meeting 支持 | 不支持（仅 participant） | 已实现 |
+| AWS | Chime Meeting | IVS Real-Time Host/Viewer | Android/iOS/Web/macOS 已实现 |
 | LiveKit | 支持 | 支持 Host/Viewer | 已实现 |
 | Agora 声网 | 支持 | 支持 Host/Viewer | Adapter 已实现 |
 | 腾讯云 TRTC | 支持 | 支持 Host/Viewer | 可选 Adapter 已实现 |
-| 阿里云 ARTC | 支持 | 支持 Host/Viewer | 可选 Adapter 已实现 |
-| Amazon IVS Real-Time | 支持 | 支持 Host/Viewer | Android/iOS 已实现 |
+| 阿里云 ARTC | 支持 | 支持 Host/Viewer | Android/iOS/Web 已实现；macOS 需官方 framework |
 
 ## 音视频与直播能力
 

@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -32,7 +34,9 @@ jobs:
         run: flutter pub get
 
       - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed lib test example/lib example/integration_test
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          lib test packages example/lib example/test example/integration_test
 
       - name: Analyze
         run: flutter analyze
@@ -47,9 +51,89 @@ jobs:
         working-directory: flutter_aws_chime/example
         run: flutter pub get
 
+      - name: Resolve SDK dependencies
+        working-directory: flutter_aws_chime/packages/flutter_realtime_sdk
+        run: flutter pub get
+
+      - name: Analyze SDK and Demo
+        run: |
+          (cd packages/flutter_realtime_sdk && flutter analyze --no-pub)
+          (cd example && flutter analyze --no-pub)
+
       - name: Build Android example with built-in Kotlin
         working-directory: flutter_aws_chime/example
         run: flutter build apk --debug
+
+      - name: Build standard JavaScript Web example
+        working-directory: flutter_aws_chime/example
+        run: flutter build web --release
+
+  package-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - packages/flutter_realtime_chat_agora
+          - packages/flutter_realtime_chat_core
+          - packages/flutter_realtime_chat_ivs
+          - packages/flutter_realtime_chat_rtc
+          - packages/flutter_realtime_chat_tencent
+          - packages/flutter_realtime_media_agora
+          - packages/flutter_realtime_media_artc
+          - packages/flutter_realtime_media_chime
+          - packages/flutter_realtime_media_core
+          - packages/flutter_realtime_media_ivs
+          - packages/flutter_realtime_media_livekit
+          - packages/flutter_realtime_media_trtc
+          - packages/flutter_realtime_media_ui
+          - packages/flutter_realtime_media_web
+          - packages/flutter_realtime_sdk
+          - example
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: flutter_aws_chime
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Resolve project dependencies
+        working-directory: flutter_aws_chime/${{ matrix.project }}
+        run: flutter pub get
+
+      - name: Run project tests
+        working-directory: flutter_aws_chime/${{ matrix.project }}
+        run: |
+          if [ -d test ]; then
+            flutter test --no-pub
+          else
+            flutter analyze --no-pub
+          fi
+
+  web-sdk-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: flutter_aws_chime
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Resolve SDK dependencies
+        working-directory: flutter_aws_chime/packages/flutter_realtime_sdk
+        run: flutter pub get
+
+      - name: Test Web platform catalog in Chrome
+        working-directory: flutter_aws_chime/packages/flutter_realtime_sdk
+        run: flutter test --platform chrome --no-pub
 
   ios:
     runs-on: macos-15
@@ -79,11 +163,15 @@ jobs:
       - name: Enable Swift Package Manager
         run: flutter config --enable-swift-package-manager
 
-      - name: Build iOS example with Swift Package Manager
+      - name: Build iOS device target without codesigning
         working-directory: flutter_aws_chime/example
         run: |
           flutter pub get
-          flutter build ios --simulator
+          flutter build ios --release --no-codesign
+
+      - name: Build macOS example with CocoaPods
+        working-directory: flutter_aws_chime/example
+        run: flutter build macos
 
       - name: Validate CocoaPods podspec
         run: >-
@@ -91,3 +179,24 @@ jobs:
           --configuration=Debug
           --skip-tests
           --allow-warnings
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: flutter_aws_chime
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Resolve example dependencies
+        working-directory: flutter_aws_chime/example
+        run: flutter pub get
+
+      - name: Build Windows example
+        working-directory: flutter_aws_chime/example
+        run: flutter build windows --release
