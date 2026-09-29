@@ -35,9 +35,22 @@ function fakeApi() {
   const created: string[] = [];
   const imported: Array<{ userId: string; displayName: string }> = [];
   const deleted: string[] = [];
+  const removed: Array<{ groupId: string; userId: string }> = [];
   const api: TencentChatApi = {
-    async createGroup(groupId) {
-      created.push(groupId);
+    async createGroup(name) {
+      created.push(name);
+      return `tencent-group-${created.length}`;
+    },
+    async listGroups() {
+      return [
+        {
+          providerRoomId: 'tencent-group-1',
+          name: 'Realtime room 654321',
+          type: 'Meeting',
+          memberCount: 2,
+          inferredRoomCode: '654321',
+        },
+      ];
     },
     async importAccount(userId, displayName) {
       imported.push({ userId, displayName });
@@ -45,11 +58,14 @@ function fakeApi() {
     async deleteGroup(groupId) {
       deleted.push(groupId);
     },
+    async removeGroupMember(groupId, userId) {
+      removed.push({ groupId, userId });
+    },
     buildUserSig(userId, ttlSeconds) {
       return `sig:${userId}:${ttlSeconds}`;
     },
   };
-  return { api, created, imported, deleted };
+  return { api, created, imported, deleted, removed };
 }
 
 test('Tencent Chat room lifecycle stays independent from media provider', async () => {
@@ -61,12 +77,30 @@ test('Tencent Chat room lifecycle stays independent from media provider', async 
   });
   const binding = await provider.createRoom('654321');
   assert.equal(binding.chatProvider, 'tencent-chat');
-  assert.equal(binding.chatRoomArn, 'rm_654321');
-  assert.deepEqual(fake.created, ['rm_654321']);
+  assert.equal(binding.chatRoomArn, 'tencent-group-1');
+  assert.deepEqual(fake.created, ['Realtime room 654321']);
+  assert.deepEqual(await provider.listCloudRooms?.(), [
+    {
+      providerRoomId: 'tencent-group-1',
+      name: 'Realtime room 654321',
+      type: 'Meeting',
+      memberCount: 2,
+      inferredRoomCode: '654321',
+    },
+  ]);
 
   const entry = room();
   await provider.closeRoom(entry);
   assert.deepEqual(fake.deleted, [entry.chatRoomArn]);
+  await provider.deleteCloudRoom?.('tencent-group-1');
+  assert.deepEqual(fake.deleted, [entry.chatRoomArn, 'tencent-group-1']);
+  await provider.removeMember?.(entry, attendee('viewer'));
+  assert.deepEqual(fake.removed, [
+    {
+      groupId: entry.chatRoomArn,
+      userId: tencentChatProviderUserId('viewer-logical-user'),
+    },
+  ]);
 });
 
 test('Tencent Chat credentials use server-authoritative logical identity', async () => {

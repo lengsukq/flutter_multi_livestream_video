@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../model/chat_error.dart';
+import '../model/chat_management_capability.dart';
 import '../model/chat_role.dart';
 import '../model/chat_room_context.dart';
 import '../session/chat_join_info.dart';
@@ -160,7 +161,11 @@ class HttpStandaloneChatProvisioner
       _HttpStandaloneChatModeration(_backend, joinInfo);
 }
 
-class _HttpStandaloneChatModeration implements ChatModeration {
+class _HttpStandaloneChatModeration
+    implements
+        ChatModeration,
+        ChatModerationCapabilitySource,
+        ChatModerationStateSync {
   const _HttpStandaloneChatModeration(this.backend, this.joinInfo);
   final ChatBackendClient backend;
   final ChatJoinInfo joinInfo;
@@ -168,13 +173,41 @@ class _HttpStandaloneChatModeration implements ChatModeration {
   Map<String, Object?> get _auth => {
     'requesterParticipantId': joinInfo.participantId,
     'participantCredential': joinInfo.json['participantCredential']?.toString(),
+    'roomOwnerCredential': joinInfo.json['roomOwnerCredential']?.toString(),
   };
+
+  bool _managementFlag(String key, {required bool fallback}) {
+    final raw = joinInfo.json['management'];
+    if (raw is! Map) return fallback;
+    final value = raw[key];
+    return value is bool ? value : fallback;
+  }
+
+  String get _roomPath => joinInfo.context == ChatRoomContext.standalone
+      ? '/chat/rooms/${Uri.encodeComponent(joinInfo.roomCode)}'
+      : '/rooms/${Uri.encodeComponent(joinInfo.roomCode)}/chat';
+
+  @override
+  ChatManagementCapabilities get moderationCapabilities =>
+      ChatManagementCapabilities(
+        listMembers: _managementFlag('listMembers', fallback: true)
+            ? const ChatManagementCapability.backend()
+            : const ChatManagementCapability.unsupported(),
+        removeMember: _managementFlag('removeMember', fallback: false)
+            ? const ChatManagementCapability.backend()
+            : const ChatManagementCapability.unsupported(
+                reason: 'The selected chat provider cannot remove members.',
+              ),
+        closeRoom: _managementFlag('closeRoom', fallback: true)
+            ? const ChatManagementCapability.backend()
+            : const ChatManagementCapability.unsupported(),
+      );
 
   @override
   Future<List<ChatMember>> listMembers() async {
     final data = await backend._request(
       'POST',
-      '/chat/rooms/${Uri.encodeComponent(joinInfo.roomCode)}/members',
+      '$_roomPath/members',
       body: _auth,
     );
     final raw = data['members'];
@@ -194,10 +227,24 @@ class _HttpStandaloneChatModeration implements ChatModeration {
   }
 
   @override
-  Future<void> removeMember(String userId) =>
-      _unsupported('server-enforced member removal');
+  Future<void> removeMember(String userId) {
+    if (!moderationCapabilities.removeMember.supported) {
+      return _unsupported('server-enforced member removal');
+    }
+    return _post('remove', {'targetUserId': userId});
+  }
+
   @override
-  Future<void> closeRoom() => _post('close');
+  Future<void> syncRemovedMember(String userId) =>
+      _post('remove', {'targetUserId': userId, 'providerEnforced': true});
+
+  @override
+  Future<void> closeRoom() {
+    if (!moderationCapabilities.closeRoom.supported) {
+      return _unsupported('close room');
+    }
+    return _post('close');
+  }
 
   @override
   Future<void> banMember(String userId, {required bool banned}) =>
@@ -218,7 +265,7 @@ class _HttpStandaloneChatModeration implements ChatModeration {
   ]) async {
     await backend._request(
       'POST',
-      '/chat/rooms/${Uri.encodeComponent(joinInfo.roomCode)}/manage/$operation',
+      '$_roomPath/manage/$operation',
       body: {..._auth, ...extra},
     );
   }
@@ -232,7 +279,7 @@ class _HttpStandaloneChatModeration implements ChatModeration {
   );
 }
 
-class ChatBackendClient {
+class ChatBackendClient implements StandaloneChatModerationProvider {
   ChatBackendClient(this.config, {http.Client? httpClient})
     : _httpClient = httpClient ?? http.Client(),
       _ownsHttpClient = httpClient == null;
@@ -246,6 +293,7 @@ class ChatBackendClient {
     required String roomCode,
     required String participantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   }) async {
     final code = _required(roomCode, 'roomCode');
     final data = await _request(
@@ -256,6 +304,9 @@ class ChatBackendClient {
         if (participantCredential != null &&
             participantCredential.trim().isNotEmpty)
           'participantCredential': participantCredential.trim(),
+        if (roomOwnerCredential != null &&
+            roomOwnerCredential.trim().isNotEmpty)
+          'roomOwnerCredential': roomOwnerCredential.trim(),
       },
     );
     final providerId =
@@ -272,9 +323,22 @@ class ChatBackendClient {
     return ChatBackendJoinResponse(
       providerId: providerId,
       roomCode: returnedCode.isEmpty ? code : returnedCode,
-      json: data,
+      json: {
+        ...data,
+        if (participantCredential != null &&
+            participantCredential.trim().isNotEmpty)
+          'participantCredential': participantCredential.trim(),
+        if (roomOwnerCredential != null &&
+            roomOwnerCredential.trim().isNotEmpty)
+          'roomOwnerCredential': roomOwnerCredential.trim(),
+        'context': ChatRoomContext.attached.wireName,
+      },
     );
   }
+
+  @override
+  ChatModeration moderationFor(ChatJoinInfo joinInfo) =>
+      _HttpStandaloneChatModeration(this, joinInfo);
 
   Future<Map<String, dynamic>> _request(
     String method,

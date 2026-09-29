@@ -38,6 +38,7 @@ function fakeApi() {
     userId: string;
   }> = [];
   let deletedArn: string | null = null;
+  const disconnected: Array<{ roomArn: string; userId: string }> = [];
   const api: IvsChatApi = {
     async createRoom(name) {
       return {
@@ -61,11 +62,15 @@ function fakeApi() {
     async deleteRoom(roomArn) {
       deletedArn = roomArn;
     },
+    async disconnectUser(roomArn, userId) {
+      disconnected.push({ roomArn, userId });
+    },
   };
   return {
     api,
     tokenInputs,
     deletedArn: () => deletedArn,
+    disconnected,
   };
 }
 
@@ -116,6 +121,10 @@ test('IVS Chat room lifecycle is independent from the media provider', async () 
   const entry = room();
   await provider.closeRoom(entry);
   assert.equal(fake.deletedArn(), entry.chatRoomArn);
+  await provider.removeMember?.(entry, attendee('viewer'));
+  assert.deepEqual(fake.disconnected, [
+    { roomArn: entry.chatRoomArn, userId: 'viewer-user' },
+  ]);
 });
 
 test('IVS Chat token duration is clamped to the AWS 1-180 minute range', () => {

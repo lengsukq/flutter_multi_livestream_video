@@ -59,21 +59,24 @@ class ChatClient {
     String? roomCode,
   }) async {
     final controller = _standaloneProvisioner;
-    final joinInfo = await controller.create(
-      userId: userId,
-      displayName: displayName,
-      role: role,
-      roomCode: roomCode,
+    final joinInfo = _parseProvisionedJoinInfo(
+      await controller.create(
+        userId: userId,
+        displayName: displayName,
+        role: role,
+        roomCode: roomCode,
+      ),
     );
-    return connect(
-      joinInfo,
-      credentialProvider: () => controller.provision(
+    Future<ChatJoinInfo> credentials() async => _parseProvisionedJoinInfo(
+      await controller.provision(
         roomCode: joinInfo.roomCode,
         participantId: joinInfo.participantId,
         participantCredential: joinInfo.json['participantCredential']
             ?.toString(),
       ),
+      expected: joinInfo,
     );
+    return connect(joinInfo, credentialProvider: credentials);
   }
 
   Future<ChatRoomSession> joinStandaloneRoom({
@@ -83,17 +86,53 @@ class ChatClient {
     ChatRole role = ChatRole.participant,
   }) async {
     final controller = _standaloneProvisioner;
-    Future<ChatJoinInfo> credentials() => controller.join(
-      roomCode: roomCode,
-      userId: userId,
-      displayName: displayName,
-      role: role,
+    final joinInfo = _parseProvisionedJoinInfo(
+      await controller.join(
+        roomCode: roomCode,
+        userId: userId,
+        displayName: displayName,
+        role: role,
+      ),
     );
-    return connect(await credentials(), credentialProvider: credentials);
+    Future<ChatJoinInfo> credentials() async => _parseProvisionedJoinInfo(
+      await controller.provision(
+        roomCode: joinInfo.roomCode,
+        participantId: joinInfo.participantId,
+        participantCredential: joinInfo.json['participantCredential']
+            ?.toString(),
+      ),
+      expected: joinInfo,
+    );
+    return connect(joinInfo, credentialProvider: credentials);
   }
 
   Future<List<ChatRoomSummary>> listStandaloneRooms() =>
       _standaloneProvisioner.listRooms();
+
+  ChatJoinInfo _parseProvisionedJoinInfo(
+    ChatJoinInfo provisioned, {
+    ChatJoinInfo? expected,
+  }) {
+    final providerId = provisioned.providerId.trim().toLowerCase();
+    final factory = registry.require(providerId);
+    final parsed = factory.parseJoinInfo(provisioned.json);
+    final baseline = expected ?? provisioned;
+    if (providerId != baseline.providerId.trim().toLowerCase() ||
+        parsed.providerId.trim().toLowerCase() != providerId ||
+        parsed.roomCode != baseline.roomCode ||
+        parsed.participantId != baseline.participantId ||
+        parsed.userId != baseline.userId ||
+        parsed.role != baseline.role) {
+      throw ChatError(
+        code: ChatErrorCode.invalidJoinInfo,
+        message:
+            'Provisioned chat credentials changed the provider, room, '
+            'participant, user, or role.',
+        providerId: providerId,
+      );
+    }
+    return parsed;
+  }
 
   /// Connects directly using credentials provisioned by the host application.
   ///
@@ -118,6 +157,10 @@ class ChatClient {
             ? (provisioner as StandaloneChatModerationProvider).moderationFor(
                 joinInfo,
               )
+            : backend is StandaloneChatModerationProvider
+            ? (backend as StandaloneChatModerationProvider).moderationFor(
+                joinInfo,
+              )
             : null,
       );
     } catch (_) {
@@ -130,6 +173,7 @@ class ChatClient {
     required String roomCode,
     required String participantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   }) async {
     final customProvisioner = provisioner;
     Future<ChatJoinInfo> credentials() async {
@@ -153,6 +197,7 @@ class ChatClient {
         roomCode: roomCode,
         participantId: participantId,
         participantCredential: participantCredential,
+        roomOwnerCredential: roomOwnerCredential,
       );
       final factory = registry.require(response.providerId);
       final joinInfo = factory.parseJoinInfo(response.json);

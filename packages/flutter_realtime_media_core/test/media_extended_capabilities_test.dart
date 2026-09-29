@@ -13,8 +13,14 @@ void main() {
         capabilities.managementCapabilities.listParticipants.execution,
         ManagementExecution.backend,
       );
-      expect(capabilities.managementCapabilities.removeParticipant.supported, isTrue);
-      expect(capabilities.managementCapabilities.muteParticipant.supported, isFalse);
+      expect(
+        capabilities.managementCapabilities.removeParticipant.supported,
+        isTrue,
+      );
+      expect(
+        capabilities.managementCapabilities.muteParticipant.supported,
+        isFalse,
+      );
     });
     test('device helpers filter and select provider-neutral devices', () async {
       final session = _ExtendedSession();
@@ -111,7 +117,87 @@ void main() {
       expect(capabilities.supports(MediaFeature.unorderedData), isFalse);
       expect(capabilities.maxDataMessageBytes, 4096);
     });
+
+    test(
+      'room management prefers provider client execution when available',
+      () async {
+        final session = _ClientManagedSession();
+        final room = MediaRoomSession.direct(
+          roomCode: 'room-client-management',
+          participantId: 'host-1',
+          session: session,
+        );
+
+        expect(
+          room.managementCapabilities.removeParticipant.execution,
+          ManagementExecution.client,
+        );
+
+        final participants = await room.listParticipants();
+        expect(participants.single.userId, 'user-2');
+
+        await room.removeParticipant('participant-2');
+        expect(session.removedParticipants, ['participant-2']);
+
+        await room.closeRoom();
+        expect(session.closeCount, 1);
+        await room.dispose();
+      },
+    );
   });
+}
+
+class _ClientManagedSession extends _BareSession
+    implements MediaRoomManagement {
+  static const _managedCapabilities = MediaCapabilities(
+    management: MediaManagementCapabilities(
+      listParticipants: ManagementCapability.client(),
+      removeParticipant: ManagementCapability.client(),
+      closeRoom: ManagementCapability.client(),
+    ),
+  );
+
+  final List<String> removedParticipants = <String>[];
+  int closeCount = 0;
+
+  @override
+  MediaCapabilities get capabilities => _managedCapabilities;
+
+  @override
+  Future<List<MediaRoomParticipantSummary>> listParticipants(
+    String roomCode, {
+    required String requesterParticipantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async => const [
+    MediaRoomParticipantSummary(
+      participantId: 'participant-2',
+      userId: 'user-2',
+      displayName: 'User 2',
+      role: MediaRole.participant,
+    ),
+  ];
+
+  @override
+  Future<void> removeParticipant(
+    String roomCode, {
+    required String requesterParticipantId,
+    required String targetParticipantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async {
+    removedParticipants.add(targetParticipantId);
+  }
+
+  @override
+  Future<void> closeRoomManaged(
+    String roomCode, {
+    required String requesterParticipantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async {
+    closeCount++;
+  }
 }
 
 class _BareSession implements MediaSession {

@@ -206,13 +206,63 @@ test('switching the active provider does not change an existing room provider', 
   assert.equal(created.body.provider, 'livekit');
   assert.equal(created.body.role, 'participant');
   assert.equal(created.body.roomMode, 'meeting');
+  assert.ok(created.body.roomOwnerCredential);
 
   const rejoinedSameDevice = await post('/rooms/stickyRoom1/join', {
     userId: 'Renamed Host',
     deviceId: 'device-sticky-001',
+    roomOwnerCredential: created.body.roomOwnerCredential,
   });
   assert.equal(rejoinedSameDevice.status, 200);
   assert.equal(rejoinedSameDevice.body.role, 'participant');
+  assert.equal(
+    rejoinedSameDevice.body.roomOwnerCredential,
+    created.body.roomOwnerCredential,
+  );
+
+  const meetingParticipants = await post('/rooms/stickyRoom1/participants', {
+    requesterParticipantId: rejoinedSameDevice.body.participantId,
+    participantCredential: rejoinedSameDevice.body.participantCredential,
+    roomOwnerCredential: rejoinedSameDevice.body.roomOwnerCredential,
+  });
+  assert.equal(meetingParticipants.status, 200);
+  assert.equal(meetingParticipants.body.participants?.length, 1);
+  assert.equal(meetingParticipants.body.participants?.[0]?.userId, 'Renamed Host');
+
+  const meetingGuest = await post('/rooms/stickyRoom1/join', {
+    userId: 'meeting-guest',
+    displayName: 'Meeting Guest',
+    deviceId: 'device-sticky-guest-001',
+  });
+  assert.equal(meetingGuest.status, 200);
+  assert.equal(meetingGuest.body.role, 'participant');
+
+  const forbiddenMeetingManagement = await post(
+    '/rooms/stickyRoom1/participants',
+    {
+      requesterParticipantId: meetingGuest.body.participantId,
+      participantCredential: meetingGuest.body.participantCredential,
+    },
+  );
+  assert.equal(forbiddenMeetingManagement.status, 403);
+
+  const removeMeetingGuest = await post(
+    '/rooms/stickyRoom1/participants/remove',
+    {
+      requesterParticipantId: rejoinedSameDevice.body.participantId,
+      participantCredential: rejoinedSameDevice.body.participantCredential,
+      roomOwnerCredential: rejoinedSameDevice.body.roomOwnerCredential,
+      targetParticipantId: meetingGuest.body.participantId,
+    },
+  );
+  assert.equal(removeMeetingGuest.status, 200);
+
+  const invalidMeetingOwner = await post('/rooms/stickyRoom1/join', {
+    userId: 'fake-owner',
+    displayName: 'Fake Owner',
+    roomOwnerCredential: 'invalid-owner-proof',
+  });
+  assert.equal(invalidMeetingOwner.status, 403);
 
   const participantHeartbeat = await post('/rooms/stickyRoom1/heartbeat', {
     participantId: rejoinedSameDevice.body.participantId,
@@ -303,7 +353,7 @@ test('switching the active provider does not change an existing room provider', 
     true,
   );
   assert.equal(hostParticipants.body.participants?.[0]?.deviceId, undefined);
-  assert.equal(hostParticipants.body.participants?.[0]?.userId, undefined);
+  assert.equal(typeof hostParticipants.body.participants?.[0]?.userId, 'string');
 
   const impersonatedHost = await post('/rooms/broadcast01/participants', {
     requesterParticipantId: creatorRejoin.body.participantId,
@@ -412,6 +462,23 @@ test('switching the active provider does not change an existing room provider', 
     retryOverview.rooms?.some((room) => room.roomCode === 'deleteRetry1'),
     false,
   );
+
+  const closeableMeeting = await post('/rooms', {
+    roomCode: 'meetClose1',
+    displayName: 'Meeting Owner',
+    userId: 'meeting-owner',
+    roomMode: 'meeting',
+    deviceId: 'device-meeting-close-001',
+  });
+  assert.equal(closeableMeeting.status, 200);
+  assert.equal(closeableMeeting.body.role, 'participant');
+  assert.ok(closeableMeeting.body.roomOwnerCredential);
+  const closeMeeting = await post('/rooms/meetClose1/close', {
+    requesterParticipantId: closeableMeeting.body.participantId,
+    participantCredential: closeableMeeting.body.participantCredential,
+    roomOwnerCredential: closeableMeeting.body.roomOwnerCredential,
+  });
+  assert.equal(closeMeeting.status, 200);
 
   const switched = await post('/api/provider', { provider: 'chime' });
   assert.equal(switched.status, 200);

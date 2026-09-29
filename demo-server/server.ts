@@ -46,7 +46,9 @@ import {
 import { ProviderOperationError, ProviderRegistry } from './providers/provider-registry.ts';
 import { RoomDirectory } from './providers/room-directory.ts';
 import { createTrtcProvider } from './providers/trtc.ts';
+import { localizeDemoMessage, resolveDemoLanguage } from './i18n.ts';
 import type {
+  ChatProviderAdapter,
   ChatRoomEntry,
   ChimeRoomEntry,
   MediaRole,
@@ -91,6 +93,7 @@ app.use(cors({
   methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Authorization',
+    'Accept-Language',
     'Content-Type',
     'X-Media-Backend-Contract',
     'X-Realtime-Chat-Contract',
@@ -100,6 +103,11 @@ app.use(cors({
   maxAge: 600,
 }));
 app.use(express.json({ limit: '64kb' }));
+app.use((req, res, next) => {
+  res.vary('Accept-Language');
+  res.locals.language = resolveDemoLanguage(req.get('Accept-Language'));
+  next();
+});
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value == null || value.trim() === '') return fallback;
@@ -305,8 +313,17 @@ function joinRoleForRoom(
   entry: RoomEntry,
   roomOwnerCredential: unknown,
 ): MediaRole {
-  if (entry.roomMode !== 'broadcast') return 'participant';
   const credential = String(roomOwnerCredential ?? '').trim();
+  if (entry.roomMode !== 'broadcast') {
+    if (credential && !matchesRoomOwnerCredential(entry, credential)) {
+      throw new ProviderOperationError(
+        403,
+        'forbidden',
+        'The room owner credential is invalid.',
+      );
+    }
+    return 'participant';
+  }
   if (!credential) return 'viewer';
   if (!matchesRoomOwnerCredential(entry, credential)) {
     throw new ProviderOperationError(
@@ -337,6 +354,65 @@ function requireStandaloneChatHost(entry: ChatRoomEntry, body: Record<string, un
   return attendee;
 }
 
+function chatManagementCapabilities(
+  provider: ChatProviderAdapter,
+  canManage: boolean,
+) {
+  if (!canManage) {
+    return {
+      listMembers: false,
+      removeMember: false,
+      closeRoom: false,
+      muteMember: false,
+      banMember: false,
+      recallMessage: false,
+      manageRoles: false,
+    };
+  }
+  return {
+    listMembers: true,
+    removeMember: typeof provider.removeMember === 'function',
+    closeRoom: true,
+    muteMember: false,
+    banMember: false,
+    recallMessage: false,
+    manageRoles: false,
+  };
+}
+
+function mediaManagementCapabilities(provider: ProviderAdapter) {
+  return {
+    listParticipants: true,
+    removeParticipant:
+      typeof provider.moderateRemoveParticipant === 'function',
+    closeRoom: true,
+    muteParticipant: false,
+    stopParticipantVideo: false,
+    changeParticipantRole: false,
+  };
+}
+
+function chatMemberPayload(item: RoomAttendee) {
+  return {
+    userId: item.userId ?? item.externalUserId,
+    displayName: item.displayName ?? item.externalUserId,
+    role: item.role ?? 'participant',
+  };
+}
+
+function findChatMemberByUserId(
+  entry: ChatRoomEntry,
+  userId: unknown,
+): RoomAttendee | null {
+  const target = String(userId ?? '').trim();
+  if (!target) return null;
+  return (
+    entry.attendees.find(
+      (item) => (item.userId ?? item.externalUserId) === target,
+    ) ?? null
+  );
+}
+
 app.post('/chat/rooms/:code/members', (req, res) => {
   try {
     const entry = chatRoomDirectory.get(req.params.code);
@@ -347,15 +423,216 @@ app.post('/chat/rooms/:code/members', (req, res) => {
     res.json({
       contractVersion: CONTRACT_VERSION,
       roomCode: entry.roomCode,
-      members: entry.attendees.map((item) => ({
-        userId: item.userId ?? item.externalUserId,
-        displayName: item.displayName ?? item.externalUserId,
-        role: item.role ?? 'participant',
-      })),
+      members: entry.attendees.map(chatMemberPayload),
     });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     throw error;
+  }
+});
+
+app.post('/rooms/:code/chat/members', async (req, res) => {
+  try {
+    const entry = await resolveRoom(req.params.code);
+    if (!entry || !entry.chatProvider) {
+      return contractError(
+        res,
+        404,
+        'room-not-found',
+        'The requested room or attached chat was not found.',
+      );
+    }
+    if (
+      !requireRoomManager(
+        entry,
+        req.body?.requesterParticipantId,
+        req.body?.participantCredential,
+        req.body?.roomOwnerCredential,
+      )
+    ) {
+      return contractError(res, 403, 'forbidden', 'Room owner permission is required.');
+    }
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      roomCode: entry.roomCode,
+      members: entry.attendees
+        .filter((item) => !item.chatRemoved)
+        .map(chatMemberPayload),
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('attached chat member list failed', error);
+    contractError(res, 500, 'chat-member-list-failed', 'Unable to list chat members.');
+  }
+});
+
+app.post('/rooms/:code/chat/manage/remove', async (req, res) => {
+  try {
+    const entry = await resolveRoom(req.params.code);
+    if (!entry || !entry.chatProvider) {
+      return contractError(
+        res,
+        404,
+        'room-not-found',
+        'The requested room or attached chat was not found.',
+      );
+    }
+    const manager = requireRoomManager(
+      entry,
+      req.body?.requesterParticipantId,
+      req.body?.participantCredential,
+      req.body?.roomOwnerCredential,
+    );
+    if (!manager) {
+      return contractError(res, 403, 'forbidden', 'Room owner permission is required.');
+    }
+    const target = findChatMemberByUserId(entry, req.body?.targetUserId);
+    if (!target || target.chatRemoved) {
+      return contractError(
+        res,
+        404,
+        'participant-not-found',
+        'The requested chat member was not found.',
+      );
+    }
+    if (target.attendeeId === manager.attendeeId) {
+      return contractError(
+        res,
+        400,
+        'invalid-argument',
+        'The room owner cannot remove itself from attached chat.',
+      );
+    }
+    const provider = chatProviderRegistry.requireConfigured(entry.chatProvider);
+    const providerEnforced = req.body?.providerEnforced === true;
+    if (!providerEnforced) {
+      if (!provider.removeMember) {
+        return contractError(
+          res,
+          400,
+          'unsupported-feature',
+          'This chat provider does not support member removal.',
+        );
+      }
+      await provider.removeMember(entry, target);
+    }
+    target.chatRemoved = true;
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      ok: true,
+      roomCode: entry.roomCode,
+      userId: target.userId ?? target.externalUserId,
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('attached chat member removal failed', error);
+    contractError(
+      res,
+      500,
+      'chat-member-remove-failed',
+      'Unable to remove the attached chat member.',
+    );
+  }
+});
+
+app.post('/rooms/:code/chat/manage/close', async (req, res) => {
+  try {
+    const entry = await resolveRoom(req.params.code);
+    if (!entry || !entry.chatProvider) {
+      return contractError(
+        res,
+        404,
+        'room-not-found',
+        'The requested room or attached chat was not found.',
+      );
+    }
+    if (
+      !requireRoomManager(
+        entry,
+        req.body?.requesterParticipantId,
+        req.body?.participantCredential,
+        req.body?.roomOwnerCredential,
+      )
+    ) {
+      return contractError(res, 403, 'forbidden', 'Room owner permission is required.');
+    }
+    if (!entry.chatClosed) {
+      const provider = chatProviderRegistry.requireConfigured(entry.chatProvider);
+      await provider.closeRoom(entry);
+      entry.chatClosed = true;
+    }
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      ok: true,
+      roomCode: entry.roomCode,
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('attached chat close failed', error);
+    contractError(res, 500, 'chat-room-close-failed', 'Unable to close attached chat.');
+  }
+});
+
+app.post('/chat/rooms/:code/manage/remove', async (req, res) => {
+  try {
+    const entry = chatRoomDirectory.get(req.params.code);
+    if (!entry || !entry.chatProvider) {
+      return contractError(
+        res,
+        404,
+        'room-not-found',
+        'The requested chat room was not found.',
+      );
+    }
+    const host = requireStandaloneChatHost(entry, req.body ?? {});
+    const target = findChatMemberByUserId(entry, req.body?.targetUserId);
+    if (!target) {
+      return contractError(
+        res,
+        404,
+        'participant-not-found',
+        'The requested chat member was not found.',
+      );
+    }
+    if (target.attendeeId === host.attendeeId) {
+      return contractError(
+        res,
+        400,
+        'invalid-argument',
+        'The host cannot remove itself; close the chat room instead.',
+      );
+    }
+    const provider = chatProviderRegistry.requireConfigured(entry.chatProvider);
+    const providerEnforced = req.body?.providerEnforced === true;
+    if (!providerEnforced) {
+      if (!provider.removeMember) {
+        return contractError(
+          res,
+          400,
+          'unsupported-feature',
+          'This chat provider does not support member removal.',
+        );
+      }
+      await provider.removeMember(entry, target);
+    }
+    entry.attendees = entry.attendees.filter(
+      (item) => item.attendeeId !== target.attendeeId,
+    );
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      ok: true,
+      roomCode: entry.roomCode,
+      userId: target.userId ?? target.externalUserId,
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('standalone chat member removal failed', error);
+    contractError(
+      res,
+      500,
+      'chat-member-remove-failed',
+      'Unable to remove the chat member.',
+    );
   }
 });
 
@@ -377,6 +654,167 @@ app.post('/chat/rooms/:code/manage/close', async (req, res) => {
   }
 });
 
+app.delete('/api/chat/rooms/:code', requireSameOrigin, requireAdmin, async (req, res) => {
+  try {
+    const entry = chatRoomDirectory.get(String(req.params.code ?? ''));
+    if (!entry || !entry.chatProvider) {
+      return contractError(res, 404, 'room-not-found', 'The requested chat room was not found.');
+    }
+    const provider = chatProviderRegistry.requireConfigured(entry.chatProvider);
+    await provider.closeRoom(entry);
+    chatRoomDirectory.remove(entry.roomCode);
+    logEvent(
+      'chat-room-close-force',
+      `standalone chat room ${entry.roomCode} closed by dashboard admin`,
+    );
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      deleted: true,
+      roomCode: entry.roomCode,
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('admin standalone chat close failed', error);
+    contractError(res, 500, 'chat-room-close-failed', 'Unable to close the chat room.');
+  }
+});
+
+app.get('/api/chat/cloud-rooms', requireAdmin, async (req, res) => {
+  try {
+    const providerId = String(
+      req.query.provider ?? activeChatProvider ?? '',
+    ).trim().toLowerCase();
+    if (!providerId) {
+      return res.json({
+        contractVersion: CONTRACT_VERSION,
+        provider: null,
+        source: 'local',
+        rooms: [],
+      });
+    }
+
+    const provider = chatProviderRegistry.requireConfigured(providerId);
+    const localRooms = chatRoomDirectory
+      .list()
+      .filter((entry) => entry.chatProvider === providerId);
+
+    if (!provider.listCloudRooms) {
+      return res.json({
+        contractVersion: CONTRACT_VERSION,
+        provider: providerId,
+        source: 'local',
+        rooms: localRooms.map((entry) => ({
+          roomCode: entry.roomCode,
+          providerRoomId: entry.chatRoomArn ?? entry.roomCode,
+          chatProvider: entry.chatProvider,
+          name: entry.roomCode,
+          type: 'standalone',
+          memberCount: entry.attendees.length,
+          createdAt: entry.createdAt,
+          tracked: true,
+          attendees: entry.attendees,
+        })),
+      });
+    }
+
+    const cloudRooms = await provider.listCloudRooms();
+    const localByProviderRoomId = new Map(
+      localRooms
+        .filter((entry) => entry.chatRoomArn)
+        .map((entry) => [entry.chatRoomArn!, entry]),
+    );
+    res.json({
+      contractVersion: CONTRACT_VERSION,
+      provider: providerId,
+      source: 'cloud',
+      rooms: cloudRooms.map((room) => {
+        const local = localByProviderRoomId.get(room.providerRoomId);
+        return {
+          roomCode: local?.roomCode ?? room.inferredRoomCode ?? '',
+          providerRoomId: room.providerRoomId,
+          chatProvider: providerId,
+          name: room.name,
+          type: room.type,
+          memberCount: room.memberCount ?? local?.attendees.length ?? 0,
+          createdAt: room.createdAt ?? local?.createdAt ?? null,
+          tracked: Boolean(local),
+          attendees: local?.attendees ?? [],
+        };
+      }),
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('admin cloud chat room list failed', error);
+    contractError(
+      res,
+      500,
+      'chat-cloud-room-list-failed',
+      'Unable to list cloud chat rooms.',
+    );
+  }
+});
+
+app.delete(
+  '/api/chat/cloud-rooms/:provider/:roomId',
+  requireSameOrigin,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const providerId = String(req.params.provider ?? '').trim().toLowerCase();
+      const providerRoomId = String(req.params.roomId ?? '').trim();
+      const provider = chatProviderRegistry.requireConfigured(providerId);
+      if (!provider.deleteCloudRoom) {
+        return contractError(
+          res,
+          400,
+          'unsupported-feature',
+          'This chat provider does not expose cloud room deletion.',
+        );
+      }
+      if (!providerRoomId) {
+        return contractError(
+          res,
+          400,
+          'invalid-argument',
+          'A provider room id is required.',
+        );
+      }
+
+      await provider.deleteCloudRoom(providerRoomId);
+      const removedRoomCodes: string[] = [];
+      for (const entry of chatRoomDirectory.list()) {
+        if (
+          entry.chatProvider === providerId &&
+          entry.chatRoomArn === providerRoomId
+        ) {
+          chatRoomDirectory.remove(entry.roomCode);
+          removedRoomCodes.push(entry.roomCode);
+        }
+      }
+      logEvent(
+        'chat-room-close-force',
+        `cloud chat room ${providerRoomId} deleted from ${providerId}`,
+      );
+      res.json({
+        contractVersion: CONTRACT_VERSION,
+        deleted: true,
+        provider: providerId,
+        providerRoomId,
+        removedRoomCodes,
+      });
+    } catch (error) {
+      if (sendProviderError(res, error) !== false) return;
+      console.error('admin cloud chat room delete failed', error);
+      contractError(
+        res,
+        500,
+        'chat-cloud-room-delete-failed',
+        'Unable to delete the cloud chat room.',
+      );
+    }
+  },
+);
+
 app.post('/chat/rooms/:code/credentials', async (req, res) => {
   try {
     const entry = chatRoomDirectory.get(req.params.code);
@@ -395,6 +833,7 @@ app.post('/chat/rooms/:code/credentials', async (req, res) => {
       ...response,
       participantCredential: String(req.body?.participantCredential ?? '').trim(),
       context: 'standalone',
+      management: chatManagementCapabilities(provider, attendee.role === 'host'),
     });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
@@ -464,6 +903,7 @@ app.post('/chat/rooms', async (req, res) => {
         ...response,
         participantCredential,
         context: 'standalone',
+        management: chatManagementCapabilities(provider, attendee.role === 'host'),
       });
     }
     res.status(201).json({
@@ -505,7 +945,12 @@ app.post('/chat/rooms/:code/join', async (req, res) => {
     entry.lastHeartbeatMs = Date.now();
     const response = await provider.issueToken({ entry, attendee });
     const participantCredential = issueParticipantCredential(entry, participantId);
-    res.json({ ...response, participantCredential, context: 'standalone' });
+    res.json({
+      ...response,
+      participantCredential,
+      context: 'standalone',
+      management: chatManagementCapabilities(provider, attendee.role === 'host'),
+    });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     console.error('standalone chat join failed', error);
@@ -610,7 +1055,11 @@ function contractError(
 ): Response {
   return res.status(status).json({
     contractVersion: CONTRACT_VERSION,
-    error: { code, message, ...(details === undefined ? {} : { details }) },
+    error: {
+      code,
+      message: localizeDemoMessage(message, res.locals.language ?? 'en'),
+      ...(details === undefined ? {} : { details }),
+    },
   });
 }
 
@@ -980,6 +1429,14 @@ app.get('/api/overview', requireAdmin, (req, res) => {
       context: 'standalone',
       createdAt: entry.createdAt,
       attendeeCount: entry.attendees.length,
+      attendees: entry.attendees.map((attendee) => ({
+        userId: attendee.userId ?? attendee.externalUserId,
+        externalUserId: attendee.externalUserId,
+        displayName: attendee.displayName ?? attendee.externalUserId,
+        role: attendee.role ?? 'participant',
+        joinedAt: attendee.joinedAt,
+        lastHeartbeatMs: attendee.lastHeartbeatMs,
+      })),
     })),
     rooms: allRooms.map((entry) => summarizeRoom(entry, req)),
     events: events.slice(0, 100),
@@ -1087,6 +1544,7 @@ app.post('/rooms', async (req, res) => {
     }
     created.entry.roomMode = roomMode;
     created.response.roomMode = roomMode;
+    created.response.management = mediaManagementCapabilities(provider);
     // Room ownership is a logical SDK/control-plane role and is independent
     // from the provider media role. This lets meeting providers such as Chime
     // keep their native participant role while the creator can still manage
@@ -1188,10 +1646,15 @@ app.post('/rooms/:code/join', async (req, res) => {
     });
     if (entry.chatProvider) response.chatProvider = entry.chatProvider;
     if (entry.roomMode) response.roomMode = entry.roomMode;
-    if (role === 'host') {
-      response.roomOwnerCredential = String(
-        req.body?.roomOwnerCredential ?? '',
-      ).trim();
+    response.management = mediaManagementCapabilities(provider);
+    const presentedOwnerCredential = String(
+      req.body?.roomOwnerCredential ?? '',
+    ).trim();
+    if (
+      presentedOwnerCredential &&
+      matchesRoomOwnerCredential(entry, presentedOwnerCredential)
+    ) {
+      response.roomOwnerCredential = presentedOwnerCredential;
     }
     bindLogicalIdentity(
       entry,
@@ -1248,9 +1711,39 @@ app.post('/rooms/:code/chat/token', async (req, res) => {
       participantId,
       req.body?.participantCredential,
     );
+    if (attendee.chatRemoved) {
+      return contractError(
+        res,
+        403,
+        'forbidden',
+        'This participant has been removed from the attached chat.',
+      );
+    }
+    const ownerCredential = String(
+      req.body?.roomOwnerCredential ?? '',
+    ).trim();
+    const canManageChat =
+      attendee.role === 'host' ||
+      (ownerCredential.length > 0 &&
+        matchesRoomOwnerCredential(entry, ownerCredential));
+    const chatAttendee =
+      canManageChat && attendee.role !== 'host'
+        ? { ...attendee, role: 'host' as const }
+        : attendee;
     const chatProvider = chatProviderRegistry.requireConfigured(entry.chatProvider);
-    const response = await chatProvider.issueToken({ entry, attendee });
-    res.json(response);
+    const response = await chatProvider.issueToken({
+      entry,
+      attendee: chatAttendee,
+    });
+    res.json({
+      ...response,
+      participantCredential: String(
+        req.body?.participantCredential ?? '',
+      ).trim(),
+      roomOwnerCredential: ownerCredential,
+      context: 'attached',
+      management: chatManagementCapabilities(chatProvider, canManageChat),
+    });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     console.error('chat token failed', error);
@@ -1353,10 +1846,11 @@ app.post('/rooms/:code/leave', async (req, res) => {
   }
 });
 
-function requireHostAttendee(
+function requireRoomManager(
   entry: RoomEntry,
   requesterParticipantId: unknown,
   participantCredential: unknown,
+  roomOwnerCredential: unknown,
 ): RoomAttendee | null {
   const requester = String(requesterParticipantId ?? '').trim();
   if (!requester) return null;
@@ -1366,7 +1860,12 @@ function requireHostAttendee(
       requester,
       participantCredential,
     );
-    return attendee.role === 'host' ? attendee : null;
+    if (attendee.role === 'host') return attendee;
+    const ownerCredential = String(roomOwnerCredential ?? '').trim();
+    return ownerCredential &&
+      matchesRoomOwnerCredential(entry, ownerCredential)
+      ? attendee
+      : null;
   } catch (error) {
     if (
       error instanceof ProviderOperationError &&
@@ -1383,10 +1882,11 @@ app.post('/rooms/:code/participants', async (req, res) => {
   if (!entry) {
     return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
   }
-  if (!requireHostAttendee(
+  if (!requireRoomManager(
     entry,
     req.body?.requesterParticipantId,
     req.body?.participantCredential,
+    req.body?.roomOwnerCredential,
   )) {
     return contractError(res, 403, 'forbidden', 'Host permission is required.');
   }
@@ -1395,6 +1895,7 @@ app.post('/rooms/:code/participants', async (req, res) => {
     roomCode: entry.roomCode,
     participants: entry.attendees.map((attendee) => ({
       participantId: attendee.attendeeId,
+      userId: attendee.userId ?? attendee.externalUserId,
       displayName: attendee.displayName ?? attendee.externalUserId,
       role: attendee.role ?? 'participant',
       joinedAt: attendee.joinedAt,
@@ -1408,10 +1909,11 @@ app.post('/rooms/:code/participants/remove', async (req, res) => {
     if (!entry) {
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
-    const host = requireHostAttendee(
+    const host = requireRoomManager(
       entry,
       req.body?.requesterParticipantId,
       req.body?.participantCredential,
+      req.body?.roomOwnerCredential,
     );
     if (!host) {
       return contractError(res, 403, 'forbidden', 'Host permission is required.');
@@ -1456,10 +1958,11 @@ app.post('/rooms/:code/close', async (req, res) => {
     if (!entry) {
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
-    if (!requireHostAttendee(
+    if (!requireRoomManager(
       entry,
       req.body?.requesterParticipantId,
       req.body?.participantCredential,
+      req.body?.roomOwnerCredential,
     )) {
       return contractError(res, 403, 'forbidden', 'Host permission is required.');
     }

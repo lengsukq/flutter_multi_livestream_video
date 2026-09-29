@@ -17,6 +17,7 @@ abstract interface class MediaRoomModeration implements MediaRoomManagement {
     required String requesterParticipantId,
     required String targetParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   });
 
   Future<void> stopParticipantVideo(
@@ -24,6 +25,7 @@ abstract interface class MediaRoomModeration implements MediaRoomManagement {
     required String requesterParticipantId,
     required String targetParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   });
 
   Future<void> changeParticipantRole(
@@ -32,6 +34,7 @@ abstract interface class MediaRoomModeration implements MediaRoomManagement {
     required String targetParticipantId,
     required MediaRole role,
     String? participantCredential,
+    String? roomOwnerCredential,
   });
 }
 
@@ -41,6 +44,7 @@ abstract interface class MediaRoomManagement {
     String roomCode, {
     required String requesterParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   });
 
   Future<void> removeParticipant(
@@ -48,11 +52,13 @@ abstract interface class MediaRoomManagement {
     required String requesterParticipantId,
     required String targetParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   });
 
   Future<void> closeRoomManaged(
     String roomCode, {
     required String requesterParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   });
 }

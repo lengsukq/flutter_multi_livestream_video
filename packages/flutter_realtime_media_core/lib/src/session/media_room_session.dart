@@ -3,6 +3,7 @@ import 'dart:async';
 import '../client/media_backend_error.dart';
 import '../model/media_error.dart';
 import '../model/media_event.dart';
+import '../model/media_management_capability.dart';
 import '../model/media_recovery_status.dart';
 import '../model/media_role.dart';
 import '../model/media_room_participant_summary.dart';
@@ -48,6 +49,42 @@ class MediaRoomSession {
     _stateSubscription = session.states.listen(_onStateChanged);
     _eventSubscription = session.events.listen(_onSessionEvent);
     _startHeartbeat();
+  }
+
+  MediaRoomManagement _managementExecutor(
+    ManagementCapability capability,
+    String operation,
+  ) {
+    if (!capability.supported) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message:
+            'Cannot $operation because the active provider does not support it.',
+        providerId: providerId,
+      );
+    }
+    if (capability.canExecuteOnClient && session is MediaRoomManagement) {
+      return session as MediaRoomManagement;
+    }
+    return _requireManagement(operation);
+  }
+
+  MediaRoomModeration _moderationExecutor(
+    ManagementCapability capability,
+    String operation,
+  ) {
+    if (!capability.supported) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message:
+            'Cannot $operation because the active provider does not support it.',
+        providerId: providerId,
+      );
+    }
+    if (capability.canExecuteOnClient && session is MediaRoomModeration) {
+      return session as MediaRoomModeration;
+    }
+    return _requireModeration(operation);
   }
 
   /// Attaches backend presence handling to an already joined [session].
@@ -114,6 +151,53 @@ class MediaRoomSession {
   /// Role the session was created for.
   MediaRole get role => session.role;
 
+  bool get isLogicalOwner =>
+      (roomOwnerCredential?.trim().isNotEmpty ?? false) ||
+      role == MediaRole.host;
+
+  bool _backendManagementFlag(String key, {required bool fallback}) {
+    final raw = backendMetadata['management'];
+    if (raw is! Map) return fallback;
+    final value = raw[key];
+    return value is bool ? value : fallback;
+  }
+
+  MediaManagementCapabilities get managementCapabilities {
+    final client = session.capabilities.managementCapabilities;
+    if (!isLogicalOwner) return client;
+    ManagementCapability preferClient(
+      ManagementCapability clientCapability, {
+      required String backendKey,
+      required bool backendFallback,
+    }) {
+      if (clientCapability.supported) return clientCapability;
+      return _backendManagementFlag(backendKey, fallback: backendFallback)
+          ? const ManagementCapability.backend()
+          : clientCapability;
+    }
+
+    return MediaManagementCapabilities(
+      listParticipants: preferClient(
+        client.listParticipants,
+        backendKey: 'listParticipants',
+        backendFallback: true,
+      ),
+      removeParticipant: preferClient(
+        client.removeParticipant,
+        backendKey: 'removeParticipant',
+        backendFallback: false,
+      ),
+      muteParticipant: client.muteParticipant,
+      stopParticipantVideo: client.stopParticipantVideo,
+      changeParticipantRole: client.changeParticipantRole,
+      closeRoom: preferClient(
+        client.closeRoom,
+        backendKey: 'closeRoom',
+        backendFallback: true,
+      ),
+    );
+  }
+
   /// Latest media snapshot.
   MediaSnapshot get snapshot => session.snapshot;
 
@@ -129,46 +213,67 @@ class MediaRoomSession {
   /// Lists sanitized logical room participants. The backend remains the
   /// authority and rejects callers without room-management permission.
   Future<List<MediaRoomParticipantSummary>> listParticipants() =>
-      _requireManagement('list room participants').listParticipants(
+      _managementExecutor(
+        managementCapabilities.listParticipants,
+        'list room participants',
+      ).listParticipants(
         roomCode,
         requesterParticipantId: participantId,
         participantCredential: participantCredential,
+        roomOwnerCredential: roomOwnerCredential,
       );
 
   Future<void> muteParticipant(String targetParticipantId) =>
-      _requireModeration('mute room participants').muteParticipant(
+      _moderationExecutor(
+        managementCapabilities.muteParticipant,
+        'mute room participants',
+      ).muteParticipant(
         roomCode,
         requesterParticipantId: participantId,
         targetParticipantId: targetParticipantId,
         participantCredential: participantCredential,
+        roomOwnerCredential: roomOwnerCredential,
       );
 
   Future<void> stopParticipantVideo(String targetParticipantId) =>
-      _requireModeration('stop participant video').stopParticipantVideo(
+      _moderationExecutor(
+        managementCapabilities.stopParticipantVideo,
+        'stop participant video',
+      ).stopParticipantVideo(
         roomCode,
         requesterParticipantId: participantId,
         targetParticipantId: targetParticipantId,
         participantCredential: participantCredential,
+        roomOwnerCredential: roomOwnerCredential,
       );
 
   Future<void> changeParticipantRole(
     String targetParticipantId,
     MediaRole role,
-  ) => _requireModeration('change participant role').changeParticipantRole(
-    roomCode,
-    requesterParticipantId: participantId,
-    targetParticipantId: targetParticipantId,
-    role: role,
-    participantCredential: participantCredential,
-  );
+  ) =>
+      _moderationExecutor(
+        managementCapabilities.changeParticipantRole,
+        'change participant role',
+      ).changeParticipantRole(
+        roomCode,
+        requesterParticipantId: participantId,
+        targetParticipantId: targetParticipantId,
+        role: role,
+        participantCredential: participantCredential,
+        roomOwnerCredential: roomOwnerCredential,
+      );
 
   /// Removes a participant when the backend/provider supports true moderation.
   Future<void> removeParticipant(String targetParticipantId) =>
-      _requireManagement('remove room participants').removeParticipant(
+      _managementExecutor(
+        managementCapabilities.removeParticipant,
+        'remove room participants',
+      ).removeParticipant(
         roomCode,
         requesterParticipantId: participantId,
         targetParticipantId: targetParticipantId,
         participantCredential: participantCredential,
+        roomOwnerCredential: roomOwnerCredential,
       );
 
   /// Closes the logical room for future joins using backend-authoritative
@@ -185,7 +290,10 @@ class MediaRoomSession {
   }
 
   Future<void> _closeRoom() async {
-    final management = _requireManagement('close the logical room');
+    final management = _managementExecutor(
+      managementCapabilities.closeRoom,
+      'close the logical room',
+    );
     if (_disposed || _leaveNotified) return;
     _stopHeartbeat();
     await _heartbeatFuture;
@@ -194,6 +302,7 @@ class MediaRoomSession {
         roomCode,
         requesterParticipantId: participantId,
         participantCredential: participantCredential,
+        roomOwnerCredential: roomOwnerCredential,
       );
     } catch (_) {
       if (!_disposed && !_leaveNotified && !session.state.isTerminal) {

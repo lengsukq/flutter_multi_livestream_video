@@ -34,6 +34,7 @@ function room(): RoomEntry {
 function fakeApi() {
   const users: string[] = [];
   const deleted: string[] = [];
+  const removed: Array<{ roomId: string; username: string }> = [];
   const api: AgoraChatApi = {
     async createRoom(name) {
       return `room:${name}`;
@@ -45,11 +46,14 @@ function fakeApi() {
     async deleteRoom(roomId) {
       deleted.push(roomId);
     },
+    async removeMember(roomId, username) {
+      removed.push({ roomId, username });
+    },
     buildUserToken(userUuid, ttlSeconds) {
       return `token:${userUuid}:${ttlSeconds}`;
     },
   };
-  return { api, users, deleted };
+  return { api, users, deleted, removed };
 }
 
 test('Agora Chat room lifecycle stays independent from media provider', async () => {
@@ -66,6 +70,13 @@ test('Agora Chat room lifecycle stays independent from media provider', async ()
   const entry = room();
   await provider.closeRoom(entry);
   assert.deepEqual(fake.deleted, [entry.chatRoomArn]);
+  await provider.removeMember?.(entry, attendee('viewer'));
+  assert.deepEqual(fake.removed, [
+    {
+      roomId: entry.chatRoomArn,
+      username: agoraChatProviderUserId('viewer-logical-user'),
+    },
+  ]);
 });
 
 test('Agora Chat credentials use registered Chat UUID for token minting', async () => {

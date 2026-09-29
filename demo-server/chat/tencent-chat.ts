@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import tlsSigApiV2 from 'tls-sig-api-v2';
 import type {
   ChatProviderAdapter,
+  ChatProviderCloudRoom,
   ChatProviderTokenResponse,
   MediaRole,
   ProviderFactoryContext,
@@ -17,9 +18,11 @@ const DEFAULT_REST_HOST = 'https://console.tim.qq.com';
 const DEFAULT_TOKEN_TTL_SECONDS = 3600;
 
 export interface TencentChatApi {
-  createGroup(groupId: string, name: string): Promise<void>;
+  createGroup(name: string): Promise<string>;
+  listGroups(): Promise<ChatProviderCloudRoom[]>;
   importAccount(userId: string, displayName: string): Promise<void>;
   deleteGroup(groupId: string): Promise<void>;
+  removeGroupMember?(groupId: string, userId: string): Promise<void>;
   buildUserSig(userId: string, ttlSeconds: number): string;
 }
 
@@ -96,23 +99,82 @@ function createRestApi({
   }
 
   return {
-    async createGroup(groupId, name) {
-      try {
-        await request('v4/group_open_http_svc/create_group', {
-          Type: 'Meeting',
-          GroupId: groupId,
-          Name: name,
-          ApplyJoinOption: 'FreeAccess',
-        });
-      } catch (error) {
-        if (
-          error instanceof ProviderOperationError &&
-          JSON.stringify(error.details).includes('10025')
-        ) {
-          return;
-        }
-        throw error;
+    async createGroup(name) {
+      const payload = await request('v4/group_open_http_svc/create_group', {
+        Type: 'Meeting',
+        Name: name,
+        ApplyJoinOption: 'FreeAccess',
+      });
+      const groupId = payload.GroupId?.toString().trim();
+      if (!groupId) {
+        throw new ProviderOperationError(
+          502,
+          'provider-api-error',
+          'Tencent Chat did not return a group ID after creation.',
+          payload,
+        );
       }
+      return groupId;
+    },
+    async listGroups() {
+      const listPayload = await request(
+        'v4/group_open_http_svc/get_appid_group_list',
+        { Limit: 10000, Next: 0 },
+      );
+      const rawGroups = Array.isArray(listPayload.GroupIdList)
+        ? listPayload.GroupIdList
+        : [];
+      const groupIds = rawGroups
+        .map((item) => {
+          if (!item || typeof item !== 'object') return '';
+          return (item as Record<string, unknown>).GroupId?.toString().trim() ?? '';
+        })
+        .filter(Boolean);
+
+      const rooms: ChatProviderCloudRoom[] = [];
+      for (let index = 0; index < groupIds.length; index += 50) {
+        const batch = groupIds.slice(index, index + 50);
+        const infoPayload = await request('v4/group_open_http_svc/get_group_info', {
+          GroupIdList: batch,
+          ResponseFilter: {
+            GroupBaseInfoFilter: [
+              'Type',
+              'Name',
+              'CreateTime',
+              'MemberNum',
+            ],
+          },
+        });
+        const infos = Array.isArray(infoPayload.GroupInfo)
+          ? infoPayload.GroupInfo
+          : [];
+        for (const raw of infos) {
+          if (!raw || typeof raw !== 'object') continue;
+          const info = raw as Record<string, unknown>;
+          const providerRoomId = info.GroupId?.toString().trim() ?? '';
+          const name = info.Name?.toString().trim() ?? '';
+          const legacy = providerRoomId.startsWith('rm_');
+          const managedName = name.startsWith('Realtime room ');
+          if (!providerRoomId || (!legacy && !managedName)) continue;
+          const inferredRoomCode = managedName
+            ? name.slice('Realtime room '.length).trim()
+            : providerRoomId.slice(3).trim();
+          const createTime = Number(info.CreateTime);
+          const memberCount = Number(info.MemberNum);
+          rooms.push({
+            providerRoomId,
+            name: name || providerRoomId,
+            type: info.Type?.toString().trim() || undefined,
+            memberCount: Number.isFinite(memberCount) ? memberCount : undefined,
+            createdAt:
+              Number.isFinite(createTime) && createTime > 0
+                ? new Date(createTime * 1000).toISOString()
+                : undefined,
+            inferredRoomCode: inferredRoomCode || undefined,
+          });
+        }
+      }
+      return rooms;
     },
     async importAccount(userId, displayName) {
       await request('v4/im_open_login_svc/account_import', {
@@ -123,6 +185,13 @@ function createRestApi({
     async deleteGroup(groupId) {
       await request('v4/group_open_http_svc/destroy_group', {
         GroupId: groupId,
+      });
+    },
+    async removeGroupMember(groupId, userId) {
+      await request('v4/group_open_http_svc/delete_group_member', {
+        GroupId: groupId,
+        MemberToDel_Account: [userId],
+        Silence: 1,
       });
     },
     buildUserSig(userId, ttlSeconds) {
@@ -175,8 +244,8 @@ export function createTencentChatProvider({
       {
         key: 'disconnectUser',
         label: 'Remove user',
-        support: 'unsupported',
-        note: 'The current provider-neutral adapter does not expose Tencent moderation operations.',
+        support: 'conditional',
+        note: 'Host control-plane management removes the provider account from the Tencent group.',
       },
       {
         key: 'history',
@@ -195,8 +264,11 @@ export function createTencentChatProvider({
           'Tencent Chat is not configured.',
         );
       }
-      const groupId = `rm_${roomCode}`;
-      await api.createGroup(groupId, `Realtime room ${roomCode}`);
+      // Let Tencent assign the provider group ID. The public room code is a
+      // control-plane identifier and may be reused after this demo server is
+      // restarted; binding it directly to GroupId leaves stale cloud groups
+      // that make a later create fail with "group id has been used".
+      const groupId = await api.createGroup(`Realtime room ${roomCode}`);
       return { chatProvider: 'tencent-chat', chatRoomArn: groupId };
     },
     async issueToken({ entry, attendee }): Promise<ChatProviderTokenResponse> {
@@ -234,6 +306,45 @@ export function createTencentChatProvider({
         return;
       }
       await api.deleteGroup(entry.chatRoomArn);
+    },
+    async removeMember(entry, attendee) {
+      if (
+        !api ||
+        !api.removeGroupMember ||
+        entry.chatProvider !== 'tencent-chat' ||
+        !entry.chatRoomArn
+      ) {
+        throw new ProviderOperationError(
+          400,
+          'unsupported-feature',
+          'Tencent Chat member removal is not available.',
+        );
+      }
+      const identity = requireIdentity(attendee);
+      await api.removeGroupMember(
+        entry.chatRoomArn,
+        tencentChatProviderUserId(identity.userId),
+      );
+    },
+    async listCloudRooms() {
+      if (!api) {
+        throw new ProviderOperationError(
+          503,
+          'provider-not-configured',
+          'Tencent Chat is not configured.',
+        );
+      }
+      return api.listGroups();
+    },
+    async deleteCloudRoom(providerRoomId) {
+      if (!api) {
+        throw new ProviderOperationError(
+          503,
+          'provider-not-configured',
+          'Tencent Chat is not configured.',
+        );
+      }
+      await api.deleteGroup(providerRoomId);
     },
   };
 }

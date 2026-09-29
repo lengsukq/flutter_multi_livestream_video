@@ -34,6 +34,7 @@ export interface RoomAttendee {
   lastHeartbeatMs?: number;
   role?: MediaRole;
   deviceId?: string;
+  chatRemoved?: boolean;
 }
 
 export interface ChatProviderMetadata {
@@ -52,6 +53,15 @@ export interface ChatProviderMetadata {
 export interface ChatRoomBinding {
   chatProvider: string;
   chatRoomArn: string;
+}
+
+export interface ChatProviderCloudRoom {
+  providerRoomId: string;
+  name: string;
+  type?: string;
+  memberCount?: number;
+  createdAt?: string;
+  inferredRoomCode?: string;
 }
 
 export interface IssueChatTokenInput {
@@ -85,6 +95,9 @@ export interface ChatProviderAdapter {
   createRoom(roomCode: string): Promise<ChatRoomBinding>;
   issueToken(input: IssueChatTokenInput): Promise<ChatProviderTokenResponse>;
   closeRoom(entry: ChatRoomEntry): Promise<void>;
+  removeMember?(entry: ChatRoomEntry, attendee: RoomAttendee): Promise<void>;
+  listCloudRooms?(): Promise<ChatProviderCloudRoom[]>;
+  deleteCloudRoom?(providerRoomId: string): Promise<void>;
 }
 
 export interface ChimeMeeting {

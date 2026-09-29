@@ -3,6 +3,7 @@ import {
   CreateChatTokenCommand,
   CreateRoomCommand,
   DeleteRoomCommand,
+  DisconnectUserCommand,
   IvschatClient,
 } from '@aws-sdk/client-ivschat';
 import type { ChatTokenCapability as ChatTokenCapabilityType } from '@aws-sdk/client-ivschat';
@@ -33,6 +34,7 @@ export interface IvsChatApi {
     durationMinutes: number;
   }): Promise<IvsChatToken>;
   deleteRoom(roomArn: string): Promise<void>;
+  disconnectUser?(roomArn: string, userId: string): Promise<void>;
 }
 
 export async function resolveIvsChatRegion(
@@ -121,6 +123,15 @@ function createAwsApi(region: string): IvsChatApi {
     },
     async deleteRoom(roomArn) {
       await client.send(new DeleteRoomCommand({ identifier: roomArn }));
+    },
+    async disconnectUser(roomArn, userId) {
+      await client.send(
+        new DisconnectUserCommand({
+          roomIdentifier: roomArn,
+          userId,
+          reason: 'Removed by room host',
+        }),
+      );
     },
   };
 }
@@ -284,6 +295,26 @@ export function createIvsChatProvider({
         await api.deleteRoom(entry.chatRoomArn);
       } catch (error) {
         fail('DeleteRoom', error);
+      }
+    },
+    async removeMember(entry, attendee) {
+      if (
+        !api ||
+        !api.disconnectUser ||
+        entry.chatProvider !== 'ivs-chat' ||
+        !entry.chatRoomArn
+      ) {
+        throw new ProviderOperationError(
+          400,
+          'unsupported-feature',
+          'Amazon IVS Chat member removal is not available.',
+        );
+      }
+      const identity = requireAttendeeIdentity(attendee);
+      try {
+        await api.disconnectUser(entry.chatRoomArn, identity.userId);
+      } catch (error) {
+        fail('DisconnectUser', error);
       }
     },
   };

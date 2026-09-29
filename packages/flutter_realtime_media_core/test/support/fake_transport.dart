@@ -89,8 +89,7 @@ Map<String, Object?> liveKitJoinPayload({
   'participantId': participantId,
   if (participantCredential != null)
     'participantCredential': participantCredential,
-  if (roomOwnerCredential != null)
-    'roomOwnerCredential': roomOwnerCredential,
+  if (roomOwnerCredential != null) 'roomOwnerCredential': roomOwnerCredential,
   'livekit': {'url': url, 'token': token, 'identity': participantId},
 };
 

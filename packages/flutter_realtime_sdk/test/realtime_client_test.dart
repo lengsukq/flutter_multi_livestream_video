@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
@@ -470,6 +472,174 @@ void main() {
       await room.dispose();
     },
   );
+
+  group('RealtimeChatModeration execution routing', () {
+    test(
+      'prefers provider client removal over the backend control plane',
+      () async {
+        final session = _ModerationChatSession(canDisconnectUser: true);
+        final moderation = RealtimeChatModeration(session);
+
+        expect(
+          moderation.capabilities.removeMember.execution,
+          ChatManagementExecution.client,
+        );
+
+        await moderation.removeMember('user-2');
+
+        expect(session.disconnectedUsers, ['user-2']);
+        await session.dispose();
+      },
+    );
+
+    test(
+      'falls back to backend removal when the client cannot enforce it',
+      () async {
+        final session = _ModerationChatSession();
+        final backend = _ModerationControlPlane(
+          capabilities: const ChatManagementCapabilities(
+            removeMember: ChatManagementCapability.backend(),
+          ),
+        );
+        final moderation = RealtimeChatModeration(session, backend);
+
+        expect(
+          moderation.capabilities.removeMember.execution,
+          ChatManagementExecution.backend,
+        );
+
+        await moderation.removeMember('user-2');
+
+        expect(session.disconnectedUsers, isEmpty);
+        expect(backend.removedUsers, ['user-2']);
+        await session.dispose();
+      },
+    );
+
+    test(
+      'uses hybrid removal when client enforcement and backend sync both exist',
+      () async {
+        final session = _ModerationChatSession(canDisconnectUser: true);
+        final backend = _ModerationControlPlane(
+          capabilities: const ChatManagementCapabilities(
+            removeMember: ChatManagementCapability.backend(),
+          ),
+        );
+        final moderation = RealtimeChatModeration(session, backend);
+
+        expect(
+          moderation.capabilities.removeMember.execution,
+          ChatManagementExecution.hybrid,
+        );
+
+        await moderation.removeMember('user-2');
+
+        expect(session.disconnectedUsers, ['user-2']);
+        expect(backend.removedUsers, isEmpty);
+        expect(backend.syncedUsers, ['user-2']);
+        await session.dispose();
+      },
+    );
+  });
+}
+
+class _ModerationChatSession implements ChatSession, ChatSessionIdentity {
+  _ModerationChatSession({this.canDisconnectUser = false});
+
+  final bool canDisconnectUser;
+  final List<String> disconnectedUsers = <String>[];
+  final StreamController<ChatConnectionState> _states =
+      StreamController<ChatConnectionState>.broadcast();
+  final StreamController<List<ChatMessage>> _messages =
+      StreamController<List<ChatMessage>>.broadcast();
+  final StreamController<ChatEvent> _events =
+      StreamController<ChatEvent>.broadcast();
+
+  @override
+  String get providerId => 'moderation-fake';
+  @override
+  String get localParticipantId => 'participant-host';
+  @override
+  String get localUserId => 'host-user';
+  @override
+  String get localDisplayName => 'Host';
+  @override
+  ChatRole get role => ChatRole.host;
+  @override
+  ChatCapabilities get capabilities => ChatCapabilities(
+    canSendMessage: true,
+    canDisconnectUser: canDisconnectUser,
+  );
+  @override
+  ChatConnectionState get state => ChatConnectionState.connected;
+  @override
+  List<ChatMessage> get messages => const [];
+  @override
+  Stream<ChatConnectionState> get states => _states.stream;
+  @override
+  Stream<List<ChatMessage>> get messageSnapshots => _messages.stream;
+  @override
+  Stream<ChatEvent> get events => _events.stream;
+
+  @override
+  Future<void> connect(
+    ChatJoinInfo joinInfo, {
+    ChatCredentialProvider? credentialProvider,
+  }) async {}
+  @override
+  Future<void> sendMessage(String message) async {}
+  @override
+  Future<void> deleteMessage(String messageId) async {}
+  @override
+  Future<void> disconnectUser(String userId) async {
+    disconnectedUsers.add(userId);
+  }
+
+  @override
+  Future<void> disconnect() async {}
+  @override
+  Future<void> dispose() async {
+    await _states.close();
+    await _messages.close();
+    await _events.close();
+  }
+}
+
+class _ModerationControlPlane
+    implements
+        ChatModeration,
+        ChatModerationCapabilitySource,
+        ChatModerationStateSync {
+  _ModerationControlPlane({required this.capabilities});
+
+  final ChatManagementCapabilities capabilities;
+  final List<String> removedUsers = <String>[];
+  final List<String> syncedUsers = <String>[];
+
+  @override
+  ChatManagementCapabilities get moderationCapabilities => capabilities;
+  @override
+  Future<List<ChatMember>> listMembers() async => const [];
+  @override
+  Future<void> removeMember(String userId) async {
+    removedUsers.add(userId);
+  }
+
+  @override
+  Future<void> syncRemovedMember(String userId) async {
+    syncedUsers.add(userId);
+  }
+
+  @override
+  Future<void> muteMember(String userId, {required bool muted}) async {}
+  @override
+  Future<void> banMember(String userId, {required bool banned}) async {}
+  @override
+  Future<void> recallMessage(String messageId) async {}
+  @override
+  Future<void> changeMemberRole(String userId, ChatRole role) async {}
+  @override
+  Future<void> closeRoom() async {}
 }
 
 class _FailingChatBackend extends ChatBackendClient {
@@ -481,6 +651,7 @@ class _FailingChatBackend extends ChatBackendClient {
     required String roomCode,
     required String participantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   }) => throw const ChatError(
     code: ChatErrorCode.network,
     message: 'chat backend unavailable',

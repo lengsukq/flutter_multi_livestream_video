@@ -97,10 +97,12 @@ class MediaBackendClient
     String roomCode, {
     required String requesterParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   }) => closeRoomAsParticipant(
     roomCode,
     requesterParticipantId: requesterParticipantId,
     participantCredential: participantCredential,
+    roomOwnerCredential: roomOwnerCredential,
   );
 
   @override
@@ -109,11 +111,13 @@ class MediaBackendClient
     required String requesterParticipantId,
     required String targetParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   }) => removeRoomParticipant(
     roomCode,
     requesterParticipantId: requesterParticipantId,
     targetParticipantId: targetParticipantId,
     participantCredential: participantCredential,
+    roomOwnerCredential: roomOwnerCredential,
   );
 
   @override
@@ -121,16 +125,19 @@ class MediaBackendClient
     String roomCode, {
     required String requesterParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   }) => listRoomParticipants(
     roomCode,
     requesterParticipantId: requesterParticipantId,
     participantCredential: participantCredential,
+    roomOwnerCredential: roomOwnerCredential,
   );
 
   Future<List<MediaRoomParticipantSummary>> listRoomParticipants(
     String roomCode, {
     required String requesterParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   }) async {
     final code = _required(roomCode, 'roomCode');
     final requester = _required(
@@ -143,6 +150,9 @@ class MediaBackendClient
           if (participantCredential != null &&
               participantCredential.trim().isNotEmpty)
             'participantCredential': participantCredential.trim(),
+          if (roomOwnerCredential != null &&
+              roomOwnerCredential.trim().isNotEmpty)
+            'roomOwnerCredential': roomOwnerCredential.trim(),
         });
     final raw = data['participants'];
     if (raw is! List) {
@@ -167,6 +177,7 @@ class MediaBackendClient
     required String requesterParticipantId,
     required String targetParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   }) async {
     final code = _required(roomCode, 'roomCode');
     await _post('/rooms/${Uri.encodeComponent(code)}/participants/remove', {
@@ -181,6 +192,8 @@ class MediaBackendClient
       if (participantCredential != null &&
           participantCredential.trim().isNotEmpty)
         'participantCredential': participantCredential.trim(),
+      if (roomOwnerCredential != null && roomOwnerCredential.trim().isNotEmpty)
+        'roomOwnerCredential': roomOwnerCredential.trim(),
     });
   }
 
@@ -188,6 +201,7 @@ class MediaBackendClient
     String roomCode, {
     required String requesterParticipantId,
     String? participantCredential,
+    String? roomOwnerCredential,
   }) async {
     final code = _required(roomCode, 'roomCode');
     await _post('/rooms/${Uri.encodeComponent(code)}/close', {
@@ -198,6 +212,8 @@ class MediaBackendClient
       if (participantCredential != null &&
           participantCredential.trim().isNotEmpty)
         'participantCredential': participantCredential.trim(),
+      if (roomOwnerCredential != null && roomOwnerCredential.trim().isNotEmpty)
+        'roomOwnerCredential': roomOwnerCredential.trim(),
     });
   }
 

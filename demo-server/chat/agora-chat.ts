@@ -19,6 +19,7 @@ export interface AgoraChatApi {
   createRoom(name: string): Promise<string>;
   ensureUser(username: string): Promise<string>;
   deleteRoom(roomId: string): Promise<void>;
+  removeMember?(roomId: string, username: string): Promise<void>;
   buildUserToken(userUuid: string, ttlSeconds: number): string;
 }
 
@@ -170,6 +171,12 @@ function createRestApi({
         method: 'DELETE',
       });
     },
+    async removeMember(roomId, username) {
+      await request(
+        `chatrooms/${encodeURIComponent(roomId)}/users/${encodeURIComponent(username)}`,
+        { method: 'DELETE' },
+      );
+    },
     buildUserToken(userUuid, ttlSeconds) {
       return ChatTokenBuilder.buildUserToken(
         appId,
@@ -234,8 +241,8 @@ export function createAgoraChatProvider({
       {
         key: 'disconnectUser',
         label: 'Remove user',
-        support: 'unsupported',
-        note: 'The current provider-neutral adapter does not expose Agora moderation operations.',
+        support: 'conditional',
+        note: 'Host control-plane management removes the provider user from the Agora chat room.',
       },
       {
         key: 'history',
@@ -292,6 +299,25 @@ export function createAgoraChatProvider({
         return;
       }
       await api.deleteRoom(entry.chatRoomArn);
+    },
+    async removeMember(entry, attendee) {
+      if (
+        !api ||
+        !api.removeMember ||
+        entry.chatProvider !== 'agora-chat' ||
+        !entry.chatRoomArn
+      ) {
+        throw new ProviderOperationError(
+          400,
+          'unsupported-feature',
+          'Agora Chat member removal is not available.',
+        );
+      }
+      const identity = requireIdentity(attendee);
+      await api.removeMember(
+        entry.chatRoomArn,
+        agoraChatProviderUserId(identity.userId),
+      );
     },
   };
 }

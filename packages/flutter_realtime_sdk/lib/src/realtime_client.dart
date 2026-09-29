@@ -40,10 +40,7 @@ class RealtimeClient {
   ChatClient newChatClient({ChatProvisioner? provisioner}) =>
       _chatClientFactory?.call() ??
       (backendUrl == null
-          ? ChatClient.direct(
-              registry: chatRegistry,
-              provisioner: provisioner,
-            )
+          ? ChatClient.direct(registry: chatRegistry, provisioner: provisioner)
           : ChatClient(
               backendUrl: backendUrl!,
               registry: chatRegistry,
@@ -235,6 +232,7 @@ class RealtimeClient {
             roomCode: room.roomCode,
             participantId: room.participantId,
             participantCredential: room.participantCredential,
+            roomOwnerCredential: room.roomOwnerCredential,
           );
         }
         if (room.chatProvider != null &&

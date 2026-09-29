@@ -26,6 +26,7 @@ class RealtimeRoomView extends StatelessWidget {
     room: room.media,
     renderer: room.renderer,
     chatSession: room.chat,
+    chatModeration: room.chatModeration,
     config: config,
     participantBuilder: participantBuilder,
     onLeave: onLeave,
