@@ -27,6 +27,20 @@ public final class FlutterRealtimeMediaAwsDesktopPlugin: NSObject, FlutterPlugin
     )
     ivsEvents.setStreamHandler(runtime)
 
+    let ivsChatMethods = FlutterMethodChannel(
+      name: "com.oneplusdream.flutter_realtime_chat_ivs/methods",
+      binaryMessenger: registrar.messenger
+    )
+    runtime.ivsChatChannel = ivsChatMethods
+    let ivsChatHandler = AwsDesktopIvsChatMethodHandler(runtime: runtime)
+    registrar.addMethodCallDelegate(ivsChatHandler, channel: ivsChatMethods)
+    let ivsChatEvents = FlutterEventChannel(
+      name: "com.oneplusdream.flutter_realtime_chat_ivs/events",
+      binaryMessenger: registrar.messenger
+    )
+    let ivsChatStreamHandler = AwsDesktopIvsChatStreamHandler(runtime: runtime)
+    ivsChatEvents.setStreamHandler(ivsChatStreamHandler)
+
     registrar.register(
       AwsDesktopVideoViewFactory(runtime: runtime, provider: .chime),
       withId: "videoTile"
@@ -38,6 +52,8 @@ public final class FlutterRealtimeMediaAwsDesktopPlugin: NSObject, FlutterPlugin
 
     runtime.retain(chimeHandler)
     runtime.retain(ivsHandler)
+    runtime.retain(ivsChatHandler)
+    runtime.retain(ivsChatStreamHandler)
   }
 }
 
@@ -72,12 +88,51 @@ private final class AwsDesktopMethodHandler: NSObject, FlutterPlugin {
   }
 }
 
+private final class AwsDesktopIvsChatMethodHandler: NSObject, FlutterPlugin {
+  static func register(with registrar: FlutterPluginRegistrar) {
+    // Registered by FlutterRealtimeMediaAwsDesktopPlugin to share its WebKit runtime.
+  }
+
+  let runtime: AwsDesktopRuntime
+
+  init(runtime: AwsDesktopRuntime) {
+    self.runtime = runtime
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    runtime.handleIvsChat(call, result: result)
+  }
+}
+
+private final class AwsDesktopIvsChatStreamHandler: NSObject, FlutterStreamHandler {
+  let runtime: AwsDesktopRuntime
+
+  init(runtime: AwsDesktopRuntime) {
+    self.runtime = runtime
+  }
+
+  func onListen(
+    withArguments arguments: Any?,
+    eventSink events: @escaping FlutterEventSink
+  ) -> FlutterError? {
+    runtime.ivsChatSink = events
+    return nil
+  }
+
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    runtime.ivsChatSink = nil
+    return nil
+  }
+}
+
 private final class AwsDesktopRuntime: NSObject,
   FlutterStreamHandler, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate
 {
   let registrar: FlutterPluginRegistrar
   var chimeChannel: FlutterMethodChannel?
+  var ivsChatChannel: FlutterMethodChannel?
   var ivsSink: FlutterEventSink?
+  var ivsChatSink: FlutterEventSink?
   var webView: WKWebView?
 
   private var bridgeReady = false
@@ -85,6 +140,10 @@ private final class AwsDesktopRuntime: NSObject,
   private var readyTimeout: DispatchWorkItem?
   private var readyWaiters: [(Error?) -> Void] = []
   private var retainedHandlers: [AnyObject] = []
+  private var ivsChatSessionId: String?
+  private var loadedPackageScripts: Set<String> = []
+  private var loadingPackageScripts: Set<String> = []
+  private var packageScriptWaiters: [String: [(Error?) -> Void]] = [:]
   private var snapshots: [AwsDesktopProvider: [String: Any]] = [:]
   private var payloads: [AwsDesktopProvider: [String: Any]] = [:]
   private var chimeDevices: [[String: Any]] = []
@@ -270,6 +329,160 @@ private final class AwsDesktopRuntime: NSObject,
     }
   }
 
+  func handleIvsChat(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let arguments = call.arguments as? [String: Any] ?? [:]
+    switch call.method {
+    case "connect":
+      guard ivsChatSessionId == nil else {
+        result(FlutterError(
+          code: "invalid_state",
+          message: "An Amazon IVS Chat room is already active.",
+          details: nil
+        ))
+        return
+      }
+      guard
+        let region = nonEmptyString(arguments["region"]),
+        let token = nonEmptyString(arguments["token"]),
+        let tokenExpirationTimeMs = positiveInteger(arguments["tokenExpirationTimeMs"]),
+        let sessionExpirationTimeMs = positiveInteger(arguments["sessionExpirationTimeMs"])
+      else {
+        result(FlutterError(
+          code: "invalid_argument",
+          message: "Valid Amazon IVS Chat credentials are required.",
+          details: nil
+        ))
+        return
+      }
+
+      let sessionId = "aws-desktop-ivs-chat-" + UUID().uuidString
+      ivsChatSessionId = sessionId
+      let chatPayload: [String: Any] = [
+        "chat": [
+          "region": region,
+          "token": token,
+          "tokenExpirationTimeMs": tokenExpirationTimeMs,
+          "sessionExpirationTimeMs": sessionExpirationTimeMs,
+        ],
+      ]
+      invokeIvsChat("create", sessionId: sessionId, payload: chatPayload) { error in
+        if let error {
+          self.ivsChatSessionId = nil
+          result(self.ivsChatError(error, operation: "create"))
+          return
+        }
+        self.invokeIvsChat("connect", sessionId: sessionId, payload: [:]) { error in
+          guard let error else {
+            result(nil)
+            return
+          }
+          self.invokeIvsChat("dispose", sessionId: sessionId, payload: [:]) { _ in
+            self.ivsChatSessionId = nil
+            result(self.ivsChatError(error, operation: "connect"))
+          }
+        }
+      }
+    case "sendMessage":
+      runIvsChatCommand(
+        "sendMessage",
+        arguments: ["message": arguments["message"] ?? ""],
+        result: result
+      )
+    case "deleteMessage":
+      runIvsChatCommand(
+        "deleteMessage",
+        arguments: ["messageId": arguments["messageId"] ?? ""],
+        result: result
+      )
+    case "disconnectUser":
+      runIvsChatCommand(
+        "disconnectUser",
+        arguments: ["userId": arguments["userId"] ?? ""],
+        result: result
+      )
+    case "disconnect":
+      guard let sessionId = ivsChatSessionId else {
+        result(nil)
+        return
+      }
+      runIvsChatCommand(
+        "disconnect",
+        arguments: [:],
+        sessionId: sessionId,
+        result: result
+      )
+    case "dispose":
+      guard let sessionId = ivsChatSessionId else {
+        result(nil)
+        return
+      }
+      invokeIvsChat("dispose", sessionId: sessionId, payload: [:]) { error in
+        self.ivsChatSessionId = nil
+        if let error {
+          result(self.ivsChatError(error, operation: "dispose"))
+        } else {
+          result(nil)
+        }
+      }
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func runIvsChatCommand(
+    _ name: String,
+    arguments: [String: Any],
+    sessionId: String? = nil,
+    result: @escaping FlutterResult
+  ) {
+    guard let sessionId = sessionId ?? ivsChatSessionId else {
+      result(FlutterError(
+        code: "invalid_state",
+        message: "No active Amazon IVS Chat room.",
+        details: nil
+      ))
+      return
+    }
+    invokeIvsChat(
+      "command",
+      sessionId: sessionId,
+      payload: ["name": name, "arguments": arguments]
+    ) { error in
+      if let error {
+        result(self.ivsChatError(error, operation: name))
+      } else {
+        result(nil)
+      }
+    }
+  }
+
+  private func ivsChatError(_ message: String, operation: String) -> FlutterError {
+    FlutterError(
+      code: "native_error",
+      message: "Amazon IVS Chat \(operation) failed: \(message)",
+      details: ["operation": operation]
+    )
+  }
+
+  private func nonEmptyString(_ value: Any?) -> String? {
+    guard let value = value as? String else { return nil }
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+  }
+
+  private func positiveInteger(_ value: Any?) -> Int64? {
+    let parsed: Int64?
+    if let number = value as? NSNumber {
+      parsed = number.int64Value
+    } else if let text = value as? String {
+      parsed = Int64(text)
+    } else {
+      parsed = nil
+    }
+    guard let parsed, parsed > 0 else { return nil }
+    return parsed
+  }
+
   private func chimePayload(_ value: [String: Any]) -> [String: Any]? {
     let required = [
       "MeetingId", "ExternalMeetingId", "MediaRegion", "AudioHostUrl",
@@ -370,7 +583,7 @@ private final class AwsDesktopRuntime: NSObject,
     payload: [String: Any],
     completion: @escaping (Any?, String?) -> Void
   ) {
-    ensureReady { error in
+    ensureMediaProviderBridge(provider) { error in
       if let error {
         completion(nil, error.localizedDescription)
         return
@@ -400,12 +613,209 @@ private final class AwsDesktopRuntime: NSObject,
     }
   }
 
+  private func invokeIvsChat(
+    _ operation: String,
+    sessionId: String,
+    payload: [String: Any],
+    completion: @escaping (String?) -> Void
+  ) {
+    ensureIvsChatBridge { error in
+      if let error {
+        completion(error.localizedDescription)
+        return
+      }
+      guard let webView = self.webView else {
+        completion("AWS desktop WebKit runtime is unavailable.")
+        return
+      }
+      Task { @MainActor in
+        do {
+          _ = try await webView.callAsyncJavaScript(
+            "return await AwsDesktopChatRuntime.invoke(operation, sessionId, payload)",
+            arguments: [
+              "operation": operation,
+              "sessionId": sessionId,
+              "payload": payload,
+            ],
+            in: nil,
+            contentWorld: .page
+          )
+          completion(nil)
+        } catch {
+          completion(Self.jsError(error, operation: "IVS Chat " + operation))
+        }
+      }
+    }
+  }
+
+  private func ensureIvsChatBridge(completion: @escaping (Error?) -> Void) {
+    ensurePackageScript(
+      "assets/provider_web_runtime/vendors/realtime-chat-provider-bridge.js",
+      expectedGlobal: "IvsChatMessagingBridge",
+      completion: completion
+    )
+  }
+
+  private func ensureMediaProviderBridge(
+    _ provider: AwsDesktopProvider,
+    completion: @escaping (Error?) -> Void
+  ) {
+    let vendorAsset: String
+    switch provider {
+    case .chime:
+      vendorAsset = "assets/provider_web_runtime/vendors/chime-sdk.js"
+    case .ivs:
+      vendorAsset = "assets/provider_web_runtime/vendors/amazon-ivs-web-broadcast.js"
+    }
+    ensurePackageScript(vendorAsset) { error in
+      if let error {
+        completion(error)
+        return
+      }
+      self.ensurePackageScript(
+        "assets/provider_web_runtime/media-provider-bridge.js",
+        expectedGlobal: "MediaProviderBridge",
+        completion: completion
+      )
+    }
+  }
+
+  private func ensurePackageScript(
+    _ asset: String,
+    expectedGlobal: String? = nil,
+    completion: @escaping (Error?) -> Void
+  ) {
+    ensureReady { error in
+      if let error {
+        completion(error)
+        return
+      }
+      if self.loadedPackageScripts.contains(asset) {
+        completion(nil)
+        return
+      }
+      self.packageScriptWaiters[asset, default: []].append(completion)
+      guard self.loadingPackageScripts.insert(asset).inserted else { return }
+
+      do {
+        let source = try self.packageAssetText(asset)
+        let encodedSource = Data(source.utf8).base64EncodedString()
+        guard let webView = self.webView else {
+          self.finishPackageScript(asset, error: AwsDesktopError.runtimeInitialization(
+            "AWS desktop WebKit runtime is unavailable while loading \(asset)."
+          ))
+          return
+        }
+        Task { @MainActor in
+          do {
+            let loaded = try await webView.callAsyncJavaScript(
+              """
+                const binary = atob(encodedSource);
+                const bytes = new Uint8Array(binary.length);
+                for (let index = 0; index < binary.length; index += 1) {
+                  bytes[index] = binary.charCodeAt(index);
+                }
+                const script = document.createElement('script');
+                script.textContent = new TextDecoder().decode(bytes);
+                (document.head || document.documentElement).appendChild(script);
+                return expectedGlobal === '' ||
+                  typeof globalThis[expectedGlobal] !== 'undefined';
+                """,
+              arguments: [
+                "encodedSource": encodedSource,
+                "expectedGlobal": expectedGlobal ?? "",
+              ],
+              in: nil,
+              contentWorld: .page
+            ) as? Bool ?? false
+            self.finishPackageScript(
+              asset,
+              error: loaded ? nil : AwsDesktopError.runtimeInitialization(
+                "The bundled JavaScript bridge did not initialize: \(asset)."
+              )
+            )
+          } catch {
+            self.finishPackageScript(asset, error: error)
+          }
+        }
+      } catch {
+        self.finishPackageScript(asset, error: error)
+      }
+    }
+  }
+
+  private func finishPackageScript(_ asset: String, error: Error?) {
+    loadingPackageScripts.remove(asset)
+    if error == nil { loadedPackageScripts.insert(asset) }
+    let waiters = packageScriptWaiters.removeValue(forKey: asset) ?? []
+    waiters.forEach { $0(error) }
+  }
+
+  private func requestIvsChatToken(_ requestId: String) {
+    guard let ivsChatChannel else {
+      resolveIvsChatToken(
+        requestId,
+        response: nil,
+        errorMessage: "Amazon IVS Chat token refresh channel is unavailable."
+      )
+      return
+    }
+    ivsChatChannel.invokeMethod("requestToken", arguments: nil) { response in
+      if let error = response as? FlutterError {
+        self.resolveIvsChatToken(
+          requestId,
+          response: nil,
+          errorMessage: error.message ?? "Unable to refresh Amazon IVS Chat credentials."
+        )
+        return
+      }
+      guard
+        let credentials = response as? [String: Any],
+        self.nonEmptyString(credentials["token"]) != nil,
+        self.positiveInteger(credentials["tokenExpirationTimeMs"]) != nil,
+        self.positiveInteger(credentials["sessionExpirationTimeMs"]) != nil
+      else {
+        self.resolveIvsChatToken(
+          requestId,
+          response: nil,
+          errorMessage: "The IVS Chat token provider returned invalid credentials."
+        )
+        return
+      }
+      self.resolveIvsChatToken(requestId, response: credentials, errorMessage: nil)
+    }
+  }
+
+  private func resolveIvsChatToken(
+    _ requestId: String,
+    response: [String: Any]?,
+    errorMessage: String?
+  ) {
+    guard let webView else { return }
+    Task { @MainActor in
+      do {
+        _ = try await webView.callAsyncJavaScript(
+          "return AwsDesktopChatRuntime.resolveToken(requestId, response, errorMessage)",
+          arguments: [
+            "requestId": requestId,
+            "response": response.map { $0 as Any } ?? NSNull(),
+            "errorMessage": errorMessage ?? NSNull(),
+          ],
+          in: nil,
+          contentWorld: .page
+        )
+      } catch {
+        NSLog("Unable to return refreshed IVS Chat credentials to WebKit: %@", error.localizedDescription)
+      }
+    }
+  }
+
   private func bind(
     provider: AwsDesktopProvider,
     trackId: String,
     viewKey: String
   ) {
-    ensureReady { _ in
+    ensureMediaProviderBridge(provider) { _ in
       guard let webView = self.webView else { return }
       Task { @MainActor in
         _ = try? await webView.callAsyncJavaScript(
@@ -474,15 +884,6 @@ private final class AwsDesktopRuntime: NSObject,
   }
 
   private func runtimeHTML() throws -> String {
-    let chime = try packageAssetText(
-      "assets/provider_web_runtime/vendors/chime-sdk.js"
-    )
-    let ivs = try packageAssetText(
-      "assets/provider_web_runtime/vendors/amazon-ivs-web-broadcast.js"
-    )
-    let bridge = try packageAssetText(
-      "assets/provider_web_runtime/media-provider-bridge.js"
-    )
     let runtime = try ownResourceText("aws_desktop_runtime", extension: "js")
     func dataScript(_ value: String) -> String {
       let encoded = Data(value.utf8).base64EncodedString()
@@ -490,9 +891,6 @@ private final class AwsDesktopRuntime: NSObject,
     }
     return """
       <!doctype html><html><head><meta charset="utf-8"></head><body>
-      \(dataScript(chime))
-      \(dataScript(ivs))
-      \(dataScript(bridge))
       \(dataScript(runtime))
       </body></html>
       """
@@ -503,14 +901,14 @@ private final class AwsDesktopRuntime: NSObject,
       forAsset: asset,
       fromPackage: "flutter_realtime_sdk"
     )
+    let mainBundleURL = Bundle.main.bundleURL
+    let appBundleURL = mainBundleURL.lastPathComponent == "Contents"
+      ? mainBundleURL.deletingLastPathComponent()
+      : mainBundleURL
     let candidates: [URL?] = [
-      Bundle.main.resourceURL?.appendingPathComponent(key),
-      Bundle.main.privateFrameworksURL?
-        .appendingPathComponent("App.framework/Versions/A/Resources/flutter_assets")
-        .appendingPathComponent(key),
-      Bundle.main.bundleURL
-        .appendingPathComponent("Contents/Frameworks/App.framework/Versions/A/Resources/flutter_assets")
-        .appendingPathComponent(key),
+      // Flutter's macOS lookup key already includes the path to
+      // App.framework/Resources/flutter_assets from the .app bundle root.
+      URL(fileURLWithPath: key, relativeTo: appBundleURL).standardizedFileURL,
     ]
     guard let url = candidates.compactMap({ $0 }).first(where: {
       FileManager.default.fileExists(atPath: $0.path)
@@ -552,7 +950,7 @@ private final class AwsDesktopRuntime: NSObject,
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     webView.evaluateJavaScript(
-      "typeof AwsDesktopRuntime !== 'undefined' && typeof MediaProviderBridge !== 'undefined'"
+      "typeof AwsDesktopRuntime !== 'undefined'"
     ) { value, error in
       if let error {
         self.finishReady(error)
@@ -608,6 +1006,18 @@ private final class AwsDesktopRuntime: NSObject,
       } else if sessionId == AwsDesktopProvider.ivs.sessionId {
         handleIvsEvent(event)
       }
+    case "chatEvent":
+      guard let sessionId = body["sessionId"] as? String,
+        sessionId == ivsChatSessionId,
+        let event = body["event"] as? [String: Any]
+      else { return }
+      DispatchQueue.main.async { self.ivsChatSink?(event) }
+    case "chatTokenRequest":
+      guard let requestId = body["requestId"] as? String,
+        let sessionId = body["sessionId"] as? String,
+        sessionId == ivsChatSessionId
+      else { return }
+      requestIvsChatToken(requestId)
     case "frame":
       guard let viewKey = body["viewKey"] as? String,
         let encoded = body["data"] as? String

@@ -297,6 +297,20 @@ export function createIvsChatProvider({
         fail('DeleteRoom', error);
       }
     },
+    async deleteCloudRoom(providerRoomId: string) {
+      if (!api) {
+        throw new ProviderOperationError(
+          503,
+          'provider-not-configured',
+          'Amazon IVS Chat is not configured.',
+        );
+      }
+      try {
+        await api.deleteRoom(providerRoomId);
+      } catch (error) {
+        fail('DeleteRoom', error);
+      }
+    },
     async removeMember(entry, attendee) {
       if (
         !api ||

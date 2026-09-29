@@ -23,7 +23,7 @@ API，由 SDK 根据当前运行平台选择 Provider 实现。破折号表示 S
 | --- | --- | --- | --- | --- | --- |
 | Agora Chat | 支持 | 支持 | 支持 | — | 支持 |
 | Tencent Cloud Chat | 支持 | 支持 | 支持 | 支持 | 支持 |
-| Amazon IVS Chat | 支持 | 支持 | — | — | 支持 |
+| Amazon IVS Chat | 支持 | 支持 | 支持 | — | 支持 |
 
 Linux 暂未注册到默认 Catalog。高级使用者仍可通过
 `RealtimeProviderPlugin` 增加或覆盖 Driver，而无需修改 Core。
@@ -56,6 +56,9 @@ macOS 已使用 CocoaPods 验证构建通过。AWS 的 `支持**` 表示完整 S
 IVS Web Broadcast；业务代码仍只看到 `aws` 和统一 Dart API，不创建 WebView、
 不加载脚本。Flutter 当前会提示部分插件尚未提供 macOS Swift Package Manager
 支持；这是打包限制，不是本 SDK 的 Driver 路由失败。
+
+Amazon IVS Chat 也支持 macOS：复用同一个隐藏 WebKit Runtime 和本地打包的 Chat
+JavaScript bridge。Chat bridge 只会在首次打开 IVS Chat 会话时加载。
 
 当前验证环境为 macOS：Android Debug APK、iOS 真机 Release（关闭签名）、
 macOS Release 以及标准 JavaScript Web 均已完成构建验证。上表中的 Windows

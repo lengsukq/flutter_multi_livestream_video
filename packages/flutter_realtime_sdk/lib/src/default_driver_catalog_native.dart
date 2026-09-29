@@ -14,7 +14,6 @@ import 'provider_driver.dart';
 import 'provider_plugin.dart';
 import 'runtime_platform.dart';
 
-const _mobile = {RealtimeRuntimePlatform.android, RealtimeRuntimePlatform.ios};
 const _mobileAndMac = {
   RealtimeRuntimePlatform.android,
   RealtimeRuntimePlatform.ios,
@@ -99,7 +98,7 @@ List<RealtimeProviderDriver> createDefaultRealtimeDrivers() => [
     ),
   ),
   RealtimeProviderDriver(
-    platforms: _mobile,
+    platforms: _mobileAndMac,
     plugin: const RealtimeProviderPlugin(
       id: 'ivs-chat',
       metadata: RealtimeProviderMetadata(displayName: 'Amazon IVS Chat'),

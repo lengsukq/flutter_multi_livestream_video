@@ -25,7 +25,7 @@ SDK deliberately returns `unsupportedPlatform` on that target.
 | --- | --- | --- | --- | --- | --- |
 | Agora Chat | Yes | Yes | Yes | — | Yes |
 | Tencent Cloud Chat | Yes | Yes | Yes | Yes | Yes |
-| Amazon IVS Chat | Yes | Yes | — | — | Yes |
+| Amazon IVS Chat | Yes | Yes | Yes | — | Yes |
 
 Linux is not registered in the default catalog yet. Advanced applications can
 add or override drivers with `RealtimeProviderPlugin` without modifying Core.
@@ -64,6 +64,10 @@ public `aws` provider and the same Dart session APIs are used; applications do
 not create a WebView or add JavaScript assets. Flutter currently warns that
 several plugins do not yet provide macOS Swift Package Manager support; this is
 a packaging limitation rather than a driver-routing failure.
+
+Amazon IVS Chat is also available on macOS through the same hidden WebKit
+runtime, using the locally bundled Chat JavaScript bridge. The chat bridge is
+loaded only when an IVS Chat session is first opened.
 
 The current verification host is macOS: Android debug APK, iOS device Release
 without codesigning, macOS Release, and JavaScript Web builds are verified.

@@ -6,6 +6,8 @@
     : null;
   const bindings = new Map();
   const snapshots = new Map();
+  const pendingChatTokens = new Map();
+  let nextChatTokenRequestId = 0;
 
   function post(value) {
     if (native) native.postMessage(value);
@@ -22,6 +24,42 @@
     }
     if (event && event.type === 'snapshot') snapshots.set(sessionId, event);
     post({ kind: 'event', sessionId: sessionId, event: event });
+  };
+
+  global.__flutterIvsChatOnEvent = function(sessionId, type, serializedPayload) {
+    let payload;
+    try {
+      payload = typeof serializedPayload === 'string'
+        ? JSON.parse(serializedPayload)
+        : serializedPayload;
+    } catch (error) {
+      payload = { type: 'error', code: -1, message: String(error) };
+    }
+    post({
+      kind: 'chatEvent',
+      sessionId: sessionId,
+      event: Object.assign({ type: type }, payload || {}),
+    });
+  };
+
+  global.__flutterIvsChatRequestToken = function(sessionId) {
+    return new Promise(function(resolve, reject) {
+      const requestId = 'ivs-chat-token-' + String(++nextChatTokenRequestId);
+      const timeout = global.setTimeout(function() {
+        pendingChatTokens.delete(requestId);
+        reject(new Error('Timed out waiting for refreshed IVS Chat credentials.'));
+      }, 30000);
+      pendingChatTokens.set(requestId, {
+        resolve: resolve,
+        reject: reject,
+        timeout: timeout,
+      });
+      post({
+        kind: 'chatTokenRequest',
+        requestId: requestId,
+        sessionId: sessionId,
+      });
+    });
   };
 
   function requireBridge() {
@@ -118,6 +156,41 @@
     bindTrack: bindTrack,
     unbindTrack: unbindTrack,
     snapshot: function(sessionId) { return snapshots.get(sessionId) || null; },
+  };
+
+  global.AwsDesktopChatRuntime = {
+    invoke: async function(operation, sessionId, payload) {
+      const bridge = global.IvsChatMessagingBridge;
+      if (!bridge) throw new Error('The bundled Amazon IVS Chat bridge is unavailable.');
+      switch (operation) {
+        case 'create':
+          return bridge.create(sessionId, JSON.stringify(payload || {}));
+        case 'connect':
+          return bridge.connect(sessionId);
+        case 'command':
+          return bridge.command(
+            sessionId,
+            String(payload && payload.name || ''),
+            JSON.stringify(payload && payload.arguments || {}),
+          );
+        case 'dispose':
+          return bridge.dispose(sessionId);
+        default:
+          throw new Error('Unsupported Amazon IVS Chat operation: ' + operation);
+      }
+    },
+    resolveToken: function(requestId, response, errorMessage) {
+      const pending = pendingChatTokens.get(requestId);
+      if (!pending) return false;
+      pendingChatTokens.delete(requestId);
+      global.clearTimeout(pending.timeout);
+      if (errorMessage) {
+        pending.reject(new Error(String(errorMessage)));
+      } else {
+        pending.resolve(response);
+      }
+      return true;
+    },
   };
 
   post({ kind: 'ready' });

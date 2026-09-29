@@ -133,7 +133,7 @@ void main() {
             ),
             RealtimeRuntimePlatform.macos: (
               media: {'livekit', 'agora', 'trtc', 'artc', 'chime', 'ivs'},
-              chat: {'agora-chat', 'tencent-chat'},
+              chat: {'agora-chat', 'ivs-chat', 'tencent-chat'},
               public: {
                 'livekit',
                 'agora',
@@ -141,6 +141,7 @@ void main() {
                 'artc',
                 'aws',
                 'agora-chat',
+                'ivs-chat',
                 'tencent-chat',
               },
             ),

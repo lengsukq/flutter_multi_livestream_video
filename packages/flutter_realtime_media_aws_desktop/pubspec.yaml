@@ -1,5 +1,5 @@
 name: flutter_realtime_media_aws_desktop
-description: Internal macOS WebKit media driver for AWS Chime and IVS Real-Time.
+description: Internal macOS WebKit transport for AWS Chime, IVS media, and IVS Chat.
 version: 0.1.0
 publish_to: 'none'
 repository: https://github.com/lengsukq/flutter_multi_livestream_video
