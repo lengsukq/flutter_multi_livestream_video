@@ -29,6 +29,8 @@ class DemoStrings {
   String get defaultServer => isZh ? '默认' : 'Default';
   String get joinRoomTab => isZh ? '加入房间' : 'Join room';
   String get createRoomTab => isZh ? '创建房间' : 'Create room';
+  String get createMeeting => isZh ? '创建会议' : 'Create meeting';
+  String get startLive => isZh ? '开始直播' : 'Start live';
   String get videoTab => isZh ? '视频' : 'Video';
   String get chatTab => isZh ? '聊天' : 'Chat';
   String get roomCode => isZh ? '房间码' : 'Room code';
@@ -66,7 +68,7 @@ class DemoStrings {
   String get settings => isZh ? '设置' : 'Settings';
   String get serverAndIdentity => isZh ? '环境与身份' : 'Environment & Identity';
   String get serverAndIdentitySettings =>
-      isZh ? '服务与身份配置' : 'Server & Identity Settings';
+      isZh ? '连接与诊断' : 'Connection & Diagnostics';
   String get done => isZh ? '完成' : 'Done';
   String get unconfigured => isZh ? '未配置' : 'Unconfigured';
   String get tapToConfigure => isZh ? '点击配置' : 'Tap to configure';

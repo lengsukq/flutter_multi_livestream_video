@@ -9,14 +9,14 @@ class StandaloneChatDemoPage extends StatefulWidget {
   const StandaloneChatDemoPage({
     super.key,
     required this.backendUrl,
-    required this.sdk,
+    required this.realtime,
     required this.userId,
     required this.displayName,
     this.embedded = false,
     this.visible = true,
   });
   final String backendUrl;
-  final RealtimeSdk sdk;
+  final Realtime realtime;
   final String userId;
   final String displayName;
   final bool embedded;
@@ -81,11 +81,8 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
         _roomsError = null;
       });
     }
-    final provisioner = HttpStandaloneChatProvisioner(
-      ChatBackendConfig.fromUrl(backendUrl),
-    );
     try {
-      final rooms = await provisioner.listRooms();
+      final rooms = await widget.realtime.listChatRooms();
       if (mounted && widget.backendUrl.trim() == backendUrl) {
         setState(() {
           _availableRooms = rooms;
@@ -95,7 +92,6 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
     } catch (error) {
       if (!silent && mounted) setState(() => _roomsError = error.toString());
     } finally {
-      provisioner.dispose();
       _roomsRequestInFlight = false;
       if (!silent && mounted) setState(() => _roomsLoading = false);
     }
@@ -106,10 +102,6 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
     setState(() => _room.text = code);
   }
 
-  HttpStandaloneChatProvisioner _provisioner() => HttpStandaloneChatProvisioner(
-    ChatBackendConfig.fromUrl(widget.backendUrl),
-  );
-
   Future<void> _open({required bool create}) async {
     if (_busy) return;
     final strings = RealtimeStrings.of(context);
@@ -117,31 +109,27 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
       setState(() => _error = strings.enterChatRoomCode);
       return;
     }
-    final provisioner = _provisioner();
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final RealtimeChatRoom chatRoom;
-      if (create) {
-        chatRoom = await widget.sdk.createChatRoom(
-          provisioner: provisioner,
-          userId: widget.userId,
-          displayName: widget.displayName,
-          roomCode: _room.text.trim().isEmpty ? null : _room.text.trim(),
-        );
-      } else {
-        final code = _room.text.trim();
-        chatRoom = await widget.sdk.joinChatRoom(
-          provisioner: provisioner,
-          roomCode: code,
-          userId: widget.userId,
-          displayName: widget.displayName,
-        );
-      }
+      final roomCode = _room.text.trim();
+      final request = create
+          ? RealtimeRequest.create(
+              type: RealtimeExperience.chat,
+              user: RealtimeUser(id: widget.userId, name: widget.displayName),
+              roomCode: roomCode.isEmpty ? null : roomCode,
+            )
+          : RealtimeRequest.join(
+              type: RealtimeExperience.chat,
+              user: RealtimeUser(id: widget.userId, name: widget.displayName),
+              roomCode: roomCode,
+            );
+      final connection = await widget.realtime.open(request);
+      final chatRoom = connection.chatRoom!;
       if (!mounted) {
-        await chatRoom.dispose();
+        await connection.dispose();
         return;
       }
       _room.text = chatRoom.roomCode;
@@ -159,12 +147,11 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
         );
         unawaited(_refreshRooms(silent: true));
       } finally {
-        await chatRoom.dispose();
+        await connection.dispose();
       }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
-      provisioner.dispose();
       if (mounted) setState(() => _busy = false);
     }
   }

@@ -41,6 +41,7 @@ export 'src/session/broadcast_sessions.dart';
 export 'src/session/media_credential_refresh.dart';
 export 'src/session/interactive_media_session.dart';
 export 'src/session/media_device_controller.dart';
+export 'src/session/media_local_preview.dart';
 export 'src/session/media_data_controller.dart';
 export 'src/session/media_stats_provider.dart';
 export 'src/session/media_join_info.dart';

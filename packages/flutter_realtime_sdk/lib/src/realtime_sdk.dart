@@ -117,6 +117,29 @@ class RealtimeSdk {
       driverRegistry?.supportsProvider(providerId) ??
       plugins.lookup(providerId) != null;
 
+  /// Opens an optional provider-local preview without creating a room.
+  ///
+  /// Returns `null` when the resolved adapter does not implement the preview
+  /// contract. Callers must dispose a returned session when leaving the
+  /// pre-join flow, including when the user cancels.
+  Future<MediaLocalPreviewSession?> createLocalPreview({
+    required String providerId,
+    required MediaRole role,
+  }) => _guard(() async {
+    final mode = role == MediaRole.participant
+        ? MediaRoomMode.meeting
+        : MediaRoomMode.broadcast;
+    final engineProvider =
+        driverRegistry?.resolveMediaEngine(
+          providerId: providerId,
+          roomMode: mode,
+        ) ??
+        providerId.trim().toLowerCase();
+    final factory = plugins.media.lookup(engineProvider)?.sessionFactory;
+    if (factory is! MediaLocalPreviewFactory) return null;
+    return (factory as MediaLocalPreviewFactory).createLocalPreview(role: role);
+  });
+
   RealtimeClient createClient() =>
       _clientFactory?.call() ??
       RealtimeClient(

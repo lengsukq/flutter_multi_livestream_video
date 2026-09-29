@@ -180,6 +180,195 @@ void main() {
     await fixture.dispose();
   });
 
+  testWidgets('broadcast viewers see audience, chat and leave controls only', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture(role: MediaRole.viewer);
+    final chat = _FakeChatSession();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          chatSession: chat,
+          config: const MediaRoomViewConfig(confirmBeforeLeave: false),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('Microphone'), findsNothing);
+    expect(find.byTooltip('Camera'), findsNothing);
+    expect(find.byTooltip('Screen Share'), findsNothing);
+    expect(find.byTooltip('Participants'), findsWidgets);
+    expect(find.byTooltip('Chat'), findsOneWidget);
+    expect(find.byTooltip('Leave live room'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await chat.dispose();
+    await fixture.dispose();
+  });
+
+  testWidgets('participants panel lists room members at desktop width', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture(
+      participants: const [
+        MediaParticipant(id: 'self', displayName: 'Me', isLocal: true),
+        MediaParticipant(id: 'alice', displayName: 'Alice'),
+      ],
+    );
+    addTearDown(() => tester.view.resetPhysicalSize());
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          config: const MediaRoomViewConfig(confirmBeforeLeave: false),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Participants').first);
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('participants-panel-wide')),
+      findsOneWidget,
+    );
+    expect(find.text('Me'), findsOneWidget);
+    expect(find.text('Alice'), findsNWidgets(2));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await fixture.dispose();
+  });
+
+  testWidgets('room and member panel fit phone, medium and desktop viewports', (
+    tester,
+  ) async {
+    addTearDown(() => tester.view.resetPhysicalSize());
+    const viewports = [
+      Size(390, 844),
+      Size(768, 1024),
+      Size(1280, 800),
+      Size(1440, 900),
+    ];
+    for (final size in viewports) {
+      final fixture = _RoomFixture(
+        participants: const [
+          MediaParticipant(id: 'self', displayName: 'Me', isLocal: true),
+          MediaParticipant(id: 'alice', displayName: 'Alice'),
+          MediaParticipant(id: 'bob', displayName: 'Bob'),
+        ],
+      );
+      final chat = _FakeChatSession();
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+            chatSession: chat,
+            config: const MediaRoomViewConfig(confirmBeforeLeave: false),
+          ),
+        ),
+      );
+      await tester.pump();
+      final layoutError = tester.takeException();
+      expect(layoutError, isNull, reason: 'room size $size');
+
+      await tester.tap(find.byTooltip('Participants').first);
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'member panel size $size');
+      await tester.pumpWidget(const SizedBox.shrink());
+      await chat.dispose();
+      await fixture.dispose();
+    }
+  });
+
+  testWidgets('empty, 1, 4 and 9 member rooms fit phone and desktop layouts', (
+    tester,
+  ) async {
+    addTearDown(() => tester.view.resetPhysicalSize());
+    const sizes = [Size(390, 844), Size(1280, 800)];
+    const memberCounts = [0, 1, 4, 9];
+
+    for (final size in sizes) {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      for (final memberCount in memberCounts) {
+        final fixture = _RoomFixture(
+          participants: List.generate(
+            memberCount,
+            (index) => MediaParticipant(
+              id: 'participant-$index',
+              displayName: 'Participant ${index + 1}',
+              isLocal: index == 0,
+            ),
+          ),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaRoomView(
+              room: fixture.room,
+              renderer: const _FakeRenderer(),
+              config: const MediaRoomViewConfig(confirmBeforeLeave: false),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'room size $size with $memberCount members',
+        );
+
+        await tester.tap(find.byTooltip('Participants').first);
+        await tester.pump();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'member panel size $size with $memberCount members',
+        );
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await fixture.dispose();
+      }
+    }
+  });
+
+  testWidgets('pre-join preferences are applied after the room connects', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          config: const MediaRoomViewConfig(
+            confirmBeforeLeave: false,
+            initialMediaSettings: MediaLocalPreviewSettings(
+              microphoneEnabled: true,
+              cameraEnabled: true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(fixture.media.mutedCalls, [false]);
+    expect(fixture.media.videoCalls, [true]);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await fixture.dispose();
+  });
+
   testWidgets('Chat panel adapts between compact and wide layouts', (
     tester,
   ) async {
@@ -278,16 +467,14 @@ void main() {
     expect(find.text('hi Alice'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.data_object_rounded));
     await tester.pump();
-    expect(find.text('RTC Data'), findsOneWidget);
+    expect(find.text('RTC Data'), findsNWidgets(2));
 
     await tester.pumpWidget(const SizedBox.shrink());
     await chat.dispose();
     await fixture.dispose();
   });
 
-  testWidgets('screen share stage supports expand and compact toggle', (
-    tester,
-  ) async {
+  testWidgets('screen share occupies the primary room stage', (tester) async {
     final fixture = _RoomFixture(screenShare: true);
 
     await tester.pumpWidget(
@@ -304,11 +491,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.screen_share_outlined));
     await tester.pump();
 
-    expect(find.byIcon(Icons.open_in_full_rounded), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.open_in_full_rounded));
-    await tester.pump();
-
-    expect(find.byIcon(Icons.close_fullscreen_rounded), findsOneWidget);
+    expect(find.text('Screen Share'), findsNWidgets(2));
+    expect(find.byType(MediaTrackView), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await fixture.dispose();
@@ -377,10 +561,12 @@ void main() {
       );
       await tester.pump();
 
-      await tester.tap(find.byIcon(Icons.admin_panel_settings_outlined));
+      await tester.tap(find.byTooltip('Participants').first);
+      await tester.pump();
+      await tester.tap(find.text('Manage room'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Room members'), findsOneWidget);
+      expect(find.text('Room members'), findsNWidgets(2));
       expect(find.text('Alice'), findsOneWidget);
       expect(find.text('Media online'), findsNWidgets(2));
       expect(find.text('Chat online'), findsNWidgets(2));
@@ -527,15 +713,22 @@ class _FakeScreenShareTrack implements MediaVideoTrack {
 }
 
 class _RoomFixture {
-  _RoomFixture({bool screenShare = false})
-    : media = _FakeMediaSession(screenShare: screenShare),
-      backend = MediaBackendClient(
-        MediaBackendConfig.fromUrl(
-          'http://localhost',
-          heartbeatInterval: Duration.zero,
-        ),
-        transport: _FakeTransport(),
-      ) {
+  _RoomFixture({
+    bool screenShare = false,
+    MediaRole role = MediaRole.participant,
+    List<MediaParticipant> participants = const [],
+  }) : media = _FakeMediaSession(
+         screenShare: screenShare,
+         role: role,
+         participants: participants,
+       ),
+       backend = MediaBackendClient(
+         MediaBackendConfig.fromUrl(
+           'http://localhost',
+           heartbeatInterval: Duration.zero,
+         ),
+         transport: _FakeTransport(),
+       ) {
     room = MediaRoomSession.attach(
       roomCode: 'room-1',
       participantId: 'participant-1',
@@ -574,10 +767,19 @@ class _FakeTransport implements MediaBackendTransport {
 }
 
 class _FakeMediaSession implements InteractiveMediaSession {
-  _FakeMediaSession({this.screenShare = false});
+  _FakeMediaSession({
+    this.screenShare = false,
+    this.role = MediaRole.participant,
+    this.participants = const [],
+  });
 
   final bool screenShare;
+  @override
+  final MediaRole role;
+  final List<MediaParticipant> participants;
   final List<bool> screenShareCalls = <bool>[];
+  final List<bool> mutedCalls = <bool>[];
+  final List<bool> videoCalls = <bool>[];
   final StreamController<MediaSessionState> _states =
       StreamController<MediaSessionState>.broadcast();
   final StreamController<MediaSnapshot> _snapshots =
@@ -590,14 +792,18 @@ class _FakeMediaSession implements InteractiveMediaSession {
   String get providerId => 'fake';
 
   @override
-  MediaRole get role => MediaRole.participant;
-
   @override
-  MediaCapabilities get capabilities => MediaCapabilities(
-    canSendData: true,
-    canReceiveData: true,
-    canScreenShare: screenShare,
-  );
+  MediaCapabilities get capabilities => role == MediaRole.viewer
+      ? const MediaCapabilities.broadcastViewer()
+      : MediaCapabilities(
+          canPublishAudio: true,
+          canPublishVideo: true,
+          canSwitchCamera: true,
+          canSendData: true,
+          canReceiveData: true,
+          canSubscribeVideo: true,
+          canScreenShare: screenShare || role == MediaRole.host,
+        );
 
   @override
   MediaSessionState get state => MediaSessionState.connected;
@@ -605,7 +811,12 @@ class _FakeMediaSession implements InteractiveMediaSession {
   @override
   MediaSnapshot get snapshot =>
       _snapshot ??
-      MediaSnapshot(state: state, role: role, capabilities: capabilities);
+      MediaSnapshot(
+        state: state,
+        role: role,
+        capabilities: capabilities,
+        participants: participants,
+      );
 
   @override
   Stream<MediaSessionState> get states => _states.stream;
@@ -620,13 +831,17 @@ class _FakeMediaSession implements InteractiveMediaSession {
   Future<void> sendMessage(String message, {String topic = 'chat'}) async {}
 
   @override
-  Future<void> setMuted(bool muted) async {}
+  Future<void> setMuted(bool muted) async {
+    mutedCalls.add(muted);
+  }
 
   @override
   Future<void> toggleMute() async {}
 
   @override
-  Future<void> setVideoEnabled(bool enabled) async {}
+  Future<void> setVideoEnabled(bool enabled) async {
+    videoCalls.add(enabled);
+  }
 
   @override
   Future<void> setScreenShareEnabled(bool enabled) async {

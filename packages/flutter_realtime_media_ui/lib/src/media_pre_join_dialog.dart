@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
@@ -421,4 +423,591 @@ class _CheckVisual {
   final IconData icon;
   final Color color;
   final Color background;
+}
+
+typedef MediaLocalPreviewOpener =
+    Future<MediaLocalPreviewSession?> Function(
+      String providerId,
+      MediaRole role,
+    );
+
+/// Responsive device setup page used before joining a meeting or live room.
+///
+/// [MediaPreJoinDialog.show] remains available for existing integrations.
+class MediaPreJoinPage extends StatefulWidget {
+  const MediaPreJoinPage({
+    super.key,
+    required this.runCheck,
+    required this.openPreview,
+    this.displayName = '',
+    this.roomLabel,
+    this.title,
+  });
+
+  final MediaPreJoinCheckRunner runCheck;
+  final MediaLocalPreviewOpener openPreview;
+  final String displayName;
+  final String? roomLabel;
+  final String? title;
+
+  static Future<MediaLocalPreviewSettings?> show(
+    BuildContext context, {
+    required MediaPreJoinCheckRunner runCheck,
+    required MediaLocalPreviewOpener openPreview,
+    String displayName = '',
+    String? roomLabel,
+    String? title,
+  }) => Navigator.of(context).push<MediaLocalPreviewSettings?>(
+    MaterialPageRoute(
+      builder: (_) => MediaPreJoinPage(
+        runCheck: runCheck,
+        openPreview: openPreview,
+        displayName: displayName,
+        roomLabel: roomLabel,
+        title: title,
+      ),
+    ),
+  );
+
+  @override
+  State<MediaPreJoinPage> createState() => _MediaPreJoinPageState();
+}
+
+class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
+  MediaPreJoinResult? _result;
+  MediaLocalPreviewSession? _preview;
+  Object? _error;
+  Object? _previewError;
+  Object? _deviceError;
+  List<MediaDevice> _devices = const [];
+  bool _loading = true;
+  bool _saving = false;
+  bool _allowPop = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _runChecks();
+  }
+
+  Future<void> _runChecks() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _previewError = null;
+      _deviceError = null;
+      _devices = const [];
+    });
+    await _disposePreview();
+    try {
+      final result = await widget.runCheck();
+      if (!mounted) return;
+      _result = result;
+      setState(() => _loading = false);
+      if (result.role != MediaRole.viewer && result.providerId != null) {
+        try {
+          final preview = await widget.openPreview(
+            result.providerId!,
+            result.role,
+          );
+          if (!mounted) {
+            await preview?.dispose();
+            return;
+          }
+          _preview = preview;
+          if (preview != null) {
+            try {
+              _devices = await preview.listMediaDevices();
+            } catch (error) {
+              _deviceError = error;
+            }
+          }
+          setState(() {});
+        } catch (error) {
+          if (mounted) setState(() => _previewError = error);
+        }
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _disposePreview() async {
+    final preview = _preview;
+    _preview = null;
+    if (preview != null) await preview.dispose();
+  }
+
+  Future<void> _enter() async {
+    final result = _result;
+    if (_loading || _saving || result == null || !result.isReady) return;
+    setState(() => _saving = true);
+    final settings =
+        _preview?.settings ?? MediaLocalPreviewSettings(cameraEnabled: false);
+    await _disposePreview();
+    if (mounted) {
+      setState(() => _allowPop = true);
+      Navigator.of(context).pop(settings);
+    }
+  }
+
+  Future<void> _cancel() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    await _disposePreview();
+    if (mounted && Navigator.canPop(context)) {
+      setState(() => _allowPop = true);
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _setMicrophone(bool enabled) async {
+    final preview = _preview;
+    if (preview == null) return;
+    try {
+      await preview.setMicrophoneEnabled(enabled);
+      if (mounted) setState(() => _previewError = null);
+    } catch (error) {
+      if (mounted) setState(() => _previewError = error);
+    }
+  }
+
+  Future<void> _setCamera(bool enabled) async {
+    final preview = _preview;
+    if (preview == null) return;
+    try {
+      await preview.setCameraEnabled(enabled);
+      if (mounted) setState(() => _previewError = null);
+    } catch (error) {
+      if (mounted) setState(() => _previewError = error);
+    }
+  }
+
+  Future<void> _selectDevice(MediaDevice device) async {
+    final preview = _preview;
+    if (preview == null) return;
+    try {
+      await preview.selectMediaDevice(device);
+      if (mounted) setState(() => _deviceError = null);
+    } catch (error) {
+      if (mounted) setState(() => _deviceError = error);
+    }
+  }
+
+  @override
+  void dispose() {
+    final preview = _preview;
+    _preview = null;
+    if (preview != null) unawaited(preview.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = RealtimeStrings.of(context);
+    final result = _result;
+    final isViewer = result?.role == MediaRole.viewer;
+    return PopScope(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_saving) unawaited(_cancel());
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0B1220),
+        body: SafeArea(
+          child: Column(
+            children: [
+              _pageHeader(context, strings),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wide = constraints.maxWidth >= 900;
+                    final preview = _previewPanel(strings, isViewer);
+                    final setup = _setupPanel(strings, result, isViewer);
+                    if (wide) {
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(flex: 6, child: preview),
+                          Expanded(flex: 5, child: setup),
+                        ],
+                      );
+                    }
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+                      children: [preview, const SizedBox(height: 12), setup],
+                    );
+                  },
+                ),
+              ),
+              _footer(strings, result),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pageHeader(BuildContext context, RealtimeStrings strings) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 8, 16, 10),
+    child: Row(
+      children: [
+        IconButton(
+          tooltip: strings.cancel,
+          onPressed: _saving ? null : _cancel,
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.title ?? strings.preJoinCheck,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              if (widget.roomLabel?.isNotEmpty == true)
+                Text(
+                  widget.roomLabel!,
+                  style: const TextStyle(color: Color(0xFF94A3B8)),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _previewPanel(RealtimeStrings strings, bool isViewer) => Padding(
+    padding: const EdgeInsets.all(14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: ColoredBox(
+              color: const Color(0xFF111827),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (_preview?.cameraTrack case final track?)
+                    MediaTrackView(renderer: _preview!.renderer, track: track)
+                  else
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isViewer
+                                ? Icons.live_tv_outlined
+                                : Icons.person_outline_rounded,
+                            color: const Color(0xFF94A3B8),
+                            size: 58,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            isViewer
+                                ? strings.live
+                                : _preview == null
+                                ? strings.cameraPreviewUnavailable
+                                : strings.camera,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Positioned(
+                    left: 12,
+                    bottom: 12,
+                    child: RealtimePill(
+                      label: widget.displayName.isEmpty
+                          ? strings.you
+                          : widget.displayName,
+                      icon: Icons.person_outline_rounded,
+                      foreground: Colors.white,
+                      background: const Color(0xB3000000),
+                      borderColor: const Color(0x40FFFFFF),
+                    ),
+                  ),
+                  if (_loading)
+                    const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (!isViewer && _preview != null) _mediaToggles(strings),
+        if (_previewError != null ||
+            (!isViewer && _preview == null && !_loading))
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _previewError == null
+                  ? strings.cameraPreviewUnavailable
+                  : '${strings.previewStartFailed} $_previewError',
+              style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  Widget _mediaToggles(RealtimeStrings strings) {
+    final preview = _preview!;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _toggleChip(
+          icon: preview.settings.microphoneEnabled
+              ? Icons.mic_rounded
+              : Icons.mic_off_rounded,
+          label: strings.microphone,
+          enabled: preview.settings.microphoneEnabled,
+          available: preview.capabilities.canPublishAudio,
+          onChanged: _setMicrophone,
+        ),
+        _toggleChip(
+          icon: preview.settings.cameraEnabled
+              ? Icons.videocam_rounded
+              : Icons.videocam_off_rounded,
+          label: strings.camera,
+          enabled: preview.settings.cameraEnabled,
+          available: preview.capabilities.canPublishVideo,
+          onChanged: _setCamera,
+        ),
+      ],
+    );
+  }
+
+  Widget _toggleChip({
+    required IconData icon,
+    required String label,
+    required bool enabled,
+    required bool available,
+    required ValueChanged<bool> onChanged,
+  }) => FilterChip(
+    avatar: Icon(icon, size: 18),
+    label: Text(label),
+    selected: enabled,
+    onSelected: available ? onChanged : null,
+    showCheckmark: false,
+    backgroundColor: const Color(0xFF1F2937),
+    selectedColor: const Color(0xFF374151),
+    labelStyle: const TextStyle(color: Colors.white),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+    ),
+  );
+
+  Widget _setupPanel(
+    RealtimeStrings strings,
+    MediaPreJoinResult? result,
+    bool isViewer,
+  ) {
+    if (isViewer) {
+      return Padding(
+        padding: const EdgeInsets.all(14),
+        child: _resultContent(strings, result),
+      );
+    }
+    final preview = _preview;
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            strings.deviceSetup,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (preview != null) ...[
+            _devicePicker(
+              strings.microphone,
+              MediaDeviceKind.microphone,
+              preview.settings.microphone,
+              preview.capabilities.canEnumerateMicrophones &&
+                  preview.capabilities.canSelectMicrophone,
+            ),
+            _devicePicker(
+              strings.camera,
+              MediaDeviceKind.camera,
+              preview.settings.camera,
+              preview.capabilities.canEnumerateCameras &&
+                  preview.capabilities.canSelectCamera,
+            ),
+            _devicePicker(
+              strings.speaker,
+              MediaDeviceKind.audioOutput,
+              preview.settings.audioOutput,
+              preview.capabilities.canEnumerateAudioDevices &&
+                  preview.capabilities.canSelectAudioOutput,
+            ),
+            const SizedBox(height: 12),
+            if (_deviceError != null)
+              Text(
+                '${strings.deviceListUnavailable}: $_deviceError',
+                style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+              )
+            else if (!preview.capabilities.canEnumerateMicrophones &&
+                !preview.capabilities.canEnumerateCameras &&
+                !preview.capabilities.canEnumerateAudioDevices)
+              Text(
+                strings.deviceSelectionUnsupported,
+                style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+              )
+            else if (_devices.isEmpty)
+              Text(
+                strings.noDevicesFound,
+                style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+              ),
+          ],
+          _resultContent(strings, result),
+        ],
+      ),
+    );
+  }
+
+  Widget _devicePicker(
+    String label,
+    MediaDeviceKind kind,
+    MediaDevice? selected,
+    bool enabled,
+  ) {
+    final devices = _devices.where((device) => device.kind == kind).toList();
+    if (!enabled || devices.isEmpty) return const SizedBox.shrink();
+    final selectedDevice = devices
+        .where((d) => d.id == selected?.id)
+        .firstOrNull;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: DropdownButtonFormField<MediaDevice>(
+        initialValue: selectedDevice,
+        isExpanded: true,
+        dropdownColor: const Color(0xFF1F2937),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Color(0xFFCBD5E1)),
+          filled: true,
+          fillColor: const Color(0xFF111827),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+            borderSide: const BorderSide(color: Color(0xFF374151)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+            borderSide: const BorderSide(color: Color(0xFF374151)),
+          ),
+        ),
+        style: const TextStyle(color: Colors.white),
+        items: devices
+            .map(
+              (device) =>
+                  DropdownMenuItem(value: device, child: Text(device.label)),
+            )
+            .toList(growable: false),
+        onChanged: (device) {
+          if (device != null) _selectDevice(device);
+        },
+      ),
+    );
+  }
+
+  Widget _resultContent(RealtimeStrings strings, MediaPreJoinResult? result) {
+    if (_loading) return _LoadingView(label: strings.runningPreJoinChecks);
+    if (_error != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${strings.unableToRunPreJoin} $_error',
+            style: const TextStyle(color: Color(0xFFFCA5A5)),
+          ),
+          TextButton.icon(
+            onPressed: _runChecks,
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(strings.runAgain),
+          ),
+        ],
+      );
+    }
+    if (result == null) return const SizedBox.shrink();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ResultView(result: result),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _runChecks,
+            icon: const Icon(Icons.refresh_rounded),
+            label: Text(strings.runAgain),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _footer(RealtimeStrings strings, MediaPreJoinResult? result) {
+    final label = result?.role == MediaRole.viewer
+        ? strings.enterLiveRoom
+        : result?.role == MediaRole.host
+        ? strings.enterLiveRoom
+        : strings.joinMeeting;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFF111827),
+        border: Border(top: BorderSide(color: Color(0xFF253044))),
+      ),
+      child: SizedBox(
+        height: 52,
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: !_loading && !_saving && result?.isReady == true
+              ? _enter
+              : null,
+          icon: _saving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.arrow_forward_rounded),
+          label: Text(label),
+          style: FilledButton.styleFrom(
+            backgroundColor: RealtimeUiTokens.primary,
+            disabledBackgroundColor: const Color(0xFF374151),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(
+                RealtimeUiTokens.controlRadius,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

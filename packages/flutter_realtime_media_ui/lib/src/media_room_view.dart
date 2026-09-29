@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,15 +19,17 @@ typedef MediaParticipantBuilder =
 
 class MediaRoomViewConfig {
   const MediaRoomViewConfig({
-    this.showProvider = true,
+    this.showProvider = false,
     this.showChat = true,
     this.showRtcDataMessages = false,
     this.confirmBeforeLeave = true,
+    this.initialMediaSettings,
   });
   final bool showProvider;
   final bool showChat;
   final bool showRtcDataMessages;
   final bool confirmBeforeLeave;
+  final MediaLocalPreviewSettings? initialMediaSettings;
 }
 
 class MediaRoomView extends StatefulWidget {
@@ -66,10 +67,11 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   int _seenChatMessageCount = 0;
   int _unreadChatCount = 0;
   bool _chatOpen = false;
+  bool _participantsOpen = false;
   bool _chatSending = false;
   bool _rtcDataOpen = false;
   bool _copied = false;
-  bool _screenShareExpanded = false;
+  bool _initialSettingsApplied = false;
   String? _focusedParticipantId;
   String? _error;
   MediaSession get session => widget.room.session;
@@ -106,7 +108,45 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     });
   }
 
+  Future<void> _applyInitialSettings() async {
+    if (_initialSettingsApplied) return;
+    _initialSettingsApplied = true;
+    final settings = widget.config.initialMediaSettings;
+    if (settings == null) return;
+    final current = session;
+    if (current is MediaDeviceController) {
+      for (final device in [
+        settings.microphone,
+        settings.camera,
+        settings.audioOutput,
+      ]) {
+        if (device == null) continue;
+        try {
+          await current.selectMediaDevice(device);
+        } catch (error) {
+          if (mounted) setState(() => _error = error.toString());
+        }
+      }
+    }
+    if (current is InteractiveMediaSession) {
+      try {
+        await current.setMuted(!settings.microphoneEnabled);
+        await current.setVideoEnabled(settings.cameraEnabled);
+      } catch (error) {
+        if (mounted) setState(() => _error = error.toString());
+      }
+    }
+  }
+
+  void _openParticipants() {
+    setState(() {
+      _participantsOpen = !_participantsOpen;
+      _chatOpen = false;
+    });
+  }
+
   Future<void> _showRoomManagement() async {
+    final navigator = Navigator.of(context);
     final mediaCapabilities = widget.room.managementCapabilities;
     final chatModeration = widget.chatModeration;
     final chatCapabilities = chatModeration is ChatModerationCapabilitySource
@@ -380,8 +420,19 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                 RealtimeDangerButton(
                   onPressed: () async {
                     Navigator.pop(sheetContext);
-                    await _run(widget.room.closeRoom);
-                    if (mounted) widget.onLeave?.call();
+                    try {
+                      await widget.room.closeRoom();
+                    } catch (error) {
+                      if (mounted) setState(() => _error = error.toString());
+                      return;
+                    }
+                    if (!mounted) return;
+                    await widget.chatSession?.dispose();
+                    await widget.room.dispose();
+                    widget.onLeave?.call();
+                    if (widget.onLeave == null && navigator.canPop()) {
+                      navigator.pop();
+                    }
                   },
                   icon: Icons.stop_circle_outlined,
                   label: strings.closeRoomForEveryone,
@@ -425,9 +476,17 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               icon: Icons.call_end_rounded,
               iconColor: RealtimeUiTokens.danger,
               iconBackground: RealtimeUiTokens.dangerSubtle,
-              title: Text(strings.leaveRoomTitle),
+              title: Text(
+                widget.room.role == MediaRole.host &&
+                        widget.room.managementCapabilities.closeRoom.supported
+                    ? strings.endLiveRoom
+                    : strings.leaveRoomTitle,
+              ),
               content: Text(
-                strings.leaveRoomConfirmation,
+                widget.room.role == MediaRole.host &&
+                        widget.room.managementCapabilities.closeRoom.supported
+                    ? strings.closeLiveRoomConfirmation
+                    : strings.leaveRoomConfirmation,
                 style: const TextStyle(
                   color: RealtimeUiTokens.textMuted,
                   fontSize: 14,
@@ -460,6 +519,15 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           false;
     }
     if (!leave) return;
+    if (widget.room.role == MediaRole.host &&
+        widget.room.managementCapabilities.closeRoom.supported) {
+      try {
+        await widget.room.closeRoom();
+      } catch (error) {
+        if (mounted) setState(() => _error = error.toString());
+        return;
+      }
+    }
     await widget.chatSession?.dispose();
     await widget.room.dispose();
     widget.onLeave?.call();
@@ -482,22 +550,36 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     initialData: session.snapshot,
     builder: (context, snap) {
       final value = snap.data ?? session.snapshot;
+      if (value.state == MediaSessionState.connected &&
+          widget.config.initialMediaSettings != null &&
+          !_initialSettingsApplied) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_applyInitialSettings());
+        });
+      }
       return Scaffold(
         backgroundColor: Colors.transparent,
         body: RealtimeAmbientBackground(
           child: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 900;
+                final wide = constraints.maxWidth >= 1200;
+                final medium = constraints.maxWidth >= 760;
                 final compact = constraints.maxWidth < 520;
                 return Column(
                   children: [
                     _topBar(value, compact: compact),
                     if (widget.header != null) widget.header!,
+                    if (value.state == MediaSessionState.reconnecting ||
+                        value.state == MediaSessionState.failed ||
+                        value.state == MediaSessionState.ended)
+                      _connectionBanner(value.state),
                     if (_error != null) _errorView(),
                     Expanded(
                       child: wide
                           ? _wideContent(value, constraints)
+                          : medium
+                          ? _mediumContent(value, constraints)
                           : _compactContent(value, constraints),
                     ),
                     if (_rtcDataOpen) _rtcData(),
@@ -513,15 +595,17 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   );
 
   Widget _wideContent(MediaSnapshot value, BoxConstraints constraints) {
-    final chat = widget.chatSession;
+    final panelOpen = _chatOpen || _participantsOpen;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(child: _mediaStage(value)),
-        if (_chatOpen && chat != null)
+        if (panelOpen)
           SizedBox(
-            key: const ValueKey('chat-panel-wide'),
-            width: (constraints.maxWidth * .31).clamp(320.0, 420.0),
+            key: ValueKey(
+              _participantsOpen ? 'participants-panel-wide' : 'chat-panel-wide',
+            ),
+            width: 320,
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0.0, end: 1.0),
               duration: RealtimeUiTokens.animNormal,
@@ -535,7 +619,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(4, 8, 12, 8),
-                child: _productChat(chat),
+                child: _sidePanel(value),
               ),
             ),
           ),
@@ -543,17 +627,44 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     );
   }
 
+  Widget _mediumContent(MediaSnapshot value, BoxConstraints constraints) =>
+      Stack(
+        fit: StackFit.expand,
+        children: [
+          _mediaStage(value),
+          if (_chatOpen || _participantsOpen)
+            Align(
+              alignment: Alignment.centerRight,
+              child: SizedBox(
+                key: ValueKey(
+                  _participantsOpen
+                      ? 'participants-panel-medium'
+                      : 'chat-panel-medium',
+                ),
+                width: math.min(360, constraints.maxWidth * .56),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 8, 12, 8),
+                  child: _sidePanel(value),
+                ),
+              ),
+            ),
+        ],
+      );
+
   Widget _compactContent(MediaSnapshot value, BoxConstraints constraints) {
-    final chat = widget.chatSession;
     final maxChatHeight = math.max(140.0, constraints.maxHeight - 150);
     final desiredChatHeight = (constraints.maxHeight * .42).clamp(180.0, 380.0);
     final chatHeight = math.min(desiredChatHeight, maxChatHeight);
     return Column(
       children: [
         Expanded(child: _mediaStage(value)),
-        if (_chatOpen && chat != null)
+        if (_chatOpen || _participantsOpen)
           SizedBox(
-            key: const ValueKey('chat-panel-compact'),
+            key: ValueKey(
+              _participantsOpen
+                  ? 'participants-panel-compact'
+                  : 'chat-panel-compact',
+            ),
             height: chatHeight,
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0.0, end: 1.0),
@@ -568,7 +679,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-                child: _productChat(chat),
+                child: _sidePanel(value),
               ),
             ),
           ),
@@ -576,17 +687,225 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     );
   }
 
-  Widget _mediaStage(MediaSnapshot value) => Column(
-    children: [
-      Expanded(child: value.participants.isEmpty ? _waiting() : _grid(value)),
-      if (value.contentShareTrack != null) _screenShare(value),
-    ],
+  Widget _sidePanel(MediaSnapshot value) {
+    final strings = RealtimeStrings.of(context);
+    final chatAvailable = widget.config.showChat && widget.chatSession != null;
+    final canManage =
+        widget.room.managementCapabilities.listParticipants.supported ||
+        widget.room.managementCapabilities.removeParticipant.supported ||
+        widget.room.managementCapabilities.muteParticipant.supported ||
+        widget.room.managementCapabilities.stopParticipantVideo.supported ||
+        widget.room.managementCapabilities.changeParticipantRole.supported ||
+        widget.room.managementCapabilities.closeRoom.supported;
+    return Column(
+      children: [
+        RealtimeGlassSurface(
+          radius: RealtimeUiTokens.controlRadius,
+          opacity: .96,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: _panelTab(
+                  label: strings.participants,
+                  active: _participantsOpen,
+                  onPressed: _openParticipants,
+                  badge: value.participants.length,
+                ),
+              ),
+              if (chatAvailable) ...[
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _panelTab(
+                    label: strings.chat,
+                    active: _chatOpen,
+                    onPressed: _toggleChat,
+                    badge: _unreadChatCount,
+                  ),
+                ),
+              ],
+              const SizedBox(width: 4),
+              RealtimeGlassIconButton(
+                tooltip: strings.close,
+                icon: Icons.close_rounded,
+                size: 40,
+                radius: RealtimeUiTokens.compactRadius,
+                onPressed: () => setState(() {
+                  _chatOpen = false;
+                  _participantsOpen = false;
+                }),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _participantsOpen || !chatAvailable
+              ? _participantsList(value, canManage: canManage)
+              : _productChat(widget.chatSession!, showHeader: false),
+        ),
+      ],
+    );
+  }
+
+  Widget _panelTab({
+    required String label,
+    required bool active,
+    required VoidCallback onPressed,
+    int badge = 0,
+  }) => TextButton(
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      minimumSize: const Size(44, 44),
+      foregroundColor: active ? Colors.white : RealtimeUiTokens.textMuted,
+      backgroundColor: active ? RealtimeUiTokens.primary : Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+      ),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+        if (badge > 0) ...[
+          const SizedBox(width: 5),
+          Text('$badge', style: const TextStyle(fontWeight: FontWeight.w800)),
+        ],
+      ],
+    ),
+  );
+
+  Widget _participantsList(MediaSnapshot value, {required bool canManage}) {
+    final strings = RealtimeStrings.of(context);
+    return RealtimeGlassSurface(
+      radius: RealtimeUiTokens.controlRadius,
+      opacity: .97,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    strings.roomMembers,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                Text('${value.participants.length}'),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: value.participants.isEmpty
+                ? Center(child: Text(strings.noManagedMembers))
+                : ListView.separated(
+                    padding: const EdgeInsets.all(8),
+                    itemCount: value.participants.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 4),
+                    itemBuilder: (context, index) {
+                      final participant = value.participants[index];
+                      return ListTile(
+                        minLeadingWidth: 36,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 2,
+                        ),
+                        leading: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: participant.isSpeaking
+                              ? RealtimeUiTokens.successSubtle
+                              : RealtimeUiTokens.primarySubtle,
+                          child: Icon(
+                            participant.isMuted
+                                ? Icons.mic_off_outlined
+                                : Icons.person_outline_rounded,
+                            size: 18,
+                            color: participant.isSpeaking
+                                ? RealtimeUiTokens.success
+                                : RealtimeUiTokens.primary,
+                          ),
+                        ),
+                        title: Text(
+                          participant.displayName.isEmpty
+                              ? participant.id
+                              : participant.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          participant.isLocal
+                              ? strings.you
+                              : participant.isMuted
+                              ? strings.muteParticipant
+                              : strings.mediaOnline,
+                        ),
+                        trailing: Icon(
+                          participant.isVideoEnabled
+                              ? Icons.videocam_outlined
+                              : Icons.videocam_off_outlined,
+                          size: 19,
+                          color: RealtimeUiTokens.textMuted,
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          if (canManage)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _showRoomManagement,
+                  icon: const Icon(Icons.admin_panel_settings_outlined),
+                  label: Text(strings.manageRoom),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mediaStage(MediaSnapshot value) => ColoredBox(
+    color: const Color(0xFF080F1C),
+    child: value.contentShareTrack == null
+        ? value.participants.isEmpty
+              ? _waiting()
+              : _grid(value)
+        : Column(
+            children: [
+              Expanded(child: _screenShare(value)),
+              if (value.participants.isNotEmpty)
+                SizedBox(height: 116, child: _participantStrip(value)),
+            ],
+          ),
+  );
+
+  Widget _participantStrip(MediaSnapshot value) => ListView.separated(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    scrollDirection: Axis.horizontal,
+    itemCount: value.participants.length,
+    separatorBuilder: (_, _) => const SizedBox(width: 8),
+    itemBuilder: (context, index) => SizedBox(
+      width: 144,
+      child: _buildParticipantWidget(
+        value.participants[index],
+        isFocused: false,
+        canFocus: true,
+      ),
+    ),
   );
 
   Widget _topBar(MediaSnapshot value, {required bool compact}) {
     final strings = RealtimeStrings.of(context);
     final mm = (_seconds ~/ 60).toString().padLeft(2, '0');
     final ss = (_seconds % 60).toString().padLeft(2, '0');
+    final isLive = widget.room.role != MediaRole.participant;
     return RealtimeGlassSurface(
       margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -595,59 +914,106 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       child: Row(
         children: [
           RealtimeGlassIconButton(
+            tooltip: strings.leave,
             icon: Icons.arrow_back_ios_new_rounded,
             onPressed: _leave,
-            size: 40,
+            size: 44,
             radius: RealtimeUiTokens.compactRadius,
           ),
           const SizedBox(width: 10),
-          RealtimePill(
-            label: widget.room.roomCode,
-            icon: _copied ? Icons.check_rounded : Icons.copy_rounded,
-            foreground: _copied
-                ? RealtimeUiTokens.success
-                : RealtimeUiTokens.text,
-            background: _copied
-                ? RealtimeUiTokens.successSubtle
-                : RealtimeUiTokens.surfaceSubtle,
-            borderColor: _copied
-                ? RealtimeUiTokens.successBorder
-                : RealtimeUiTokens.border,
-            onTap: _copyCode,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isLive ? strings.live : strings.meeting,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: RealtimeUiTokens.text,
+                  ),
+                ),
+                InkWell(
+                  onTap: _copyCode,
+                  borderRadius: BorderRadius.circular(6),
+                  child: SizedBox(
+                    height: 44,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 5),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                strings.roomLabel(widget.room.roomCode),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: RealtimeUiTokens.textMuted,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Icon(
+                              _copied
+                                  ? Icons.check_rounded
+                                  : Icons.copy_rounded,
+                              size: 13,
+                              color: _copied
+                                  ? RealtimeUiTokens.success
+                                  : RealtimeUiTokens.textMuted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           if (widget.config.showProvider && !compact) ...[
             const SizedBox(width: 8),
             _providerBadge(widget.room.providerId),
           ],
-          const Spacer(),
-          if (!compact) ...[
-            RealtimePill(
-              label: '$mm:$ss',
-              leadingDotColor: _seconds.isEven
-                  ? const Color(0xFF10B981)
-                  : const Color(0xFF34D399),
+          const SizedBox(width: 8),
+          RealtimePill(
+            label: '$mm:$ss',
+            leadingDotColor: _seconds.isEven
+                ? const Color(0xFF10B981)
+                : const Color(0xFF34D399),
+          ),
+          const SizedBox(width: 4),
+          Tooltip(
+            message: _stateLabel(strings, value.state),
+            child: Icon(
+              Icons.circle,
+              size: 9,
+              color: switch (value.state) {
+                MediaSessionState.connected => RealtimeUiTokens.success,
+                MediaSessionState.reconnecting => RealtimeUiTokens.warning,
+                MediaSessionState.failed ||
+                MediaSessionState.ended => RealtimeUiTokens.danger,
+                _ => RealtimeUiTokens.textMuted,
+              },
             ),
-            const SizedBox(width: 8),
-          ],
-          if ((widget.room.roomOwnerCredential?.isNotEmpty ?? false) ||
-              (widget.room.role == MediaRole.host &&
-                  (widget
-                          .room
-                          .managementCapabilities
-                          .listParticipants
-                          .supported ||
-                      widget.room.managementCapabilities.closeRoom.supported)))
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: RealtimeGlassIconButton(
-                tooltip: strings.manageRoom,
-                onPressed: _showRoomManagement,
-                icon: Icons.admin_panel_settings_outlined,
-                size: 40,
-                radius: RealtimeUiTokens.compactRadius,
-              ),
-            ),
-          _badge('${value.participants.length}', Icons.people_outline_rounded),
+          ),
+          const SizedBox(width: 4),
+          RealtimeGlassIconButton(
+            tooltip: strings.participants,
+            icon: Icons.people_outline_rounded,
+            badgeCount: value.participants.length,
+            active: _participantsOpen,
+            size: 44,
+            radius: RealtimeUiTokens.compactRadius,
+            onPressed: _openParticipants,
+          ),
         ],
       ),
     );
@@ -664,8 +1030,13 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     );
   }
 
-  Widget _badge(String text, IconData icon) =>
-      RealtimePill(label: text, icon: icon);
+  String _stateLabel(RealtimeStrings strings, MediaSessionState state) =>
+      switch (state) {
+        MediaSessionState.connected => strings.connected,
+        MediaSessionState.reconnecting => strings.reconnecting,
+        MediaSessionState.ended || MediaSessionState.disposed => strings.ended,
+        _ => strings.connecting,
+      };
 
   Widget _errorView() => RealtimeGlassSurface(
     margin: const EdgeInsets.fromLTRB(12, 6, 12, 2),
@@ -707,6 +1078,49 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       ],
     ),
   );
+
+  Widget _connectionBanner(MediaSessionState state) {
+    final strings = RealtimeStrings.of(context);
+    final reconnecting = state == MediaSessionState.reconnecting;
+    final ended = state == MediaSessionState.ended;
+    final color = reconnecting
+        ? RealtimeUiTokens.warning
+        : RealtimeUiTokens.danger;
+    final text = reconnecting
+        ? strings.reconnectingDetail
+        : ended
+        ? strings.ended
+        : strings.connectionFailed;
+    return RealtimeGlassSurface(
+      margin: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      radius: RealtimeUiTokens.controlRadius,
+      fillColor: reconnecting
+          ? RealtimeUiTokens.warningSubtle
+          : RealtimeUiTokens.dangerSubtle,
+      borderColor: color.withValues(alpha: .28),
+      opacity: .96,
+      shadow: false,
+      child: Row(
+        children: [
+          Icon(
+            reconnecting ? Icons.sync_rounded : Icons.error_outline_rounded,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (!reconnecting)
+            TextButton(onPressed: _leave, child: Text(strings.leave)),
+        ],
+      ),
+    );
+  }
 
   Widget _waiting() {
     final strings = RealtimeStrings.of(context);
@@ -879,19 +1293,10 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   Widget _screenShare(MediaSnapshot value) {
     final strings = RealtimeStrings.of(context);
-    return AnimatedContainer(
-      duration: RealtimeUiTokens.animNormal,
-      curve: Curves.easeOutCubic,
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      height: _screenShareExpanded ? 260 : 168,
-      decoration: BoxDecoration(
-        gradient: RealtimeUiTokens.glassGradient(opacity: 0.90),
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-        border: Border.all(color: RealtimeUiTokens.border, width: 1.1),
-        boxShadow: RealtimeUiTokens.cardShadow,
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius - 2),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -901,32 +1306,13 @@ class _MediaRoomViewState extends State<MediaRoomView> {
             ),
             Positioned(
               left: 10,
-              right: 10,
               top: 10,
-              child: Row(
-                children: [
-                  RealtimePill(
-                    label: strings.screenShare,
-                    icon: Icons.present_to_all_rounded,
-                    foreground: RealtimeUiTokens.primary,
-                    background: Colors.white.withValues(alpha: 0.90),
-                    borderColor: RealtimeUiTokens.primaryBorder,
-                  ),
-                  const Spacer(),
-                  RealtimeGlassIconButton(
-                    tooltip: _screenShareExpanded
-                        ? strings.compactStage
-                        : strings.expandStage,
-                    icon: _screenShareExpanded
-                        ? Icons.close_fullscreen_rounded
-                        : Icons.open_in_full_rounded,
-                    size: 34,
-                    radius: RealtimeUiTokens.compactRadius,
-                    onPressed: () => setState(
-                      () => _screenShareExpanded = !_screenShareExpanded,
-                    ),
-                  ),
-                ],
+              child: RealtimePill(
+                label: strings.screenShare,
+                icon: Icons.present_to_all_rounded,
+                foreground: Colors.white,
+                background: const Color(0xB3000000),
+                borderColor: const Color(0x40FFFFFF),
               ),
             ),
           ],
@@ -935,58 +1321,62 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     );
   }
 
-  Widget _productChat(ChatSession chat) => StreamBuilder<ChatConnectionState>(
-    stream: chat.states,
-    initialData: chat.state,
-    builder: (context, stateSnapshot) {
-      final connectionState = stateSnapshot.data ?? chat.state;
-      return StreamBuilder<List<ChatMessage>>(
-        stream: chat.messageSnapshots,
-        initialData: chat.messages,
-        builder: (context, messageSnapshot) {
-          final messages = messageSnapshot.data ?? chat.messages;
-          _syncChatScroll(messages.length);
-          return RealtimeGlassSurface(
-            radius: RealtimeUiTokens.cardRadius,
-            opacity: .90,
-            child: Column(
-              children: [
-                _chatHeader(connectionState, messages.length),
-                const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                Expanded(
-                  child: messages.isEmpty
-                      ? _emptyChat()
-                      : ListView.builder(
-                          key: const ValueKey('chat-message-list'),
-                          controller: _chatScroll,
-                          reverse: true,
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                          itemCount: messages.length,
-                          itemBuilder: (context, index) {
-                            final messageIndex = messages.length - 1 - index;
-                            final message = messages[messageIndex];
-                            final previous = messageIndex > 0
-                                ? messages[messageIndex - 1]
-                                : null;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: _chatMessage(
-                                chat,
-                                message,
-                                previousMessage: previous,
-                              ),
-                            );
-                          },
-                        ),
+  Widget _productChat(ChatSession chat, {bool showHeader = true}) =>
+      StreamBuilder<ChatConnectionState>(
+        stream: chat.states,
+        initialData: chat.state,
+        builder: (context, stateSnapshot) {
+          final connectionState = stateSnapshot.data ?? chat.state;
+          return StreamBuilder<List<ChatMessage>>(
+            stream: chat.messageSnapshots,
+            initialData: chat.messages,
+            builder: (context, messageSnapshot) {
+              final messages = messageSnapshot.data ?? chat.messages;
+              _syncChatScroll(messages.length);
+              return RealtimeGlassSurface(
+                radius: RealtimeUiTokens.cardRadius,
+                opacity: .90,
+                child: Column(
+                  children: [
+                    if (showHeader) ...[
+                      _chatHeader(connectionState, messages.length),
+                      const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    ],
+                    Expanded(
+                      child: messages.isEmpty
+                          ? _emptyChat()
+                          : ListView.builder(
+                              key: const ValueKey('chat-message-list'),
+                              controller: _chatScroll,
+                              reverse: true,
+                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                              itemCount: messages.length,
+                              itemBuilder: (context, index) {
+                                final messageIndex =
+                                    messages.length - 1 - index;
+                                final message = messages[messageIndex];
+                                final previous = messageIndex > 0
+                                    ? messages[messageIndex - 1]
+                                    : null;
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: _chatMessage(
+                                    chat,
+                                    message,
+                                    previousMessage: previous,
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    _chatComposer(chat, connectionState),
+                  ],
                 ),
-                _chatComposer(chat, connectionState),
-              ],
-            ),
+              );
+            },
           );
         },
       );
-    },
-  );
 
   Widget _chatHeader(ChatConnectionState connectionState, int messageCount) =>
       Padding(
@@ -1383,6 +1773,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   void _toggleChat() {
     setState(() {
       _chatOpen = !_chatOpen;
+      _participantsOpen = false;
       if (_chatOpen) {
         _unreadChatCount = 0;
         _seenChatMessageCount = widget.chatSession?.messages.length ?? 0;
@@ -1482,97 +1873,160 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         ? session as InteractiveMediaSession
         : null;
     final caps = value.capabilities;
-    return RealtimeGlassSurface(
-      margin: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      radius: RealtimeUiTokens.dockRadius,
-      opacity: .88,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            if (interactive != null && caps.canPublishAudio)
-              _control(
-                value.localMuted
-                    ? Icons.mic_off_outlined
-                    : Icons.mic_none_rounded,
-                () => _run(interactive.toggleMute),
-                active: !value.localMuted,
-              ),
-            if (interactive != null && caps.canPublishVideo) ...[
-              const SizedBox(width: 8),
-              _control(
-                value.localVideoEnabled
-                    ? Icons.videocam_outlined
-                    : Icons.videocam_off_outlined,
-                () => _run(
-                  () => interactive.setVideoEnabled(!value.localVideoEnabled),
-                ),
-                active: value.localVideoEnabled,
-              ),
-            ],
-            if (interactive != null && caps.canSwitchCamera) ...[
-              const SizedBox(width: 8),
-              _control(
-                Icons.cameraswitch_outlined,
-                () => _run(
-                  () => interactive.switchCamera(MediaCameraPosition.back),
-                ),
-              ),
-            ],
-            if (interactive != null && caps.canScreenShare) ...[
-              const SizedBox(width: 8),
-              _control(
-                value.localScreenShareEnabled
-                    ? Icons.stop_screen_share_outlined
-                    : Icons.screen_share_outlined,
-                () => _run(
-                  () => interactive.setScreenShareEnabled(
-                    !value.localScreenShareEnabled,
-                  ),
-                ),
-                active: value.localScreenShareEnabled,
-              ),
-            ],
-            if (widget.config.showChat && widget.chatSession != null) ...[
-              const SizedBox(width: 8),
-              _control(
-                Icons.chat_bubble_outline_rounded,
-                _toggleChat,
-                active: _chatOpen,
-                badgeCount: _unreadChatCount,
-              ),
-            ],
-            if (widget.config.showRtcDataMessages && caps.canSendData) ...[
-              const SizedBox(width: 8),
-              _control(
-                Icons.data_object_rounded,
-                () => setState(() => _rtcDataOpen = !_rtcDataOpen),
-                active: _rtcDataOpen,
-              ),
-            ],
-            const SizedBox(width: 10),
-            _control(Icons.call_end_rounded, _leave, endCall: true),
-          ],
+    final strings = RealtimeStrings.of(context);
+    final showLabels = MediaQuery.sizeOf(context).width >= 760;
+    final controls = <Widget>[];
+    if (interactive != null && caps.canPublishAudio) {
+      controls.add(
+        _control(
+          value.localMuted ? Icons.mic_off_outlined : Icons.mic_none_rounded,
+          strings.microphone,
+          () => _run(interactive.toggleMute),
+          active: !value.localMuted,
+          showLabel: showLabels,
         ),
+      );
+    }
+    if (interactive != null && caps.canPublishVideo) {
+      controls.add(
+        _control(
+          value.localVideoEnabled
+              ? Icons.videocam_outlined
+              : Icons.videocam_off_outlined,
+          strings.camera,
+          () =>
+              _run(() => interactive.setVideoEnabled(!value.localVideoEnabled)),
+          active: value.localVideoEnabled,
+          showLabel: showLabels,
+        ),
+      );
+    }
+    if (interactive != null && caps.canSwitchCamera) {
+      controls.add(
+        _control(
+          Icons.cameraswitch_outlined,
+          strings.switchCamera,
+          () => _run(() => interactive.switchCamera(MediaCameraPosition.back)),
+          showLabel: showLabels,
+        ),
+      );
+    }
+    if (interactive != null && caps.canScreenShare) {
+      controls.add(
+        _control(
+          value.localScreenShareEnabled
+              ? Icons.stop_screen_share_outlined
+              : Icons.screen_share_outlined,
+          strings.screenShare,
+          () => _run(
+            () => interactive.setScreenShareEnabled(
+              !value.localScreenShareEnabled,
+            ),
+          ),
+          active: value.localScreenShareEnabled,
+          showLabel: showLabels,
+        ),
+      );
+    }
+    controls.add(
+      _control(
+        Icons.people_outline_rounded,
+        strings.participants,
+        _openParticipants,
+        active: _participantsOpen,
+        badgeCount: value.participants.length,
+        showLabel: showLabels,
+      ),
+    );
+    if (widget.config.showChat && widget.chatSession != null) {
+      controls.add(
+        _control(
+          Icons.chat_bubble_outline_rounded,
+          strings.chat,
+          _toggleChat,
+          active: _chatOpen,
+          badgeCount: _unreadChatCount,
+          showLabel: showLabels,
+        ),
+      );
+    }
+    if (widget.config.showRtcDataMessages && caps.canSendData) {
+      controls.add(
+        _control(
+          Icons.data_object_rounded,
+          strings.rtcData,
+          () => setState(() => _rtcDataOpen = !_rtcDataOpen),
+          active: _rtcDataOpen,
+          showLabel: showLabels,
+        ),
+      );
+    }
+    controls.add(
+      _control(
+        Icons.call_end_rounded,
+        widget.room.role == MediaRole.host &&
+                widget.room.managementCapabilities.closeRoom.supported
+            ? strings.endLiveRoom
+            : widget.room.role == MediaRole.participant
+            ? strings.leave
+            : strings.leaveLiveRoom,
+        _leave,
+        endCall: true,
+        showLabel: showLabels,
+      ),
+    );
+    return RealtimeGlassSurface(
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      radius: RealtimeUiTokens.dockRadius,
+      opacity: .96,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: showLabels ? 16 : 4,
+        runSpacing: 2,
+        children: controls,
       ),
     );
   }
 
   Widget _control(
     IconData icon,
+    String label,
     VoidCallback action, {
     bool active = false,
     bool endCall = false,
     int badgeCount = 0,
-  }) => RealtimeGlassIconButton(
-    icon: icon,
-    onPressed: action,
-    active: active,
-    danger: endCall,
-    badgeCount: badgeCount,
-    size: 46,
-    radius: RealtimeUiTokens.controlRadius,
+    bool showLabel = false,
+  }) => Semantics(
+    label: label,
+    button: true,
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        RealtimeGlassIconButton(
+          tooltip: label,
+          icon: icon,
+          onPressed: action,
+          active: active,
+          danger: endCall,
+          badgeCount: badgeCount,
+          size: 46,
+          radius: RealtimeUiTokens.controlRadius,
+        ),
+        if (showLabel) ...[
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: endCall ? RealtimeUiTokens.danger : RealtimeUiTokens.text,
+            ),
+          ),
+        ],
+      ],
+    ),
   );
 }
 
@@ -1740,32 +2194,31 @@ class MediaParticipantTile extends StatelessWidget {
               Positioned(
                 top: 10,
                 right: 10,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.pillRadius,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
                   ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.76),
-                        borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.pillRadius,
-                        ),
-                        border: Border.all(color: RealtimeUiTokens.border),
-                      ),
-                      child: Icon(
-                        isFocused
-                            ? Icons.grid_view_rounded
-                            : Icons.open_in_full_rounded,
-                        size: 13,
-                        color: RealtimeUiTokens.textMuted,
-                      ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.88),
+                    borderRadius: BorderRadius.circular(
+                      RealtimeUiTokens.pillRadius,
                     ),
+                    border: Border.all(color: RealtimeUiTokens.border),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0F172A).withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    isFocused
+                        ? Icons.grid_view_rounded
+                        : Icons.open_in_full_rounded,
+                    size: 13,
+                    color: RealtimeUiTokens.textMuted,
                   ),
                 ),
               ),
@@ -1773,56 +2226,46 @@ class MediaParticipantTile extends StatelessWidget {
               left: 10,
               right: 10,
               bottom: 10,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.compactRadius,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
                 ),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(
-                    sigmaX: RealtimeUiTokens.subtleBlur,
-                    sigmaY: RealtimeUiTokens.subtleBlur,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .90),
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.compactRadius,
                   ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .84),
-                      borderRadius: BorderRadius.circular(
-                        RealtimeUiTokens.compactRadius,
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.90),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '$name${participant.isLocal ? strings.youSuffix : ''}',
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: RealtimeUiTokens.text,
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          participant.isMuted
-                              ? Icons.mic_off_rounded
-                              : Icons.mic_rounded,
-                          size: 15,
-                          color: participant.isMuted
-                              ? RealtimeUiTokens.danger
-                              : speaking
-                              ? const Color(0xFF10B981)
-                              : RealtimeUiTokens.textMuted,
-                        ),
-                      ],
-                    ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.90),
                   ),
+                  boxShadow: RealtimeUiTokens.cardShadow,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$name${participant.isLocal ? strings.youSuffix : ''}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: RealtimeUiTokens.text,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      participant.isMuted
+                          ? Icons.mic_off_rounded
+                          : Icons.mic_rounded,
+                      size: 15,
+                      color: participant.isMuted
+                          ? RealtimeUiTokens.danger
+                          : speaking
+                          ? const Color(0xFF10B981)
+                          : RealtimeUiTokens.textMuted,
+                    ),
+                  ],
                 ),
               ),
             ),

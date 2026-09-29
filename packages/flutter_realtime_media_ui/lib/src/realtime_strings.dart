@@ -77,6 +77,41 @@ class RealtimeStrings {
   String get leave => isZh ? '离开' : 'Leave';
   String get continueLabel => isZh ? '继续' : 'Continue';
   String get runAgain => isZh ? '重新检查' : 'Run again';
+  String get microphone => isZh ? '麦克风' : 'Microphone';
+  String get camera => isZh ? '摄像头' : 'Camera';
+  String get speaker => isZh ? '扬声器' : 'Speaker';
+  String get deviceSetup => isZh ? '设备设置' : 'Device setup';
+  String get cameraPreviewUnavailable => isZh
+      ? '当前服务商不支持本地摄像头预览'
+      : 'Local camera preview is not supported by this provider';
+  String get previewStartFailed => isZh
+      ? '无法启动预览，仍可继续加入。'
+      : 'Preview could not start. You can still continue.';
+  String get deviceListUnavailable =>
+      isZh ? '设备列表暂不可用' : 'Device list is unavailable';
+  String get noDevicesFound =>
+      isZh ? '没有检测到可用的音视频设备' : 'No audio or video devices were found';
+  String get deviceSelectionUnsupported => isZh
+      ? '当前服务商不支持选择设备，可继续入会。'
+      : 'Device selection is not supported by this provider. You can continue.';
+  String get joinMeeting => isZh ? '加入会议' : 'Join meeting';
+  String get enterLiveRoom => isZh ? '进入直播间' : 'Enter live room';
+  String get connecting => isZh ? '连接中' : 'Connecting';
+  String get reconnecting => isZh ? '正在重新连接' : 'Reconnecting';
+  String get reconnectingDetail => isZh
+      ? '正在尝试恢复音视频连接，请稍候。'
+      : 'Trying to restore audio and video. Please wait.';
+  String get connectionFailed => isZh ? '连接失败' : 'Connection failed';
+  String get ended => isZh ? '房间已结束' : 'Room ended';
+  String get participants => isZh ? '成员' : 'Participants';
+  String get switchCamera => isZh ? '切换摄像头' : 'Switch camera';
+  String get speakerView => isZh ? '发言人' : 'Speaker';
+  String get connected => isZh ? '已连接' : 'Connected';
+  String get leaveLiveRoom => isZh ? '离开直播间' : 'Leave live room';
+  String get endLiveRoom => isZh ? '结束直播' : 'End live';
+  String get closeLiveRoomConfirmation => isZh
+      ? '结束直播会关闭房间并断开所有观众。'
+      : 'Ending the live stream closes the room and disconnects all viewers.';
 
   String get onlyOneHere => isZh ? '现在只有你一个人' : "You're the only one here";
   String get shareRoomCode =>
@@ -183,6 +218,8 @@ class RealtimeStrings {
   String roomSummary(String mode, String provider, int attendees) => isZh
       ? '$mode · $provider · $attendees 人在线'
       : '$mode · $provider · $attendees online';
+  String roomCardSummary(String mode, int attendees) =>
+      isZh ? '$mode · $attendees 人在线' : '$mode · $attendees online';
   String get join => isZh ? '加入' : 'Join';
 }
 

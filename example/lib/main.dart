@@ -16,6 +16,15 @@ enum _JoinFormError { backendMissing, roomCodeMissing, invalidRoomCode }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Keep native status bars aligned with the SDK's light surface on iOS and
+  // Android, including screens that use custom headers instead of AppBar.
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Color(0xFFF4F7FB),
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+    ),
+  );
   final preferences = await SharedPreferences.getInstance();
   final savedLocale = preferences.getString(_demoLocalePreferenceKey);
   _initialDemoLocale = switch (savedLocale) {
@@ -107,7 +116,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _demoTabs = TabController(length: 2, vsync: this);
-    _roomTabs = TabController(length: 2, vsync: this);
+    _roomTabs = TabController(length: 3, vsync: this);
     _deviceIdFuture = _loadOrCreateDeviceId();
     unawaited(_loadDisplayName());
     _serverController.text = _defaultBackendUrl;
@@ -136,12 +145,20 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       setState(() => _roomListError = null);
     }
     try {
-      final rooms = await _newRealtimeSdk().listRooms();
+      final rooms = await _newRealtime().listRooms();
       if (!mounted) return;
-      setState(() {
-        _availableRooms = rooms;
-        _roomListError = null;
-      });
+      final changed =
+          _availableRooms.length != rooms.length ||
+          _roomListError != null ||
+          !_availableRooms.every(
+            (r) => rooms.any((nr) => nr.roomCode == r.roomCode),
+          );
+      if (changed) {
+        setState(() {
+          _availableRooms = rooms;
+          _roomListError = null;
+        });
+      }
     } catch (error) {
       if (!silent && mounted) {
         setState(() => _roomListError = error.toString());
@@ -282,33 +299,43 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     _serverStatusRequestInFlight = true;
     if (!silent && mounted) setState(() => _testingServer = true);
     try {
-      final report = await _newRealtimeSdk().diagnoseBackend();
+      final report = await _newRealtime().diagnoseBackend();
       final backendCheck = report.checkById('backend');
       final online = backendCheck?.status != MediaDoctorStatus.fail;
+      final newInfo = online
+          ? backendCheck?.status == MediaDoctorStatus.warning
+                ? 'Reachable (health unavailable)'
+                : report.activeProvider == null
+                ? 'Ready'
+                : 'Default: ${mediaProviderDisplayName(report.activeProvider!)}'
+          : report.backendReachable
+          ? 'Health check failed'
+          : 'Unreachable';
       if (mounted && _server == url) {
-        setState(() {
-          _serverOnline = online;
-          _serverMediaProviderId = report.activeProvider;
-          _serverChatProviderId = report.activeChatProvider;
-          _serverProviderInfo = online
-              ? backendCheck?.status == MediaDoctorStatus.warning
-                    ? 'Reachable (health unavailable)'
-                    : report.activeProvider == null
-                    ? 'Ready'
-                    : 'Default: ${mediaProviderDisplayName(report.activeProvider!)}'
-              : report.backendReachable
-              ? 'Health check failed'
-              : 'Unreachable';
-        });
+        final changed =
+            _serverOnline != online ||
+            _serverMediaProviderId != report.activeProvider ||
+            _serverChatProviderId != report.activeChatProvider ||
+            _serverProviderInfo != newInfo;
+        if (changed) {
+          setState(() {
+            _serverOnline = online;
+            _serverMediaProviderId = report.activeProvider;
+            _serverChatProviderId = report.activeChatProvider;
+            _serverProviderInfo = newInfo;
+          });
+        }
       }
     } catch (_) {
       if (mounted && _server == url) {
-        setState(() {
-          _serverOnline = false;
-          _serverProviderInfo = 'Unreachable';
-          _serverMediaProviderId = null;
-          _serverChatProviderId = null;
-        });
+        if (_serverOnline != false || _serverProviderInfo != 'Unreachable') {
+          setState(() {
+            _serverOnline = false;
+            _serverProviderInfo = 'Unreachable';
+            _serverMediaProviderId = null;
+            _serverChatProviderId = null;
+          });
+        }
       }
     } finally {
       _serverStatusRequestInFlight = false;
@@ -342,29 +369,45 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       _showFormError(_JoinFormError.invalidRoomCode);
       return;
     }
-    final sdk = _newRealtimeSdk();
+    final roomLabel = requestedCode.isEmpty
+        ? DemoStrings.of(context).createAndJoin
+        : requestedCode;
+    final realtime = _newRealtime();
     final role = _createRoomMode == MediaRoomMode.broadcast
         ? MediaRole.host
         : MediaRole.participant;
-    final canContinue = await _runPreJoin(sdk, role: role);
-    if (!canContinue) return;
     final deviceId = await _deviceIdFuture;
     final displayName = await _resolveDisplayName(deviceId);
+    final initialMediaSettings = await _runPreJoin(
+      realtime,
+      role: role,
+      displayName: displayName,
+      roomLabel: roomLabel,
+    );
+    if (initialMediaSettings == null) return;
     await _run(() async {
-      final room = await sdk.createRoom(
-        roomCode: requestedCode.isEmpty ? null : requestedCode,
-        user: MediaIdentity(
-          userId: deviceId,
-          displayName: displayName,
-          deviceId: deviceId,
+      final connection = await realtime.open(
+        RealtimeRequest.create(
+          type: _createRoomMode == MediaRoomMode.broadcast
+              ? RealtimeExperience.live
+              : RealtimeExperience.meeting,
+          roomCode: requestedCode.isEmpty ? null : requestedCode,
+          user: RealtimeUser(
+            id: deviceId,
+            name: displayName,
+            deviceId: deviceId,
+          ),
         ),
-        mode: _createRoomMode,
       );
+      final room = connection.mediaRoom!;
       final ownerCredential = room.media.roomOwnerCredential;
       if (ownerCredential != null) {
         _roomOwnerCredentials[room.roomCode] = ownerCredential;
       }
-      await _openMeeting(room);
+      await _openMeeting(
+        connection,
+        initialMediaSettings: initialMediaSettings,
+      );
     });
   }
 
@@ -378,53 +421,80 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       _showFormError(_JoinFormError.roomCodeMissing);
       return;
     }
-    final sdk = _newRealtimeSdk();
+    final realtime = _newRealtime();
     final role = roomMode == MediaRoomMode.broadcast
         ? MediaRole.viewer
         : MediaRole.participant;
-    final canContinue = await _runPreJoin(
-      sdk,
+    final deviceId = await _deviceIdFuture;
+    final displayName = await _resolveDisplayName(deviceId);
+    final initialMediaSettings = await _runPreJoin(
+      realtime,
       role: role,
       providerId: providerId,
       roomCode: code,
+      displayName: displayName,
+      roomLabel: code,
     );
-    if (!canContinue) return;
-    final deviceId = await _deviceIdFuture;
-    final displayName = await _resolveDisplayName(deviceId);
+    if (initialMediaSettings == null) return;
     await _run(() async {
-      final room = await sdk.joinRoom(
-        roomCode: code,
-        roomOwnerCredential: _roomOwnerCredentials[code],
-        user: MediaIdentity(
-          userId: deviceId,
-          displayName: displayName,
-          deviceId: deviceId,
+      final connection = await realtime.open(
+        RealtimeRequest.join(
+          type: roomMode == MediaRoomMode.broadcast
+              ? RealtimeExperience.live
+              : RealtimeExperience.meeting,
+          roomCode: code,
+          roomOwnerCredential: _roomOwnerCredentials[code],
+          user: RealtimeUser(
+            id: deviceId,
+            name: displayName,
+            deviceId: deviceId,
+          ),
         ),
       );
+      final room = connection.mediaRoom!;
       final ownerCredential = room.media.roomOwnerCredential;
       if (ownerCredential != null) {
         _roomOwnerCredentials[room.roomCode] = ownerCredential;
       }
-      await _openMeeting(room);
+      await _openMeeting(
+        connection,
+        initialMediaSettings: initialMediaSettings,
+      );
     });
   }
 
-  RealtimeSdk _newRealtimeSdk() => RealtimeSdk.standard(
+  Realtime _newRealtime() => Realtime.standard(
     backendUrl: _server,
     tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
   );
 
-  Future<bool> _runPreJoin(
-    RealtimeSdk sdk, {
+  Future<MediaLocalPreviewSettings?> _runPreJoin(
+    Realtime realtime, {
     required MediaRole role,
+    required String displayName,
+    required String roomLabel,
     String? providerId,
     String? roomCode,
   }) {
-    if (!mounted) return Future.value(false);
-    return MediaPreJoinDialog.show(
+    if (!mounted) return Future.value(null);
+    return MediaPreJoinPage.show(
       context,
-      runCheck: () =>
-          sdk.preJoin(role: role, providerId: providerId, roomCode: roomCode),
+      runCheck: () => realtime.preJoin(
+        role: role,
+        providerId: providerId,
+        roomCode: roomCode,
+      ),
+      openPreview: (providerId, previewRole) => realtime.createLocalPreview(
+        providerId: providerId,
+        role: previewRole,
+      ),
+      displayName: displayName,
+      roomLabel: roomLabel,
+      title: role == MediaRole.viewer
+          ? DemoStrings.of(context).live
+          : role == MediaRole.host
+          ? DemoStrings.of(context).startLive
+          : DemoStrings.of(context).meeting,
     );
   }
 
@@ -443,111 +513,130 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _openMeeting(RealtimeRoom realtimeRoom) async {
+  Future<void> _openMeeting(
+    RealtimeConnection connection, {
+    required MediaLocalPreviewSettings initialMediaSettings,
+  }) async {
+    final realtimeRoom = connection.mediaRoom!;
     if (!mounted) {
-      await realtimeRoom.dispose();
+      await connection.dispose();
       return;
     }
 
     try {
       await Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => MeetingRoomPage(room: realtimeRoom)),
+        MaterialPageRoute(
+          builder: (_) => MeetingRoomPage(
+            room: realtimeRoom,
+            initialMediaSettings: initialMediaSettings,
+          ),
+        ),
       );
     } finally {
-      await realtimeRoom.dispose();
+      await connection.dispose();
     }
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Colors.transparent,
-    body: RealtimeAmbientBackground(
-      child: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isWide = constraints.maxWidth > 640;
-            final contentWidth = isWide ? 560.0 : constraints.maxWidth;
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
-            return Center(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isWide ? 24 : 16,
-                  vertical: 20,
-                ),
-                child: SizedBox(
-                  width: contentWidth,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildTopBar(),
-                      const SizedBox(height: 4),
-                      _buildHeader(),
-                      const SizedBox(height: 12),
-                      AnimatedBuilder(
-                        animation: _demoTabs,
-                        builder: (context, _) => _buildStatusCapsule(),
-                      ),
-                      const SizedBox(height: 18),
-                      _buildDemoTabsCard(),
-                      const SizedBox(height: 16),
-                      AnimatedBuilder(
-                        animation: _demoTabs,
-                        builder: (context, _) => Stack(
-                          children: [
-                            Offstage(
-                              offstage: _demoTabs.index != 0,
-                              child: _buildActionTabsCard(),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      resizeToAvoidBottomInset: false,
+      body: RealtimeAmbientBackground(
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 640;
+              final contentWidth = isWide ? 560.0 : constraints.maxWidth;
+
+              return Center(
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.only(
+                    left: isWide ? 24 : 16,
+                    right: isWide ? 24 : 16,
+                    top: 20,
+                    bottom: 20 + bottomInset,
+                  ),
+                  child: SizedBox(
+                    width: contentWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        RepaintBoundary(child: _buildTopBar()),
+                        const SizedBox(height: 4),
+                        RepaintBoundary(child: _buildHeader()),
+                        const SizedBox(height: 12),
+                        const SizedBox(height: 18),
+                        RepaintBoundary(child: _buildDemoTabsCard()),
+                        const SizedBox(height: 16),
+                        AnimatedBuilder(
+                          animation: _demoTabs,
+                          builder: (context, _) => RepaintBoundary(
+                            child: Stack(
+                              children: [
+                                Offstage(
+                                  offstage: _demoTabs.index != 0,
+                                  child: _buildActionTabsCard(),
+                                ),
+                                Offstage(
+                                  offstage: _demoTabs.index != 1,
+                                  child: FutureBuilder<String>(
+                                    future: _deviceIdFuture,
+                                    builder: (context, snapshot) {
+                                      if (!snapshot.hasData) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return StandaloneChatDemoPage(
+                                        backendUrl: _server,
+                                        realtime: _newRealtime(),
+                                        userId: snapshot.data!,
+                                        displayName:
+                                            _displayNameController.text
+                                                .trim()
+                                                .isEmpty
+                                            ? _defaultDisplayName(
+                                                snapshot.data!,
+                                              )
+                                            : _displayNameController.text
+                                                  .trim(),
+                                        embedded: true,
+                                        visible: _demoTabs.index == 1,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
-                            Offstage(
-                              offstage: _demoTabs.index != 1,
-                              child: FutureBuilder<String>(
-                                future: _deviceIdFuture,
-                                builder: (context, snapshot) {
-                                  if (!snapshot.hasData) {
-                                    return const SizedBox.shrink();
-                                  }
-                                  return StandaloneChatDemoPage(
-                                    backendUrl: _server,
-                                    sdk: _newRealtimeSdk(),
-                                    userId: snapshot.data!,
-                                    displayName:
-                                        _displayNameController.text
-                                            .trim()
-                                            .isEmpty
-                                        ? _defaultDisplayName(snapshot.data!)
-                                        : _displayNameController.text.trim(),
-                                    embedded: true,
-                                    visible: _demoTabs.index == 1,
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                      AnimatedBuilder(
-                        animation: _demoTabs,
-                        builder: (context, _) {
-                          if (_demoTabs.index != 0 ||
-                              (_error == null && _formError == null)) {
-                            return const SizedBox.shrink();
-                          }
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 16),
-                            child: _buildErrorBanner(),
-                          );
-                        },
-                      ),
-                    ],
+                        AnimatedBuilder(
+                          animation: _demoTabs,
+                          builder: (context, _) {
+                            if (_demoTabs.index != 0 ||
+                                (_error == null && _formError == null)) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: _buildErrorBanner(),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _buildTopBar() {
     final strings = DemoStrings.of(context);
@@ -600,115 +689,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             child: Text(strings.chinese),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildStatusCapsule() {
-    final strings = DemoStrings.of(context);
-    final providersSummary = strings.providerSummary(
-      chatTab: _demoTabs.index == 1,
-      mediaProvider: _serverMediaProviderId == null
-          ? null
-          : mediaProviderDisplayName(_serverMediaProviderId!),
-      chatProvider: _serverChatProviderId == null
-          ? null
-          : strings.chatProviderDisplayName(_serverChatProviderId!),
-    );
-    final statusText = _server.isEmpty
-        ? strings.unconfigured
-        : _testingServer
-        ? strings.checking
-        : _serverOnline == true &&
-              _serverProviderInfo != 'Reachable (health unavailable)' &&
-              providersSummary.isNotEmpty
-        ? providersSummary
-        : strings.backendStatus(_serverProviderInfo, checkingNow: false);
-    final isOnline = _serverOnline == true;
-    final isOffline = _serverOnline == false;
-    final statusColor = _testingServer
-        ? RealtimeUiTokens.primary
-        : isOnline
-        ? RealtimeUiTokens.success
-        : isOffline
-        ? RealtimeUiTokens.danger
-        : const Color(0xFF94A3B8);
-
-    final displayName = _displayNameController.text.trim().isNotEmpty
-        ? _displayNameController.text.trim()
-        : '...';
-
-    return Center(
-      child: RealtimeGlassPressable(
-        onTap: _showServerAndIdentitySheet,
-        child: RealtimeGlassSurface(
-          radius: RealtimeUiTokens.pillRadius,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          opacity: 0.88,
-          borderColor: isOffline
-              ? RealtimeUiTokens.dangerBorder
-              : RealtimeUiTokens.border,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  statusText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700,
-                    color: isOffline
-                        ? RealtimeUiTokens.danger
-                        : RealtimeUiTokens.text,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Container(
-                width: 1,
-                height: 12,
-                color: RealtimeUiTokens.borderStrong,
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Icons.person_outline_rounded,
-                size: 14,
-                color: RealtimeUiTokens.textMuted,
-              ),
-              const SizedBox(width: 4),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 140),
-                child: Text(
-                  displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: RealtimeUiTokens.text,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(
-                Icons.tune_rounded,
-                size: 14,
-                color: RealtimeUiTokens.textMuted,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -810,57 +790,60 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 580),
-              child: RealtimeGlassSurface(
-                radius: RealtimeUiTokens.sheetRadius,
-                opacity: 0.94,
-                blur: RealtimeUiTokens.blur,
-                padding: EdgeInsets.fromLTRB(18, 14, 18, bottomInset + 16),
-                child: SafeArea(
-                  top: false,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.tune_rounded,
-                              size: 20,
-                              color: RealtimeUiTokens.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                DemoStrings.of(
-                                  context,
-                                ).serverAndIdentitySettings,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: RealtimeUiTokens.text,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: bottomInset),
+                child: RealtimeGlassSurface(
+                  radius: RealtimeUiTokens.sheetRadius,
+                  opacity: 0.94,
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                  child: SafeArea(
+                    top: false,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.tune_rounded,
+                                size: 20,
+                                color: RealtimeUiTokens.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  DemoStrings.of(
+                                    context,
+                                  ).serverAndIdentitySettings,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: RealtimeUiTokens.text,
+                                  ),
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              icon: const Icon(
-                                Icons.close_rounded,
-                                color: RealtimeUiTokens.textMuted,
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.close_rounded,
+                                  color: RealtimeUiTokens.textMuted,
+                                ),
+                                onPressed: () =>
+                                    Navigator.of(sheetContext).pop(),
                               ),
-                              onPressed: () => Navigator.of(sheetContext).pop(),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        _buildServerSettingsSection(setSheetState),
-                        const SizedBox(height: 12),
-                        _buildIdentitySettingsSection(setSheetState),
-                        const SizedBox(height: 16),
-                        RealtimeGlassButton(
-                          onPressed: () => Navigator.of(sheetContext).pop(),
-                          child: Text(DemoStrings.of(context).done),
-                        ),
-                      ],
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          _buildServerSettingsSection(setSheetState),
+                          const SizedBox(height: 12),
+                          _buildIdentitySettingsSection(setSheetState),
+                          const SizedBox(height: 16),
+                          RealtimeGlassButton(
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            child: Text(DemoStrings.of(context).done),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1189,7 +1172,8 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             ),
             tabs: [
               Tab(text: DemoStrings.of(context).joinRoomTab),
-              Tab(text: DemoStrings.of(context).createRoomTab),
+              Tab(text: DemoStrings.of(context).createMeeting),
+              Tab(text: DemoStrings.of(context).startLive),
             ],
           ),
         ),
@@ -1197,33 +1181,38 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
         AnimatedBuilder(
           animation: _roomTabs,
           builder: (context, _) {
-            final isJoin = _roomTabs.index == 0;
-            return AnimatedSize(
-              duration: RealtimeUiTokens.animNormal,
-              curve: Curves.easeOutCubic,
-              child: isJoin
-                  ? Column(
-                      key: const ValueKey('join-tab-content'),
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _roomForm(
-                          code: _joinCodeController,
-                          codeLabel: DemoStrings.of(context).roomCode,
-                          actionLabel: DemoStrings.of(context).joinRoom,
-                          action: _joinRoom,
-                          isCreate: false,
-                        ),
-                        const SizedBox(height: 22),
-                        _buildAvailableRooms(),
-                      ],
-                    )
-                  : _roomForm(
-                      code: _createCodeController,
-                      codeLabel: DemoStrings.of(context).optionalRoomCode,
-                      actionLabel: DemoStrings.of(context).createAndJoin,
-                      action: _createRoom,
-                      isCreate: true,
-                    ),
+            final tab = _roomTabs.index;
+            if (tab == 0) {
+              return Column(
+                key: const ValueKey('join-tab-content'),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _roomForm(
+                    code: _joinCodeController,
+                    codeLabel: DemoStrings.of(context).roomCode,
+                    actionLabel: DemoStrings.of(context).joinRoom,
+                    action: _joinRoom,
+                    isCreate: false,
+                  ),
+                  const SizedBox(height: 22),
+                  _buildAvailableRooms(),
+                ],
+              );
+            }
+            final live = tab == 2;
+            return _roomForm(
+              code: _createCodeController,
+              codeLabel: DemoStrings.of(context).optionalRoomCode,
+              actionLabel: live
+                  ? DemoStrings.of(context).startLive
+                  : DemoStrings.of(context).createMeeting,
+              action: () {
+                _createRoomMode = live
+                    ? MediaRoomMode.broadcast
+                    : MediaRoomMode.meeting;
+                return _createRoom();
+              },
+              isCreate: true,
             );
           },
         ),
@@ -1262,24 +1251,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                 onTap: _pasteJoinCode,
               ),
       ),
-      if (isCreate) ...[
-        const SizedBox(height: 14),
-        Text(
-          DemoStrings.of(context).roomType,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: RealtimeUiTokens.text,
-          ),
-        ),
-        const SizedBox(height: 8),
-        RealtimeModeSelector(
-          selectedMode: _createRoomMode,
-          onChanged: _busy
-              ? null
-              : (mode) => setState(() => _createRoomMode = mode),
-        ),
-      ],
       const SizedBox(height: 18),
       RealtimeGlassButton(
         onPressed: _busy ? null : action,
@@ -1418,89 +1389,21 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
 /// Demo room view driven entirely by the room and capability objects returned
 /// by the high-level SDK.
 class MeetingRoomPage extends StatelessWidget {
-  const MeetingRoomPage({super.key, required this.room});
+  const MeetingRoomPage({
+    super.key,
+    required this.room,
+    required this.initialMediaSettings,
+  });
 
   final RealtimeRoom room;
+  final MediaLocalPreviewSettings initialMediaSettings;
 
   @override
   Widget build(BuildContext context) => RealtimeRoomView(
     room: room,
-    config: const MediaRoomViewConfig(showChat: true),
-    header: _RoomCapabilitiesSummary(room: room),
+    config: MediaRoomViewConfig(
+      showChat: true,
+      initialMediaSettings: initialMediaSettings,
+    ),
   );
-}
-
-class _RoomCapabilitiesSummary extends StatelessWidget {
-  const _RoomCapabilitiesSummary({required this.room});
-
-  final RealtimeRoom room;
-
-  @override
-  Widget build(BuildContext context) {
-    final isZh = Localizations.localeOf(context).languageCode == 'zh';
-    final capabilities = room.capabilities;
-    final media = capabilities.media;
-    final chat = capabilities.chat;
-    final labels = <(String, bool)>[
-      (isZh ? '发布音频' : 'Publish audio', media.canPublishAudio),
-      (isZh ? '发布视频' : 'Publish video', media.canPublishVideo),
-      (isZh ? '切换摄像头' : 'Switch camera', media.canSwitchCamera),
-      (isZh ? '屏幕共享' : 'Screen share', media.canScreenShare),
-      (isZh ? '接收视频' : 'Receive video', media.canSubscribeVideo),
-      (isZh ? '发送房间数据' : 'Send room data', media.canSendData),
-      (isZh ? '房间聊天' : 'Room chat', capabilities.canChat),
-      if (room.usesProductChat && chat != null) ...[
-        (isZh ? '产品 Chat' : 'Product Chat', chat.canSendMessage),
-        (isZh ? '加载历史' : 'Load history', chat.canLoadHistory),
-        (isZh ? '删除消息' : 'Delete messages', chat.canDeleteMessage),
-        (isZh ? '移除成员' : 'Remove members', chat.canDisconnectUser),
-      ],
-      if (room.usesRtcDataChat)
-        (
-          isZh ? 'RTC Data Chat' : 'RTC Data Chat',
-          chat?.canSendMessage == true,
-        ),
-    ];
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-      ),
-      child: ExpansionTile(
-        dense: true,
-        title: Text(isZh ? '当前房间能力' : 'Current room capabilities'),
-        subtitle: Text(
-          isZh
-              ? '音频 ${_yesNo(isZh, media.canPublishAudio)} · 视频 ${_yesNo(isZh, media.canPublishVideo)} · 聊天 ${_yesNo(isZh, capabilities.canChat)}'
-              : 'Audio ${_yesNo(isZh, media.canPublishAudio)} · Video ${_yesNo(isZh, media.canPublishVideo)} · Chat ${_yesNo(isZh, capabilities.canChat)}',
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final (label, supported) in labels)
-                Chip(
-                  avatar: Icon(
-                    supported ? Icons.check_circle_outline : Icons.block,
-                    size: 17,
-                    color: supported
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).colorScheme.outline,
-                  ),
-                  label: Text(label),
-                  visualDensity: VisualDensity.compact,
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _yesNo(bool isZh, bool value) =>
-      isZh ? (value ? '支持' : '不支持') : (value ? 'yes' : 'no');
 }

@@ -3,12 +3,17 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 
 import 'livekit_join_info.dart';
+import 'livekit_local_preview.dart';
 import 'livekit_media_session.dart';
 
 typedef LiveKitDeviceCountLoader = Future<int> Function();
 
 /// Registers LiveKit as a provider for [MediaClient].
-class LiveKitSessionFactory implements MediaSessionFactory, MediaPreJoinProbe {
+class LiveKitSessionFactory
+    implements
+        MediaSessionFactory,
+        MediaPreJoinProbe,
+        MediaLocalPreviewFactory {
   const LiveKitSessionFactory({
     @visibleForTesting this.audioInputCountLoader,
     @visibleForTesting this.videoInputCountLoader,
@@ -49,6 +54,11 @@ class LiveKitSessionFactory implements MediaSessionFactory, MediaPreJoinProbe {
       MediaRole.viewer => LiveKitViewerSession(),
     };
   }
+
+  @override
+  Future<MediaLocalPreviewSession> createLocalPreview({
+    required MediaRole role,
+  }) => LiveKitLocalPreviewSession.create(role: role);
 
   @override
   Future<MediaPreJoinProbeResult> runPreJoinProbe(

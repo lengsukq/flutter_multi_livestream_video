@@ -1,24 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
-/// Minimal application-facing flow using the simplified facade.
-Future<void> openMinimalRealtimeRoom({
+/// Advanced API example for applications that need direct [RealtimeSdk]
+/// orchestration rather than the simplified [Realtime] facade.
+Future<void> openAdvancedRealtimeRoom({
   required BuildContext context,
-  required Realtime realtime,
+  required RealtimeSdk sdk,
   required String roomCode,
   required String participantId,
   required String displayName,
 }) async {
-  final connection = await realtime.open(
-    RealtimeRequest.join(
-      type: RealtimeExperience.meeting,
-      roomCode: roomCode,
-      user: RealtimeUser(id: participantId, name: displayName),
-    ),
+  final room = await sdk.joinRoom(
+    roomCode: roomCode,
+    user: MediaIdentity(userId: participantId, displayName: displayName),
   );
-  final room = connection.mediaRoom!;
   if (!context.mounted) {
-    await connection.dispose();
+    await room.dispose();
     return;
   }
 
@@ -32,6 +29,6 @@ Future<void> openMinimalRealtimeRoom({
       ),
     );
   } finally {
-    await connection.dispose();
+    await room.dispose();
   }
 }
