@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
@@ -29,6 +30,41 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await chat.dispose();
   });
+
+  testWidgets(
+    'standalone chat with showAppBar integrates back button and handles Enter to send',
+    (tester) async {
+      final chat = _FakeChatSession();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RealtimeChatView(
+            session: chat,
+            roomCode: 'room-1',
+            showAppBar: true,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Verify back button in glass header and no duplicate app bar
+      expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+      expect(find.byType(AppBar), findsNothing);
+
+      // Enter message
+      await tester.enterText(find.byType(TextField), 'Hello World');
+      await tester.pump();
+
+      // Press Enter to send
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      expect(chat.sentMessages, contains('Hello World'));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await chat.dispose();
+    },
+  );
 
   testWidgets('standalone host can open capability-driven member management', (
     tester,
@@ -72,6 +108,7 @@ void main() {
         home: MediaRoomView(
           room: fixture.room,
           renderer: const _FakeRenderer(),
+          header: const Text('Current room capabilities'),
           config: const MediaRoomViewConfig(confirmBeforeLeave: false),
         ),
       ),
@@ -80,6 +117,7 @@ void main() {
 
     expect(find.text('现在只有你一个人'), findsOneWidget);
     expect(find.text('分享房间码即可邀请其他人加入'), findsOneWidget);
+    expect(find.text('Current room capabilities'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await fixture.dispose();
@@ -684,8 +722,12 @@ class _FakeChatSession implements ChatSession, ChatSessionIdentity {
     ChatCredentialProvider? credentialProvider,
   }) async {}
 
+  final List<String> sentMessages = [];
+
   @override
-  Future<void> sendMessage(String message) async {}
+  Future<void> sendMessage(String message) async {
+    sentMessages.add(message);
+  }
 
   void emitIncomingMessage(ChatMessage message) {
     _messages.add(message);

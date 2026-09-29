@@ -67,12 +67,24 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                 margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 14,
+                  vertical: 12,
                 ),
                 radius: RealtimeUiTokens.cardRadius,
                 opacity: .86,
                 child: Row(
                   children: [
+                    if (widget.showAppBar) ...[
+                      RealtimeGlassIconButton(
+                        tooltip: MaterialLocalizations.of(
+                          context,
+                        ).backButtonTooltip,
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: Icons.arrow_back_rounded,
+                        size: 40,
+                        radius: RealtimeUiTokens.compactRadius,
+                      ),
+                      const SizedBox(width: 10),
+                    ],
                     Container(
                       width: 42,
                       height: 42,
@@ -133,6 +145,8 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                               strings.chatConnectionState(state.name),
                               strings.messageCount(messages.length),
                             ].join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: RealtimeUiTokens.textMuted),
                           ),
@@ -333,14 +347,9 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
     return widget.showAppBar
         ? Scaffold(
             backgroundColor: Colors.transparent,
-            extendBodyBehindAppBar: false,
-            appBar: AppBar(
-              title: Text(resolvedTitle),
-              backgroundColor: Colors.white.withValues(alpha: .78),
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
+            body: RealtimeAmbientBackground(
+              child: SafeArea(child: body),
             ),
-            body: RealtimeAmbientBackground(child: body),
           )
         : body;
   }
@@ -412,30 +421,47 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
         child: Row(
           children: <Widget>[
             Expanded(
-              child: TextField(
-                controller: _message,
-                enabled: enabled,
-                minLines: 1,
-                maxLines: 4,
-                onSubmitted: enabled ? (_) => unawaited(_send()) : null,
-                decoration: InputDecoration(
-                  hintText: enabled
-                      ? strings.messageHint
-                      : strings.chatState(state.name),
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: .82),
-                  border: border,
-                  enabledBorder: border,
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(
-                      RealtimeUiTokens.controlRadius,
+              child: Focus(
+                onKeyEvent: (node, event) {
+                  if (event is KeyDownEvent &&
+                      event.logicalKey == LogicalKeyboardKey.enter &&
+                      !HardwareKeyboard.instance.isShiftPressed &&
+                      !HardwareKeyboard.instance.isControlPressed &&
+                      !HardwareKeyboard.instance.isMetaPressed &&
+                      !HardwareKeyboard.instance.isAltPressed) {
+                    if (enabled) {
+                      unawaited(_send());
+                      return KeyEventResult.handled;
+                    }
+                  }
+                  return KeyEventResult.ignored;
+                },
+                child: TextField(
+                  controller: _message,
+                  enabled: enabled,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: enabled ? (_) => unawaited(_send()) : null,
+                  decoration: InputDecoration(
+                    hintText: enabled
+                        ? strings.messageHint
+                        : strings.chatState(state.name),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: .82),
+                    border: border,
+                    enabledBorder: border,
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(
+                        RealtimeUiTokens.controlRadius,
+                      ),
+                      borderSide: const BorderSide(
+                        color: RealtimeUiTokens.primary,
+                        width: 1.5,
+                      ),
                     ),
-                    borderSide: const BorderSide(
-                      color: RealtimeUiTokens.primary,
-                      width: 1.5,
-                    ),
+                    isDense: true,
                   ),
-                  isDense: true,
                 ),
               ),
             ),

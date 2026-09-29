@@ -39,6 +39,7 @@ class MediaRoomView extends StatefulWidget {
     this.chatSession,
     this.chatModeration,
     this.config = const MediaRoomViewConfig(),
+    this.header,
     this.participantBuilder,
     this.onLeave,
   });
@@ -47,6 +48,7 @@ class MediaRoomView extends StatefulWidget {
   final ChatSession? chatSession;
   final ChatModeration? chatModeration;
   final MediaRoomViewConfig config;
+  final Widget? header;
   final MediaParticipantBuilder? participantBuilder;
   final VoidCallback? onLeave;
   @override
@@ -491,6 +493,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                 return Column(
                   children: [
                     _topBar(value, compact: compact),
+                    if (widget.header != null) widget.header!,
                     if (_error != null) _errorView(),
                     Expanded(
                       child: wide
