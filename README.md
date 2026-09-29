@@ -28,11 +28,38 @@ need provider-name branches. Meeting/Live room owners can list logical
 participants, remove them when the selected provider has a real enforcement
 API, and close the room. Product Chat keeps its own moderation domain:
 IVS Chat currently exposes client-enforced message deletion and user
-disconnection for host credentials, while standalone rooms also expose
-authenticated member listing and room close through the reference control
-plane. Mute, ban, role changes, and similar operations stay explicitly
-unsupported until an adapter can enforce them; the SDK does not emulate them
-with advisory data messages.
+disconnection for host credentials. Tencent Chat and Agora Chat also have
+vendor client moderation APIs, but the reference Demo does not pretend that a
+normal member token is an owner/admin token; with the Demo credentials those
+actions therefore fall back to the reference control plane. Applications that
+provision real provider owner/admin credentials can advertise client execution
+through the same typed capability model. Mute, ban, role changes, and similar
+operations stay explicitly unsupported unless the selected adapter can
+actually enforce them. The SDK never emulates privileged operations with
+advisory data messages.
+
+### Lightweight UI localization
+
+The built-in Flutter UI keeps localization intentionally lightweight. It
+currently ships English and Simplified Chinese strings for Meeting/Live,
+Product Chat, Pre-Join, and management surfaces. Core, provider adapters, and
+backend contracts remain language-neutral.
+
+The UI follows the host application's locale. Wire the exported delegates and
+supported locales into your app:
+
+\`\`\`dart
+MaterialApp(
+  supportedLocales: RealtimeStrings.supportedLocales,
+  localizationsDelegates: RealtimeStrings.localizationsDelegates,
+  home: RealtimeRoomView(room: room),
+);
+\`\`\`
+
+Set \`MaterialApp.locale\` when you want to override the system locale. The
+repository example includes a small English/中文 switcher. The demo-server
+Dashboard also supports English / 简体中文, follows the browser language on
+first visit, and persists the selected language locally.
 
 ## Core philosophy
 
@@ -102,9 +129,9 @@ existing Chime-only applications and is kept backward compatible.
 | `flutter_realtime_media_artc` | Optional Alibaba Cloud ARTC RTC + host/viewer adapter | Implemented; real-device E2E optional |
 | `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + host/viewer adapter | Android/iOS implemented |
 | `flutter_realtime_chat_core` | Provider-neutral product chat client/session contract | Implemented |
-| `flutter_realtime_chat_ivs` | Amazon IVS Chat adapter | Android/iOS implemented |
+| `flutter_realtime_chat_ivs` | Amazon IVS Chat adapter | Android/iOS/Web implemented |
 | `flutter_realtime_chat_tencent` | Tencent Cloud Chat adapter | Implemented; SDK-backed multi-platform adapter |
-| `flutter_realtime_chat_agora` | Agora Chat adapter | Android/iOS implemented |
+| `flutter_realtime_chat_agora` | Agora Chat adapter | Android/iOS/macOS/Web implemented |
 | `flutter_realtime_chat_rtc` | Adapts bidirectional RTC data to `ChatSession` when no product Chat Provider is bound | Implemented |
 | `flutter_aws_chime` | Existing standalone Chime v3 Flutter plugin | Maintained for compatibility |
 
@@ -612,7 +639,11 @@ for the broader roadmap.
 Flutter Realtime Media 是一个面向 Flutter 的多 Provider 实时音视频 SDK
 架构，用于多人实时音视频通信和一对多直播。
 
-Flutter App 统一依赖 Core 接口，房间实际使用哪一家媒体服务由业务后端决定。
+Flutter App 统一依赖 Core 接口。SDK 采用 **client-first、backend-when-required**
+的管理模型：供应商客户端 SDK 能安全执行的踢人、删消息等操作直接由对应 Flutter
+Adapter 调用；只有 Token 签发、供应商要求服务端管理员权限的操作，才通过可选
+Backend Contract 执行。仓库的 `demo-server` 是参考控制面，不是 SDK 的强制运行依赖。
+房间实际使用哪一家媒体服务可由业务后端决定。
 各供应商 SDK 通过独立 Adapter 接入，因此业务 UI 不需要绑定 LiveKit、Chime
 或未来其他供应商的具体实现。
 
@@ -622,6 +653,17 @@ Live 自动使用 Amazon IVS Real-Time**。产品聊天是独立 Provider 轴，
 当前已通过 Chat Core 接入 **Amazon IVS Chat**、**Tencent Cloud Chat** 和
 **Agora Chat**。原有
 `flutter_aws_chime` v3 包继续保留，供已有 Chime-only 项目兼容使用。
+
+### 轻量 UI 国际化
+
+SDK 内置 Flutter UI 目前提供 English 与简体中文两套文案，覆盖 Meeting / Live、
+产品 Chat、Pre-Join 和管理界面。Core、Provider Adapter 与后端协议保持语言无关。
+
+宿主 App 使用 `RealtimeStrings.supportedLocales` 和
+`RealtimeStrings.localizationsDelegates` 接入 MaterialApp。默认跟随系统语言；
+需要手动切换时直接设置 `MaterialApp.locale`。仓库 Example 提供 English / 中文
+切换示例并保存选择。Demo Server Dashboard 同样支持 English / 简体中文，
+首次跟随浏览器语言，并在浏览器本地保存当前选择。
 
 ## 包结构
 
@@ -635,9 +677,9 @@ Live 自动使用 Amazon IVS Real-Time**。产品聊天是独立 Provider 轴，
 | `flutter_realtime_media_artc` | 可选的阿里云 ARTC RTC + Host/Viewer Adapter | 已实现；真实设备 E2E 可选 |
 | `flutter_realtime_media_ivs` | Amazon IVS Real-Time Stage + Host/Viewer Adapter | Android/iOS 已实现 |
 | `flutter_realtime_chat_core` | Provider 无关的产品聊天 Client/Session 契约 | 已实现 |
-| `flutter_realtime_chat_ivs` | Amazon IVS Chat Adapter | Android/iOS 已实现 |
+| `flutter_realtime_chat_ivs` | Amazon IVS Chat Adapter | Android/iOS/Web 已实现 |
 | `flutter_realtime_chat_tencent` | Tencent Cloud Chat Adapter | 已实现；跟随腾讯 Chat SDK 多平台能力 |
-| `flutter_realtime_chat_agora` | Agora Chat Adapter | Android/iOS 已实现 |
+| `flutter_realtime_chat_agora` | Agora Chat Adapter | Android/iOS/macOS/Web 已实现 |
 | `flutter_realtime_chat_rtc` | 无独立产品 Chat Provider 时，将完整双向 RTC Data 适配为 `ChatSession` | 已实现 |
 | `flutter_aws_chime` | 原有独立 Chime v3 Flutter 插件 | 兼容维护 |
 
@@ -665,7 +707,7 @@ Meeting 是多人双向音视频；Live / Broadcast 是一对多直播，房主�
 | 音视频供应商 | Meeting | Live / Broadcast | RTC 数据消息 | 屏幕共享 | 房主管理 |
 | --- | --- | --- | --- | --- | --- |
 | LiveKit | 支持 | 支持房主/观众 | 支持，含定向和不可靠发送 | 发布者支持 | 可列出、移除参与者并关闭房间 |
-| AWS Chime | 支持 | 不支持，仅 participant | 支持，单条上限 2 KiB | Adapter 未提供 | 无房主角色 |
+| AWS Chime | 支持 | 不支持，仅 participant | 支持，单条上限 2 KiB | Adapter 未提供 | Meeting 创建者通过逻辑房主凭证管理；列表/关闭走控制面 |
 | Agora | 支持 | 支持房主/观众 | 房主/participant 可发送，单条上限 1 KiB | 暂未实现 | 可列出参与者、关闭房间；不能服务端强制移除 |
 | 腾讯云 TRTC | 支持 | 支持房主/观众 | 房主/participant 可发送，单条上限 1 KiB | Adapter 未提供 | 可列出参与者、关闭房间；不能服务端强制移除 |
 | 阿里云 ARTC | 支持 | 支持房主/观众 | 房主/participant 可发送，单条上限 1 KiB | Adapter 未提供 | 可列出参与者、关闭房间；不能服务端强制移除 |
@@ -673,8 +715,13 @@ Meeting 是多人双向音视频；Live / Broadcast 是一对多直播，房主�
 
 产品聊天是独立于音视频 Provider 的能力。当前支持 Amazon IVS Chat、Tencent Cloud Chat 和 Agora Chat，
 也可以关闭产品聊天；启用时可与上表任意音视频 Provider 配合。三者都通过统一 `ChatSession` 收发实时消息。
-IVS Chat 的房主令牌支持删除消息和断开用户；Tencent/Agora 首版 Adapter 为避免把厂商后台管理权限错误地下放到
-客户端，只暴露安全可验证的消息收发能力，删除/踢人明确返回 unsupported。若房间没有
+Web 端复用共用 Chat runtime，使用本地打包的厂商 JavaScript SDK；Agora 原生端继续使用 Flutter SDK。
+IVS Chat 的房主令牌支持直接在客户端删除消息和断开用户。Tencent Chat 与 Agora Chat
+客户端 SDK 本身也提供房主/管理员管理 API，但参考 Demo 当前签发的是普通成员凭证，
+不会伪装成厂商房主；因此 Demo 中的成员移除会通过后端 REST 管理接口执行。
+自建后端如果确实为用户授予了供应商 owner/admin 权限，可以通过统一 capability
+声明为 `client`，高层 `RealtimeChatModeration` 会优先走 Provider Adapter，
+而不是固定依赖后端。若房间没有
 绑定独立 `chatProvider`，SDK 可在当前 Media Provider 同时具备 `canSendData` 和 `canReceiveData` 时，
 通过 `flutter_realtime_chat_rtc` 将 RTC Data 适配成统一 `ChatSession`。若服务端明确绑定了产品 Chat，
 则始终优先使用独立 Chat，连接失败时也不会偷偷改走 RTC fallback。RTC Data Debug 继续使用

@@ -25,9 +25,9 @@ the internal engine capabilities used by that AWS routing.
 | Pre-Join provider network probe | Unsupported without issued credentials | No native probe | No native probe | No native probe | No native probe | Unsupported without participant token |
 | Network stats | Yes | Not exposed by adapter | Yes | Yes | Not exposed by adapter | Basic RTC stats |
 | Screen share | Yes for publishers | Not exposed by adapter | Deferred | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter |
-| Host participant list | Backend + host role | Not available (no host role) | Backend + host role | Backend + host role | Backend + host role | Backend + host role |
+| Host participant list | Backend + logical owner | Meeting creator via logical owner credential | Backend + logical owner | Backend + logical owner | Backend + logical owner | Backend + logical owner |
 | Host remove participant | LiveKit host | No | No | No | No | IVS DisconnectParticipant |
-| Host close room | Host via backend | Not available (no host role) | Host via backend | Host via backend | Host via backend | Host via backend |
+| Host close room | Host via backend | Meeting creator via control plane | Host via backend | Host via backend | Host via backend | Host via backend |
 
 ## Product chat
 
@@ -39,8 +39,10 @@ It uses `ChatSession` / `ChatCapabilities` from
 | --- | --- | --- | --- | --- |
 | Send message | Yes | Yes | Yes | When media has bidirectional data |
 | Receive live message | Yes | Yes | Yes | Yes |
-| Delete message | Host/moderator token | Not exposed by current adapter | Not exposed by current adapter | No |
-| Disconnect user | Host/moderator token | Not exposed by current adapter | Not exposed by current adapter | No |
+| Delete message | Host/moderator token: client | Demo member credentials do not expose it; custom owner/admin credentials may | Demo member credentials do not expose it; custom owner/admin credentials may | No |
+| Disconnect user | Host/moderator token: client | Demo uses reference control-plane REST; owner/admin credentials may declare client | Demo uses reference control-plane REST; owner/admin credentials may declare client | No |
+| Member list | Demo logical directory | Demo logical directory | Demo logical directory | No management directory |
+| Management execution | Client-first, backend when required | Demo: backend; owner/admin credentials may be client | Demo: backend; owner/admin credentials may be client | Unsupported |
 | Automatic credential refresh | Yes | UserSig refresh | Token refresh | Follows MediaSession |
 | Server history | Service capability; no Core v1 pagination API | Service capability; no Core v1 pagination API | Service capability; no Core v1 pagination API | Current-session memory only |
 | Provider-independent from media | Yes | Yes | Yes | No |
@@ -55,6 +57,13 @@ Raw RTC data remains a media transport feature and a separate Debug/control
 surface. `showRtcDataMessages` does not inject raw payloads into Chat. The RTC
 fallback keeps only current-session history and provides no server-side history
 or moderation. Chat capability is independent from audio/video publish rights.
+
+Privileged operations use typed `ChatManagementExecution` values:
+`client`, `backend`, `hybrid`, or `unsupported`. The high-level
+`RealtimeChatModeration` prefers enforceable provider-client operations and
+only falls back to an optional control plane when the vendor security model
+requires a server-side admin API. Applications therefore do not branch on
+provider ids and never need long-lived provider secrets in the Flutter app.
 
 ## Provider-neutral APIs
 

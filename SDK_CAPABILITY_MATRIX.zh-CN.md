@@ -23,9 +23,9 @@ AWS 对外统一展示为一个 Vendor，内部按模式路由：`Meeting -> Chi
 | 加入前 Provider 网络探测 | 需要房间凭证时不支持 | 无 | 无 | 无 | 无 | 需要参与者令牌时不支持 |
 | 网络统计 | 支持 | Adapter 未提供 | 支持 | 支持 | Adapter 未提供 | 基础 RTC 统计 |
 | 屏幕共享 | 发布者支持 | Adapter 未提供 | 暂未实现 | Adapter 未提供 | Adapter 未提供 | Adapter 未提供 |
-| 房主查看参与者列表 | 后端验证房主角色 | 无房主角色 | 后端验证房主角色 | 后端验证房主角色 | 后端验证房主角色 | 后端验证房主角色 |
+| 房主查看参与者列表 | 后端验证逻辑房主 | Meeting 创建者通过逻辑房主凭证 | 后端验证逻辑房主 | 后端验证逻辑房主 | 后端验证逻辑房主 | 后端验证逻辑房主 |
 | 房主移除参与者 | 支持 | 不支持 | 不支持 | 不支持 | 不支持 | 通过 IVS `DisconnectParticipant` |
-| 房主关闭房间 | 后端支持 | 无房主角色 | 后端支持 | 后端支持 | 后端支持 | 后端支持 |
+| 房主关闭房间 | 后端支持 | Meeting 创建者通过控制面关闭 | 后端支持 | 后端支持 | 后端支持 | 后端支持 |
 
 Meeting 是多人双向音视频模式。Broadcast 是一对多直播模式：房主发布音视频，观众订阅观看。
 Chime 当前只提供 participant 角色，不支持房主/观众直播角色。
@@ -39,8 +39,10 @@ Chime 当前只提供 participant 角色，不支持房主/观众直播角色。
 | --- | --- | --- | --- | --- |
 | 发送消息 | 支持 | 支持 | 支持 | Media 同时支持双向 Data 时支持 |
 | 接收实时消息 | 支持 | 支持 | 支持 | 支持 |
-| 删除消息 | 房主/管理员令牌支持 | 当前 Adapter 不开放 | 当前 Adapter 不开放 | 不支持 |
-| 断开用户 | 房主/管理员令牌支持 | 当前 Adapter 不开放 | 当前 Adapter 不开放 | 不支持 |
+| 删除消息 | 房主/管理员令牌：客户端执行 | Demo 普通成员凭证不开放；可由自建 owner/admin 凭证扩展 | Demo 普通成员凭证不开放；可由自建 owner/admin 凭证扩展 | 不支持 |
+| 断开用户 | 房主/管理员令牌：客户端执行 | Demo 走参考控制面 REST；供应商 owner/admin 凭证可声明 client | Demo 走参考控制面 REST；供应商 owner/admin 凭证可声明 client | 不支持 |
+| 成员列表 | Demo 控制面逻辑成员列表 | Demo 控制面逻辑成员列表 | Demo 控制面逻辑成员列表 | 不提供管理目录 |
+| 管理执行策略 | client 优先，必要时 backend | 当前 Demo 为 backend；真实 owner/admin 凭证可 client | 当前 Demo 为 backend；真实 owner/admin 凭证可 client | unsupported |
 | 重连时自动刷新凭证 | 支持 | 支持 UserSig 刷新 | 支持 Token 刷新 | 跟随 MediaSession |
 | 服务端消息历史 | IVS Chat 服务能力；Core v1 未提供历史分页 | Tencent Chat 服务能力；Core v1 未提供历史分页 | Agora Chat 服务能力；Core v1 未提供历史分页 | 仅当前会话内存 |
 | 是否依赖音视频 Provider | 否，可独立选择 | 否，可独立选择 | 否，可独立选择 | 是 |
@@ -53,6 +55,11 @@ RTC 数据发送和接收，`flutter_realtime_chat_rtc` 才会创建会话级 fa
 原始 RTC Data 仍是独立的媒体传输/Debug 能力；`showRtcDataMessages` 不会把调试负载
 注入 Chat 消息列表。RTC fallback 只保留当前会话内消息，没有服务端历史或管理员能力。
 聊天能力与麦克风/摄像头发布权限完全独立。
+
+管理能力通过 `ChatManagementExecution` 明确标记为 `client`、`backend`、
+`hybrid` 或 `unsupported`。高层 `RealtimeChatModeration` 优先执行
+Provider 客户端能力，只有供应商权限模型确实要求服务端管理员 API 时才回退到可选
+control-plane。因此使用者不需要按 Provider 写分支，也不需要为了管理能力把长期密钥下发到 App。
 
 ## Provider 无关 API
 

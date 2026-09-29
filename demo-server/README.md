@@ -51,6 +51,11 @@ Dashboard:
 http://localhost:3000/
 ```
 
+The dashboard supports Simplified Chinese and English. It follows the browser
+language on first visit, and remembers the selected language in that browser.
+API error messages follow the request's `Accept-Language` header; error codes
+remain language-neutral.
+
 Switching the dashboard provider affects **new rooms only**. Existing room
 codes stay bound to the provider that originally created them.
 
@@ -151,21 +156,41 @@ Current SDK heartbeats include `participantId`. The demo tracks a per-participan
 last-seen timestamp and removes stale logical participants from discovery/admin
 counts while keeping empty-body room heartbeats compatible with older clients.
 
-For broadcast rooms the reference server also exposes optional host-management
-routes: `POST /rooms/:code/participants`,
+The reference server also exposes optional logical-owner management routes for
+Meeting and Live rooms: `POST /rooms/:code/participants`,
 `POST /rooms/:code/participants/remove`, and
-`POST /rooms/:code/close`. Participant listing is sanitized and never returns
-stable user/device ids or provider credentials. Native participant removal is
-currently implemented for LiveKit, and LiveKit room close uses RoomService
-`DeleteRoom` so connected participants are actually disconnected. Other
-providers return
-`unsupported-feature` instead of pretending a local list deletion kicked a
-remote RTC client.
+`POST /rooms/:code/close`. Meeting creators keep the provider-native
+`participant` media role but receive a separate `roomOwnerCredential`; this
+credential authorizes logical room management without inventing a provider host
+role. Participant listing returns the stable logical `userId`, display name,
+participant id, and role needed by the SDK to merge Media and Chat membership,
+but never returns device ids, provider secrets, or long-lived credentials.
+Server-enforced participant removal is currently available for providers whose
+adapter exposes a real moderation API (for example LiveKit and IVS Real-Time).
+Unsupported providers return `unsupported-feature` instead of pretending a
+local list deletion kicked a remote RTC client.
 
-Because this Demo intentionally has no account system, its
-`requesterParticipantId` host check is demonstration-level authorization, not
-a production security boundary. A real backend should bind these operations to
-its authenticated user/session and independently authorize the host action.
+Management in the Flutter SDK is **client-first, backend-when-required**.
+Provider adapters may advertise a management operation as `client`,
+`backend`, `hybrid`, or `unsupported`. If the provider SDK can safely
+enforce the action with the user's short-lived credentials, Flutter calls it
+directly. This demo server only handles token issuance, logical room
+authorization, and operations that genuinely require a trusted provider admin
+API.
+
+Standalone Chat has matching host routes for member listing, member removal,
+and room close. Attached Chat exposes the same operations under
+`/rooms/:code/chat/*`. Amazon IVS Chat host tokens can enforce disconnect
+directly in the client; Tencent Chat and Agora Chat in this demo use ordinary
+member credentials, so member removal falls back to their server-side REST
+admin APIs. A production backend that grants real provider owner/admin
+credentials can advertise client execution through the same capability model.
+
+Because this Demo intentionally has no account system, participant credentials
+plus the logical `roomOwnerCredential` are demonstration-level authorization,
+not a production account security boundary. A real backend should bind these
+operations to its authenticated user/session and independently authorize every
+privileged action.
 
 ## Public Vercel deployment
 
