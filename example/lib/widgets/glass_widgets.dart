@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 /// Thin adapter forwarding to the SDK's built-in [RealtimeGlassSurface].
 class GlassContainer extends StatelessWidget {

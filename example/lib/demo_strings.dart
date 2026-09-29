@@ -50,6 +50,9 @@ class DemoStrings {
       ? '创建者为主播，其他设备以观众身份加入。'
       : 'The creator is the host; other devices join as viewers.';
   String get availableRooms => isZh ? '可加入的房间' : 'Available rooms';
+  String get availableChatRooms => isZh ? '可加入的聊天室' : 'Available chat rooms';
+  String get noActiveChatRooms =>
+      isZh ? '当前没有可加入的聊天室。' : 'No active chat rooms found.';
   String get refresh => isZh ? '刷新' : 'Refresh';
   String get noActiveRooms => isZh ? '当前没有正在进行的房间。' : 'No active rooms found.';
   String get join => isZh ? '加入' : 'Join';
@@ -59,6 +62,46 @@ class DemoStrings {
   String get invalidRoomCode => isZh
       ? '房间码必须为 4–12 位字母或数字。'
       : 'Room code must be 4–12 letters or digits.';
+
+  String get settings => isZh ? '设置' : 'Settings';
+  String get serverAndIdentity => isZh ? '环境与身份' : 'Environment & Identity';
+  String get serverAndIdentitySettings =>
+      isZh ? '服务与身份配置' : 'Server & Identity Settings';
+  String get done => isZh ? '完成' : 'Done';
+  String get unconfigured => isZh ? '未配置' : 'Unconfigured';
+  String get tapToConfigure => isZh ? '点击配置' : 'Tap to configure';
+  String get copySuccess => isZh ? '已复制到剪贴板' : 'Copied to clipboard';
+  String get currentIdentity => isZh ? '当前身份' : 'Current identity';
+  String get copy => isZh ? '复制' : 'Copy';
+  String get chatProviderLabel => isZh ? '聊天' : 'Chat';
+  String get videoProviderLabel => isZh ? '视频' : 'Video';
+
+  String get chatProviderNotConfigured => isZh ? '未配置' : 'Not configured';
+
+  String providerSummary({
+    required bool chatTab,
+    required String? mediaProvider,
+    required String? chatProvider,
+  }) {
+    if (chatTab) {
+      return '$chatProviderLabel：${chatProvider ?? chatProviderNotConfigured}';
+    }
+    if (mediaProvider == null) {
+      return chatProvider == null ? '' : '$chatProviderLabel：$chatProvider';
+    }
+    final chat = chatProvider == null
+        ? ''
+        : ' · $chatProviderLabel：$chatProvider';
+    return '$defaultServer：$mediaProvider$chat';
+  }
+
+  String chatProviderDisplayName(String providerId) =>
+      switch (providerId.trim().toLowerCase()) {
+        'agora-chat' => 'Agora Chat',
+        'ivs-chat' => 'Amazon IVS Chat',
+        'tencent-chat' => 'Tencent Chat',
+        _ => providerId.trim().toUpperCase(),
+      };
 
   String backendStatus(String? value, {required bool checkingNow}) {
     if (checkingNow) return checking;

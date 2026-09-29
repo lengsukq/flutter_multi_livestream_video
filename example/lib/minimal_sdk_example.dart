@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
-import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 /// Minimal application-facing flow.
 ///
-/// The full showcase keeps provider registration in provider_adapters.dart.
-/// A real application creates [RealtimeSdk] once with its provider plugins.
+/// The full showcase uses [RealtimeSdk.standard], which selects the built-in
+/// provider driver for the current platform inside the SDK.
+/// A real application normally creates [RealtimeSdk.standard] once; provider
+/// and platform routing stay inside that SDK instance.
 Future<void> openMinimalRealtimeRoom({
   required BuildContext context,
   required RealtimeSdk sdk,

@@ -18,36 +18,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_realtime_media_artc:
-    path: ../packages/flutter_realtime_media_artc
-  flutter_realtime_media_agora:
-    path: ../packages/flutter_realtime_media_agora
-  flutter_realtime_media_core:
-    path: ../packages/flutter_realtime_media_core
-  flutter_realtime_media_ui:
-    path: ../packages/flutter_realtime_media_ui
-  flutter_realtime_media_livekit:
-    path: ../packages/flutter_realtime_media_livekit
-  flutter_realtime_media_chime:
-    path: ../packages/flutter_realtime_media_chime
-  flutter_realtime_media_trtc:
-    path: ../packages/flutter_realtime_media_trtc
-  flutter_realtime_media_ivs:
-    path: ../packages/flutter_realtime_media_ivs
-  flutter_realtime_media_web:
-    path: ../packages/flutter_realtime_media_web
-  flutter_realtime_chat_core:
-    path: ../packages/flutter_realtime_chat_core
-  flutter_realtime_chat_rtc:
-    path: ../packages/flutter_realtime_chat_rtc
   flutter_realtime_sdk:
     path: ../packages/flutter_realtime_sdk
-  flutter_realtime_chat_ivs:
-    path: ../packages/flutter_realtime_chat_ivs
-  flutter_realtime_chat_tencent:
-    path: ../packages/flutter_realtime_chat_tencent
-  flutter_realtime_chat_agora:
-    path: ../packages/flutter_realtime_chat_agora
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -59,6 +31,21 @@ dev_dependencies:
     sdk: flutter
   flutter_test:
     sdk: flutter
+  flutter_realtime_media_core:
+    path: ../packages/flutter_realtime_media_core
+  # Provider-specific imports are intentionally limited to low-level E2E
+  # adapter tests. The demo application itself only consumes
+  # flutter_realtime_sdk.
+  flutter_realtime_media_agora:
+    path: ../packages/flutter_realtime_media_agora
+  flutter_realtime_media_artc:
+    path: ../packages/flutter_realtime_media_artc
+  flutter_realtime_media_chime:
+    path: ../packages/flutter_realtime_media_chime
+  flutter_realtime_media_livekit:
+    path: ../packages/flutter_realtime_media_livekit
+  flutter_realtime_media_trtc:
+    path: ../packages/flutter_realtime_media_trtc
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

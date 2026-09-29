@@ -256,98 +256,105 @@ packages:
     source: sdk
     version: "0.0.0"
   flutter_realtime_chat_agora:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "../packages/flutter_realtime_chat_agora"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_chat_core:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "../packages/flutter_realtime_chat_core"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_chat_ivs:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "../packages/flutter_realtime_chat_ivs"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_chat_rtc:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "../packages/flutter_realtime_chat_rtc"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_chat_tencent:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "../packages/flutter_realtime_chat_tencent"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_media_agora:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       path: "../packages/flutter_realtime_media_agora"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_media_artc:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       path: "../packages/flutter_realtime_media_artc"
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_media_aws_desktop:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_media_aws_desktop"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_media_chime:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       path: "../packages/flutter_realtime_media_chime"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_media_core:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       path: "../packages/flutter_realtime_media_core"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_media_ivs:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "../packages/flutter_realtime_media_ivs"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_media_livekit:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       path: "../packages/flutter_realtime_media_livekit"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_media_trtc:
-    dependency: "direct main"
+    dependency: "direct dev"
     description:
       path: "../packages/flutter_realtime_media_trtc"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_media_ui:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "../packages/flutter_realtime_media_ui"
       relative: true
     source: path
     version: "0.1.0"
   flutter_realtime_media_web:
-    dependency: "direct main"
+    dependency: transitive
     description:
       path: "../packages/flutter_realtime_media_web"
       relative: true

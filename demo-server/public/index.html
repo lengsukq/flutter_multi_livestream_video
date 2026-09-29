@@ -1876,6 +1876,7 @@
       ['尚未配置 Amazon IVS Chat。请设置 IVS_CHAT_REGION 或 AWS 区域，并通过服务器 IAM 凭证链提供 AWS 凭证。', 'Amazon IVS Chat is not configured. Set IVS_CHAT_REGION (or an AWS region) and provide AWS credentials through the server IAM credential chain.'],
       ['尚未配置 Tencent Chat。请设置 TENCENT_CHAT_SDK_APP_ID 和 TENCENT_CHAT_SECRET_KEY；TENCENT_CHAT_ADMIN_USER 默认为 administrator。', 'Tencent Chat is not configured. Set TENCENT_CHAT_SDK_APP_ID and TENCENT_CHAT_SECRET_KEY; TENCENT_CHAT_ADMIN_USER defaults to administrator.'],
       ['尚未配置 Agora Chat。请设置 AGORA_CHAT_APP_KEY、AGORA_CHAT_REST_HOST 和 AGORA_CHAT_APP_ID/AGORA_CHAT_APP_CERTIFICATE（或复用 AGORA_APP_ID/AGORA_APP_CERTIFICATE）。', 'Agora Chat is not configured. Set AGORA_CHAT_APP_KEY, AGORA_CHAT_REST_HOST, and AGORA_CHAT_APP_ID/AGORA_CHAT_APP_CERTIFICATE (or reuse AGORA_APP_ID/AGORA_APP_CERTIFICATE).'],
+      ['AGORA_CHAT_APP_KEY 格式错误。请使用 Agora Chat 的 App Key（OrgName#AppName），不要填写纯数字的 Agora RTC App ID。', 'AGORA_CHAT_APP_KEY must be the Agora Chat App Key in OrgName#AppName format. Do not use the numeric Agora RTC App ID.'],
       ['已签发凭证的 IVS DISCONNECT_USER 权限可使用此功能。', 'Available to host credentials with the IVS DISCONNECT_USER capability.'],
       ['Amazon IVS Chat 只在当前会话中保留消息状态。', 'The current IVS Chat adapter keeps only session-local message state.'],
       ['Amazon IVS Chat 是 AWS 托管实时聊天服务', 'AWS managed realtime chat'],
@@ -2656,6 +2657,7 @@
                 data-provider="${esc(r.chatProvider || '')}"
                 data-room-id="${esc(remoteId)}"
                 data-room-code="${esc(r.roomCode || '')}"
+                data-tracked="${r.tracked ? 'true' : 'false'}"
                 onclick="promptCloseChatRoom(this)">
                 ${t('关闭')}
               </button>
@@ -2776,7 +2778,8 @@
       const provider = button.dataset.provider || '';
       const providerRoomId = button.dataset.roomId || '';
       const roomCode = button.dataset.roomCode || '';
-      targetCloseChatRoom = { provider, providerRoomId, roomCode };
+      const tracked = button.dataset.tracked === 'true';
+      targetCloseChatRoom = { provider, providerRoomId, roomCode, tracked };
       const label = roomCode || providerRoomId;
       document.getElementById('modal-title').textContent = t('关闭独立聊天室 {code}？', { code: label });
       document.getElementById('modal-desc').textContent = t('确认关闭独立聊天室 {code}？此操作会清理对应 Chat Provider 的云端聊天室，并让现有客户端失去该聊天室连接。', { code: label });
@@ -2808,13 +2811,13 @@
       targetCloseChatRoom = null;
       closeConfirmModal();
       try {
-        await api(
-          '/api/chat/cloud-rooms/' +
-            encodeURIComponent(target.provider) +
-            '/' +
-            encodeURIComponent(target.providerRoomId),
-          { method: 'DELETE' },
-        );
+        const url = target.tracked && target.roomCode
+          ? '/api/chat/rooms/' + encodeURIComponent(target.roomCode)
+          : '/api/chat/cloud-rooms/' +
+              encodeURIComponent(target.provider) +
+              '/' +
+              encodeURIComponent(target.providerRoomId);
+        await api(url, { method: 'DELETE' });
         await refresh();
         toast(
           t('云端聊天室 {code} 已删除', {
