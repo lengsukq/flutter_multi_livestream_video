@@ -490,6 +490,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       ),
       displayName: displayName,
       roomLabel: roomLabel,
+      backendProviderId: _serverMediaProviderId ?? '',
       title: role == MediaRole.viewer
           ? DemoStrings.of(context).live
           : role == MediaRole.host
@@ -775,6 +776,52 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
+      ),
+      const SizedBox(height: 10),
+      Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          RealtimePill(
+            label: DemoStrings.of(context).backendMediaProvider(
+              _serverMediaProviderId == null
+                  ? null
+                  : mediaProviderDisplayName(_serverMediaProviderId!),
+              checkingNow: _testingServer,
+            ),
+            icon: Icons.videocam_outlined,
+            foreground: _serverMediaProviderId == null
+                ? RealtimeUiTokens.textMuted
+                : RealtimeUiTokens.primary,
+            background: _serverMediaProviderId == null
+                ? RealtimeUiTokens.surfaceSubtle
+                : RealtimeUiTokens.primarySubtle,
+            borderColor: _serverMediaProviderId == null
+                ? RealtimeUiTokens.border
+                : RealtimeUiTokens.primaryBorder,
+          ),
+          RealtimePill(
+            label: DemoStrings.of(context).backendChatProvider(
+              _serverChatProviderId == null
+                  ? null
+                  : DemoStrings.of(
+                      context,
+                    ).chatProviderDisplayName(_serverChatProviderId!),
+              checkingNow: _testingServer,
+            ),
+            icon: Icons.chat_bubble_outline_rounded,
+            foreground: _serverChatProviderId == null
+                ? RealtimeUiTokens.textMuted
+                : RealtimeUiTokens.primary,
+            background: _serverChatProviderId == null
+                ? RealtimeUiTokens.surfaceSubtle
+                : RealtimeUiTokens.primarySubtle,
+            borderColor: _serverChatProviderId == null
+                ? RealtimeUiTokens.border
+                : RealtimeUiTokens.primaryBorder,
+          ),
+        ],
       ),
     ],
   );

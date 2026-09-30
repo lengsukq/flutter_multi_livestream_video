@@ -77,6 +77,21 @@ class DemoStrings {
   String get copy => isZh ? '复制' : 'Copy';
   String get chatProviderLabel => isZh ? '聊天' : 'Chat';
   String get videoProviderLabel => isZh ? '视频' : 'Video';
+  String backendMediaProvider(String? provider, {required bool checkingNow}) {
+    if (checkingNow) {
+      return isZh ? '后端视频服务商：检查中…' : 'Backend video provider: checking…';
+    }
+    final value = provider ?? (isZh ? '未知' : 'Unknown');
+    return isZh ? '后端视频服务商：$value' : 'Backend video provider: $value';
+  }
+
+  String backendChatProvider(String? provider, {required bool checkingNow}) {
+    if (checkingNow) {
+      return isZh ? '后端聊天服务商：检查中…' : 'Backend chat provider: checking…';
+    }
+    final value = provider ?? (isZh ? '未知' : 'Unknown');
+    return isZh ? '后端聊天服务商：$value' : 'Backend chat provider: $value';
+  }
 
   String get chatProviderNotConfigured => isZh ? '未配置' : 'Not configured';
 

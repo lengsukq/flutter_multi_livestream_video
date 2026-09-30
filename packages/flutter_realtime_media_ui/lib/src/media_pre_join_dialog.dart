@@ -528,6 +528,7 @@ class MediaPreJoinPage extends StatefulWidget {
     this.displayName = '',
     this.roomLabel,
     this.title,
+    this.backendProviderId,
   });
 
   final MediaPreJoinCheckRunner runCheck;
@@ -536,6 +537,10 @@ class MediaPreJoinPage extends StatefulWidget {
   final String displayName;
   final String? roomLabel;
   final String? title;
+
+  /// Provider reported by the backend health endpoint, independent of the
+  /// provider resolved for the room being joined.
+  final String? backendProviderId;
 
   static Future<MediaLocalPreviewSettings?> show(
     BuildContext context, {
@@ -546,6 +551,7 @@ class MediaPreJoinPage extends StatefulWidget {
     String displayName = '',
     String? roomLabel,
     String? title,
+    String? backendProviderId,
   }) => Navigator.of(context).push<MediaLocalPreviewSettings?>(
     MaterialPageRoute(
       builder: (_) => MediaPreJoinPage(
@@ -555,6 +561,7 @@ class MediaPreJoinPage extends StatefulWidget {
         displayName: displayName,
         roomLabel: roomLabel,
         title: title,
+        backendProviderId: backendProviderId,
       ),
     ),
   );
@@ -1041,10 +1048,14 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
               ],
             ),
           ),
-          if (_result?.providerId case final provider?) ...[
+          if (widget.backendProviderId case final provider?) ...[
             const SizedBox(width: 8),
             RealtimePill(
-              label: mediaProviderDisplayName(provider),
+              label: strings.backendProviderLabel(
+                provider.trim().isEmpty
+                    ? strings.preJoinStatus('unknown')
+                    : mediaProviderDisplayName(provider),
+              ),
               icon: Icons.hub_outlined,
               foreground: RealtimeUiTokens.primary,
               background: RealtimeUiTokens.primarySubtle,

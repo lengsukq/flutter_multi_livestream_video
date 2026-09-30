@@ -74,6 +74,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   bool _initialSettingsApplied = false;
   String? _focusedParticipantId;
   String? _error;
+  List<_ManagedRoomMember>? _roomMembers;
+  Object? _roomMembersError;
+  bool _loadingRoomMembers = false;
   MediaSession get session => widget.room.session;
 
   @override
@@ -139,18 +142,24 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   void _openParticipants() {
+    final opening = !_participantsOpen;
     setState(() {
       _participantsOpen = !_participantsOpen;
       _chatOpen = false;
     });
+    if (opening) unawaited(_refreshRoomMembers());
   }
 
-  Future<void> _showRoomManagement() async {
-    final navigator = Navigator.of(context);
+  Future<void> _refreshRoomMembers() async {
+    if (_loadingRoomMembers) return;
+    setState(() {
+      _loadingRoomMembers = true;
+      _roomMembersError = null;
+    });
     final mediaCapabilities = widget.room.managementCapabilities;
     final chatModeration = widget.chatModeration;
-    final chatCapabilities = chatModeration is ChatModerationCapabilitySource
-        ? (chatModeration as ChatModerationCapabilitySource)
+    final chatCapabilities = chatModeration is ChatManagementCapabilitySource
+        ? (chatModeration as ChatManagementCapabilitySource)
               .moderationCapabilities
         : const ChatManagementCapabilities();
     List<MediaRoomParticipantSummary> mediaParticipants = const [];
@@ -171,278 +180,40 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       }
     }
     if (!mounted) return;
-    final strings = RealtimeStrings.of(context);
-    final members = _mergeManagedMembers(
-      mediaParticipants,
-      chatMembers,
-      localMediaParticipantId: widget.room.participantId,
-      localChatUserId: widget.chatSession is ChatSessionIdentity
-          ? (widget.chatSession as ChatSessionIdentity).localUserId
-          : null,
-    );
-    await showRealtimeGlassBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              RealtimeSheetHeader(
-                title: strings.roomMembers,
-                subtitle: strings.roomManagementSubtitle(
-                  widget.room.providerId,
-                  strings.roleLabel(widget.room.role.name),
-                ),
-              ),
-              if (loadErrors.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    loadErrors.map((error) => error.toString()).join('\n'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ),
-              if (members.isEmpty && loadErrors.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 18, bottom: 4),
-                  child: Text(
-                    strings.noManagedMembers,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: RealtimeUiTokens.textMuted),
-                  ),
-                ),
-              if (members.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                ...members.map(
-                  (member) => Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.72),
-                      borderRadius: BorderRadius.circular(
-                        RealtimeUiTokens.controlRadius,
-                      ),
-                      border: Border.all(color: RealtimeUiTokens.border),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const CircleAvatar(
-                          backgroundColor: RealtimeUiTokens.primarySubtle,
-                          child: Icon(
-                            Icons.person_outline,
-                            color: RealtimeUiTokens.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      member.displayName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  if (member.isSelf)
-                                    RealtimePill(
-                                      label: strings.you,
-                                      foreground: RealtimeUiTokens.primary,
-                                      background:
-                                          RealtimeUiTokens.primarySubtle,
-                                      borderColor:
-                                          RealtimeUiTokens.primaryBorder,
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                member.roleLabel(strings),
-                                style: const TextStyle(
-                                  color: RealtimeUiTokens.textMuted,
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: [
-                                  if (member.media != null)
-                                    RealtimePill(
-                                      label: strings.mediaOnline,
-                                      icon: Icons.videocam_outlined,
-                                      foreground: const Color(0xFF047857),
-                                      background: const Color(0xFFECFDF5),
-                                      borderColor: const Color(0xFFA7F3D0),
-                                    ),
-                                  if (member.chat != null)
-                                    RealtimePill(
-                                      label: strings.chatOnline,
-                                      icon: Icons.forum_outlined,
-                                      foreground: RealtimeUiTokens.primary,
-                                      background:
-                                          RealtimeUiTokens.primarySubtle,
-                                      borderColor:
-                                          RealtimeUiTokens.primaryBorder,
-                                    ),
-                                ],
-                              ),
-                              if (!member.isSelf) ...[
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 6,
-                                  children: [
-                                    if (member.media != null)
-                                      OutlinedButton.icon(
-                                        onPressed:
-                                            mediaCapabilities
-                                                .removeParticipant
-                                                .supported
-                                            ? () async {
-                                                Navigator.pop(sheetContext);
-                                                await _run(
-                                                  () => widget.room
-                                                      .removeParticipant(
-                                                        member
-                                                            .media!
-                                                            .participantId,
-                                                      ),
-                                                );
-                                              }
-                                            : null,
-                                        icon: const Icon(
-                                          Icons.person_remove_outlined,
-                                          size: 17,
-                                        ),
-                                        label: Text(strings.removeFromMedia),
-                                      ),
-                                    if (member.media != null &&
-                                        mediaCapabilities
-                                            .muteParticipant
-                                            .supported)
-                                      OutlinedButton.icon(
-                                        onPressed: () async {
-                                          Navigator.pop(sheetContext);
-                                          await _run(
-                                            () => widget.room.muteParticipant(
-                                              member.media!.participantId,
-                                            ),
-                                          );
-                                        },
-                                        icon: const Icon(
-                                          Icons.mic_off_outlined,
-                                          size: 17,
-                                        ),
-                                        label: Text(strings.muteParticipant),
-                                      ),
-                                    if (member.media != null &&
-                                        mediaCapabilities
-                                            .stopParticipantVideo
-                                            .supported)
-                                      OutlinedButton.icon(
-                                        onPressed: () async {
-                                          Navigator.pop(sheetContext);
-                                          await _run(
-                                            () => widget.room
-                                                .stopParticipantVideo(
-                                                  member.media!.participantId,
-                                                ),
-                                          );
-                                        },
-                                        icon: const Icon(
-                                          Icons.videocam_off_outlined,
-                                          size: 17,
-                                        ),
-                                        label: Text(
-                                          strings.stopParticipantVideo,
-                                        ),
-                                      ),
-                                    if (member.chat != null &&
-                                        chatModeration != null)
-                                      OutlinedButton.icon(
-                                        onPressed:
-                                            chatCapabilities
-                                                .removeMember
-                                                .supported
-                                            ? () async {
-                                                Navigator.pop(sheetContext);
-                                                await _run(
-                                                  () => chatModeration
-                                                      .removeMember(
-                                                        member.chat!.userId,
-                                                      ),
-                                                );
-                                              }
-                                            : null,
-                                        icon: const Icon(
-                                          Icons.forum_outlined,
-                                          size: 17,
-                                        ),
-                                        label: Text(strings.removeFromChat),
-                                      ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              if (chatModeration != null &&
-                  chatCapabilities.closeRoom.supported) ...[
-                const SizedBox(height: 12),
-                RealtimeDangerButton(
-                  onPressed: () async {
-                    Navigator.pop(sheetContext);
-                    await _run(chatModeration.closeRoom);
-                  },
-                  icon: Icons.forum_outlined,
-                  label: strings.closeChatRoom,
-                ),
-              ],
-              if (mediaCapabilities.closeRoom.supported) ...[
-                const SizedBox(height: 12),
-                RealtimeDangerButton(
-                  onPressed: () async {
-                    Navigator.pop(sheetContext);
-                    try {
-                      await widget.room.closeRoom();
-                    } catch (error) {
-                      if (mounted) setState(() => _error = error.toString());
-                      return;
-                    }
-                    if (!mounted) return;
-                    await widget.chatSession?.dispose();
-                    await widget.room.dispose();
-                    widget.onLeave?.call();
-                    if (widget.onLeave == null && navigator.canPop()) {
-                      navigator.pop();
-                    }
-                  },
-                  icon: Icons.stop_circle_outlined,
-                  label: strings.closeRoomForEveryone,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
+    setState(() {
+      _roomMembers = _mergeManagedMembers(
+        mediaParticipants,
+        chatMembers,
+        localMediaParticipantId: widget.room.participantId,
+        localChatUserId: widget.chatSession is ChatSessionIdentity
+            ? (widget.chatSession as ChatSessionIdentity).localUserId
+            : null,
+      );
+      _roomMembersError = loadErrors.isEmpty ? null : loadErrors.first;
+      _loadingRoomMembers = false;
+    });
+  }
+
+  Future<void> _closeChatRoomForEveryone() async {
+    final moderation = widget.chatModeration;
+    if (moderation == null) return;
+    await _run(moderation.closeRoom);
+  }
+
+  Future<void> _closeRoomForEveryone() async {
+    try {
+      await widget.room.closeRoom();
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+      return;
+    }
+    if (!mounted) return;
+    await widget.chatSession?.dispose();
+    await widget.room.dispose();
+    widget.onLeave?.call();
+    if (widget.onLeave == null && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -690,13 +461,6 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   Widget _sidePanel(MediaSnapshot value) {
     final strings = RealtimeStrings.of(context);
     final chatAvailable = widget.config.showChat && widget.chatSession != null;
-    final canManage =
-        widget.room.managementCapabilities.listParticipants.supported ||
-        widget.room.managementCapabilities.removeParticipant.supported ||
-        widget.room.managementCapabilities.muteParticipant.supported ||
-        widget.room.managementCapabilities.stopParticipantVideo.supported ||
-        widget.room.managementCapabilities.changeParticipantRole.supported ||
-        widget.room.managementCapabilities.closeRoom.supported;
     return Column(
       children: [
         RealtimeGlassSurface(
@@ -741,7 +505,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         const SizedBox(height: 8),
         Expanded(
           child: _participantsOpen || !chatAvailable
-              ? _participantsList(value, canManage: canManage)
+              ? _participantsList(value)
               : _productChat(widget.chatSession!, showHeader: false),
         ),
       ],
@@ -777,15 +541,45 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     ),
   );
 
-  Widget _participantsList(MediaSnapshot value, {required bool canManage}) {
+  Widget _participantsList(MediaSnapshot value) {
     final strings = RealtimeStrings.of(context);
+    final capabilities = widget.room.managementCapabilities;
+    final chatModeration = widget.chatModeration;
+    final chatCapabilities = chatModeration is ChatManagementCapabilitySource
+        ? (chatModeration as ChatManagementCapabilitySource)
+              .moderationCapabilities
+        : const ChatManagementCapabilities();
+    final members = [...?_roomMembers];
+    for (final participant in value.participants) {
+      final alreadyListed = members.any(
+        (member) => member.media?.participantId == participant.id,
+      );
+      if (alreadyListed) continue;
+      members.add(
+        _ManagedRoomMember(
+          userId: '',
+          displayName: participant.displayName.isEmpty
+              ? participant.id
+              : participant.displayName,
+          media: MediaRoomParticipantSummary(
+            participantId: participant.id,
+            displayName: participant.displayName,
+            role: participant.isLocal ? widget.room.role : null,
+          ),
+          isSelf: participant.isLocal,
+        ),
+      );
+    }
+    final canCloseChat =
+        chatModeration != null && chatCapabilities.closeRoom.supported;
+    final canCloseMedia = capabilities.closeRoom.supported;
     return RealtimeGlassSurface(
       radius: RealtimeUiTokens.controlRadius,
       opacity: .97,
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
             child: Row(
               children: [
                 Expanded(
@@ -794,20 +588,76 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
-                Text('${value.participants.length}'),
+                Text('${members.length}'),
+                const SizedBox(width: 2),
+                IconButton(
+                  tooltip: strings.refresh,
+                  onPressed: _loadingRoomMembers
+                      ? null
+                      : () => unawaited(_refreshRoomMembers()),
+                  visualDensity: VisualDensity.compact,
+                  icon: _loadingRoomMembers
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded, size: 19),
+                ),
               ],
             ),
           ),
           const Divider(height: 1),
+          if (_roomMembersError != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _roomMembersError.toString(),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ),
           Expanded(
-            child: value.participants.isEmpty
-                ? Center(child: Text(strings.noManagedMembers))
+            child: members.isEmpty
+                ? Center(
+                    child: _loadingRoomMembers
+                        ? const CircularProgressIndicator(strokeWidth: 2)
+                        : Text(strings.noManagedMembers),
+                  )
                 : ListView.separated(
                     padding: const EdgeInsets.all(8),
-                    itemCount: value.participants.length,
+                    itemCount: members.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 4),
                     itemBuilder: (context, index) {
-                      final participant = value.participants[index];
+                      final member = members[index];
+                      final media = member.media;
+                      final chat = member.chat;
+                      final canRemoveMedia =
+                          !member.isSelf &&
+                          media != null &&
+                          capabilities.removeParticipant.supported;
+                      final canMuteMedia =
+                          !member.isSelf &&
+                          media != null &&
+                          capabilities.muteParticipant.supported;
+                      final canStopVideo =
+                          !member.isSelf &&
+                          media != null &&
+                          capabilities.stopParticipantVideo.supported;
+                      final canRemoveChat =
+                          !member.isSelf &&
+                          chat != null &&
+                          chatModeration != null &&
+                          chatCapabilities.removeMember.supported;
+                      final hasActions =
+                          canRemoveMedia ||
+                          canMuteMedia ||
+                          canStopVideo ||
+                          canRemoveChat;
                       return ListTile(
                         minLeadingWidth: 36,
                         contentPadding: const EdgeInsets.symmetric(
@@ -816,60 +666,177 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                         ),
                         leading: CircleAvatar(
                           radius: 18,
-                          backgroundColor: participant.isSpeaking
-                              ? RealtimeUiTokens.successSubtle
-                              : RealtimeUiTokens.primarySubtle,
-                          child: Icon(
-                            participant.isMuted
-                                ? Icons.mic_off_outlined
-                                : Icons.person_outline_rounded,
+                          backgroundColor: RealtimeUiTokens.primarySubtle,
+                          child: const Icon(
+                            Icons.person_outline_rounded,
                             size: 18,
-                            color: participant.isSpeaking
-                                ? RealtimeUiTokens.success
-                                : RealtimeUiTokens.primary,
+                            color: RealtimeUiTokens.primary,
                           ),
                         ),
-                        title: Text(
-                          participant.displayName.isEmpty
-                              ? participant.id
-                              : participant.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                member.displayName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (member.isSelf)
+                              RealtimePill(
+                                label: strings.you,
+                                foreground: RealtimeUiTokens.primary,
+                                background: RealtimeUiTokens.primarySubtle,
+                                borderColor: RealtimeUiTokens.primaryBorder,
+                              ),
+                          ],
                         ),
-                        subtitle: Text(
-                          participant.isLocal
-                              ? strings.you
-                              : participant.isMuted
-                              ? strings.muteParticipant
-                              : strings.mediaOnline,
-                        ),
-                        trailing: Icon(
-                          participant.isVideoEnabled
-                              ? Icons.videocam_outlined
-                              : Icons.videocam_off_outlined,
-                          size: 19,
-                          color: RealtimeUiTokens.textMuted,
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(member.roleLabel(strings)),
+                            const SizedBox(height: 5),
+                            Wrap(
+                              spacing: 5,
+                              runSpacing: 4,
+                              children: [
+                                if (media != null)
+                                  RealtimePill(
+                                    label: strings.mediaOnline,
+                                    icon: Icons.videocam_outlined,
+                                    foreground: const Color(0xFF047857),
+                                    background: const Color(0xFFECFDF5),
+                                    borderColor: const Color(0xFFA7F3D0),
+                                  ),
+                                if (chat != null)
+                                  RealtimePill(
+                                    label: strings.chatOnline,
+                                    icon: Icons.forum_outlined,
+                                    foreground: RealtimeUiTokens.primary,
+                                    background: RealtimeUiTokens.primarySubtle,
+                                    borderColor: RealtimeUiTokens.primaryBorder,
+                                  ),
+                              ],
+                            ),
+                            if (hasActions) ...[
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 4,
+                                children: [
+                                  if (canRemoveMedia)
+                                    _memberActionButton(
+                                      label: strings.removeFromMedia,
+                                      icon: Icons.person_remove_outlined,
+                                      danger: true,
+                                      onPressed: () => _runMemberManagement(
+                                        () => widget.room.removeParticipant(
+                                          media!.participantId,
+                                        ),
+                                      ),
+                                    ),
+                                  if (canMuteMedia)
+                                    _memberActionButton(
+                                      label: strings.muteParticipant,
+                                      icon: Icons.mic_off_outlined,
+                                      onPressed: () => _runMemberManagement(
+                                        () => widget.room.muteParticipant(
+                                          media!.participantId,
+                                        ),
+                                      ),
+                                    ),
+                                  if (canStopVideo)
+                                    _memberActionButton(
+                                      label: strings.stopParticipantVideo,
+                                      icon: Icons.videocam_off_outlined,
+                                      onPressed: () => _runMemberManagement(
+                                        () => widget.room.stopParticipantVideo(
+                                          media!.participantId,
+                                        ),
+                                      ),
+                                    ),
+                                  if (canRemoveChat)
+                                    _memberActionButton(
+                                      label: strings.removeFromChat,
+                                      icon: Icons.forum_outlined,
+                                      danger: true,
+                                      onPressed: () => _runMemberManagement(
+                                        () => chatModeration!.removeMember(
+                                          chat!.userId,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ],
                         ),
                       );
                     },
                   ),
           ),
-          if (canManage)
+          if (canCloseChat || canCloseMedia)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _showRoomManagement,
-                  icon: const Icon(Icons.admin_panel_settings_outlined),
-                  label: Text(strings.manageRoom),
-                ),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  if (canCloseChat)
+                    OutlinedButton.icon(
+                      onPressed: _closeChatRoomForEveryone,
+                      icon: const Icon(Icons.forum_outlined, size: 17),
+                      label: Text(strings.closeChatRoom),
+                    ),
+                  if (canCloseMedia)
+                    OutlinedButton.icon(
+                      onPressed: _closeRoomForEveryone,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: RealtimeUiTokens.danger,
+                        side: const BorderSide(
+                          color: RealtimeUiTokens.dangerBorder,
+                        ),
+                      ),
+                      icon: const Icon(Icons.stop_circle_outlined, size: 17),
+                      label: Text(strings.closeRoomForEveryone),
+                    ),
+                ],
               ),
             ),
         ],
       ),
     );
   }
+
+  Future<void> _runMemberManagement(Future<void> Function() action) async {
+    await _run(action);
+    if (mounted) await _refreshRoomMembers();
+  }
+
+  Widget _memberActionButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    bool danger = false,
+  }) => OutlinedButton.icon(
+    onPressed: onPressed,
+    style: OutlinedButton.styleFrom(
+      foregroundColor: danger
+          ? RealtimeUiTokens.danger
+          : RealtimeUiTokens.textMuted,
+      side: BorderSide(
+        color: danger ? RealtimeUiTokens.dangerBorder : RealtimeUiTokens.border,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      visualDensity: VisualDensity.compact,
+      minimumSize: const Size(0, 30),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    ),
+    icon: Icon(icon, size: 15),
+    label: Text(label, style: const TextStyle(fontSize: 11)),
+  );
 
   Widget _mediaStage(MediaSnapshot value) => ColoredBox(
     color: RealtimeUiTokens.background,
@@ -2054,8 +2021,7 @@ class _ManagedRoomMember {
   String roleLabel(RealtimeStrings strings) {
     final mediaRole = media?.role?.wireName;
     final chatRole = chat?.role.name;
-    final value = mediaRole ?? chatRole ?? 'participant';
-    return strings.roleLabel(value);
+    return strings.roleLabel(mediaRole ?? chatRole ?? 'participant');
   }
 }
 

@@ -182,6 +182,8 @@ class RealtimeStrings {
   String get resolveBlockingIssues =>
       isZh ? '请先处理阻止加入的问题' : 'Resolve blocking issues before joining';
   String get backend => isZh ? '后端' : 'Backend';
+  String backendProviderLabel(String provider) =>
+      isZh ? '后端服务商：$provider' : 'Backend provider: $provider';
   String get provider => isZh ? '服务商' : 'Provider';
   String get microphonePermission => isZh ? '麦克风权限' : 'Microphone permission';
   String get cameraPermission => isZh ? '摄像头权限' : 'Camera permission';
