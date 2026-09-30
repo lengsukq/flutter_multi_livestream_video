@@ -8,7 +8,7 @@ android {
     compileSdk 37
 
     defaultConfig {
-        minSdk 23
+        minSdk 24
     }
 
     compileOptions {
@@ -18,5 +18,6 @@ android {
 }
 
 dependencies {
+    implementation project(':flutter_realtime_video_effects')
     implementation 'com.aliyun.aio:AliVCSDK_ARTC:7.11.0'
 }

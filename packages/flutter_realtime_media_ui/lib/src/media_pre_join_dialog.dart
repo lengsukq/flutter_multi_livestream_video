@@ -1157,7 +1157,11 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
                   fit: StackFit.expand,
                   children: [
                     if (_preview?.cameraTrack case final track?)
-                      MediaTrackView(renderer: _preview!.renderer, track: track)
+                      MediaTrackView(
+                        renderer: _preview!.renderer,
+                        track: track,
+                        fit: BoxFit.contain,
+                      )
                     else
                       Center(
                         child: Column(

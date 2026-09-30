@@ -18,6 +18,9 @@ import androidx.core.app.ActivityCompat;
 import com.alivc.rtc.AliRtcEngine;
 import com.alivc.rtc.AliRtcEngineEventListener;
 import com.alivc.rtc.AliRtcEngineNotify;
+import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrame;
+import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameHub;
+import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameSink;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -63,6 +66,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
     private ActivityPluginBinding activityBinding;
     private Activity activity;
     private AliRtcEngine engine;
+    private ProcessedArtcVideoSink processedVideoSink;
     private MethodChannel.Result pendingJoinResult;
     private MethodChannel.Result pendingLeaveResult;
     private MethodChannel.Result pendingPermissionResult;
@@ -72,6 +76,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
     private String localUserId;
     private boolean viewer;
     private boolean inChannel;
+    private boolean videoEnabled;
     private boolean disposed;
 
     @Override
@@ -125,6 +130,8 @@ public final class FlutterRealtimeMediaArtcPlugin implements
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
         switch (call.method) {
+            case "attachProcessedVideoSource": attachProcessedVideoSource(call, result); break;
+            case "detachProcessedVideoSource": detachProcessedVideoSource(); result.success(null); break;
             case "join": join(call, result); break;
             case "leave": leave(result); break;
             case "setMuted": setMuted(call, result); break;
@@ -190,6 +197,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
             engine.publishLocalAudioStream(false);
             engine.publishLocalVideoStream(false);
             engine.enableLocalVideo(false);
+            videoEnabled = false;
             pendingJoinResult = result;
             joinTimeout = () -> {
                 MethodChannel.Result pending = pendingJoinResult;
@@ -219,6 +227,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
             error(result, "invalid_state", "ARTC leave is already in progress.");
             return;
         }
+        detachProcessedVideoSource();
         pendingLeaveResult = result;
         leaveTimeout = () -> finishLeave("ARTC did not confirm channel leave before timeout.");
         mainHandler.postDelayed(leaveTimeout, LEAVE_TIMEOUT_MS);
@@ -246,16 +255,94 @@ public final class FlutterRealtimeMediaArtcPlugin implements
         if (!enabled) {
             int publishCode = engine.publishLocalVideoStream(false);
             int captureCode = engine.enableLocalVideo(false);
-            if (publishCode == 0 && captureCode == 0) result.success(null);
+            if (publishCode == 0 && captureCode == 0) { videoEnabled = false; result.success(null); }
             else nativeError(result, "ARTC failed to disable local video", publishCode != 0 ? publishCode : captureCode);
+            return;
+        }
+        if (processedVideoSink != null) {
+            int code = engine.publishLocalVideoStream(true);
+            if (code == 0) { videoEnabled = true; result.success(null); } else nativeError(result, "ARTC failed to publish processed video", code);
             return;
         }
         withPermissions(new String[]{Manifest.permission.CAMERA}, result, () -> {
             int captureCode = engine.enableLocalVideo(true);
             int publishCode = captureCode == 0 ? engine.publishLocalVideoStream(true) : captureCode;
-            if (publishCode == 0) result.success(null);
+            if (publishCode == 0) { videoEnabled = true; result.success(null); }
             else nativeError(result, "ARTC failed to enable local video", publishCode);
         });
+    }
+
+    private void attachProcessedVideoSource(MethodCall call, MethodChannel.Result result) {
+        if (!requirePublisher(result)) return;
+        final String sourceId = string(call, "sourceId");
+        if (sourceId.isEmpty()) { error(result, "invalid_argument", "sourceId is required."); return; }
+        try {
+            boolean wasEnabled = videoEnabled;
+            detachProcessedVideoSource();
+            engine.publishLocalVideoStream(false);
+            int captureCode = engine.enableLocalVideo(false);
+            if (captureCode != 0) throw new IllegalStateException("ARTC failed to stop its camera: " + captureCode);
+            engine.setExternalVideoSource(true, false, AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera,
+                    AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeAuto);
+            processedVideoSink = new ProcessedArtcVideoSink(sourceId, engine);
+            if (wasEnabled) {
+                int publishCode = engine.publishLocalVideoStream(true);
+                if (publishCode != 0) throw new IllegalStateException("ARTC failed to publish processed video: " + publishCode);
+            }
+            videoEnabled = wasEnabled;
+            result.success(null);
+        } catch (Throwable failure) {
+            detachProcessedVideoSource();
+            error(result, "attach_provider_failed", failure.getMessage());
+        }
+    }
+
+    private void detachProcessedVideoSource() {
+        ProcessedArtcVideoSink sink = processedVideoSink;
+        processedVideoSink = null;
+        if (sink != null) { sink.dispose(); videoEnabled = false; }
+    }
+
+    /** The vendor only converts the SDK's processed RGBA frame to its input structure. */
+    private final class ProcessedArtcVideoSink implements ProcessedVideoFrameSink {
+        private final String sourceId;
+        private AliRtcEngine target;
+        private boolean failed;
+        ProcessedArtcVideoSink(String sourceId, AliRtcEngine target) {
+            this.sourceId = sourceId;
+            this.target = target;
+            ProcessedVideoFrameHub.INSTANCE.register(sourceId, this);
+        }
+        @Override public synchronized void onVideoFrame(ProcessedVideoFrame input) {
+            if (target == null || failed) return;
+            if (input.getRowStride() != input.getWidth() * 4) {
+                throw new IllegalArgumentException("ARTC requires tightly packed RGBA input.");
+            }
+            byte[] bytes = new byte[input.getRowStride() * input.getHeight()];
+            input.getRgba().duplicate().get(bytes);
+            AliRtcEngine.AliRtcRawDataFrame frame = new AliRtcEngine.AliRtcRawDataFrame();
+            frame.format = AliRtcEngine.AliRtcVideoFormat.AliRtcVideoFormatRGBA;
+            frame.width = input.getWidth(); frame.height = input.getHeight();
+            frame.rotation = input.getRotationDegrees();
+            // ARTC defines RGBA lineSize as four component widths in pixels.
+            frame.lineSize = new int[]{input.getWidth(), input.getWidth(), input.getWidth(), input.getWidth()};
+            frame.frame = bytes; frame.videoFrameLength = bytes.length;
+            frame.timestamp = input.getTimestampNs() / 1_000_000L;
+            int code = target.pushExternalVideoFrame(frame, AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera);
+            if (code != 0) {
+                failed = true;
+                target.publishLocalVideoStream(false);
+                emit(event("error", "code", code, "message", "ARTC rejected the processed video frame."));
+            }
+        }
+        synchronized void dispose() {
+            ProcessedVideoFrameHub.INSTANCE.unregister(sourceId, this);
+            if (target == null) return;
+            target.publishLocalVideoStream(false);
+            target.setExternalVideoSource(false, false, AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera,
+                    AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeAuto);
+            target = null;
+        }
     }
 
     private void switchCamera(MethodCall call, MethodChannel.Result result) {
@@ -465,6 +552,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
 
     private void disposeEngine() {
         disposed = true;
+        detachProcessedVideoSource();
         clearJoinTimeout();
         if (leaveTimeout != null) mainHandler.removeCallbacks(leaveTimeout);
         leaveTimeout = null;

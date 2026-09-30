@@ -39,6 +39,29 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
         methodChannel.setMethodCallHandler { call, result ->
             val callResult: MethodChannelResult
             when (call.method) {
+                "attachProcessedVideoSource" -> {
+                    try {
+                        val sourceId = call.argument<String>("sourceId").orEmpty()
+                        require(sourceId.isNotEmpty()) { "sourceId is required." }
+                        check(MeetingSessionManager.meetingSession != null) { "No active Chime meeting session." }
+                        val wasEnabled = MeetingSessionManager.localVideoEnabled
+                        MeetingSessionManager.meetingSession?.audioVideo?.stopLocalVideo()
+                        MeetingSessionManager.detachProcessedVideoSource()
+                        val source = ProcessedChimeVideoSource(sourceId)
+                        MeetingSessionManager.processedVideoSource = source
+                        if (wasEnabled) {
+                            MeetingSessionManager.meetingSession?.audioVideo?.startLocalVideo(source)
+                            MeetingSessionManager.localVideoEnabled = true
+                        }
+                        result.success(null)
+                    } catch (error: Throwable) { result.error("attach_provider_failed", error.message, null) }
+                    return@setMethodCallHandler
+                }
+                "detachProcessedVideoSource" -> {
+                    MeetingSessionManager.detachProcessedVideoSource()
+                    result.success(null)
+                    return@setMethodCallHandler
+                }
                 MethodCallFlutter.manageAudioPermissions.call -> {
                     permissionsManager.manageAudioPermissions(result)
                     return@setMethodCallHandler
@@ -113,6 +136,7 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
     }
 
     fun dispose() {
+        MeetingSessionManager.detachProcessedVideoSource()
         permissionsManager.cancelPendingRequests()
         methodChannel.setMethodCallHandler(null)
     }
@@ -220,14 +244,18 @@ class MethodChannelCoordinator(binaryMessenger: BinaryMessenger, activity: Activ
     }
 
     fun startLocalVideo(): MethodChannelResult {
-        MeetingSessionManager.meetingSession?.audioVideo?.startLocalVideo()
+        val audioVideo = MeetingSessionManager.meetingSession?.audioVideo
                 ?: return NULL_MEETING_SESSION_RESPONSE
+        val processed = MeetingSessionManager.processedVideoSource
+        if (processed != null) audioVideo.startLocalVideo(processed) else audioVideo.startLocalVideo()
+        MeetingSessionManager.localVideoEnabled = true
         return MethodChannelResult(true, Response.local_video_on_success.msg)
     }
 
     fun stopLocalVideo(): MethodChannelResult {
         MeetingSessionManager.meetingSession?.audioVideo?.stopLocalVideo()
                 ?: return NULL_MEETING_SESSION_RESPONSE
+        MeetingSessionManager.localVideoEnabled = false
         return MethodChannelResult(true, Response.local_video_off_success.msg)
     }
 

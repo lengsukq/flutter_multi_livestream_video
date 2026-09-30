@@ -39,12 +39,12 @@ android {
     }
 
     defaultConfig {
-        minSdk 23
+        minSdk 24
     }
 
     testOptions {
         unitTests.all {
-            useJUnitPlatform()
+            useJUnit()
 
             testLogging {
                events "passed", "skipped", "failed", "standardOut", "standardError"
@@ -62,7 +62,9 @@ kotlin {
 }
 
 dependencies {
+    implementation project(':flutter_realtime_video_effects')
     testImplementation 'org.jetbrains.kotlin:kotlin-test:2.4.0'
+    testImplementation 'junit:junit:4.12'
     implementation 'software.aws.chimesdk:amazon-chime-sdk:0.25.5'
     implementation 'software.aws.chimesdk:amazon-chime-sdk-media:0.25.4'
     implementation 'androidx.core:core:1.3.0'

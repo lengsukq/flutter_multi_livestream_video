@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.18)
+project(realtime_frame_push)
+add_library(realtime_frame_push SHARED agora_frame_push.cpp)
+target_include_directories(realtime_frame_push PRIVATE ../../../../native/agora/include)
+target_compile_features(realtime_frame_push PRIVATE cxx_std_17)

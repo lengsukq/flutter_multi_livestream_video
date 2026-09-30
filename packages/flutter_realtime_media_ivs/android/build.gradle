@@ -161,6 +161,7 @@ rootProject.allprojects { candidate ->
 }
 
 dependencies {
+    implementation project(':flutter_realtime_video_effects')
     api('com.amazonaws:ivs-broadcast:1.47.0') {
         artifact {
             name = 'ivs-broadcast'

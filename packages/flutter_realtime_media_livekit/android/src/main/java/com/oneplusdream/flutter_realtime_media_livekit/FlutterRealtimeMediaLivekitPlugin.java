@@ -19,12 +19,30 @@ public final class FlutterRealtimeMediaLivekitPlugin
 
     private Context applicationContext;
     private MethodChannel channel;
+    private MethodChannel processedChannel;
+    private final java.util.Map<String,ProcessedWebRtcTrack> processedTracks = new java.util.HashMap<>();
 
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
         applicationContext = binding.getApplicationContext();
         channel = new MethodChannel(binding.getBinaryMessenger(), CHANNEL);
         channel.setMethodCallHandler(this);
+        processedChannel = new MethodChannel(binding.getBinaryMessenger(), "flutter_realtime_media_livekit/processed_video");
+        processedChannel.setMethodCallHandler((call,result) -> {
+            String sourceId=call.argument("sourceId");
+            try {
+                if (sourceId == null || sourceId.trim().isEmpty()) throw new IllegalArgumentException("sourceId is required.");
+                if ("create".equals(call.method)) {
+                    ProcessedWebRtcTrack old=processedTracks.remove(sourceId);
+                    if (old!=null) old.dispose();
+                    ProcessedWebRtcTrack track=new ProcessedWebRtcTrack(sourceId);
+                    processedTracks.put(sourceId,track); result.success(track.descriptor());
+                } else if ("dispose".equals(call.method)) {
+                    ProcessedWebRtcTrack old=processedTracks.remove(sourceId);
+                    if (old!=null) old.dispose(); result.success(null);
+                } else result.notImplemented();
+            } catch(Exception error) { result.error("processed_video_failed",error.getMessage(),null); }
+        });
     }
 
     @Override
@@ -60,6 +78,9 @@ public final class FlutterRealtimeMediaLivekitPlugin
 
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        for (ProcessedWebRtcTrack track: processedTracks.values()) track.dispose();
+        processedTracks.clear();
+        if (processedChannel != null) processedChannel.setMethodCallHandler(null);
         if (channel != null) channel.setMethodCallHandler(null);
         channel = null;
         applicationContext = null;

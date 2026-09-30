@@ -45,7 +45,9 @@ class VideoEffectsLocalPreviewSession
       );
     }
     final effects = bridge ?? VideoEffectsBridge();
-    final source = await effects.createSource();
+    final source = await effects.createSource(
+      config: const VideoEffectsSourceConfig(frameRate: 30),
+    );
     return VideoEffectsLocalPreviewSession._(
       providerId: providerId,
       role: role,
@@ -63,6 +65,9 @@ class VideoEffectsLocalPreviewSession
   final VideoEffectsBridge bridge;
   final ProcessedVideoSource source;
   MediaLocalPreviewSettings _settings;
+  // Processing failures hide the broken track without changing the user's
+  // camera choice. A successful effect change can restore that choice.
+  bool _requestedCameraEnabled = true;
   bool _disposed = false;
   final _failures = StreamController<MediaError>.broadcast();
   StreamSubscription<VideoEffectsFailure>? _failureSubscription;
@@ -149,6 +154,7 @@ class VideoEffectsLocalPreviewSession
   Future<void> setCameraEnabled(bool enabled) async {
     _ensureActive();
     await bridge.setEnabled(source, enabled);
+    _requestedCameraEnabled = enabled;
     _settings = _settings.copyWith(cameraEnabled: enabled);
   }
 
@@ -163,7 +169,13 @@ class VideoEffectsLocalPreviewSession
       );
     }
     await bridge.setEffect(source, effect);
-    _settings = _settings.copyWith(backgroundEffect: effect);
+    if (_requestedCameraEnabled && !_settings.cameraEnabled) {
+      await bridge.setEnabled(source, true);
+    }
+    _settings = _settings.copyWith(
+      backgroundEffect: effect,
+      cameraEnabled: _requestedCameraEnabled,
+    );
   }
 
   @override

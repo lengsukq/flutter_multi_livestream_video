@@ -1,9 +1,9 @@
 package com.oneplusdream.flutter_aws_chime
 
-import kotlin.test.Test
+import org.junit.Test
 import kotlin.test.assertEquals
 
-internal class MethodChannelResultTest {
+class MethodChannelResultTest {
     @Test
     fun successfulResponsesUseTheSharedPlatformChannelShape() {
         assertEquals(

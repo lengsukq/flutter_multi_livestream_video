@@ -17,6 +17,8 @@ import com.amazonaws.ivs.broadcast.AudioLocalStageStream;
 import com.amazonaws.ivs.broadcast.BroadcastException;
 import com.amazonaws.ivs.broadcast.Device;
 import com.amazonaws.ivs.broadcast.DeviceDiscovery;
+import com.amazonaws.ivs.broadcast.CustomImageSource;
+import com.amazonaws.ivs.broadcast.BroadcastConfiguration;
 import com.amazonaws.ivs.broadcast.ImageLocalStageStream;
 import com.amazonaws.ivs.broadcast.ImagePreviewSurfaceView;
 import com.amazonaws.ivs.broadcast.ImageStageStream;
@@ -72,8 +74,10 @@ public final class FlutterRealtimeMediaIvsPlugin
     private DeviceDiscovery deviceDiscovery;
     private Stage stage;
     private ImageLocalStageStream cameraStream;
+    private ProcessedIvsVideoSink processedVideoSink;
     private AudioLocalStageStream microphoneStream;
     private boolean shouldPublish;
+    private boolean videoEnabled;
     private boolean connectedOnce;
     private MethodChannel.Result pendingJoinResult;
 
@@ -134,6 +138,14 @@ public final class FlutterRealtimeMediaIvsPlugin
     public void onMethodCall(@NonNull MethodCall call, @NonNull MethodChannel.Result result) {
         try {
             switch (call.method) {
+                case "attachProcessedVideoSource":
+                    attachProcessedVideoSource(requireString(call, "sourceId"));
+                    result.success(null);
+                    return;
+                case "detachProcessedVideoSource":
+                    detachProcessedVideoSource();
+                    result.success(null);
+                    return;
                 case "probeDevices":
                     result.success(probeDevices());
                     return;
@@ -207,6 +219,7 @@ public final class FlutterRealtimeMediaIvsPlugin
         final String role = requireString(call, "role");
         shouldPublish = !"viewer".equals(role);
         connectedOnce = false;
+        videoEnabled = false;
         ensurePublishPermissions();
         prepareLocalStreams();
 
@@ -286,12 +299,8 @@ public final class FlutterRealtimeMediaIvsPlugin
         final Device camera = frontCamera != null ? frontCamera : fallbackCamera;
         final Device microphone =
                 defaultMicrophone != null ? defaultMicrophone : fallbackMicrophone;
-        if (camera != null) {
-            cameraStream = new ImageLocalStageStream(camera);
-            cameraStream.setMuted(true);
-            publishStreams.add(cameraStream);
-            observeStream(cameraStream);
-        }
+        // Camera capture is lazy. A processed source is attached before enabling video.
+        // Constructing a camera stream here can compete with the SDK-owned CameraX source.
         if (microphone != null) {
             microphoneStream = new AudioLocalStageStream(microphone);
             microphoneStream.setMuted(true);
@@ -312,12 +321,66 @@ public final class FlutterRealtimeMediaIvsPlugin
 
     private void setVideoEnabled(boolean enabled) {
         requireStage();
+        if (enabled && cameraStream == null && processedVideoSink == null) switchCamera("front");
         if (cameraStream == null) {
             if (enabled) throw new IllegalStateException("No IVS camera is available.");
             return;
         }
         cameraStream.setMuted(!enabled);
+        videoEnabled = enabled;
         updateLocalPreviewHolders(cameraStream);
+    }
+
+    private void attachProcessedVideoSource(String sourceId) {
+        requireStage();
+        if (!shouldPublish) throw new IllegalStateException("A viewer cannot attach local video.");
+        boolean wasEnabled = videoEnabled;
+        detachProcessedVideoSource();
+        if (cameraStream != null) {
+            cameraStream.setMuted(true);
+            publishStreams.remove(cameraStream);
+            observedStreams.remove(cameraStream);
+            cameraStream = null;
+        }
+        final CustomImageSource input = requireDeviceDiscovery().createImageInputSource(
+                new BroadcastConfiguration.Vec2(1280, 720));
+        if (input == null) throw new IllegalStateException("IVS could not create a custom video input.");
+        try {
+            cameraStream = new ImageLocalStageStream(input);
+            cameraStream.setMuted(!wasEnabled);
+            videoEnabled = wasEnabled;
+            publishStreams.add(0, cameraStream);
+            observeStream(cameraStream);
+            stage.refreshStrategy();
+            processedVideoSink = new ProcessedIvsVideoSink(sourceId, input, failure -> mainHandler.post(() -> {
+                if (processedVideoSink == null || processedVideoSink.source != input) return;
+                if (cameraStream != null) cameraStream.setMuted(true);
+                videoEnabled = false;
+                Map<String,Object> event = typeOnly("error");
+                event.put("code", -1); event.put("message", failure.getMessage()); emit(event);
+            }));
+            updateLocalPreviewHolders(cameraStream);
+        } catch (Throwable failure) {
+            if (cameraStream != null) {
+                publishStreams.remove(cameraStream); observedStreams.remove(cameraStream); cameraStream = null;
+            }
+            input.release();
+            throw failure;
+        }
+    }
+
+    private void detachProcessedVideoSource() {
+        ProcessedIvsVideoSink sink = processedVideoSink;
+        if (sink == null) return;
+        processedVideoSink = null;
+        videoEnabled = false;
+        if (cameraStream != null) {
+            cameraStream.setMuted(true);
+            publishStreams.remove(cameraStream); observedStreams.remove(cameraStream); cameraStream = null;
+        }
+        if (stage != null) stage.refreshStrategy();
+        updateLocalPreviewHolders(null);
+        sink.dispose();
     }
 
     private void switchCamera(String position) {
@@ -431,6 +494,7 @@ public final class FlutterRealtimeMediaIvsPlugin
     }
 
     private void leaveNative() {
+        detachProcessedVideoSource();
         final Stage current = stage;
         if (current == null) return;
         current.leave();

@@ -16,6 +16,17 @@ object MeetingSessionManager {
 
     var meetingSession: DefaultMeetingSession? = null
     var cameraPosition: String = "front"
+    internal var processedVideoSource: ProcessedChimeVideoSource? = null
+    internal var localVideoEnabled = false
+
+    @Synchronized
+    internal fun detachProcessedVideoSource() {
+        val source = processedVideoSource ?: return
+        processedVideoSource = null
+        localVideoEnabled = false
+        meetingSession?.audioVideo?.stopLocalVideo()
+        source.dispose()
+    }
 
 
     private val NULL_MEETING_SESSION_RESPONSE: MethodChannelResult =
@@ -34,6 +45,7 @@ object MeetingSessionManager {
         val audioVideo: AudioVideoFacade =
                 meetingSession?.audioVideo ?: return NULL_MEETING_SESSION_RESPONSE
         cameraPosition = "front"
+        localVideoEnabled = false
         addObservers(realtimeObserver, videoTileObserver, audioVideoObserver, dataMessageObserver)
         audioVideo.start()
         audioVideo.startRemoteVideo()
@@ -42,6 +54,7 @@ object MeetingSessionManager {
 
     fun stop(): MethodChannelResult {
         val session = meetingSession ?: return NULL_MEETING_SESSION_RESPONSE
+        detachProcessedVideoSource()
         removeObservers()
         session.audioVideo.stopRemoteVideo()
         session.audioVideo.stop()
@@ -52,6 +65,7 @@ object MeetingSessionManager {
 
     @Synchronized
     fun onSessionStopped() {
+        detachProcessedVideoSource()
         removeObservers()
         meetingSession = null
         cameraPosition = "front"
