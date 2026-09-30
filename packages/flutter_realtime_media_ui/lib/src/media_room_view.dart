@@ -7,6 +7,8 @@ import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'media_provider_label.dart';
+import 'background_effect_selector.dart';
+import 'media_background_image_preset.dart';
 import 'realtime_strings.dart';
 import 'realtime_ui_style.dart';
 
@@ -17,6 +19,13 @@ typedef MediaParticipantBuilder =
       MediaTrackRenderer renderer,
     );
 
+/// Layout modes supported in the room view.
+enum MediaRoomLayoutMode {
+  grid,
+  speaker,
+  presentation,
+}
+
 class MediaRoomViewConfig {
   const MediaRoomViewConfig({
     this.showProvider = false,
@@ -24,12 +33,16 @@ class MediaRoomViewConfig {
     this.showRtcDataMessages = false,
     this.confirmBeforeLeave = true,
     this.initialMediaSettings,
+    this.backgroundImageBytes,
+    this.backgroundImagePresets = const [],
   });
   final bool showProvider;
   final bool showChat;
   final bool showRtcDataMessages;
   final bool confirmBeforeLeave;
   final MediaLocalPreviewSettings? initialMediaSettings;
+  final Uint8List? backgroundImageBytes;
+  final List<MediaBackgroundImagePreset> backgroundImagePresets;
 }
 
 class MediaRoomView extends StatefulWidget {
@@ -43,6 +56,7 @@ class MediaRoomView extends StatefulWidget {
     this.header,
     this.participantBuilder,
     this.onLeave,
+    this.backgroundEffects,
   });
   final MediaRoomSession room;
   final MediaTrackRenderer renderer;
@@ -52,6 +66,7 @@ class MediaRoomView extends StatefulWidget {
   final Widget? header;
   final MediaParticipantBuilder? participantBuilder;
   final VoidCallback? onLeave;
+  final MediaBackgroundEffectsController? backgroundEffects;
   @override
   State<MediaRoomView> createState() => _MediaRoomViewState();
 }
@@ -77,7 +92,122 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   List<_ManagedRoomMember>? _roomMembers;
   Object? _roomMembersError;
   bool _loadingRoomMembers = false;
+  MediaRoomLayoutMode _layoutMode = MediaRoomLayoutMode.grid;
+  bool _handRaised = false;
+  final Set<String> _raisedHandParticipantIds = {};
+  bool _cleanScreen = false;
+  int _likeCount = 0;
+  final List<_FloatingHeartItem> _floatingHearts = [];
+  bool _coHostRequested = false;
   MediaSession get session => widget.room.session;
+  MediaBackgroundEffectsController get _backgroundEffects =>
+      widget.backgroundEffects ?? widget.room;
+
+  void _toggleRaiseHand() {
+    final strings = RealtimeStrings.of(context);
+    setState(() {
+      _handRaised = !_handRaised;
+      if (_handRaised) {
+        _raisedHandParticipantIds.add(widget.room.participantId);
+      } else {
+        _raisedHandParticipantIds.remove(widget.room.participantId);
+      }
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_handRaised ? strings.handRaised : strings.lowerHand),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _sendLike() {
+    final random = math.Random();
+    const hues = [
+      Color(0xFFEF4444),
+      Color(0xFFF43F5E),
+      Color(0xFFEC4899),
+      Color(0xFFF59E0B),
+      Color(0xFF8B5CF6),
+    ];
+    final heart = _FloatingHeartItem(
+      id: '${DateTime.now().microsecondsSinceEpoch}-${random.nextInt(1000)}',
+      color: hues[random.nextInt(hues.length)],
+      startX: 0.65 + (random.nextDouble() * 0.25),
+    );
+    setState(() {
+      _likeCount++;
+      _floatingHearts.add(heart);
+    });
+    Future<void>.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted) {
+        setState(() => _floatingHearts.removeWhere((h) => h.id == heart.id));
+      }
+    });
+  }
+
+  void _toggleCleanScreen() {
+    setState(() => _cleanScreen = !_cleanScreen);
+  }
+
+  void _toggleCoHostRequest() {
+    final strings = RealtimeStrings.of(context);
+    setState(() => _coHostRequested = !_coHostRequested);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _coHostRequested ? strings.coHostApplied : strings.lowerHand,
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  Future<void> _muteAllParticipants() async {
+    final strings = RealtimeStrings.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => RealtimeGlassDialog(
+        icon: Icons.volume_off_rounded,
+        iconColor: RealtimeUiTokens.warning,
+        iconBackground: RealtimeUiTokens.warningSubtle,
+        title: Text(strings.muteAll),
+        content: Text(strings.muteAllConfirmation),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(strings.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: RealtimeUiTokens.warning,
+            ),
+            child: Text(strings.muteAll),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final participants = session.snapshot.participants
+        .where((p) => !p.isLocal)
+        .toList();
+    for (final p in participants) {
+      try {
+        await widget.room.muteParticipant(p.id);
+      } catch (_) {}
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(strings.muteAllSuccess),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      await _refreshRoomMembers();
+    }
+  }
 
   @override
   void initState() {
@@ -131,10 +261,42 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         }
       }
     }
+    var allowInitialVideoPublish = true;
+    if (settings.backgroundEffect.enabled) {
+      if (!_backgroundEffects.backgroundCapabilities.supports(
+        settings.backgroundEffect,
+      )) {
+        allowInitialVideoPublish = false;
+        if (mounted) {
+          setState(
+            () => _error =
+                'The current media provider cannot apply the selected '
+                'background effect. Camera publishing was kept off.',
+          );
+        }
+      } else {
+        try {
+          await _backgroundEffects.setBackgroundEffect(
+            settings.backgroundEffect,
+          );
+        } catch (error) {
+          allowInitialVideoPublish = false;
+          if (mounted) setState(() => _error = error.toString());
+        }
+      }
+    } else {
+      try {
+        await _backgroundEffects.setBackgroundEffect(settings.backgroundEffect);
+      } catch (error) {
+        if (mounted) setState(() => _error = error.toString());
+      }
+    }
     if (current is InteractiveMediaSession) {
       try {
         await current.setMuted(!settings.microphoneEnabled);
-        await current.setVideoEnabled(settings.cameraEnabled);
+        await current.setVideoEnabled(
+          settings.cameraEnabled && allowInitialVideoPublish,
+        );
       } catch (error) {
         if (mounted) setState(() => _error = error.toString());
       }
@@ -158,8 +320,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     });
     final mediaCapabilities = widget.room.managementCapabilities;
     final chatModeration = widget.chatModeration;
-    final chatCapabilities = chatModeration is ChatManagementCapabilitySource
-        ? (chatModeration as ChatManagementCapabilitySource)
+    final chatCapabilities = chatModeration is ChatModerationCapabilitySource
+        ? (chatModeration as ChatModerationCapabilitySource)
               .moderationCapabilities
         : const ChatManagementCapabilities();
     List<MediaRoomParticipantSummary> mediaParticipants = const [];
@@ -210,6 +372,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     if (!mounted) return;
     await widget.chatSession?.dispose();
     await widget.room.dispose();
+    if (!mounted) return;
     widget.onLeave?.call();
     if (widget.onLeave == null && Navigator.canPop(context)) {
       Navigator.pop(context);
@@ -327,6 +490,32 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) unawaited(_applyInitialSettings());
         });
+      }
+      final strings = RealtimeStrings.of(context);
+      if (_cleanScreen && widget.room.role != MediaRole.participant) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              _mediaStage(value),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: SafeArea(
+                  child: RealtimePill(
+                    label: strings.exitCleanScreen,
+                    icon: Icons.fullscreen_exit_rounded,
+                    foreground: Colors.white,
+                    background: Colors.black.withValues(alpha: 0.65),
+                    borderColor: Colors.white.withValues(alpha: 0.35),
+                    onTap: _toggleCleanScreen,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
       }
       return Scaffold(
         backgroundColor: Colors.transparent,
@@ -545,8 +734,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     final strings = RealtimeStrings.of(context);
     final capabilities = widget.room.managementCapabilities;
     final chatModeration = widget.chatModeration;
-    final chatCapabilities = chatModeration is ChatManagementCapabilitySource
-        ? (chatModeration as ChatManagementCapabilitySource)
+    final chatCapabilities = chatModeration is ChatModerationCapabilitySource
+        ? (chatModeration as ChatModerationCapabilitySource)
               .moderationCapabilities
         : const ChatManagementCapabilities();
     final members = [...?_roomMembers];
@@ -607,6 +796,36 @@ class _MediaRoomViewState extends State<MediaRoomView> {
             ),
           ),
           const Divider(height: 1),
+          if (capabilities.muteParticipant.supported &&
+              widget.room.role == MediaRole.host)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _muteAllParticipants,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: RealtimeUiTokens.warning,
+                        side: const BorderSide(
+                          color: RealtimeUiTokens.warning,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.volume_off_rounded, size: 16),
+                      label: Text(
+                        strings.muteAll,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (_roomMembersError != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
@@ -653,11 +872,17 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                           chat != null &&
                           chatModeration != null &&
                           chatCapabilities.removeMember.supported;
+                      final canGrantHost =
+                          !member.isSelf &&
+                          media != null &&
+                          widget.room.role == MediaRole.host &&
+                          capabilities.changeParticipantRole.supported;
                       final hasActions =
                           canRemoveMedia ||
                           canMuteMedia ||
                           canStopVideo ||
-                          canRemoveChat;
+                          canRemoveChat ||
+                          canGrantHost;
                       return ListTile(
                         minLeadingWidth: 36,
                         contentPadding: const EdgeInsets.symmetric(
@@ -689,6 +914,18 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                                 background: RealtimeUiTokens.primarySubtle,
                                 borderColor: RealtimeUiTokens.primaryBorder,
                               ),
+                            if ((member.isSelf && _handRaised) ||
+                                _raisedHandParticipantIds
+                                    .contains(media?.participantId)) ...[
+                              const SizedBox(width: 4),
+                              RealtimePill(
+                                label: strings.handRaised,
+                                icon: Icons.pan_tool_outlined,
+                                foreground: const Color(0xFFD97706),
+                                background: const Color(0xFFFFFBEB),
+                                borderColor: const Color(0xFFFDE68A),
+                              ),
+                            ],
                           ],
                         ),
                         subtitle: Column(
@@ -732,7 +969,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                                       danger: true,
                                       onPressed: () => _runMemberManagement(
                                         () => widget.room.removeParticipant(
-                                          media!.participantId,
+                                          media.participantId,
                                         ),
                                       ),
                                     ),
@@ -742,7 +979,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                                       icon: Icons.mic_off_outlined,
                                       onPressed: () => _runMemberManagement(
                                         () => widget.room.muteParticipant(
-                                          media!.participantId,
+                                          media.participantId,
                                         ),
                                       ),
                                     ),
@@ -752,7 +989,18 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                                       icon: Icons.videocam_off_outlined,
                                       onPressed: () => _runMemberManagement(
                                         () => widget.room.stopParticipantVideo(
-                                          media!.participantId,
+                                          media.participantId,
+                                        ),
+                                      ),
+                                    ),
+                                  if (canGrantHost)
+                                    _memberActionButton(
+                                      label: strings.grantHost,
+                                      icon: Icons.shield_outlined,
+                                      onPressed: () => _runMemberManagement(
+                                        () => widget.room.changeParticipantRole(
+                                          media.participantId,
+                                          MediaRole.host,
                                         ),
                                       ),
                                     ),
@@ -762,8 +1010,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                                       icon: Icons.forum_outlined,
                                       danger: true,
                                       onPressed: () => _runMemberManagement(
-                                        () => chatModeration!.removeMember(
-                                          chat!.userId,
+                                        () => chatModeration.removeMember(
+                                          chat.userId,
                                         ),
                                       ),
                                     ),
@@ -838,20 +1086,111 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     label: Text(label, style: const TextStyle(fontSize: 11)),
   );
 
-  Widget _mediaStage(MediaSnapshot value) => ColoredBox(
-    color: RealtimeUiTokens.background,
-    child: value.contentShareTrack == null
-        ? value.participants.isEmpty
-              ? _waiting()
-              : _grid(value)
-        : Column(
-            children: [
-              Expanded(child: _screenShare(value)),
-              if (value.participants.isNotEmpty)
-                SizedBox(height: 116, child: _participantStrip(value)),
-            ],
-          ),
+  Widget _danmakuOverlay() {
+    final chat = widget.chatSession;
+    if (chat == null || chat.messages.isEmpty) return const SizedBox.shrink();
+    final recent = chat.messages.reversed.take(4).toList().reversed.toList();
+    final identity =
+        widget.chatSession is ChatSessionIdentity
+            ? widget.chatSession as ChatSessionIdentity
+            : null;
+    final myId = identity?.localUserId;
+    return Positioned(
+      left: 14,
+      bottom: 14,
+      width: 290,
+      child: IgnorePointer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: recent.map((m) {
+            final own = m.userId == myId;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.52),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+              ),
+              child: RichText(
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text:
+                          '${m.displayName.isEmpty ? m.userId : m.displayName}: ',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: own
+                            ? const Color(0xFF67E8F9)
+                            : const Color(0xFFFDE047),
+                      ),
+                    ),
+                    TextSpan(
+                      text: m.message,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _floatingHeartsOverlay() => Positioned.fill(
+    child: IgnorePointer(
+      child: Stack(
+        children: _floatingHearts
+            .map(
+              (heart) => _FloatingHeartParticle(
+                key: ValueKey(heart.id),
+                heart: heart,
+              ),
+            )
+            .toList(),
+      ),
+    ),
   );
+
+  Widget _mediaStage(MediaSnapshot value) {
+    final isLive = widget.room.role != MediaRole.participant;
+    final stageContent =
+        value.contentShareTrack == null &&
+                _layoutMode != MediaRoomLayoutMode.presentation
+            ? value.participants.isEmpty
+                ? _waiting()
+                : _grid(value)
+            : Column(
+                children: [
+                  Expanded(child: _screenShare(value)),
+                  if (value.participants.isNotEmpty)
+                    SizedBox(height: 116, child: _participantStrip(value)),
+                ],
+              );
+
+    return ColoredBox(
+      color: isLive ? Colors.black : RealtimeUiTokens.background,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          stageContent,
+          if (isLive && !_cleanScreen) ...[
+            _danmakuOverlay(),
+            _floatingHeartsOverlay(),
+          ],
+        ],
+      ),
+    );
+  }
 
   Widget _participantStrip(MediaSnapshot value) => ListView.separated(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -948,6 +1287,65 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           if (widget.config.showProvider && !compact) ...[
             const SizedBox(width: 8),
             _providerBadge(widget.room.providerId),
+          ],
+          if (widget.room.role == MediaRole.host && !compact) ...[
+            const SizedBox(width: 8),
+            RealtimePill(
+              label: strings.hostBadge,
+              icon: Icons.shield_outlined,
+              foreground: const Color(0xFFD97706),
+              background: const Color(0xFFFFFBEB),
+              borderColor: const Color(0xFFFDE68A),
+            ),
+          ],
+          if (!isLive && !compact) ...[
+            const SizedBox(width: 4),
+            PopupMenuButton<MediaRoomLayoutMode>(
+              tooltip: strings.layoutMode,
+              icon: Icon(
+                switch (_layoutMode) {
+                  MediaRoomLayoutMode.grid => Icons.grid_view_rounded,
+                  MediaRoomLayoutMode.speaker => Icons.person_pin_rounded,
+                  MediaRoomLayoutMode.presentation =>
+                    Icons.present_to_all_rounded,
+                },
+                size: 20,
+                color: RealtimeUiTokens.text,
+              ),
+              onSelected: (mode) => setState(() => _layoutMode = mode),
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  value: MediaRoomLayoutMode.grid,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.grid_view_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Text(strings.gridMode),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: MediaRoomLayoutMode.speaker,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person_pin_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Text(strings.speakerMode),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: MediaRoomLayoutMode.presentation,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.present_to_all_rounded, size: 18),
+                      const SizedBox(width: 8),
+                      Text(strings.presentationMode),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ],
           const SizedBox(width: 8),
           RealtimePill(
@@ -1169,10 +1567,17 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       final focused = count > 1 && _focusedParticipantId != null
           ? participants.where((p) => p.id == _focusedParticipantId).firstOrNull
           : null;
+      final isSpeaker = _layoutMode == MediaRoomLayoutMode.speaker;
+      final effectiveFocused =
+          focused ??
+          (isSpeaker && count > 1
+              ? (participants.where((p) => p.isSpeaking).firstOrNull ??
+                  participants.first)
+              : null);
 
-      if (focused != null) {
+      if (effectiveFocused != null) {
         final others = participants
-            .where((p) => p.id != focused.id)
+            .where((p) => p.id != effectiveFocused.id)
             .toList(growable: false);
         return Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
@@ -1181,7 +1586,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               Expanded(
                 flex: 3,
                 child: _buildParticipantWidget(
-                  focused,
+                  effectiveFocused,
                   isFocused: true,
                   canFocus: true,
                 ),
@@ -1841,6 +2246,60 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     });
   }
 
+  Future<void> _openBackgroundEffects() async {
+    var effect = _backgroundEffects.backgroundEffect;
+    var busy = false;
+    String? errorMessage;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, updateSheet) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                BackgroundEffectSelector(
+                  capabilities: _backgroundEffects.backgroundCapabilities,
+                  effect: effect,
+                  imageBytes: widget.config.backgroundImageBytes,
+                  imagePresets: widget.config.backgroundImagePresets,
+                  busy: busy,
+                  onChanged: (next) async {
+                    updateSheet(() {
+                      busy = true;
+                      errorMessage = null;
+                    });
+                    try {
+                      await _backgroundEffects.setBackgroundEffect(next);
+                      effect = next;
+                      if (mounted) setState(() => _error = null);
+                    } catch (error) {
+                      errorMessage = error.toString();
+                    } finally {
+                      if (sheetContext.mounted) {
+                        updateSheet(() => busy = false);
+                      }
+                    }
+                  },
+                ),
+                if (errorMessage != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    errorMessage!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _controls(MediaSnapshot value) {
     final interactive = session is InteractiveMediaSession
         ? session as InteractiveMediaSession
@@ -1880,6 +2339,18 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           Icons.cameraswitch_outlined,
           strings.switchCamera,
           () => _run(() => interactive.switchCamera(MediaCameraPosition.back)),
+          showLabel: showLabels,
+        ),
+      );
+    }
+    if (caps.canPublishVideo &&
+        _backgroundEffects.backgroundCapabilities.isSupported) {
+      controls.add(
+        _control(
+          Icons.blur_on_outlined,
+          strings.virtualBackground,
+          _openBackgroundEffects,
+          active: _backgroundEffects.backgroundEffect.enabled,
           showLabel: showLabels,
         ),
       );
@@ -1930,6 +2401,49 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           strings.rtcData,
           () => setState(() => _rtcDataOpen = !_rtcDataOpen),
           active: _rtcDataOpen,
+          showLabel: showLabels,
+        ),
+      );
+    }
+    final isLive = widget.room.role != MediaRole.participant;
+    if (!isLive) {
+      controls.add(
+        _control(
+          Icons.pan_tool_outlined,
+          _handRaised ? strings.lowerHand : strings.raiseHand,
+          _toggleRaiseHand,
+          active: _handRaised,
+          showLabel: showLabels,
+        ),
+      );
+    } else {
+      controls.add(
+        _control(
+          Icons.favorite_rounded,
+          '${strings.totalLikes} $_likeCount',
+          _sendLike,
+          showLabel: showLabels,
+        ),
+      );
+      if (widget.room.role == MediaRole.viewer) {
+        controls.add(
+          _control(
+            Icons.pan_tool_outlined,
+            _coHostRequested ? strings.coHostApplied : strings.applyCoHost,
+            _toggleCoHostRequest,
+            active: _coHostRequested,
+            showLabel: showLabels,
+          ),
+        );
+      }
+      controls.add(
+        _control(
+          _cleanScreen
+              ? Icons.fullscreen_exit_rounded
+              : Icons.fullscreen_rounded,
+          _cleanScreen ? strings.exitCleanScreen : strings.cleanScreen,
+          _toggleCleanScreen,
+          active: _cleanScreen,
           showLabel: showLabels,
         ),
       );
@@ -2256,4 +2770,70 @@ class MediaParticipantTile extends StatelessWidget {
     }
     return tile;
   }
+}
+
+class _FloatingHeartItem {
+  _FloatingHeartItem({
+    required this.id,
+    required this.color,
+    required this.startX,
+  });
+  final String id;
+  final Color color;
+  final double startX;
+}
+
+class _FloatingHeartParticle extends StatefulWidget {
+  const _FloatingHeartParticle({super.key, required this.heart});
+  final _FloatingHeartItem heart;
+
+  @override
+  State<_FloatingHeartParticle> createState() => _FloatingHeartParticleState();
+}
+
+class _FloatingHeartParticleState extends State<_FloatingHeartParticle>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _progress;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..forward();
+    _progress = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _progress,
+    builder: (context, child) {
+      final value = _progress.value;
+      final yOffset = -value * 220;
+      final xOffset = math.sin(value * math.pi * 2) * 16;
+      final opacity = (1.0 - value).clamp(0.0, 1.0);
+      return Align(
+        alignment: Alignment(widget.heart.startX * 2 - 1, 0.85),
+        child: Transform.translate(
+          offset: Offset(xOffset, yOffset),
+          child: Opacity(
+            opacity: opacity,
+            child: Icon(
+              Icons.favorite_rounded,
+              size: 26,
+              color: widget.heart.color,
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }

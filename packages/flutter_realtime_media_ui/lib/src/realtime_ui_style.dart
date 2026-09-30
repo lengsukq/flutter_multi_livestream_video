@@ -1123,6 +1123,10 @@ class RealtimeRoomCard extends StatelessWidget {
           FilledButton(
             onPressed: onJoin,
             style: FilledButton.styleFrom(
+              backgroundColor: isBroadcast
+                  ? const Color(0xFFE11D48)
+                  : RealtimeUiTokens.primary,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               minimumSize: Size.zero,
               shape: RoundedRectangleBorder(
@@ -1132,7 +1136,7 @@ class RealtimeRoomCard extends StatelessWidget {
               ),
             ),
             child: Text(
-              strings.join,
+              isBroadcast ? strings.watchLive : strings.join,
               style: const TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,

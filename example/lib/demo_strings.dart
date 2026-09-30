@@ -32,7 +32,17 @@ class DemoStrings {
   String get createMeeting => isZh ? '创建会议' : 'Create meeting';
   String get startLive => isZh ? '开始直播' : 'Start live';
   String get videoTab => isZh ? '视频' : 'Video';
+  String get meetingTab => isZh ? '会议' : 'Meeting';
+  String get livestreamTab => isZh ? '直播' : 'Livestream';
   String get chatTab => isZh ? '聊天' : 'Chat';
+  String get watchLiveStream => isZh ? '观看直播' : 'Watch Live';
+  String get hostBroadcast => isZh ? '我要开播' : 'Go Live';
+  String get liveStreamList => isZh ? '活跃直播间' : 'Live Streams';
+  String get meetingList => isZh ? '进行中会议' : 'Meetings';
+  String get noActiveLiveStreams =>
+      isZh ? '当前暂无开播中的直播间。' : 'No active live streams found.';
+  String get noActiveMeetings =>
+      isZh ? '当前暂无进行中的会议。' : 'No active meetings found.';
   String get roomCode => isZh ? '房间码' : 'Room code';
   String get optionalRoomCode => isZh ? '房间码（可选）' : 'Room code (optional)';
   String get roomCodeHelp => isZh ? '4–12 位字母或数字' : '4–12 letters or digits';

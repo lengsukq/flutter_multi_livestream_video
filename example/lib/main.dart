@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'standalone_chat_demo.dart';
 import 'demo_strings.dart';
+import 'demo_background.dart';
 
 const _demoLocalePreferenceKey = 'realtime_media_demo_locale';
 Locale? _initialDemoLocale;
@@ -110,6 +111,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   bool _roomListRequestInFlight = false;
   List<MediaRoomSummary> _availableRooms = const [];
   String? _roomListError;
+  MediaRoomMode? _roomFilter;
   final Map<String, String> _roomOwnerCredentials = {};
 
   @override
@@ -475,8 +477,9 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     required String roomLabel,
     String? providerId,
     String? roomCode,
-  }) {
-    if (!mounted) return Future.value(null);
+  }) async {
+    final backgroundPresets = await DemoBackground.presets;
+    if (!mounted) return null;
     return MediaPreJoinPage.show(
       context,
       runCheck: () => realtime.preJoin(
@@ -491,6 +494,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       displayName: displayName,
       roomLabel: roomLabel,
       backendProviderId: _serverMediaProviderId ?? '',
+      backgroundImagePresets: backgroundPresets,
       title: role == MediaRole.viewer
           ? DemoStrings.of(context).live
           : role == MediaRole.host
@@ -1247,19 +1251,75 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
               );
             }
             final live = tab == 2;
-            return _roomForm(
-              code: _createCodeController,
-              codeLabel: DemoStrings.of(context).optionalRoomCode,
-              actionLabel: live
-                  ? DemoStrings.of(context).startLive
-                  : DemoStrings.of(context).createMeeting,
-              action: () {
-                _createRoomMode = live
-                    ? MediaRoomMode.broadcast
-                    : MediaRoomMode.meeting;
-                return _createRoom();
-              },
-              isCreate: true,
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: live
+                        ? const Color(0xFFFFF1F2).withValues(alpha: 0.8)
+                        : RealtimeUiTokens.primarySubtle
+                            .withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(
+                      RealtimeUiTokens.compactRadius,
+                    ),
+                    border: Border.all(
+                      color: live
+                          ? const Color(0xFFFECDD3)
+                          : RealtimeUiTokens.primaryBorder,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        live ? Icons.sensors_rounded : Icons.groups_rounded,
+                        size: 20,
+                        color: live
+                            ? const Color(0xFFE11D48)
+                            : RealtimeUiTokens.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          live
+                              ? (DemoStrings.of(context).isZh
+                                  ? '高清互动直播 · 悬浮弹幕流 · 实时飘心点赞 · 清屏沉浸模式'
+                                  : 'Interactive livestream · Floating danmaku · Flying heart likes · Clean screen')
+                              : (DemoStrings.of(context).isZh
+                                  ? '多人协作会议 · 宫格与演讲者布局 · 屏幕共享 · 全员静音管理'
+                                  : 'Multi-party meeting · Grid & Speaker layouts · Screen sharing · Host controls'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: live
+                                ? const Color(0xFFE11D48)
+                                : RealtimeUiTokens.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _roomForm(
+                  code: _createCodeController,
+                  codeLabel: DemoStrings.of(context).optionalRoomCode,
+                  actionLabel: live
+                      ? DemoStrings.of(context).startLive
+                      : DemoStrings.of(context).createMeeting,
+                  action: () {
+                    _createRoomMode = live
+                        ? MediaRoomMode.broadcast
+                        : MediaRoomMode.meeting;
+                    return _createRoom();
+                  },
+                  isCreate: true,
+                ),
+              ],
             );
           },
         ),
@@ -1309,7 +1369,12 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   );
 
   Widget _buildAvailableRooms() {
-    final rooms = _availableRooms;
+    final strings = DemoStrings.of(context);
+    final allRooms = _availableRooms;
+    final rooms = _roomFilter == null
+        ? allRooms
+        : allRooms.where((r) => r.roomMode == _roomFilter).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1319,17 +1384,17 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
               child: Row(
                 children: [
                   Text(
-                    DemoStrings.of(context).availableRooms,
-                    style: TextStyle(
+                    strings.availableRooms,
+                    style: const TextStyle(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w800,
                       color: RealtimeUiTokens.text,
                     ),
                   ),
-                  if (rooms.isNotEmpty) ...[
+                  if (allRooms.isNotEmpty) ...[
                     const SizedBox(width: 8),
                     RealtimePill(
-                      label: '${rooms.length}',
+                      label: '${allRooms.length}',
                       foreground: RealtimeUiTokens.primary,
                       background: RealtimeUiTokens.primarySubtle,
                       borderColor: RealtimeUiTokens.primaryBorder,
@@ -1349,10 +1414,53 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.refresh_rounded, size: 17),
-              label: Text(DemoStrings.of(context).refresh),
+              label: Text(strings.refresh),
             ),
           ],
         ),
+        if (allRooms.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              RealtimePill(
+                label: strings.isZh ? '全部' : 'All',
+                foreground: _roomFilter == null
+                    ? Colors.white
+                    : RealtimeUiTokens.textMuted,
+                background: _roomFilter == null
+                    ? RealtimeUiTokens.primary
+                    : RealtimeUiTokens.surfaceSubtle,
+                onTap: () => setState(() => _roomFilter = null),
+              ),
+              const SizedBox(width: 6),
+              RealtimePill(
+                label: strings.meeting,
+                icon: Icons.groups_rounded,
+                foreground: _roomFilter == MediaRoomMode.meeting
+                    ? Colors.white
+                    : RealtimeUiTokens.primary,
+                background: _roomFilter == MediaRoomMode.meeting
+                    ? RealtimeUiTokens.primary
+                    : RealtimeUiTokens.primarySubtle,
+                onTap: () => setState(() => _roomFilter = MediaRoomMode.meeting),
+              ),
+              const SizedBox(width: 6),
+              RealtimePill(
+                label: strings.live,
+                icon: Icons.podcasts_rounded,
+                foreground: _roomFilter == MediaRoomMode.broadcast
+                    ? Colors.white
+                    : const Color(0xFFE11D48),
+                background: _roomFilter == MediaRoomMode.broadcast
+                    ? const Color(0xFFE11D48)
+                    : const Color(0xFFFFF1F2),
+                borderColor: const Color(0xFFFECDD3),
+                onTap: () =>
+                    setState(() => _roomFilter = MediaRoomMode.broadcast),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 8),
         if (_roomListError != null)
           Text(
@@ -1370,9 +1478,13 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
               border: Border.all(color: RealtimeUiTokens.border),
             ),
             child: Text(
-              DemoStrings.of(context).noActiveRooms,
+              _roomFilter == MediaRoomMode.broadcast
+                  ? strings.noActiveLiveStreams
+                  : (_roomFilter == MediaRoomMode.meeting
+                      ? strings.noActiveMeetings
+                      : strings.noActiveRooms),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12.5,
                 color: RealtimeUiTokens.textMuted,
                 fontWeight: FontWeight.w500,
@@ -1446,11 +1558,16 @@ class MeetingRoomPage extends StatelessWidget {
   final MediaLocalPreviewSettings initialMediaSettings;
 
   @override
-  Widget build(BuildContext context) => RealtimeRoomView(
-    room: room,
-    config: MediaRoomViewConfig(
-      showChat: true,
-      initialMediaSettings: initialMediaSettings,
-    ),
-  );
+  Widget build(BuildContext context) =>
+      FutureBuilder<List<MediaBackgroundImagePreset>>(
+        future: DemoBackground.presets,
+        builder: (context, snapshot) => RealtimeRoomView(
+          room: room,
+          config: MediaRoomViewConfig(
+            showChat: true,
+            initialMediaSettings: initialMediaSettings,
+            backgroundImagePresets: snapshot.data ?? const [],
+          ),
+        ),
+      );
 }

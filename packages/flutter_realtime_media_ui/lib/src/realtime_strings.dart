@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 /// Lightweight localization surface for the built-in SDK UI.
 ///
@@ -77,8 +78,28 @@ class RealtimeStrings {
   String get leave => isZh ? '离开' : 'Leave';
   String get continueLabel => isZh ? '继续' : 'Continue';
   String get runAgain => isZh ? '重新检查' : 'Run again';
+  String get refresh => isZh ? '刷新' : 'Refresh';
   String get microphone => isZh ? '麦克风' : 'Microphone';
   String get camera => isZh ? '摄像头' : 'Camera';
+  String get virtualBackground => isZh ? '虚拟背景' : 'Virtual background';
+  String get noVirtualBackground => isZh ? '无' : 'None';
+  String get backgroundBlur => isZh ? '背景虚化' : 'Background blur';
+  String get backgroundImage => isZh ? '背景图片' : 'Background image';
+  String get blurStrength => isZh ? '模糊强度' : 'Blur strength';
+  String get invalidBackgroundImage =>
+      isZh ? '无法读取背景图片' : 'Unable to read the background image';
+  String backgroundBlurStrength(MediaBackgroundBlurStrength strength) =>
+      switch (strength) {
+        MediaBackgroundBlurStrength.low => isZh ? '低' : 'Low',
+        MediaBackgroundBlurStrength.medium => isZh ? '中' : 'Medium',
+        MediaBackgroundBlurStrength.high => isZh ? '高' : 'High',
+      };
+  String get backgroundBlurPreviewDescription => isZh
+      ? '立即应用到本地预览画面。'
+      : 'Apply the effect to the local preview immediately.';
+  String get backgroundBlurJoinDescription => isZh
+      ? '当前服务商不支持独立特效预览；效果会在摄像头画面发布前应用。'
+      : 'This provider cannot preview the effect independently; it will be applied before the camera is published.';
   String get speaker => isZh ? '扬声器' : 'Speaker';
   String get deviceSetup => isZh ? '设备设置' : 'Device setup';
   String get cameraPreviewUnavailable => isZh
@@ -247,6 +268,60 @@ class RealtimeStrings {
   String roomCardSummary(String mode, int attendees) =>
       isZh ? '$mode · $attendees 人在线' : '$mode · $attendees online';
   String get join => isZh ? '加入' : 'Join';
+
+  // --- Extended Chat Strings ---
+  String get scrollToBottom => isZh ? '回到底部' : 'Scroll to bottom';
+  String get newMessages => isZh ? '新消息' : 'New messages';
+  String get quickReactions => isZh ? '快捷表情' : 'Quick reactions';
+  String get messageCopied => isZh ? '已复制消息' : 'Message copied';
+  String get removeMember => isZh ? '移出成员' : 'Remove member';
+  String get copyText => isZh ? '复制文字' : 'Copy text';
+
+  // --- Extended Live Stream Strings ---
+  String get liveStream => isZh ? '互动直播' : 'Livestream';
+  String get liveAudience => isZh ? '人正在看' : 'watching';
+  String get watchLive => isZh ? '观看直播' : 'Watch live';
+  String get startLive => isZh ? '开始直播' : 'Start live';
+  String get cleanScreen => isZh ? '清屏模式' : 'Clean screen';
+  String get exitCleanScreen => isZh ? '退出清屏' : 'Exit clean screen';
+  String get sendDanmaku => isZh ? '发弹幕' : 'Send';
+  String get danmakuHint => isZh ? '聊两句，发个弹幕吧…' : 'Say something in chat…';
+  String get applyCoHost => isZh ? '申请连麦' : 'Request co-host';
+  String get coHostApplied => isZh ? '连麦申请已发出' : 'Co-host request sent';
+  String get coHostRequests => isZh ? '连麦申请' : 'Co-host requests';
+  String get approveCoHost => isZh ? '同意连麦' : 'Approve';
+  String get rejectCoHost => isZh ? '拒绝' : 'Decline';
+  String get endLive => isZh ? '结束直播' : 'End livestream';
+  String get endLiveConfirmation =>
+      isZh ? '确定要结束当前直播吗？所有观众将被断开。' : 'End this livestream? All viewers will be disconnected.';
+  String get liveSummary => isZh ? '直播小结' : 'Livestream Summary';
+  String get liveDuration => isZh ? '直播时长' : 'Live duration';
+  String get peakViewers => isZh ? '最高在线' : 'Peak viewers';
+  String get totalLikes => isZh ? '获赞总数' : 'Total likes';
+
+  // --- Extended Meeting Strings ---
+  String get gridMode => isZh ? '宫格视图' : 'Grid view';
+  String get speakerMode => isZh ? '演讲者视图' : 'Speaker view';
+  String get presentationMode => isZh ? '演示视图' : 'Presentation view';
+  String get layoutMode => isZh ? '切换布局' : 'Layout mode';
+  String get raiseHand => isZh ? '举手' : 'Raise hand';
+  String get lowerHand => isZh ? '手放下' : 'Lower hand';
+  String get handRaised => isZh ? '已举手' : 'Hand raised';
+  String get muteAll => isZh ? '全员静音' : 'Mute all';
+  String get muteAllConfirmation =>
+      isZh ? '确定要将除自己外的所有人静音吗？' : 'Mute everyone in the meeting except yourself?';
+  String get muteAllSuccess => isZh ? '已将所有成员静音' : 'All participants muted';
+  String get hostBadge => isZh ? '主持人' : 'Host';
+  String get moderatorBadge => isZh ? '管理员' : 'Admin';
+  String get grantHost => isZh ? '设为主持人' : 'Grant Host';
+  String get endMeetingForAll => isZh ? '全员结束会议' : 'End meeting for all';
+  String get endMeetingForAllDesc => isZh
+      ? '关闭当前会议房间，所有参会者将被断开。'
+      : 'Close the meeting room for everyone; all participants will be disconnected.';
+  String get leaveMeetingOnly => isZh ? '仅自己离开' : 'Leave meeting only';
+  String get leaveMeetingOnlyDesc => isZh
+      ? '会议将继续进行，其他参会者不受影响。'
+      : 'The meeting will continue running for other participants.';
 }
 
 class _RealtimeStringsDelegate extends LocalizationsDelegate<RealtimeStrings> {

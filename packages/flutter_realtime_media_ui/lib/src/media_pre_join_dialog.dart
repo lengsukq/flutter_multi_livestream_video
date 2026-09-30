@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'media_provider_label.dart';
+import 'background_effect_selector.dart';
+import 'media_background_image_preset.dart';
 import 'realtime_strings.dart';
 import 'realtime_ui_style.dart';
 
@@ -425,7 +428,7 @@ class _CheckRow extends StatelessWidget {
                   TextButton(
                     onPressed: requestingPermission == permissionKind
                         ? null
-                        : () => onPermissionAction!(permissionKind!),
+                        : () => onPermissionAction!(permissionKind),
                     style: TextButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -529,6 +532,8 @@ class MediaPreJoinPage extends StatefulWidget {
     this.roomLabel,
     this.title,
     this.backendProviderId,
+    this.backgroundImageBytes,
+    this.backgroundImagePresets = const [],
   });
 
   final MediaPreJoinCheckRunner runCheck;
@@ -542,6 +547,10 @@ class MediaPreJoinPage extends StatefulWidget {
   /// provider resolved for the room being joined.
   final String? backendProviderId;
 
+  /// Optional local preset supplied by the host application.
+  final Uint8List? backgroundImageBytes;
+  final List<MediaBackgroundImagePreset> backgroundImagePresets;
+
   static Future<MediaLocalPreviewSettings?> show(
     BuildContext context, {
     required MediaPreJoinCheckRunner runCheck,
@@ -552,6 +561,8 @@ class MediaPreJoinPage extends StatefulWidget {
     String? roomLabel,
     String? title,
     String? backendProviderId,
+    Uint8List? backgroundImageBytes,
+    List<MediaBackgroundImagePreset> backgroundImagePresets = const [],
   }) => Navigator.of(context).push<MediaLocalPreviewSettings?>(
     MaterialPageRoute(
       builder: (_) => MediaPreJoinPage(
@@ -562,6 +573,8 @@ class MediaPreJoinPage extends StatefulWidget {
         roomLabel: roomLabel,
         title: title,
         backendProviderId: backendProviderId,
+        backgroundImageBytes: backgroundImageBytes,
+        backgroundImagePresets: backgroundImagePresets,
       ),
     ),
   );
@@ -576,11 +589,14 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   MediaLocalPreviewSession? _preview;
   Object? _error;
   Object? _previewError;
+  StreamSubscription<MediaError>? _previewFailures;
   Object? _deviceError;
   List<MediaDevice> _devices = const [];
   bool _loading = true;
   bool _saving = false;
+  bool _updatingBackground = false;
   bool _allowPop = false;
+  MediaBackgroundEffect _backgroundEffect = const MediaBackgroundEffect.none();
   Map<MediaPermissionKind, MediaPermissionState> _permissionStates = const {};
   MediaPermissionKind? _requestingPermission;
   bool _refreshPermissionsOnResume = false;
@@ -615,6 +631,9 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
       final permissionStates = await _readPermissionStates();
       if (!mounted) return;
       _result = result;
+      if (!result.backgroundCapabilities.supports(_backgroundEffect)) {
+        _backgroundEffect = const MediaBackgroundEffect.none();
+      }
       setState(() {
         _permissionStates = permissionStates;
         _loading = false;
@@ -629,7 +648,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
             await preview?.dispose();
             return;
           }
-          _preview = preview;
+          _bindPreview(preview);
           if (preview != null) {
             try {
               _devices = await preview.listMediaDevices();
@@ -651,7 +670,21 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     }
   }
 
+  void _bindPreview(MediaLocalPreviewSession? preview) {
+    _preview = preview;
+    if (preview is MediaLocalPreviewFailureEvents) {
+      _previewFailures = (preview as MediaLocalPreviewFailureEvents).failures
+          .listen((error) {
+            if (mounted && identical(_preview, preview)) {
+              setState(() => _previewError = error);
+            }
+          });
+    }
+  }
+
   Future<void> _disposePreview() async {
+    await _previewFailures?.cancel();
+    _previewFailures = null;
     final preview = _preview;
     _preview = null;
     if (preview != null) await preview.dispose();
@@ -662,7 +695,8 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     if (_loading || _saving || result == null || !result.isReady) return;
     setState(() => _saving = true);
     final settings =
-        _preview?.settings ?? MediaLocalPreviewSettings(cameraEnabled: false);
+        (_preview?.settings ?? MediaLocalPreviewSettings(cameraEnabled: false))
+            .copyWith(backgroundEffect: _backgroundEffect);
     await _disposePreview();
     if (mounted) {
       setState(() => _allowPop = true);
@@ -688,6 +722,31 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
       if (mounted) setState(() => _previewError = null);
     } catch (error) {
       if (mounted) setState(() => _previewError = error);
+    }
+  }
+
+  Future<void> _setBackgroundEffect(MediaBackgroundEffect effect) async {
+    if (_updatingBackground) return;
+    final preview = _preview;
+    final MediaBackgroundEffectsController? controller =
+        preview is MediaBackgroundEffectsController
+        ? preview as MediaBackgroundEffectsController
+        : null;
+    setState(() => _updatingBackground = true);
+    try {
+      if (controller != null) {
+        await controller.setBackgroundEffect(effect);
+      }
+      if (!mounted) return;
+      setState(() {
+        _backgroundEffect = effect;
+        _previewError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _previewError = error);
+    } finally {
+      if (mounted) setState(() => _updatingBackground = false);
     }
   }
 
@@ -853,6 +912,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     return MediaPreJoinResult(
       role: result.role,
       providerId: result.providerId,
+      backgroundCapabilities: result.backgroundCapabilities,
       checks: [
         for (final check in result.checks) check.type == type ? updated : check,
       ],
@@ -905,7 +965,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
         await preview?.dispose();
         return;
       }
-      _preview = preview;
+      _bindPreview(preview);
       if (preview != null) {
         try {
           _devices = await preview.listMediaDevices();
@@ -922,6 +982,8 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_previewFailures?.cancel());
+    _previewFailures = null;
     final preview = _preview;
     _preview = null;
     if (preview != null) unawaited(preview.dispose());
@@ -1296,11 +1358,34 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
             else if (_devices.isEmpty)
               _preJoinNotice(strings.noDevicesFound, danger: true),
           ],
+          if (result?.backgroundCapabilities.isSupported == true) ...[
+            const SizedBox(height: 12),
+            _backgroundEffectSetup(strings),
+          ],
           _resultContent(strings, result),
         ],
       ),
     );
   }
+
+  Widget _backgroundEffectSetup(RealtimeStrings strings) => Material(
+    color: Colors.white.withValues(alpha: .72),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+      side: const BorderSide(color: RealtimeUiTokens.border),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: BackgroundEffectSelector(
+        capabilities: _result!.backgroundCapabilities,
+        effect: _backgroundEffect,
+        imageBytes: widget.backgroundImageBytes,
+        imagePresets: widget.backgroundImagePresets,
+        busy: _updatingBackground,
+        onChanged: _setBackgroundEffect,
+      ),
+    ),
+  );
 
   Widget _devicePicker(
     String label,

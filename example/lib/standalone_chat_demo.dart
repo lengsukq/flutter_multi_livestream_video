@@ -436,18 +436,31 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                 radius: RealtimeUiTokens.controlRadius,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
-                  vertical: 11,
+                  vertical: 12,
                 ),
-                opacity: 0.82,
+                opacity: 0.88,
                 shadow: false,
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.forum_outlined,
-                      size: 18,
-                      color: RealtimeUiTokens.primary,
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: RealtimeUiTokens.primarySubtle,
+                        borderRadius: BorderRadius.circular(
+                          RealtimeUiTokens.compactRadius,
+                        ),
+                        border: Border.all(
+                          color: RealtimeUiTokens.primaryBorder,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.forum_outlined,
+                        size: 18,
+                        color: RealtimeUiTokens.primary,
+                      ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,7 +470,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: 14,
                               fontWeight: FontWeight.w800,
                               color: RealtimeUiTokens.text,
                             ),
