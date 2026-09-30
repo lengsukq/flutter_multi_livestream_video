@@ -347,9 +347,7 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
     return widget.showAppBar
         ? Scaffold(
             backgroundColor: Colors.transparent,
-            body: RealtimeAmbientBackground(
-              child: SafeArea(child: body),
-            ),
+            body: RealtimeAmbientBackground(child: SafeArea(child: body)),
           )
         : body;
   }

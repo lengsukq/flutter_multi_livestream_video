@@ -327,12 +327,21 @@ private final class ArtcVideoPlatformView: NSObject, FlutterPlatformView {
     private let containerView = UIView()
     private let userId: String
     private let isLocal: Bool
+    /// 0 = fill (crop to the tile), 1 = fit (letterbox, keep all content).
+    private let fitMode: Int
     private weak var plugin: FlutterRealtimeMediaArtcPlugin?
     private var boundEngine: AliRtcEngine?
 
-    init(frame: CGRect, userId: String, isLocal: Bool, plugin: FlutterRealtimeMediaArtcPlugin) {
+    init(
+        frame: CGRect,
+        userId: String,
+        isLocal: Bool,
+        fitMode: Int,
+        plugin: FlutterRealtimeMediaArtcPlugin
+    ) {
         self.userId = userId
         self.isLocal = isLocal
+        self.fitMode = fitMode
         self.plugin = plugin
         super.init()
         containerView.frame = frame
@@ -348,7 +357,7 @@ private final class ArtcVideoPlatformView: NSObject, FlutterPlatformView {
         boundEngine = engine
         let canvas = AliVideoCanvas()
         canvas.view = containerView
-        canvas.renderMode = .fill
+        canvas.renderMode = fitMode == 1 ? .fit : .fill
         if isLocal {
             _ = engine.setLocalViewConfig(canvas, for: .camera)
             if engine.isCameraOn() { _ = engine.startPreview() }
@@ -375,6 +384,7 @@ private final class ArtcVideoPlatformViewFactory: NSObject, FlutterPlatformViewF
             frame: frame,
             userId: values["userId"] as? String ?? "",
             isLocal: values["isLocal"] as? Bool ?? false,
+            fitMode: values["fitMode"] as? Int ?? 0,
             plugin: plugin!
         )
     }

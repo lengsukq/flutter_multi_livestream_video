@@ -388,11 +388,16 @@ abstract class _TrtcSessionBase
 
   TrtcMediaVideoTrack _makeScreenShareTrack(String userId) {
     final engine = _engine!;
+    // Screen shares must never be cropped: the TRTC sub-stream view defaults to
+    // fill, which cuts off whatever does not match the tile aspect ratio.
+    engine.setRemoteFillMode(userId, true, true);
     return TrtcMediaVideoTrack(
       userId: userId,
       local: false,
       screenShare: true,
       generation: _streamGeneration,
+      frameWidth: engine.remoteWidth(userId, subStream: true),
+      frameHeight: engine.remoteHeight(userId, subStream: true),
       startRendering: (viewId) =>
           engine.startRemoteSubStreamView(userId, viewId),
       stopRendering: () => engine.stopRemoteSubStreamView(userId),

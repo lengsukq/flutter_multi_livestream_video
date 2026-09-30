@@ -90,8 +90,11 @@ public final class FlutterRealtimeMediaArtcPlugin implements
                         Map<?, ?> values = args instanceof Map ? (Map<?, ?>) args : new HashMap<>();
                         String userId = String.valueOf(values.get("userId"));
                         boolean isLocal = Boolean.TRUE.equals(values.get("isLocal"));
+                        Object fitMode = values.get("fitMode");
                         ArtcVideoPlatformView platformView = new ArtcVideoPlatformView(
-                                context, userId, isLocal, FlutterRealtimeMediaArtcPlugin.this);
+                                context, userId, isLocal,
+                                fitMode instanceof Number ? ((Number) fitMode).intValue() : 0,
+                                FlutterRealtimeMediaArtcPlugin.this);
                         videoViews.add(platformView);
                         platformView.attach(engine);
                         return platformView;
@@ -556,15 +559,18 @@ public final class FlutterRealtimeMediaArtcPlugin implements
         private final Context context;
         private final String userId;
         private final boolean local;
+        /** 0 = fill (crop to the tile), 1 = fit (letterbox, keep all content). */
+        private final int fitMode;
         private final FlutterRealtimeMediaArtcPlugin plugin;
         private final FrameLayout container;
         private AliRtcEngine boundEngine;
         private View sdkView;
 
-        ArtcVideoPlatformView(Context context, String userId, boolean local, FlutterRealtimeMediaArtcPlugin plugin) {
+        ArtcVideoPlatformView(Context context, String userId, boolean local, int fitMode, FlutterRealtimeMediaArtcPlugin plugin) {
             this.context = context;
             this.userId = userId;
             this.local = local;
+            this.fitMode = fitMode;
             this.plugin = plugin;
             this.container = new FrameLayout(context);
         }
@@ -579,7 +585,9 @@ public final class FlutterRealtimeMediaArtcPlugin implements
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             AliRtcEngine.AliRtcVideoCanvas canvas = new AliRtcEngine.AliRtcVideoCanvas();
             canvas.view = sdkView;
-            canvas.renderMode = AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeFill;
+            canvas.renderMode = fitMode == 1
+                    ? AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeFit
+                    : AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeFill;
             if (local) {
                 currentEngine.setLocalViewConfig(canvas, AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera);
                 if (currentEngine.isCameraOn()) currentEngine.startPreview();

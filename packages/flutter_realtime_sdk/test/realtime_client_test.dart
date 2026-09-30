@@ -94,6 +94,85 @@ void main() {
         );
       },
     );
+
+    test(
+      'backend-selected public provider resolves by room mode before Pre-Join',
+      () async {
+        final meetingFactory = FakeMediaSessionFactory(
+          providerId: 'meeting-sdk',
+        );
+        final liveFactory = FakeMediaSessionFactory(providerId: 'live-sdk');
+        final adapters = RealtimeMediaAdapters([
+          RealtimeMediaAdapter(
+            sessionFactory: meetingFactory,
+            renderer: const _FakeRenderer(),
+          ),
+          RealtimeMediaAdapter(
+            sessionFactory: liveFactory,
+            renderer: const _FakeRenderer(),
+          ),
+        ]);
+        final advanced = RealtimeClient(
+          backendUrl: 'https://example.test',
+          mediaAdapters: adapters,
+          mediaClientFactory: () => MediaClient(
+            backendUrl: 'https://example.test',
+            registry: adapters.registry,
+            transport: FakeTransport(
+              (_) => jsonResponse({
+                'contractVersion': 1,
+                'ok': true,
+                'activeProvider': 'vendor',
+              }),
+            ),
+            heartbeatInterval: Duration.zero,
+          ),
+        );
+        final sdk = RealtimeSdk.standard(
+          backendUrl: 'https://example.test',
+          platformResolver: () => RealtimeRuntimePlatform.macos,
+          clientFactory: () => advanced,
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.macos},
+              publicProviderId: 'vendor',
+              mediaRoomModes: const {MediaRoomMode.meeting},
+              plugin: RealtimeProviderPlugin(
+                id: 'meeting-sdk',
+                metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+                mediaFactory: meetingFactory,
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.macos},
+              publicProviderId: 'vendor',
+              mediaRoomModes: const {MediaRoomMode.broadcast},
+              plugin: RealtimeProviderPlugin(
+                id: 'live-sdk',
+                metadata: const RealtimeProviderMetadata(displayName: 'Vendor'),
+                mediaFactory: liveFactory,
+                renderer: const _FakeRenderer(),
+              ),
+            ),
+          ],
+        );
+
+        final meeting = await sdk.preJoin(role: MediaRole.participant);
+        final live = await sdk.preJoin(role: MediaRole.host);
+
+        expect(meeting.providerId, 'vendor');
+        expect(
+          meeting.check(MediaPreJoinCheckType.provider)?.status,
+          MediaPreJoinStatus.passed,
+        );
+        expect(live.providerId, 'vendor');
+        expect(
+          live.check(MediaPreJoinCheckType.provider)?.status,
+          MediaPreJoinStatus.passed,
+        );
+      },
+    );
   });
 
   group('RealtimeDriverRegistry', () {
@@ -1530,7 +1609,11 @@ class _FakeRenderer extends MediaTrackRenderer {
   const _FakeRenderer();
 
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) =>
+  Widget buildView(
+    BuildContext context,
+    MediaVideoTrack track, {
+    MediaVideoFit fit = MediaVideoFit.cover,
+  }) =>
       const SizedBox.shrink();
 }
 

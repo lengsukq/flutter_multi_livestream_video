@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -136,7 +134,7 @@ jobs:
         run: flutter test --platform chrome --no-pub
 
   ios:
-    runs-on: macos-15
+    runs-on: macos-26
     env:
       LANG: en_US.UTF-8
       LC_ALL: en_US.UTF-8
@@ -196,6 +194,32 @@ jobs:
       - name: Resolve example dependencies
         working-directory: flutter_aws_chime/example
         run: flutter pub get
+
+      - name: Materialize Agora plugin for Windows SDK extraction
+        working-directory: flutter_aws_chime/example
+        shell: pwsh
+        run: |
+          $pluginPath = "windows/flutter/ephemeral/.plugin_symlinks/agora_rtc_engine"
+          if (-not (Test-Path -LiteralPath $pluginPath)) {
+            throw "Expected Flutter's Agora plugin link at $pluginPath"
+          }
+
+          $pluginItem = Get-Item -LiteralPath $pluginPath -Force
+          if (-not $pluginItem.Target) {
+            Write-Host "Agora plugin is already a real directory."
+            exit 0
+          }
+
+          $pluginTarget = @($pluginItem.Target)[0]
+          if (-not [System.IO.Path]::IsPathRooted($pluginTarget)) {
+            $pluginTarget = Join-Path $pluginItem.Parent.FullName $pluginTarget
+          }
+          $pluginSource = (Resolve-Path -LiteralPath $pluginTarget).Path
+
+          Remove-Item -LiteralPath $pluginPath -Force
+          New-Item -ItemType Directory -Path $pluginPath | Out-Null
+          Get-ChildItem -LiteralPath $pluginSource -Force |
+            Copy-Item -Destination $pluginPath -Recurse -Force
 
       - name: Build Windows example
         working-directory: flutter_aws_chime/example

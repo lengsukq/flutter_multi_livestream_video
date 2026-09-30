@@ -24,6 +24,9 @@ abstract interface class TrtcEngine {
   void stopRemoteView(String userId);
   void startRemoteSubStreamView(String userId, int viewId);
   void stopRemoteSubStreamView(String userId);
+  void setRemoteFillMode(String userId, bool subStream, bool fit);
+  int? remoteWidth(String userId, {required bool subStream});
+  int? remoteHeight(String userId, {required bool subStream});
   void startScreenCapture();
   void stopScreenCapture();
   int switchCamera(bool frontCamera);
@@ -73,6 +76,7 @@ class _NativeTrtcEngine implements TrtcEngine {
   bool _enterRequested = false;
   bool _registered = false;
   MediaConnectionStats? _connectionStats;
+  TRTCStatistics? _lastStatistics;
 
   Future<TRTCCloud> _getCloud() async =>
       _cloud ??= await TRTCCloud.sharedInstance();
@@ -117,6 +121,7 @@ class _NativeTrtcEngine implements TrtcEngine {
       _events.onStats?.call(next);
     },
     onStatistics: (statistics) {
+      _lastStatistics = statistics;
       final now = DateTime.now().millisecondsSinceEpoch;
       final uploadKbps = statistics.localStatisticsArray?.fold<int>(
         0,
@@ -248,6 +253,45 @@ class _NativeTrtcEngine implements TrtcEngine {
   @override
   void stopRemoteSubStreamView(String userId) =>
       _cloud?.stopRemoteView(userId, TRTCVideoStreamType.sub);
+
+  @override
+  void setRemoteFillMode(String userId, bool subStream, bool fit) =>
+      _cloud?.setRemoteRenderParams(
+        userId,
+        subStream ? TRTCVideoStreamType.sub : TRTCVideoStreamType.big,
+        TRTCRenderParams(
+          fillMode: fit ? TRTCVideoFillMode.fit : TRTCVideoFillMode.fill,
+        ),
+      );
+
+  @override
+  int? remoteWidth(String userId, {required bool subStream}) => _remoteFrame(
+    userId,
+    subStream: subStream,
+    select: (value) => value.width,
+  );
+
+  @override
+  int? remoteHeight(String userId, {required bool subStream}) => _remoteFrame(
+    userId,
+    subStream: subStream,
+    select: (value) => value.height,
+  );
+
+  int? _remoteFrame(
+    String userId, {
+    required bool subStream,
+    required int Function(TRTCRemoteStatistics value) select,
+  }) {
+    final streamType = subStream ? TRTCVideoStreamType.sub : TRTCVideoStreamType.big;
+    for (final entry
+        in _lastStatistics?.remoteStatisticsArray ?? const <TRTCRemoteStatistics>[]) {
+      if (entry.userId != userId || entry.streamType != streamType) continue;
+      final value = select(entry);
+      if (value > 0) return value;
+    }
+    return null;
+  }
 
   @override
   void startScreenCapture() {

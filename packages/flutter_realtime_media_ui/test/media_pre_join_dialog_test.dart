@@ -386,6 +386,10 @@ class _TestVideoTrack implements MediaVideoTrack {
 class _TestTrackRenderer extends MediaTrackRenderer {
   const _TestTrackRenderer();
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) =>
+  Widget buildView(
+    BuildContext context,
+    MediaVideoTrack track, {
+    MediaVideoFit fit = MediaVideoFit.cover,
+  }) =>
       const ColoredBox(color: Colors.blueGrey);
 }

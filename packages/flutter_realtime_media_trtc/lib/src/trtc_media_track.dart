@@ -9,6 +9,8 @@ class TrtcMediaVideoTrack extends MediaVideoTrack {
     required this.stopRendering,
     this.screenShare = false,
     this.generation = 0,
+    this.frameWidth,
+    this.frameHeight,
   });
 
   /// Provider user id whose camera stream this track represents.
@@ -26,6 +28,10 @@ class TrtcMediaVideoTrack extends MediaVideoTrack {
   /// Changes when the underlying TRTC room is re-entered after renewal.
   final int generation;
 
+  /// Live frame size reported by TRTC statistics, or null while unknown.
+  final int? frameWidth;
+  final int? frameHeight;
+
   @override
   String get id =>
       'trtc:$userId:${screenShare ? 'screen' : 'camera'}:$generation';
@@ -40,8 +46,8 @@ class TrtcMediaVideoTrack extends MediaVideoTrack {
   bool get isScreenShare => screenShare;
 
   @override
-  int get width => 0;
+  int get width => frameWidth ?? 0;
 
   @override
-  int get height => 0;
+  int get height => frameHeight ?? 0;
 }

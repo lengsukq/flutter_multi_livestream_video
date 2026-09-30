@@ -8,39 +8,44 @@ import 'support/fake_media_session.dart';
 
 void main() {
   group('Realtime facade', () {
-    test('direct meeting resolves public AWS provider to meeting engine', () async {
-      final meetingFactory = FakeMediaSessionFactory(providerId: 'meeting-sdk');
-      final liveFactory = FakeMediaSessionFactory(providerId: 'live-sdk');
-      final realtime = Realtime.standard(
-        platformResolver: () => RealtimeRuntimePlatform.android,
-        drivers: _awsLikeDrivers(meetingFactory, liveFactory),
-      );
+    test(
+      'direct meeting resolves public AWS provider to meeting engine',
+      () async {
+        final meetingFactory = FakeMediaSessionFactory(
+          providerId: 'meeting-sdk',
+        );
+        final liveFactory = FakeMediaSessionFactory(providerId: 'live-sdk');
+        final realtime = Realtime.standard(
+          platformResolver: () => RealtimeRuntimePlatform.android,
+          drivers: _awsLikeDrivers(meetingFactory, liveFactory),
+        );
 
-      final connection = await realtime.open(
-        RealtimeRequest.join(
-          type: RealtimeExperience.meeting,
-          user: const RealtimeUser(id: 'user-1', name: 'Leo'),
-          roomCode: 'room-1',
-          source: const RealtimeSource.credentials(
-            media: RealtimeCredentials(
-              providerId: 'aws',
-              payload: <String, dynamic>{},
+        final connection = await realtime.open(
+          RealtimeRequest.join(
+            type: RealtimeExperience.meeting,
+            user: const RealtimeUser(id: 'user-1', name: 'Leo'),
+            roomCode: 'room-1',
+            source: const RealtimeSource.credentials(
+              media: RealtimeCredentials(
+                providerId: 'aws',
+                payload: <String, dynamic>{},
+              ),
             ),
           ),
-        ),
-      );
+        );
 
-      expect(connection.providerId, 'aws');
-      expect(connection.mediaEngineProviderId, 'meeting-sdk');
-      expect(meetingFactory.parsedPayloads.single['roomMode'], 'meeting');
-      expect(meetingFactory.parsedPayloads.single['role'], 'participant');
-      expect(meetingFactory.parsedPayloads.single['participantId'], 'user-1');
-      expect(liveFactory.createdSessions, isEmpty);
+        expect(connection.providerId, 'aws');
+        expect(connection.mediaEngineProviderId, 'meeting-sdk');
+        expect(meetingFactory.parsedPayloads.single['roomMode'], 'meeting');
+        expect(meetingFactory.parsedPayloads.single['role'], 'participant');
+        expect(meetingFactory.parsedPayloads.single['participantId'], 'user-1');
+        expect(liveFactory.createdSessions, isEmpty);
 
-      final session = meetingFactory.createdSessions.single;
-      await connection.dispose();
-      expect(session.disposeCount, 1);
-    });
+        final session = meetingFactory.createdSessions.single;
+        await connection.dispose();
+        expect(session.disposeCount, 1);
+      },
+    );
 
     test('direct live resolves public AWS provider to live engine', () async {
       final meetingFactory = FakeMediaSessionFactory(providerId: 'meeting-sdk');
@@ -73,61 +78,64 @@ void main() {
       await connection.dispose();
     });
 
-    test('direct media can attach product chat through one open call', () async {
-      final mediaFactory = FakeMediaSessionFactory(providerId: 'media');
-      final chatFactory = _FakeChatFactory('product-chat');
-      final realtime = Realtime.standard(
-        platformResolver: () => RealtimeRuntimePlatform.android,
-        drivers: [
-          RealtimeProviderDriver(
-            platforms: const {RealtimeRuntimePlatform.android},
-            plugin: RealtimeProviderPlugin(
-              id: 'media',
-              metadata: const RealtimeProviderMetadata(displayName: 'Media'),
-              mediaFactory: mediaFactory,
-              renderer: const _FakeRenderer(),
-            ),
-          ),
-          RealtimeProviderDriver(
-            platforms: const {RealtimeRuntimePlatform.android},
-            plugin: RealtimeProviderPlugin(
-              id: 'product-chat',
-              metadata: const RealtimeProviderMetadata(
-                displayName: 'Product Chat',
+    test(
+      'direct media can attach product chat through one open call',
+      () async {
+        final mediaFactory = FakeMediaSessionFactory(providerId: 'media');
+        final chatFactory = _FakeChatFactory('product-chat');
+        final realtime = Realtime.standard(
+          platformResolver: () => RealtimeRuntimePlatform.android,
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.android},
+              plugin: RealtimeProviderPlugin(
+                id: 'media',
+                metadata: const RealtimeProviderMetadata(displayName: 'Media'),
+                mediaFactory: mediaFactory,
+                renderer: const _FakeRenderer(),
               ),
-              chatFactory: chatFactory,
+            ),
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.android},
+              plugin: RealtimeProviderPlugin(
+                id: 'product-chat',
+                metadata: const RealtimeProviderMetadata(
+                  displayName: 'Product Chat',
+                ),
+                chatFactory: chatFactory,
+              ),
+            ),
+          ],
+        );
+
+        final connection = await realtime.open(
+          RealtimeRequest.join(
+            type: RealtimeExperience.meeting,
+            user: const RealtimeUser(id: 'user-1', name: 'Leo'),
+            roomCode: 'room-1',
+            source: const RealtimeSource.credentials(
+              media: RealtimeCredentials(
+                providerId: 'media',
+                payload: <String, dynamic>{},
+              ),
+              chat: RealtimeCredentials(
+                providerId: 'product-chat',
+                payload: <String, dynamic>{},
+              ),
             ),
           ),
-        ],
-      );
+        );
 
-      final connection = await realtime.open(
-        RealtimeRequest.join(
-          type: RealtimeExperience.meeting,
-          user: const RealtimeUser(id: 'user-1', name: 'Leo'),
-          roomCode: 'room-1',
-          source: const RealtimeSource.credentials(
-            media: RealtimeCredentials(
-              providerId: 'media',
-              payload: <String, dynamic>{},
-            ),
-            chat: RealtimeCredentials(
-              providerId: 'product-chat',
-              payload: <String, dynamic>{},
-            ),
-          ),
-        ),
-      );
+        expect(connection.mediaRoom, isNotNull);
+        expect(connection.chatRoom, isNull);
+        expect(connection.chatSession?.providerId, 'product-chat');
+        expect(connection.capabilities.chat, isNotNull);
+        expect(chatFactory.parsedPayloads.single['roomCode'], 'room-1');
+        expect(chatFactory.parsedPayloads.single['userId'], 'user-1');
 
-      expect(connection.mediaRoom, isNotNull);
-      expect(connection.chatRoom, isNull);
-      expect(connection.chatSession?.providerId, 'product-chat');
-      expect(connection.capabilities.chat, isNotNull);
-      expect(chatFactory.parsedPayloads.single['roomCode'], 'room-1');
-      expect(chatFactory.parsedPayloads.single['userId'], 'user-1');
-
-      await connection.dispose();
-    });
+        await connection.dispose();
+      },
+    );
 
     test('direct standalone chat uses the same open API', () async {
       final chatFactory = _FakeChatFactory('product-chat');
@@ -235,48 +243,51 @@ void main() {
       await joined.dispose();
     });
 
-    test('backend standalone chat creates through facade provisioner', () async {
-      final chatFactory = _FakeChatFactory('product-chat');
-      final provisioner = _FakeStandaloneChatProvisioner('product-chat');
-      final sdk = RealtimeSdk(
-        plugins: [
-          RealtimeProviderPlugin(
-            id: 'product-chat',
-            metadata: const RealtimeProviderMetadata(
-              displayName: 'Product Chat',
+    test(
+      'backend standalone chat creates through facade provisioner',
+      () async {
+        final chatFactory = _FakeChatFactory('product-chat');
+        final provisioner = _FakeStandaloneChatProvisioner('product-chat');
+        final sdk = RealtimeSdk(
+          plugins: [
+            RealtimeProviderPlugin(
+              id: 'product-chat',
+              metadata: const RealtimeProviderMetadata(
+                displayName: 'Product Chat',
+              ),
+              chatFactory: chatFactory,
             ),
-            chatFactory: chatFactory,
+          ],
+        );
+        final realtime = Realtime.fromSdk(
+          sdk,
+          standaloneChatProvisionerFactory: () => provisioner,
+        );
+
+        final connection = await realtime.open(
+          RealtimeRequest.create(
+            type: RealtimeExperience.chat,
+            user: const RealtimeUser(id: 'host-1', name: 'Host'),
+            roomCode: 'chat-1',
           ),
-        ],
-      );
-      final realtime = Realtime.fromSdk(
-        sdk,
-        standaloneChatProvisionerFactory: () => provisioner,
-      );
+        );
 
-      final connection = await realtime.open(
-        RealtimeRequest.create(
-          type: RealtimeExperience.chat,
-          user: const RealtimeUser(id: 'host-1', name: 'Host'),
-          roomCode: 'chat-1',
-        ),
-      );
+        expect(connection.roomCode, 'chat-1');
+        expect(connection.providerId, 'product-chat');
+        expect(provisioner.lastCreateRole, ChatRole.host);
+        await connection.dispose();
 
-      expect(connection.roomCode, 'chat-1');
-      expect(connection.providerId, 'product-chat');
-      expect(provisioner.lastCreateRole, ChatRole.host);
-      await connection.dispose();
-
-      final joined = await realtime.open(
-        RealtimeRequest.join(
-          type: RealtimeExperience.chat,
-          user: const RealtimeUser(id: 'user-2', name: 'User 2'),
-          roomCode: 'chat-1',
-        ),
-      );
-      expect(provisioner.lastJoinRole, ChatRole.participant);
-      await joined.dispose();
-    });
+        final joined = await realtime.open(
+          RealtimeRequest.join(
+            type: RealtimeExperience.chat,
+            user: const RealtimeUser(id: 'user-2', name: 'User 2'),
+            roomCode: 'chat-1',
+          ),
+        );
+        expect(provisioner.lastJoinRole, ChatRole.participant);
+        await joined.dispose();
+      },
+    );
 
     test('backend join without room code fails before provisioning', () async {
       final realtime = Realtime.standard(backendUrl: 'https://example.test');
@@ -327,48 +338,51 @@ void main() {
       );
     });
 
-    test('known provider on unsupported platform maps to typed error', () async {
-      final mediaFactory = FakeMediaSessionFactory(providerId: 'mobile-only');
-      final realtime = Realtime.standard(
-        platformResolver: () => RealtimeRuntimePlatform.web,
-        drivers: [
-          RealtimeProviderDriver(
-            platforms: const {RealtimeRuntimePlatform.android},
-            plugin: RealtimeProviderPlugin(
-              id: 'mobile-only',
-              metadata: const RealtimeProviderMetadata(
-                displayName: 'Mobile only',
+    test(
+      'known provider on unsupported platform maps to typed error',
+      () async {
+        final mediaFactory = FakeMediaSessionFactory(providerId: 'mobile-only');
+        final realtime = Realtime.standard(
+          platformResolver: () => RealtimeRuntimePlatform.web,
+          drivers: [
+            RealtimeProviderDriver(
+              platforms: const {RealtimeRuntimePlatform.android},
+              plugin: RealtimeProviderPlugin(
+                id: 'mobile-only',
+                metadata: const RealtimeProviderMetadata(
+                  displayName: 'Mobile only',
+                ),
+                mediaFactory: mediaFactory,
+                renderer: const _FakeRenderer(),
               ),
-              mediaFactory: mediaFactory,
-              renderer: const _FakeRenderer(),
             ),
-          ),
-        ],
-      );
+          ],
+        );
 
-      await expectLater(
-        realtime.open(
-          RealtimeRequest.join(
-            type: RealtimeExperience.meeting,
-            user: const RealtimeUser(id: 'user-1', name: 'Leo'),
-            roomCode: 'room-1',
-            source: const RealtimeSource.credentials(
-              media: RealtimeCredentials(
-                providerId: 'mobile-only',
-                payload: <String, dynamic>{},
+        await expectLater(
+          realtime.open(
+            RealtimeRequest.join(
+              type: RealtimeExperience.meeting,
+              user: const RealtimeUser(id: 'user-1', name: 'Leo'),
+              roomCode: 'room-1',
+              source: const RealtimeSource.credentials(
+                media: RealtimeCredentials(
+                  providerId: 'mobile-only',
+                  payload: <String, dynamic>{},
+                ),
               ),
             ),
           ),
-        ),
-        throwsA(
-          isA<RealtimeException>().having(
-            (error) => error.code,
-            'code',
-            RealtimeErrorCode.unsupportedPlatform,
+          throwsA(
+            isA<RealtimeException>().having(
+              (error) => error.code,
+              'code',
+              RealtimeErrorCode.unsupportedPlatform,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   });
 }
 
@@ -642,6 +656,10 @@ class _FakeRenderer extends MediaTrackRenderer {
   const _FakeRenderer();
 
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) =>
+  Widget buildView(
+    BuildContext context,
+    MediaVideoTrack track, {
+    MediaVideoFit fit = MediaVideoFit.cover,
+  }) =>
       const SizedBox.shrink();
 }

@@ -310,6 +310,27 @@ class RealtimeSdk {
       final requestedProvider = providerId?.trim().toLowerCase();
       var coreProvider = requestedProvider;
       final registry = driverRegistry;
+      if ((coreProvider == null || coreProvider.isEmpty) &&
+          (roomCode == null || roomCode.trim().isEmpty) &&
+          registry != null) {
+        final backend = client.backend;
+        if (backend != null) {
+          final doctor = await MediaDoctor.check(
+            backend: backend,
+            registry: client.registry,
+          );
+          final activeProvider = doctor.activeProvider;
+          if (activeProvider != null &&
+              registry.knowsProvider(activeProvider)) {
+            coreProvider = registry.resolveMediaEngine(
+              providerId: activeProvider,
+              roomMode: role == MediaRole.participant
+                  ? MediaRoomMode.meeting
+                  : MediaRoomMode.broadcast,
+            );
+          }
+        }
+      }
       if (registry != null &&
           coreProvider != null &&
           coreProvider.isNotEmpty &&

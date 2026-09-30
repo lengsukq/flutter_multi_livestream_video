@@ -525,28 +525,26 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
                   ],
                 ),
                 child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF0F172A),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
                         ),
-                        if (attendee.isMuted)
-                          const Icon(
-                            Icons.mic_off_rounded,
-                            color: Color(0xFFDC2626),
-                            size: 15,
-                          ),
-                      ],
+                      ),
                     ),
-                  ),
+                    if (attendee.isMuted)
+                      const Icon(
+                        Icons.mic_off_rounded,
+                        color: Color(0xFFDC2626),
+                        size: 15,
+                      ),
+                  ],
                 ),
               ),
             ),

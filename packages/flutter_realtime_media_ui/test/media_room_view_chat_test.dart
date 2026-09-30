@@ -493,6 +493,12 @@ void main() {
 
     expect(find.text('Screen Share'), findsNWidgets(2));
     expect(find.byType(MediaTrackView), findsOneWidget);
+    // A shared screen must never be cropped: the stage asks the renderer for a
+    // contained frame instead of the default cover fit.
+    expect(
+      tester.widget<MediaTrackView>(find.byType(MediaTrackView)).fit,
+      MediaVideoFit.contain,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await fixture.dispose();
@@ -972,6 +978,9 @@ class _FakeRenderer extends MediaTrackRenderer {
   const _FakeRenderer();
 
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) =>
-      const SizedBox.shrink();
+  Widget buildView(
+    BuildContext context,
+    MediaVideoTrack track, {
+    MediaVideoFit fit = MediaVideoFit.cover,
+  }) => const SizedBox.shrink();
 }

@@ -872,7 +872,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   Widget _mediaStage(MediaSnapshot value) => ColoredBox(
-    color: const Color(0xFF080F1C),
+    color: RealtimeUiTokens.background,
     child: value.contentShareTrack == null
         ? value.participants.isEmpty
               ? _waiting()
@@ -1300,9 +1300,15 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            MediaTrackView(
-              renderer: widget.renderer,
-              track: value.contentShareTrack,
+            // Center, not expand: a contained screen share must keep its own
+            // aspect ratio instead of being stretched or cropped, with the
+            // stage background showing as letterbox bars.
+            Center(
+              child: MediaTrackView(
+                renderer: widget.renderer,
+                track: value.contentShareTrack,
+                fit: MediaVideoFit.contain,
+              ),
             ),
             Positioned(
               left: 10,
@@ -2156,7 +2162,7 @@ class MediaParticipantTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            if (participant.videoTrack != null)
+            if (participant.isVideoEnabled && participant.videoTrack != null)
               MediaTrackView(renderer: renderer, track: participant.videoTrack)
             else
               Container(

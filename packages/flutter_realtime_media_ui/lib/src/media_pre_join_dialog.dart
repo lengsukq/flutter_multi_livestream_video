@@ -617,35 +617,65 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
         if (!didPop && !_saving) unawaited(_cancel());
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF0B1220),
-        body: SafeArea(
-          child: Column(
-            children: [
-              _pageHeader(context, strings),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wide = constraints.maxWidth >= 900;
-                    final preview = _previewPanel(strings, isViewer);
-                    final setup = _setupPanel(strings, result, isViewer);
-                    if (wide) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(flex: 6, child: preview),
-                          Expanded(flex: 5, child: setup),
-                        ],
+        backgroundColor: Colors.transparent,
+        body: RealtimeAmbientBackground(
+          child: SafeArea(
+            child: Column(
+              children: [
+                _pageHeader(context, strings),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final wide =
+                          constraints.maxWidth >= 960 &&
+                          constraints.maxHeight >= 500;
+                      final preview = _previewPanel(strings, isViewer);
+                      final setup = _setupPanel(strings, result, isViewer);
+                      return Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1320),
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              wide ? 20 : 14,
+                              2,
+                              wide ? 20 : 14,
+                              14,
+                            ),
+                            child: wide
+                                ? Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(flex: 6, child: preview),
+                                      const SizedBox(width: 18),
+                                      Expanded(
+                                        flex: 5,
+                                        child: SingleChildScrollView(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: setup,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : ListView(
+                                    padding: EdgeInsets.zero,
+                                    children: [
+                                      preview,
+                                      const SizedBox(height: 12),
+                                      setup,
+                                    ],
+                                  ),
+                          ),
+                        ),
                       );
-                    }
-                    return ListView(
-                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
-                      children: [preview, const SizedBox(height: 12), setup],
-                    );
-                  },
+                    },
+                  ),
                 ),
-              ),
-              _footer(strings, result),
-            ],
+                _footer(strings, result),
+              ],
+            ),
           ),
         ),
       ),
@@ -653,116 +683,171 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
   }
 
   Widget _pageHeader(BuildContext context, RealtimeStrings strings) => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 8, 16, 10),
-    child: Row(
-      children: [
-        IconButton(
-          tooltip: strings.cancel,
-          onPressed: _saving ? null : _cancel,
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.title ?? strings.preJoinCheck,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-              if (widget.roomLabel?.isNotEmpty == true)
-                Text(
-                  widget.roomLabel!,
-                  style: const TextStyle(color: Color(0xFF94A3B8)),
-                ),
-            ],
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+    child: RealtimeGlassSurface(
+      radius: RealtimeUiTokens.dockRadius,
+      opacity: .88,
+      blur: RealtimeUiTokens.subtleBlur,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: strings.cancel,
+            onPressed: _saving ? null : _cancel,
+            style: IconButton.styleFrom(
+              foregroundColor: RealtimeUiTokens.text,
+              backgroundColor: RealtimeUiTokens.surfaceSubtle,
+            ),
+            icon: const Icon(Icons.arrow_back_rounded),
           ),
-        ),
-      ],
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.title ?? strings.preJoinCheck,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: RealtimeUiTokens.text,
+                  ),
+                ),
+                if (widget.roomLabel?.isNotEmpty == true)
+                  Text(
+                    widget.roomLabel!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: RealtimeUiTokens.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (_result?.providerId case final provider?) ...[
+            const SizedBox(width: 8),
+            RealtimePill(
+              label: mediaProviderDisplayName(provider),
+              icon: Icons.hub_outlined,
+              foreground: RealtimeUiTokens.primary,
+              background: RealtimeUiTokens.primarySubtle,
+              borderColor: RealtimeUiTokens.primaryBorder,
+            ),
+          ],
+        ],
+      ),
     ),
   );
 
   Widget _previewPanel(RealtimeStrings strings, bool isViewer) => Padding(
-    padding: const EdgeInsets.all(14),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: ColoredBox(
-              color: const Color(0xFF111827),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (_preview?.cameraTrack case final track?)
-                    MediaTrackView(renderer: _preview!.renderer, track: track)
-                  else
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            isViewer
-                                ? Icons.live_tv_outlined
-                                : Icons.person_outline_rounded,
-                            color: const Color(0xFF94A3B8),
-                            size: 58,
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            isViewer
-                                ? strings.live
-                                : _preview == null
-                                ? strings.cameraPreviewUnavailable
-                                : strings.camera,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    ),
-                  Positioned(
-                    left: 12,
-                    bottom: 12,
-                    child: RealtimePill(
-                      label: widget.displayName.isEmpty
-                          ? strings.you
-                          : widget.displayName,
-                      icon: Icons.person_outline_rounded,
-                      foreground: Colors.white,
-                      background: const Color(0xB3000000),
-                      borderColor: const Color(0x40FFFFFF),
-                    ),
-                  ),
-                  if (_loading)
-                    const Center(
-                      child: CircularProgressIndicator(color: Colors.white),
-                    ),
-                ],
+    padding: const EdgeInsets.all(2),
+    child: RealtimeGlassSurface(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              strings.camera,
+              style: const TextStyle(
+                color: RealtimeUiTokens.text,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        if (!isViewer && _preview != null) _mediaToggles(strings),
-        if (_previewError != null ||
-            (!isViewer && _preview == null && !_loading))
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              _previewError == null
-                  ? strings.cameraPreviewUnavailable
-                  : '${strings.previewStartFailed} $_previewError',
-              style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.dockRadius),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: ColoredBox(
+                color: const Color(0xFFE9EEF6),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (_preview?.cameraTrack case final track?)
+                      MediaTrackView(renderer: _preview!.renderer, track: track)
+                    else
+                      Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 68,
+                              height: 68,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: .70),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: RealtimeUiTokens.borderStrong,
+                                ),
+                              ),
+                              child: Icon(
+                                isViewer
+                                    ? Icons.live_tv_outlined
+                                    : Icons.person_outline_rounded,
+                                color: RealtimeUiTokens.primary,
+                                size: 30,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              isViewer
+                                  ? strings.live
+                                  : _preview == null
+                                  ? strings.cameraPreviewUnavailable
+                                  : strings.camera,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: RealtimeUiTokens.textMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Positioned(
+                      left: 12,
+                      bottom: 12,
+                      child: RealtimePill(
+                        label: widget.displayName.isEmpty
+                            ? strings.you
+                            : widget.displayName,
+                        icon: Icons.person_outline_rounded,
+                        foreground: RealtimeUiTokens.text,
+                        background: Colors.white,
+                        borderColor: RealtimeUiTokens.borderStrong,
+                      ),
+                    ),
+                    if (_loading)
+                      const Center(
+                        child: CircularProgressIndicator(
+                          color: RealtimeUiTokens.primary,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
-      ],
+          const SizedBox(height: 14),
+          if (!isViewer && _preview != null) _mediaToggles(strings),
+          if (_previewError != null ||
+              (!isViewer && _preview == null && !_loading))
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: _preJoinNotice(
+                _previewError == null
+                    ? strings.cameraPreviewUnavailable
+                    : '${strings.previewStartFailed} $_previewError',
+                danger: true,
+              ),
+            ),
+        ],
+      ),
     ),
   );
 
@@ -801,14 +886,25 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
     required bool available,
     required ValueChanged<bool> onChanged,
   }) => FilterChip(
-    avatar: Icon(icon, size: 18),
+    avatar: Icon(
+      icon,
+      size: 17,
+      color: enabled ? RealtimeUiTokens.primary : RealtimeUiTokens.textMuted,
+    ),
     label: Text(label),
     selected: enabled,
     onSelected: available ? onChanged : null,
     showCheckmark: false,
-    backgroundColor: const Color(0xFF1F2937),
-    selectedColor: const Color(0xFF374151),
-    labelStyle: const TextStyle(color: Colors.white),
+    backgroundColor: Colors.white.withValues(alpha: .78),
+    selectedColor: RealtimeUiTokens.primarySubtle,
+    checkmarkColor: RealtimeUiTokens.primary,
+    labelStyle: TextStyle(
+      color: enabled ? RealtimeUiTokens.primary : RealtimeUiTokens.text,
+      fontWeight: FontWeight.w700,
+    ),
+    side: BorderSide(
+      color: enabled ? RealtimeUiTokens.primaryBorder : RealtimeUiTokens.border,
+    ),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
     ),
@@ -820,27 +916,25 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
     bool isViewer,
   ) {
     if (isViewer) {
-      return Padding(
-        padding: const EdgeInsets.all(14),
+      return RealtimeGlassSurface(
+        padding: const EdgeInsets.all(16),
         child: _resultContent(strings, result),
       );
     }
     final preview = _preview;
-    return Padding(
-      padding: const EdgeInsets.all(14),
+    return RealtimeGlassSurface(
+      padding: const EdgeInsets.all(16),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             strings.deviceSetup,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: RealtimeUiTokens.text,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           if (preview != null) ...[
             _devicePicker(
               strings.microphone,
@@ -865,22 +959,16 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
             ),
             const SizedBox(height: 12),
             if (_deviceError != null)
-              Text(
+              _preJoinNotice(
                 '${strings.deviceListUnavailable}: $_deviceError',
-                style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
+                danger: true,
               )
             else if (!preview.capabilities.canEnumerateMicrophones &&
                 !preview.capabilities.canEnumerateCameras &&
                 !preview.capabilities.canEnumerateAudioDevices)
-              Text(
-                strings.deviceSelectionUnsupported,
-                style: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
-              )
+              _preJoinNotice(strings.deviceSelectionUnsupported)
             else if (_devices.isEmpty)
-              Text(
-                strings.noDevicesFound,
-                style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
-              ),
+              _preJoinNotice(strings.noDevicesFound, danger: true),
           ],
           _resultContent(strings, result),
         ],
@@ -904,22 +992,40 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
       child: DropdownButtonFormField<MediaDevice>(
         initialValue: selectedDevice,
         isExpanded: true,
-        dropdownColor: const Color(0xFF1F2937),
+        dropdownColor: Colors.white,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Color(0xFFCBD5E1)),
+          labelStyle: const TextStyle(
+            color: RealtimeUiTokens.textMuted,
+            fontWeight: FontWeight.w600,
+          ),
           filled: true,
-          fillColor: const Color(0xFF111827),
+          fillColor: Colors.white.withValues(alpha: .78),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 13,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
-            borderSide: const BorderSide(color: Color(0xFF374151)),
+            borderSide: const BorderSide(color: RealtimeUiTokens.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
-            borderSide: const BorderSide(color: Color(0xFF374151)),
+            borderSide: const BorderSide(color: RealtimeUiTokens.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+            borderSide: const BorderSide(
+              color: RealtimeUiTokens.primary,
+              width: 1.5,
+            ),
           ),
         ),
-        style: const TextStyle(color: Colors.white),
+        style: const TextStyle(
+          color: RealtimeUiTokens.text,
+          fontWeight: FontWeight.w600,
+        ),
+        iconEnabledColor: RealtimeUiTokens.textMuted,
         items: devices
             .map(
               (device) =>
@@ -938,15 +1044,16 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
     if (_error != null) {
       return Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '${strings.unableToRunPreJoin} $_error',
-            style: const TextStyle(color: Color(0xFFFCA5A5)),
-          ),
-          TextButton.icon(
-            onPressed: _runChecks,
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text(strings.runAgain),
+          _preJoinNotice('${strings.unableToRunPreJoin} $_error', danger: true),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _runChecks,
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(strings.runAgain),
+            ),
           ),
         ],
       );
@@ -969,44 +1076,76 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
     );
   }
 
+  Widget _preJoinNotice(String message, {bool danger = false}) => Container(
+    margin: const EdgeInsets.only(top: 8),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: danger
+          ? RealtimeUiTokens.dangerSubtle
+          : RealtimeUiTokens.surfaceSubtle,
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+      border: Border.all(
+        color: danger ? RealtimeUiTokens.dangerBorder : RealtimeUiTokens.border,
+      ),
+    ),
+    child: Text(
+      message,
+      style: TextStyle(
+        color: danger ? RealtimeUiTokens.danger : RealtimeUiTokens.textMuted,
+        fontSize: 12,
+      ),
+    ),
+  );
+
   Widget _footer(RealtimeStrings strings, MediaPreJoinResult? result) {
     final label = result?.role == MediaRole.viewer
         ? strings.enterLiveRoom
         : result?.role == MediaRole.host
         ? strings.enterLiveRoom
         : strings.joinMeeting;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-      decoration: const BoxDecoration(
-        color: Color(0xFF111827),
-        border: Border(top: BorderSide(color: Color(0xFF253044))),
-      ),
-      child: SizedBox(
-        height: 52,
-        width: double.infinity,
-        child: FilledButton.icon(
-          onPressed: !_loading && !_saving && result?.isReady == true
-              ? _enter
-              : null,
-          icon: _saving
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.arrow_forward_rounded),
-          label: Text(label),
-          style: FilledButton.styleFrom(
-            backgroundColor: RealtimeUiTokens.primary,
-            disabledBackgroundColor: const Color(0xFF374151),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(
-                RealtimeUiTokens.controlRadius,
+    return RealtimeGlassSurface(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      radius: RealtimeUiTokens.dockRadius,
+      opacity: .92,
+      blur: RealtimeUiTokens.subtleBlur,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              result?.providerId == null
+                  ? strings.preJoinCheck
+                  : mediaProviderDisplayName(result!.providerId!),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: RealtimeUiTokens.textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-        ),
+          const SizedBox(width: 12),
+          // The CTA must stay a flex child: a hard maxWidth of 320 plus the
+          // 12px gap overflows the footer on 390px phone viewports, where the
+          // glass surface leaves only ~331.8px of usable width.
+          Flexible(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: SizedBox(
+                height: 48,
+                child: RealtimeGlassButton(
+                  onPressed: !_loading && !_saving && result?.isReady == true
+                      ? _enter
+                      : null,
+                  isLoading: _saving,
+                  icon: Icons.arrow_forward_rounded,
+                  child: Text(label),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

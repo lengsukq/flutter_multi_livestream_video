@@ -9,7 +9,11 @@ class ProviderWebTrackRenderer extends MediaTrackRenderer {
   const ProviderWebTrackRenderer();
 
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) {
+  Widget buildView(
+    BuildContext context,
+    MediaVideoTrack track, {
+    MediaVideoFit fit = MediaVideoFit.cover,
+  }) {
     if (track is! ProviderWebVideoTrack) {
       throw ArgumentError.value(
         track,
@@ -17,14 +21,15 @@ class ProviderWebTrackRenderer extends MediaTrackRenderer {
         'ProviderWebTrackRenderer requires a ProviderWebVideoTrack.',
       );
     }
-    return _ProviderWebVideoView(track: track);
+    return _ProviderWebVideoView(track: track, fit: fit);
   }
 }
 
 class _ProviderWebVideoView extends StatefulWidget {
-  const _ProviderWebVideoView({required this.track});
+  const _ProviderWebVideoView({required this.track, required this.fit});
 
   final ProviderWebVideoTrack track;
+  final MediaVideoFit fit;
 
   @override
   State<_ProviderWebVideoView> createState() => _ProviderWebVideoViewState();
@@ -86,6 +91,7 @@ class _ProviderWebVideoViewState extends State<_ProviderWebVideoView> {
         ..width = '100%'
         ..height = '100%'
         ..overflow = 'hidden'
+        ..objectFit = widget.fit == MediaVideoFit.contain ? 'contain' : 'cover'
         ..backgroundColor = '#000000';
       _attach(widget.track, _elementId);
     },

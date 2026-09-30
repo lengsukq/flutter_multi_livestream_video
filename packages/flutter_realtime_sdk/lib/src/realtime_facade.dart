@@ -21,10 +21,7 @@ typedef RealtimeStandaloneChatProvisionerFactory =
 /// Most applications should start here. [RealtimeSdk] remains available as
 /// the advanced API for custom provisioning and lower-level orchestration.
 class Realtime {
-  Realtime.fromSdk(
-    this.sdk, {
-    this._standaloneChatProvisionerFactory,
-  });
+  Realtime.fromSdk(this.sdk, {this._standaloneChatProvisionerFactory});
 
   factory Realtime.standard({
     String? backendUrl,

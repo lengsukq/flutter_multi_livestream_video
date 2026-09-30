@@ -9,7 +9,11 @@ class LiveKitTrackRenderer extends MediaTrackRenderer {
   const LiveKitTrackRenderer();
 
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) {
+  Widget buildView(
+    BuildContext context,
+    MediaVideoTrack track, {
+    MediaVideoFit fit = MediaVideoFit.cover,
+  }) {
     if (track is! LiveKitMediaVideoTrack) {
       throw ArgumentError.value(
         track,
@@ -19,7 +23,10 @@ class LiveKitTrackRenderer extends MediaTrackRenderer {
     }
     return lk.VideoTrackRenderer(
       track.liveKitTrack,
-      fit: lk.VideoViewFit.cover,
+      fit: switch (fit) {
+        MediaVideoFit.cover => lk.VideoViewFit.cover,
+        MediaVideoFit.contain => lk.VideoViewFit.contain,
+      },
     );
   }
 }

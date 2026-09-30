@@ -112,6 +112,10 @@ void main() {
           'remote:sub:stop:u-remote',
         ]),
       );
+      // A shared screen is letterboxed, never cropped to the tile shape.
+      expect(engine.calls, contains('remote:fill:u-remote:sub:true'));
+      expect(screenTrack.width, 0);
+      expect(screenTrack.height, 0);
       engineEvents.onUserSubStreamAvailable?.call('u-remote', false);
       expect(session.snapshot.contentShareTrack, isNull);
 
@@ -248,6 +252,8 @@ class _FakeTrtcEngine implements TrtcEngine {
   TrtcEngineEvents? lastEvents;
   int exitCount = 0;
   bool disposed = false;
+  int? subStreamWidth;
+  int? subStreamHeight;
 
   @override
   Future<int> enterRoom(TrtcJoinInfo joinInfo, TrtcEngineEvents events) async {
@@ -293,6 +299,22 @@ class _FakeTrtcEngine implements TrtcEngine {
   @override
   void stopRemoteSubStreamView(String userId) =>
       calls.add('remote:sub:stop:$userId');
+
+  @override
+  void setRemoteFillMode(String userId, bool subStream, bool fit) =>
+      calls.add(
+        'remote:fill:$userId:${subStream ? 'sub' : 'big'}:$fit',
+      );
+
+  @override
+  int? remoteWidth(String userId, {required bool subStream}) => subStream
+      ? subStreamWidth
+      : null;
+
+  @override
+  int? remoteHeight(String userId, {required bool subStream}) => subStream
+      ? subStreamHeight
+      : null;
 
   @override
   void startScreenCapture() => calls.add('screen:start');

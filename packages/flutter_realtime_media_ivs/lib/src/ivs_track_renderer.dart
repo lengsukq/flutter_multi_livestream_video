@@ -12,7 +12,11 @@ class IvsTrackRenderer extends MediaTrackRenderer {
       'com.oneplusdream.flutter_realtime_media_ivs/video';
 
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) {
+  Widget buildView(
+    BuildContext context,
+    MediaVideoTrack track, {
+    MediaVideoFit fit = MediaVideoFit.cover,
+  }) {
     if (track is! IvsMediaVideoTrack) {
       throw ArgumentError.value(
         track,

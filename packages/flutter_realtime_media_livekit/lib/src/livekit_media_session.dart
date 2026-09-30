@@ -711,7 +711,7 @@ abstract class LiveKitMediaSessionBase
       lk.TrackSource.camera,
     );
     final track = publication?.track;
-    if (publication == null || track == null) return null;
+    if (publication == null || publication.muted || track == null) return null;
     return _videoTrack(publication, track, participant.identity, isLocal: true);
   }
 
@@ -720,7 +720,7 @@ abstract class LiveKitMediaSessionBase
       lk.TrackSource.camera,
     );
     final track = publication?.track;
-    if (publication == null || track == null) return null;
+    if (publication == null || publication.muted || track == null) return null;
     return _videoTrack(
       publication,
       track,
@@ -844,6 +844,22 @@ abstract class LiveKitMediaSessionBase
     _androidScreenShareServiceStarted = true;
   }
 
+  Future<void> _prepareMacOsScreenShare() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) return;
+
+    final permissionGranted = await rtc.Helper.requestCapturePermission();
+    if (!permissionGranted) {
+      throw MediaError(
+        code: MediaErrorCode.permissionDenied,
+        message:
+            'LiveKit screen sharing needs macOS Screen Recording permission. '
+            'Allow it in System Settings > Privacy & Security > Screen Recording, '
+            'then restart the app.',
+        providerId: providerId,
+      );
+    }
+  }
+
   Future<void> _stopAndroidScreenShareService() async {
     if (!_androidScreenShareServiceStarted ||
         kIsWeb ||
@@ -916,6 +932,7 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
       if (enabled) {
         await _prepareAndroidScreenShare();
         androidServicePrepared = _androidScreenShareServiceStarted;
+        await _prepareMacOsScreenShare();
       }
       await _requireLocalParticipant().setScreenShareEnabled(
         enabled,

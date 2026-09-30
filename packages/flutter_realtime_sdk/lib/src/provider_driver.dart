@@ -324,8 +324,11 @@ class _UnsupportedMediaRenderer extends MediaTrackRenderer {
   const _UnsupportedMediaRenderer();
 
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) =>
-      const SizedBox.shrink();
+  Widget buildView(
+    BuildContext context,
+    MediaVideoTrack track, {
+    MediaVideoFit fit = MediaVideoFit.cover,
+  }) => const SizedBox.shrink();
 }
 
 class _UnsupportedChatFactory implements ChatSessionFactory {

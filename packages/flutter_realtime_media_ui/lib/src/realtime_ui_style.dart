@@ -861,14 +861,19 @@ class RealtimeGlassButton extends StatelessWidget {
                           Icon(icon, color: foregroundColor, size: 18),
                           const SizedBox(width: 8),
                         ],
-                        DefaultTextStyle(
-                          style: TextStyle(
-                            color: foregroundColor,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.2,
+                        // The caption has to be allowed to shrink, otherwise a
+                        // long label inside a constrained button overflows the
+                        // surrounding Row instead of ellipsizing.
+                        Flexible(
+                          child: DefaultTextStyle(
+                            style: TextStyle(
+                              color: foregroundColor,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                            child: child,
                           ),
-                          child: child,
                         ),
                       ],
                     ),

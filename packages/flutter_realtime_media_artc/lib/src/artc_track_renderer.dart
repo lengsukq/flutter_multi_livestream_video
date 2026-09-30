@@ -13,7 +13,11 @@ class ArtcTrackRenderer extends MediaTrackRenderer {
       'com.oneplusdream.flutter_realtime_media_artc/video';
 
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) {
+  Widget buildView(
+    BuildContext context,
+    MediaVideoTrack track, {
+    MediaVideoFit fit = MediaVideoFit.cover,
+  }) {
     if (track is! ArtcMediaVideoTrack) {
       throw ArgumentError.value(
         track,

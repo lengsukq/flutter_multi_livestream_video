@@ -6,11 +6,7 @@ enum RealtimeExperience { meeting, live, chat }
 enum RealtimeAction { create, join }
 
 class RealtimeUser {
-  const RealtimeUser({
-    required this.id,
-    required this.name,
-    this.deviceId,
-  });
+  const RealtimeUser({required this.id, required this.name, this.deviceId});
 
   final String id;
   final String name;
@@ -43,10 +39,7 @@ class RealtimeUser {
 }
 
 class RealtimeCredentials {
-  const RealtimeCredentials({
-    required this.providerId,
-    required this.payload,
-  });
+  const RealtimeCredentials({required this.providerId, required this.payload});
 
   final String providerId;
   final Map<String, dynamic> payload;
