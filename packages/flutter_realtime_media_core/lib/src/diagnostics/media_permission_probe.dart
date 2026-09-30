@@ -29,37 +29,81 @@ abstract interface class MediaPermissionProbe {
   Future<MediaPermissionState> status(MediaPermissionKind kind);
 }
 
-class DefaultMediaPermissionProbe implements MediaPermissionProbe {
+/// Permission actions used by the pre-join page.
+abstract interface class MediaPermissionRequester {
+  Future<MediaPermissionState> status(MediaPermissionKind kind);
+
+  Future<MediaPermissionState> request(MediaPermissionKind kind);
+
+  bool get canOpenAppSettings;
+
+  Future<bool> openAppSettings();
+}
+
+class DefaultMediaPermissionProbe
+    implements MediaPermissionProbe, MediaPermissionRequester {
   const DefaultMediaPermissionProbe();
 
-  @override
-  Future<MediaPermissionState> status(MediaPermissionKind kind) async {
-    if (!kIsWeb &&
-        (defaultTargetPlatform != TargetPlatform.android &&
-            defaultTargetPlatform != TargetPlatform.iOS)) {
-      return MediaPermissionState.unsupported;
-    }
-    try {
-      final permission = switch (kind) {
+  bool get _isSupportedPlatform =>
+      kIsWeb ||
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
+  permissions.Permission _permissionFor(MediaPermissionKind kind) =>
+      switch (kind) {
         MediaPermissionKind.microphone => permissions.Permission.microphone,
         MediaPermissionKind.camera => permissions.Permission.camera,
       };
-      final value = await permission.status;
-      if (value.isGranted) return MediaPermissionState.granted;
-      if (value.isPermanentlyDenied) {
-        return MediaPermissionState.permanentlyDenied;
-      }
-      // permission_handler maps the browser's "prompt" state to denied. A
-      // prompt means access has not been requested yet, so pre-join must leave
-      // the decision to the user's explicit join/device action.
-      if (kIsWeb && value.isDenied) return MediaPermissionState.unknown;
-      if (value.isRestricted) return MediaPermissionState.restricted;
-      if (value.isLimited) return MediaPermissionState.limited;
-      if (value.isProvisional) return MediaPermissionState.provisional;
-      if (value.isDenied) return MediaPermissionState.denied;
-      return MediaPermissionState.unknown;
+
+  @override
+  Future<MediaPermissionState> status(MediaPermissionKind kind) async {
+    if (!_isSupportedPlatform) return MediaPermissionState.unsupported;
+    try {
+      return _stateFor(await _permissionFor(kind).status);
     } catch (_) {
       return MediaPermissionState.unknown;
+    }
+  }
+
+  @override
+  Future<MediaPermissionState> request(MediaPermissionKind kind) async {
+    if (!_isSupportedPlatform) return MediaPermissionState.unsupported;
+    try {
+      return _stateFor(await _permissionFor(kind).request());
+    } catch (_) {
+      return MediaPermissionState.unknown;
+    }
+  }
+
+  MediaPermissionState _stateFor(permissions.PermissionStatus value) {
+    if (value.isGranted) return MediaPermissionState.granted;
+    if (value.isPermanentlyDenied) {
+      return MediaPermissionState.permanentlyDenied;
+    }
+    // permission_handler maps the browser's "prompt" state to denied. A
+    // prompt means access has not been requested yet, so pre-join must leave
+    // the decision to the user's explicit permission action.
+    if (kIsWeb && value.isDenied) return MediaPermissionState.unknown;
+    if (value.isRestricted) return MediaPermissionState.restricted;
+    if (value.isLimited) return MediaPermissionState.limited;
+    if (value.isProvisional) return MediaPermissionState.provisional;
+    if (value.isDenied) return MediaPermissionState.denied;
+    return MediaPermissionState.unknown;
+  }
+
+  @override
+  bool get canOpenAppSettings =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
+  @override
+  Future<bool> openAppSettings() async {
+    if (!canOpenAppSettings) return false;
+    try {
+      return await permissions.openAppSettings();
+    } catch (_) {
+      return false;
     }
   }
 }

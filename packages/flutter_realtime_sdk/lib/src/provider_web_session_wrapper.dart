@@ -6,11 +6,10 @@ import 'provider_web_assets.dart';
 
 const _productChatWebProviders = {'agora-chat', 'ivs-chat'};
 
-/// Defers bundled Web runtime loading until the resolved provider connects.
+/// Defers bundled Web runtime loading until a provider operation needs it.
 ///
-/// The factories retain the original session objects and their optional
-/// provider interfaces. They only add setup immediately before session
-/// creation, after backend routing has selected the provider.
+/// The wrappers preserve optional pre-join interfaces implemented by each
+/// factory and load any bundled Web runtime before invoking them.
 List<RealtimeProviderPlugin> wrapWebProviderPlugins(
   Iterable<RealtimeProviderPlugin> plugins,
   RealtimeProviderWebAssetsLoader loader,
@@ -21,13 +20,29 @@ List<RealtimeProviderPlugin> wrapWebProviderPlugins(
       metadata: plugin.metadata,
       mediaFactory: plugin.mediaFactory == null
           ? null
-          : _WebAssetsMediaFactory(plugin.mediaFactory!, loader),
+          : _wrapWebAssetsMediaFactory(plugin.mediaFactory!, loader),
       renderer: plugin.renderer,
       chatFactory: plugin.chatFactory == null
           ? null
           : _WebAssetsChatFactory(plugin.chatFactory!, loader),
     ),
 ];
+
+MediaSessionFactory _wrapWebAssetsMediaFactory(
+  MediaSessionFactory delegate,
+  RealtimeProviderWebAssetsLoader loader,
+) {
+  if (delegate is MediaPreJoinProbe && delegate is MediaLocalPreviewFactory) {
+    return _WebAssetsMediaFactoryWithPreJoinAndPreview(delegate, loader);
+  }
+  if (delegate is MediaPreJoinProbe) {
+    return _WebAssetsMediaFactoryWithPreJoinProbe(delegate, loader);
+  }
+  if (delegate is MediaLocalPreviewFactory) {
+    return _WebAssetsMediaFactoryWithLocalPreview(delegate, loader);
+  }
+  return _WebAssetsMediaFactory(delegate, loader);
+}
 
 class _WebAssetsMediaFactory
     implements MediaSessionFactory, MediaSessionPreparer {
@@ -51,16 +66,72 @@ class _WebAssetsMediaFactory
     if (delegate case final MediaSessionPreparer preparer) {
       await preparer.prepareSession(joinInfo);
     }
-    await loader(
-      mediaProviderIds: [providerId],
-      includeProductChat: false,
-      includeAllMediaProviders: false,
-    );
+    await _loadProviderAssets();
   }
+
+  Future<void> _loadProviderAssets() => loader(
+    mediaProviderIds: [providerId],
+    includeProductChat: false,
+    includeAllMediaProviders: false,
+  );
 
   @override
   MediaSession createSession(MediaJoinInfo joinInfo) =>
       delegate.createSession(joinInfo);
+}
+
+class _WebAssetsMediaFactoryWithPreJoinProbe extends _WebAssetsMediaFactory
+    implements MediaPreJoinProbe {
+  const _WebAssetsMediaFactoryWithPreJoinProbe(super.delegate, super.loader);
+
+  @override
+  Future<MediaPreJoinProbeResult> runPreJoinProbe(
+    MediaPreJoinProbeRequest request,
+  ) async {
+    await _loadProviderAssets();
+    return (delegate as MediaPreJoinProbe).runPreJoinProbe(request);
+  }
+}
+
+class _WebAssetsMediaFactoryWithLocalPreview extends _WebAssetsMediaFactory
+    implements MediaLocalPreviewFactory {
+  const _WebAssetsMediaFactoryWithLocalPreview(super.delegate, super.loader);
+
+  @override
+  Future<MediaLocalPreviewSession> createLocalPreview({
+    required MediaRole role,
+  }) async {
+    await _loadProviderAssets();
+    return (delegate as MediaLocalPreviewFactory).createLocalPreview(
+      role: role,
+    );
+  }
+}
+
+class _WebAssetsMediaFactoryWithPreJoinAndPreview extends _WebAssetsMediaFactory
+    implements MediaPreJoinProbe, MediaLocalPreviewFactory {
+  const _WebAssetsMediaFactoryWithPreJoinAndPreview(
+    super.delegate,
+    super.loader,
+  );
+
+  @override
+  Future<MediaPreJoinProbeResult> runPreJoinProbe(
+    MediaPreJoinProbeRequest request,
+  ) async {
+    await _loadProviderAssets();
+    return (delegate as MediaPreJoinProbe).runPreJoinProbe(request);
+  }
+
+  @override
+  Future<MediaLocalPreviewSession> createLocalPreview({
+    required MediaRole role,
+  }) async {
+    await _loadProviderAssets();
+    return (delegate as MediaLocalPreviewFactory).createLocalPreview(
+      role: role,
+    );
+  }
 }
 
 class _WebAssetsChatFactory implements ChatSessionFactory, ChatSessionPreparer {

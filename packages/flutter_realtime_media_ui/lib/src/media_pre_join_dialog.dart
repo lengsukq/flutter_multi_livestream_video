@@ -8,6 +8,8 @@ import 'realtime_strings.dart';
 import 'realtime_ui_style.dart';
 
 typedef MediaPreJoinCheckRunner = Future<MediaPreJoinResult> Function();
+typedef _PermissionActionCallback =
+    Future<void> Function(MediaPermissionKind kind);
 
 class MediaPreJoinDialog extends StatefulWidget {
   const MediaPreJoinDialog({super.key, required this.runCheck, this.title});
@@ -219,9 +221,20 @@ class _ErrorView extends StatelessWidget {
 }
 
 class _ResultView extends StatelessWidget {
-  const _ResultView({super.key, required this.result});
+  const _ResultView({
+    super.key,
+    required this.result,
+    this.permissionStates = const {},
+    this.requestingPermission,
+    this.canOpenAppSettings = false,
+    this.onPermissionAction,
+  });
 
   final MediaPreJoinResult result;
+  final Map<MediaPermissionKind, MediaPermissionState> permissionStates;
+  final MediaPermissionKind? requestingPermission;
+  final bool canOpenAppSettings;
+  final _PermissionActionCallback? onPermissionAction;
 
   @override
   Widget build(BuildContext context) {
@@ -291,7 +304,14 @@ class _ResultView extends StatelessWidget {
             child: Column(
               children: [
                 for (var i = 0; i < result.checks.length; i++)
-                  _CheckRow(check: result.checks[i], index: i),
+                  _CheckRow(
+                    check: result.checks[i],
+                    index: i,
+                    permissionStates: permissionStates,
+                    requestingPermission: requestingPermission,
+                    canOpenAppSettings: canOpenAppSettings,
+                    onPermissionAction: onPermissionAction,
+                  ),
               ],
             ),
           ),
@@ -302,15 +322,37 @@ class _ResultView extends StatelessWidget {
 }
 
 class _CheckRow extends StatelessWidget {
-  const _CheckRow({required this.check, required this.index});
+  const _CheckRow({
+    required this.check,
+    required this.index,
+    required this.permissionStates,
+    required this.requestingPermission,
+    required this.canOpenAppSettings,
+    required this.onPermissionAction,
+  });
 
   final MediaPreJoinCheck check;
   final int index;
+  final Map<MediaPermissionKind, MediaPermissionState> permissionStates;
+  final MediaPermissionKind? requestingPermission;
+  final bool canOpenAppSettings;
+  final _PermissionActionCallback? onPermissionAction;
 
   @override
   Widget build(BuildContext context) {
     final visual = _visualFor(check.status);
     final strings = RealtimeStrings.of(context);
+    final permissionKind = _permissionKindFor(check.type);
+    final permissionState = permissionKind == null
+        ? null
+        : permissionStates[permissionKind];
+    final canAct =
+        onPermissionAction != null &&
+        permissionKind != null &&
+        permissionState != null &&
+        permissionState != MediaPermissionState.granted &&
+        permissionState != MediaPermissionState.unsupported &&
+        permissionState != MediaPermissionState.restricted;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: Duration(milliseconds: 180 + (index * 35).clamp(0, 160)),
@@ -368,11 +410,46 @@ class _CheckRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            RealtimePill(
-              label: strings.preJoinStatus(check.status.name),
-              foreground: visual.color,
-              background: visual.background,
-              borderColor: visual.color.withValues(alpha: 0.24),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                RealtimePill(
+                  label: strings.preJoinStatus(check.status.name),
+                  foreground: visual.color,
+                  background: visual.background,
+                  borderColor: visual.color.withValues(alpha: 0.24),
+                ),
+                if (canAct) ...[
+                  const SizedBox(height: 2),
+                  TextButton(
+                    onPressed: requestingPermission == permissionKind
+                        ? null
+                        : () => onPermissionAction!(permissionKind!),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      minimumSize: const Size(0, 28),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: requestingPermission == permissionKind
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            permissionState ==
+                                    MediaPermissionState.permanentlyDenied
+                                ? canOpenAppSettings
+                                      ? strings.openAppSettings
+                                      : strings.browserPermissionSettings
+                                : strings.requestPermission,
+                            textAlign: TextAlign.right,
+                          ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
@@ -425,6 +502,14 @@ class _CheckVisual {
   final Color background;
 }
 
+MediaPermissionKind? _permissionKindFor(MediaPreJoinCheckType type) =>
+    switch (type) {
+      MediaPreJoinCheckType.microphonePermission =>
+        MediaPermissionKind.microphone,
+      MediaPreJoinCheckType.cameraPermission => MediaPermissionKind.camera,
+      _ => null,
+    };
+
 typedef MediaLocalPreviewOpener =
     Future<MediaLocalPreviewSession?> Function(
       String providerId,
@@ -439,6 +524,7 @@ class MediaPreJoinPage extends StatefulWidget {
     super.key,
     required this.runCheck,
     required this.openPreview,
+    this.permissionRequester = const DefaultMediaPermissionProbe(),
     this.displayName = '',
     this.roomLabel,
     this.title,
@@ -446,6 +532,7 @@ class MediaPreJoinPage extends StatefulWidget {
 
   final MediaPreJoinCheckRunner runCheck;
   final MediaLocalPreviewOpener openPreview;
+  final MediaPermissionRequester permissionRequester;
   final String displayName;
   final String? roomLabel;
   final String? title;
@@ -454,6 +541,8 @@ class MediaPreJoinPage extends StatefulWidget {
     BuildContext context, {
     required MediaPreJoinCheckRunner runCheck,
     required MediaLocalPreviewOpener openPreview,
+    MediaPermissionRequester permissionRequester =
+        const DefaultMediaPermissionProbe(),
     String displayName = '',
     String? roomLabel,
     String? title,
@@ -462,6 +551,7 @@ class MediaPreJoinPage extends StatefulWidget {
       builder: (_) => MediaPreJoinPage(
         runCheck: runCheck,
         openPreview: openPreview,
+        permissionRequester: permissionRequester,
         displayName: displayName,
         roomLabel: roomLabel,
         title: title,
@@ -473,7 +563,8 @@ class MediaPreJoinPage extends StatefulWidget {
   State<MediaPreJoinPage> createState() => _MediaPreJoinPageState();
 }
 
-class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
+class _MediaPreJoinPageState extends State<MediaPreJoinPage>
+    with WidgetsBindingObserver {
   MediaPreJoinResult? _result;
   MediaLocalPreviewSession? _preview;
   Object? _error;
@@ -483,11 +574,23 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
   bool _loading = true;
   bool _saving = false;
   bool _allowPop = false;
+  Map<MediaPermissionKind, MediaPermissionState> _permissionStates = const {};
+  MediaPermissionKind? _requestingPermission;
+  bool _refreshPermissionsOnResume = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _runChecks();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _refreshPermissionsOnResume) {
+      _refreshPermissionsOnResume = false;
+      unawaited(_refreshPermissionStates(updateChecks: true));
+    }
   }
 
   Future<void> _runChecks() async {
@@ -497,13 +600,18 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
       _previewError = null;
       _deviceError = null;
       _devices = const [];
+      _permissionStates = const {};
     });
     await _disposePreview();
     try {
       final result = await widget.runCheck();
+      final permissionStates = await _readPermissionStates();
       if (!mounted) return;
       _result = result;
-      setState(() => _loading = false);
+      setState(() {
+        _permissionStates = permissionStates;
+        _loading = false;
+      });
       if (result.role != MediaRole.viewer && result.providerId != null) {
         try {
           final preview = await widget.openPreview(
@@ -598,8 +706,215 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
     }
   }
 
+  Future<Map<MediaPermissionKind, MediaPermissionState>>
+  _readPermissionStates() async => {
+    for (final kind in MediaPermissionKind.values)
+      kind: await _safePermissionStatus(kind),
+  };
+
+  Future<MediaPermissionState> _safePermissionStatus(
+    MediaPermissionKind kind,
+  ) async {
+    try {
+      return await widget.permissionRequester.status(kind);
+    } catch (_) {
+      return MediaPermissionState.unknown;
+    }
+  }
+
+  Future<void> _refreshPermissionStates({required bool updateChecks}) async {
+    final states = await _readPermissionStates();
+    if (!mounted) return;
+    setState(() {
+      _permissionStates = states;
+      if (updateChecks && _result != null) {
+        var updatedResult = _result!;
+        updatedResult = _withPermissionState(
+          updatedResult,
+          MediaPermissionKind.microphone,
+          states[MediaPermissionKind.microphone] ??
+              MediaPermissionState.unknown,
+        );
+        updatedResult = _withPermissionState(
+          updatedResult,
+          MediaPermissionKind.camera,
+          states[MediaPermissionKind.camera] ?? MediaPermissionState.unknown,
+        );
+        _result = updatedResult;
+      }
+    });
+  }
+
+  Future<void> _onPermissionAction(MediaPermissionKind kind) async {
+    final current = _permissionStates[kind] ?? MediaPermissionState.unknown;
+    if (current == MediaPermissionState.permanentlyDenied) {
+      if (widget.permissionRequester.canOpenAppSettings) {
+        setState(() => _requestingPermission = kind);
+        _refreshPermissionsOnResume = true;
+        var opened = false;
+        try {
+          opened = await widget.permissionRequester.openAppSettings();
+        } catch (_) {
+          opened = false;
+        }
+        if (!mounted) return;
+        setState(() => _requestingPermission = null);
+        if (!opened) {
+          _refreshPermissionsOnResume = false;
+          _showPermissionMessage(
+            RealtimeStrings.of(context).permissionSettingsUnavailable,
+          );
+        }
+      } else {
+        await _showBrowserPermissionHelp(kind);
+      }
+      return;
+    }
+
+    if (current == MediaPermissionState.restricted) return;
+    setState(() => _requestingPermission = kind);
+    MediaPermissionState next;
+    var requestFailed = false;
+    try {
+      next = await widget.permissionRequester.request(kind);
+    } catch (_) {
+      next = MediaPermissionState.unknown;
+      requestFailed = true;
+    }
+    if (!mounted) return;
+    setState(() {
+      _requestingPermission = null;
+      _permissionStates = {..._permissionStates, kind: next};
+      if (_result != null) {
+        _result = _withPermissionState(_result!, kind, next);
+      }
+    });
+    if (requestFailed || next == MediaPermissionState.unknown) {
+      _showPermissionMessage(
+        RealtimeStrings.of(context).permissionRequestFailed,
+      );
+    } else if (kind == MediaPermissionKind.camera &&
+        next == MediaPermissionState.granted) {
+      await _retryLocalPreview();
+    }
+  }
+
+  MediaPreJoinResult _withPermissionState(
+    MediaPreJoinResult result,
+    MediaPermissionKind kind,
+    MediaPermissionState state,
+  ) {
+    final type = kind == MediaPermissionKind.microphone
+        ? MediaPreJoinCheckType.microphonePermission
+        : MediaPreJoinCheckType.cameraPermission;
+    final original = result.check(type);
+    if (original == null) return result;
+    final status = switch (state) {
+      MediaPermissionState.granted => MediaPreJoinStatus.passed,
+      MediaPermissionState.denied ||
+      MediaPermissionState.permanentlyDenied ||
+      MediaPermissionState.restricted => MediaPreJoinStatus.failed,
+      MediaPermissionState.unsupported => MediaPreJoinStatus.unsupported,
+      MediaPermissionState.limited ||
+      MediaPermissionState.provisional ||
+      MediaPermissionState.unknown => MediaPreJoinStatus.unknown,
+    };
+    final label = kind == MediaPermissionKind.microphone
+        ? RealtimeStrings.of(context).microphone
+        : RealtimeStrings.of(context).camera;
+    final strings = RealtimeStrings.of(context);
+    final message = switch (state) {
+      MediaPermissionState.granted => strings.permissionGranted(label),
+      MediaPermissionState.denied => strings.permissionDenied(label),
+      MediaPermissionState.permanentlyDenied =>
+        widget.permissionRequester.canOpenAppSettings
+            ? strings.permissionPermanentlyDenied(label)
+            : strings.permissionBrowserHelp(label),
+      MediaPermissionState.restricted => strings.permissionRestricted(label),
+      MediaPermissionState.unsupported => original.message,
+      MediaPermissionState.limited ||
+      MediaPermissionState.provisional => original.message,
+      MediaPermissionState.unknown => strings.permissionDenied(label),
+    };
+    final updated = MediaPreJoinCheck(
+      type: original.type,
+      status: status,
+      severity: original.severity,
+      message: message,
+      details: original.details,
+    );
+    return MediaPreJoinResult(
+      role: result.role,
+      providerId: result.providerId,
+      checks: [
+        for (final check in result.checks) check.type == type ? updated : check,
+      ],
+    );
+  }
+
+  Future<void> _showBrowserPermissionHelp(MediaPermissionKind kind) async {
+    final strings = RealtimeStrings.of(context);
+    final label = kind == MediaPermissionKind.microphone
+        ? strings.microphone
+        : strings.camera;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(strings.permissionHelpTitle),
+        content: Text(strings.permissionBrowserHelp(label)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(strings.close),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPermissionMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _retryLocalPreview() async {
+    final result = _result;
+    if (result == null ||
+        result.role == MediaRole.viewer ||
+        result.providerId == null) {
+      return;
+    }
+    await _disposePreview();
+    if (!mounted) return;
+    setState(() {
+      _previewError = null;
+      _deviceError = null;
+      _devices = const [];
+    });
+    try {
+      final preview = await widget.openPreview(result.providerId!, result.role);
+      if (!mounted) {
+        await preview?.dispose();
+        return;
+      }
+      _preview = preview;
+      if (preview != null) {
+        try {
+          _devices = await preview.listMediaDevices();
+        } catch (error) {
+          _deviceError = error;
+        }
+      }
+      setState(() {});
+    } catch (error) {
+      if (mounted) setState(() => _previewError = error);
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     final preview = _preview;
     _preview = null;
     if (preview != null) unawaited(preview.dispose());
@@ -1063,7 +1378,13 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ResultView(result: result),
+        _ResultView(
+          result: result,
+          permissionStates: _permissionStates,
+          requestingPermission: _requestingPermission,
+          canOpenAppSettings: widget.permissionRequester.canOpenAppSettings,
+          onPermissionAction: _onPermissionAction,
+        ),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton.icon(

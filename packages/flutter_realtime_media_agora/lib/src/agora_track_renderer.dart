@@ -9,10 +9,14 @@ class AgoraTrackRenderer extends MediaTrackRenderer {
   const AgoraTrackRenderer();
 
   @override
-  Widget buildView(
+  Widget buildView(BuildContext context, MediaVideoTrack track) =>
+      buildViewWithFit(context, track);
+
+  @override
+  Widget buildViewWithFit(
     BuildContext context,
     MediaVideoTrack track, {
-    MediaVideoFit fit = MediaVideoFit.cover,
+    BoxFit fit = BoxFit.cover,
   }) {
     if (track is! AgoraMediaVideoTrack) {
       throw ArgumentError.value(
@@ -21,10 +25,9 @@ class AgoraTrackRenderer extends MediaTrackRenderer {
         'AgoraTrackRenderer requires an AgoraMediaVideoTrack.',
       );
     }
-    final renderMode = switch (fit) {
-      MediaVideoFit.cover => agora.RenderModeType.renderModeHidden,
-      MediaVideoFit.contain => agora.RenderModeType.renderModeFit,
-    };
+    final renderMode = fit == BoxFit.contain
+        ? agora.RenderModeType.renderModeFit
+        : agora.RenderModeType.renderModeHidden;
 
     if (track.isLocal) {
       return agora.AgoraVideoView(

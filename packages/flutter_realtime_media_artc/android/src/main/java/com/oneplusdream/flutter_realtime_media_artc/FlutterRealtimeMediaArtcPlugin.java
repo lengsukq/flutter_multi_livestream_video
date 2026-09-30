@@ -559,7 +559,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
         private final Context context;
         private final String userId;
         private final boolean local;
-        /** 0 = fill (crop to the tile), 1 = fit (letterbox, keep all content). */
+        /** 0 = cover/crop, 1 = contain/letterbox. */
         private final int fitMode;
         private final FlutterRealtimeMediaArtcPlugin plugin;
         private final FrameLayout container;
@@ -586,8 +586,8 @@ public final class FlutterRealtimeMediaArtcPlugin implements
             AliRtcEngine.AliRtcVideoCanvas canvas = new AliRtcEngine.AliRtcVideoCanvas();
             canvas.view = sdkView;
             canvas.renderMode = fitMode == 1
-                    ? AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeFit
-                    : AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeFill;
+                    ? AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeFill
+                    : AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeClip;
             if (local) {
                 currentEngine.setLocalViewConfig(canvas, AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera);
                 if (currentEngine.isCameraOn()) currentEngine.startPreview();

@@ -13,10 +13,14 @@ class ArtcTrackRenderer extends MediaTrackRenderer {
       'com.oneplusdream.flutter_realtime_media_artc/video';
 
   @override
-  Widget buildView(
+  Widget buildView(BuildContext context, MediaVideoTrack track) =>
+      buildViewWithFit(context, track);
+
+  @override
+  Widget buildViewWithFit(
     BuildContext context,
     MediaVideoTrack track, {
-    MediaVideoFit fit = MediaVideoFit.cover,
+    BoxFit fit = BoxFit.cover,
   }) {
     if (track is! ArtcMediaVideoTrack) {
       throw ArgumentError.value(
@@ -29,6 +33,7 @@ class ArtcTrackRenderer extends MediaTrackRenderer {
       'userId': track.userId,
       'isLocal': track.isLocal,
       'generation': track.generation,
+      'fitMode': fit == BoxFit.contain ? 1 : 0,
     };
     return switch (defaultTargetPlatform) {
       TargetPlatform.android => AndroidView(

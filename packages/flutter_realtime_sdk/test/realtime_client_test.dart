@@ -1609,11 +1609,7 @@ class _FakeRenderer extends MediaTrackRenderer {
   const _FakeRenderer();
 
   @override
-  Widget buildView(
-    BuildContext context,
-    MediaVideoTrack track, {
-    MediaVideoFit fit = MediaVideoFit.cover,
-  }) =>
+  Widget buildView(BuildContext context, MediaVideoTrack track) =>
       const SizedBox.shrink();
 }
 

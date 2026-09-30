@@ -185,6 +185,30 @@ class RealtimeStrings {
   String get provider => isZh ? '服务商' : 'Provider';
   String get microphonePermission => isZh ? '麦克风权限' : 'Microphone permission';
   String get cameraPermission => isZh ? '摄像头权限' : 'Camera permission';
+  String get requestPermission => isZh ? '获取权限' : 'Grant access';
+  String get openAppSettings => isZh ? '前往系统设置' : 'Open app settings';
+  String get browserPermissionSettings => isZh ? '查看浏览器设置' : 'Browser settings';
+  String get permissionHelpTitle =>
+      isZh ? '请在浏览器中允许权限' : 'Allow access in your browser';
+  String get permissionSettingsUnavailable => isZh
+      ? '无法打开系统设置，请手动为应用开启权限。'
+      : 'Could not open system settings. Enable this permission for the app manually.';
+  String get permissionRequestFailed =>
+      isZh ? '权限请求失败，请稍后重试。' : 'Permission request failed. Try again.';
+  String permissionGranted(String label) =>
+      isZh ? '已获得$label权限。' : '$label permission is granted.';
+  String permissionDenied(String label) => isZh
+      ? '尚未获得$label权限，可以点击获取权限。'
+      : '$label permission is not granted. Tap to request access.';
+  String permissionPermanentlyDenied(String label) => isZh
+      ? '$label权限已被拒绝，请前往系统设置开启。'
+      : '$label permission is blocked. Open app settings to enable it.';
+  String permissionRestricted(String label) => isZh
+      ? '$label权限受到系统限制。'
+      : '$label permission is restricted by the system.';
+  String permissionBrowserHelp(String label) => isZh
+      ? '浏览器已阻止$label。请打开地址栏旁的网站权限设置并允许访问，然后返回此页重新检查。'
+      : 'Your browser blocked $label. Allow it in the site permissions menu near the address bar, then return and run the check again.';
   String get microphoneDevice => isZh ? '麦克风设备' : 'Microphone device';
   String get cameraDevice => isZh ? '摄像头设备' : 'Camera device';
   String get network => isZh ? '网络' : 'Network';

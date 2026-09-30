@@ -9,11 +9,7 @@ class ChimeTrackRenderer extends MediaTrackRenderer {
   const ChimeTrackRenderer();
 
   @override
-  Widget buildView(
-    BuildContext context,
-    MediaVideoTrack track, {
-    MediaVideoFit fit = MediaVideoFit.cover,
-  }) {
+  Widget buildView(BuildContext context, MediaVideoTrack track) {
     if (track is! ChimeMediaVideoTrack) {
       throw ArgumentError.value(
         track,

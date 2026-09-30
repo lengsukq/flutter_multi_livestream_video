@@ -1307,7 +1307,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               child: MediaTrackView(
                 renderer: widget.renderer,
                 track: value.contentShareTrack,
-                fit: MediaVideoFit.contain,
+                fit: BoxFit.contain,
               ),
             ),
             Positioned(

@@ -497,7 +497,7 @@ void main() {
     // contained frame instead of the default cover fit.
     expect(
       tester.widget<MediaTrackView>(find.byType(MediaTrackView)).fit,
-      MediaVideoFit.contain,
+      BoxFit.contain,
     );
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -978,9 +978,6 @@ class _FakeRenderer extends MediaTrackRenderer {
   const _FakeRenderer();
 
   @override
-  Widget buildView(
-    BuildContext context,
-    MediaVideoTrack track, {
-    MediaVideoFit fit = MediaVideoFit.cover,
-  }) => const SizedBox.shrink();
+  Widget buildView(BuildContext context, MediaVideoTrack track) =>
+      const SizedBox.shrink();
 }

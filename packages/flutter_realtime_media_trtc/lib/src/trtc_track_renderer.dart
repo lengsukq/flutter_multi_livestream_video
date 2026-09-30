@@ -9,11 +9,7 @@ class TrtcTrackRenderer extends MediaTrackRenderer {
   const TrtcTrackRenderer();
 
   @override
-  Widget buildView(
-    BuildContext context,
-    MediaVideoTrack track, {
-    MediaVideoFit fit = MediaVideoFit.cover,
-  }) {
+  Widget buildView(BuildContext context, MediaVideoTrack track) {
     if (track is! TrtcMediaVideoTrack) {
       throw ArgumentError.value(
         track,
@@ -21,15 +17,14 @@ class TrtcTrackRenderer extends MediaTrackRenderer {
         'TrtcTrackRenderer requires a TrtcMediaVideoTrack.',
       );
     }
-    return _TrtcVideoSurface(key: ValueKey(track.id), track: track, fit: fit);
+    return _TrtcVideoSurface(key: ValueKey(track.id), track: track);
   }
 }
 
 class _TrtcVideoSurface extends StatefulWidget {
-  const _TrtcVideoSurface({super.key, required this.track, required this.fit});
+  const _TrtcVideoSurface({super.key, required this.track});
 
   final TrtcMediaVideoTrack track;
-  final MediaVideoFit fit;
 
   @override
   State<_TrtcVideoSurface> createState() => _TrtcVideoSurfaceState();
