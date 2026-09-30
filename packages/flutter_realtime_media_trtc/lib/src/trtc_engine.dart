@@ -283,9 +283,12 @@ class _NativeTrtcEngine implements TrtcEngine {
     required bool subStream,
     required int Function(TRTCRemoteStatistics value) select,
   }) {
-    final streamType = subStream ? TRTCVideoStreamType.sub : TRTCVideoStreamType.big;
+    final streamType = subStream
+        ? TRTCVideoStreamType.sub
+        : TRTCVideoStreamType.big;
     for (final entry
-        in _lastStatistics?.remoteStatisticsArray ?? const <TRTCRemoteStatistics>[]) {
+        in _lastStatistics?.remoteStatisticsArray ??
+            const <TRTCRemoteStatistics>[]) {
       if (entry.userId != userId || entry.streamType != streamType) continue;
       final value = select(entry);
       if (value > 0) return value;

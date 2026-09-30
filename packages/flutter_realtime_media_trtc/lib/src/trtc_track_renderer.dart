@@ -21,20 +21,12 @@ class TrtcTrackRenderer extends MediaTrackRenderer {
         'TrtcTrackRenderer requires a TrtcMediaVideoTrack.',
       );
     }
-    return _TrtcVideoSurface(
-      key: ValueKey(track.id),
-      track: track,
-      fit: fit,
-    );
+    return _TrtcVideoSurface(key: ValueKey(track.id), track: track, fit: fit);
   }
 }
 
 class _TrtcVideoSurface extends StatefulWidget {
-  const _TrtcVideoSurface({
-    super.key,
-    required this.track,
-    required this.fit,
-  });
+  const _TrtcVideoSurface({super.key, required this.track, required this.fit});
 
   final TrtcMediaVideoTrack track;
   final MediaVideoFit fit;

@@ -302,19 +302,15 @@ class _FakeTrtcEngine implements TrtcEngine {
 
   @override
   void setRemoteFillMode(String userId, bool subStream, bool fit) =>
-      calls.add(
-        'remote:fill:$userId:${subStream ? 'sub' : 'big'}:$fit',
-      );
+      calls.add('remote:fill:$userId:${subStream ? 'sub' : 'big'}:$fit');
 
   @override
-  int? remoteWidth(String userId, {required bool subStream}) => subStream
-      ? subStreamWidth
-      : null;
+  int? remoteWidth(String userId, {required bool subStream}) =>
+      subStream ? subStreamWidth : null;
 
   @override
-  int? remoteHeight(String userId, {required bool subStream}) => subStream
-      ? subStreamHeight
-      : null;
+  int? remoteHeight(String userId, {required bool subStream}) =>
+      subStream ? subStreamHeight : null;
 
   @override
   void startScreenCapture() => calls.add('screen:start');
