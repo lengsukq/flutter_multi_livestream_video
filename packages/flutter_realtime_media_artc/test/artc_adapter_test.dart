@@ -1,3 +1,5 @@
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -33,6 +35,95 @@ Map<String, Object?> response({MediaRole role = MediaRole.participant}) => {
 };
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'processed source owns camera control and detaches before leave',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final commands = <MethodCall>[];
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final channels = {
+        const MethodChannel(
+          'com.oneplusdream.flutter_realtime_media_artc/methods',
+        ),
+        const MethodChannel('flutter_realtime_video_effects'),
+      };
+      for (final channel in channels) {
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          commands.add(call);
+          if (call.method == 'listCameras')
+            return [
+              {'id': 'front', 'label': 'Front'},
+              {'id': 'back', 'label': 'Back'},
+            ];
+          return null;
+        });
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      }
+      final engine = _FakeArtcEngine();
+      final session = ArtcSessionFactory(
+        engineFactory: () async => engine,
+      ).createSession(joinInfo());
+      await session.join(joinInfo());
+      final sink = session as ProcessedVideoSink;
+      const source = ProcessedVideoSource(
+        id: 'shared-processed-frame-source',
+        platform: VideoEffectsPlatform.android,
+        kind: ProcessedVideoSourceKind.nativeFrameHub,
+        width: 1280,
+        height: 720,
+        frameRate: 24,
+      );
+      expect(session.capabilities.canBlurBackground, isTrue);
+      expect(session.capabilities.canReplaceBackgroundImage, isTrue);
+      expect(session.snapshot.capabilities.canBlurBackground, isTrue);
+      expect(sink.supportsProcessedVideoSource(source), isTrue);
+      await sink.attachProcessedVideoSource(source);
+      final publisher = session as InteractiveMediaSession;
+      await publisher.setVideoEnabled(true);
+      await publisher.switchCamera(MediaCameraPosition.back);
+      expect(engine.calls, isNot(contains('camera:back')));
+      final controller = session as MediaDeviceController;
+      final cameras = await controller.listMediaDevices(
+        kinds: {MediaDeviceKind.camera},
+      );
+      expect(cameras.map((c) => c.id), ['front', 'back']);
+      await controller.selectMediaDevice(cameras.first);
+      await publisher.setVideoEnabled(false);
+      expect(
+        commands
+            .where((c) => c.method == 'selectCamera')
+            .map((c) => (c.arguments as Map)['deviceId']),
+        ['back', 'front'],
+      );
+      expect(
+        commands
+            .where((c) => c.method == 'setEnabled')
+            .map((c) => (c.arguments as Map)['enabled']),
+        [true, false],
+      );
+      expect(
+        (commands
+                .firstWhere((c) => c.method == 'attachProcessedVideoSource')
+                .arguments
+            as Map)['sourceId'],
+        source.id,
+      );
+      await session.leave();
+      expect(
+        commands.where((c) => c.method == 'detachProcessedVideoSource'),
+        hasLength(1),
+      );
+      await session.dispose();
+      expect(
+        commands.where((c) => c.method == 'detachProcessedVideoSource'),
+        hasLength(1),
+      );
+    },
+  );
+
   test(
     'macOS Pre-Join blocks when the optional ARTC framework is absent',
     () async {

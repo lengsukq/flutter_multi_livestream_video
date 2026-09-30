@@ -3,6 +3,8 @@ import 'media_capabilities.dart';
 enum MediaFeature {
   publishAudio,
   publishVideo,
+  backgroundBlur,
+  backgroundImageReplacement,
   switchCamera,
   screenShare,
   sendData,
@@ -27,6 +29,8 @@ extension MediaCapabilitiesFeatures on MediaCapabilities {
   bool supports(MediaFeature feature) => switch (feature) {
     MediaFeature.publishAudio => canPublishAudio,
     MediaFeature.publishVideo => canPublishVideo,
+    MediaFeature.backgroundBlur => canBlurBackground,
+    MediaFeature.backgroundImageReplacement => canReplaceBackgroundImage,
     MediaFeature.switchCamera => canSwitchCamera,
     MediaFeature.screenShare => canScreenShare,
     MediaFeature.sendData => canSendData,

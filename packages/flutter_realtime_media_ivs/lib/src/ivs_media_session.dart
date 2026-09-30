@@ -1,6 +1,8 @@
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'ivs_engine.dart';
@@ -8,7 +10,12 @@ import 'ivs_join_info.dart';
 import 'ivs_media_track.dart';
 
 abstract class _IvsMediaSession
-    implements MediaSession, MediaCredentialRefreshable, MediaStatsProvider {
+    implements
+        MediaSession,
+        MediaCredentialRefreshable,
+        MediaStatsProvider,
+        ProcessedVideoSink,
+        MediaDeviceController {
   _IvsMediaSession({required this.role, required this.engineFactory})
     : _snapshot = MediaSnapshot(role: role);
 
@@ -38,33 +45,121 @@ abstract class _IvsMediaSession
 
   @override
   final MediaRole role;
+  bool _macEffectsInputAvailable = false;
+  bool get _effectsPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          (defaultTargetPlatform == TargetPlatform.macOS &&
+              _macEffectsInputAvailable));
+  Future<void> _probeProcessedVideoInput() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) return;
+    try {
+      _macEffectsInputAvailable =
+          await MethodChannel(
+            _processedSink.channelName,
+          ).invokeMethod<bool>('probeProcessedVideoInput') ??
+          false;
+    } on MissingPluginException {
+      _macEffectsInputAvailable = false;
+    } on PlatformException {
+      _macEffectsInputAvailable = false;
+    }
+  }
+
+  final _processedSink = NativeProcessedVideoSink(
+    providerId: 'ivs',
+    channelName: 'com.oneplusdream.flutter_realtime_media_ivs/methods',
+    attachMethod: 'attachProcessedVideoSource',
+    detachMethod: 'detachProcessedVideoSource',
+  );
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      capabilities.canPublishVideo &&
+      _effectsPlatform &&
+      _processedSink.supports(source) &&
+      source.platform ==
+          (defaultTargetPlatform == TargetPlatform.android
+              ? VideoEffectsPlatform.android
+              : VideoEffectsPlatform.macos);
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
+    _requireActive();
+    if (!supportsProcessedVideoSource(source)) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        providerId: providerId,
+        message:
+            'Processed video input is unavailable for this role or platform.',
+      );
+    }
+    await _processedSink.attach(source);
+  }
+
+  @override
+  Future<void> detachProcessedVideoSource() => _processedSink.detach();
+
+  @override
+  Future<List<MediaDevice>> listMediaDevices({
+    Set<MediaDeviceKind>? kinds,
+  }) async {
+    _requireActive();
+    if (!capabilities.canEnumerateCameras ||
+        (kinds != null && !kinds.contains(MediaDeviceKind.camera))) {
+      return const [];
+    }
+    return List.unmodifiable([
+      for (final camera in await VideoEffectsBridge().listCameras())
+        MediaDevice(
+          id: camera.id,
+          label: camera.label,
+          kind: MediaDeviceKind.camera,
+        ),
+    ]);
+  }
+
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) async {
+    _requireActive();
+    if (device.kind != MediaDeviceKind.camera ||
+        !capabilities.canSelectCamera) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        providerId: providerId,
+        message: 'This media device cannot be selected.',
+      );
+    }
+    if (_processedSink.source == null) {
+      throw MediaError(
+        code: MediaErrorCode.invalidState,
+        providerId: providerId,
+        message: 'Prepare the SDK video source before selecting a camera.',
+      );
+    }
+    await _processedSink.selectCamera(device.id);
+  }
+
   @override
   String get providerId => IvsJoinInfo.providerIdValue;
 
   @override
-  MediaCapabilities get capabilities => switch (role) {
-    MediaRole.participant => MediaCapabilities(
-      canPublishAudio: true,
-      canPublishVideo: true,
-      canSwitchCamera: defaultTargetPlatform != TargetPlatform.macOS,
+  MediaCapabilities get capabilities {
+    final publisher = role != MediaRole.viewer;
+    return MediaCapabilities(
+      canPublishAudio: publisher,
+      canPublishVideo: publisher,
+      canSwitchCamera:
+          publisher && defaultTargetPlatform != TargetPlatform.macOS,
+      canBlurBackground: publisher && _effectsPlatform,
+      canReplaceBackgroundImage: publisher && _effectsPlatform,
+      canEnumerateCameras: publisher && _effectsPlatform,
+      canSelectCamera: publisher && _effectsPlatform,
       canSubscribeVideo: true,
       canReportNetworkStats: true,
-    ),
-    MediaRole.host => MediaCapabilities(
-      canPublishAudio: true,
-      canPublishVideo: true,
-      canSwitchCamera: defaultTargetPlatform != TargetPlatform.macOS,
-      canSubscribeVideo: true,
-      canReportNetworkStats: true,
-      canListParticipants: true,
-      canRemoveParticipants: true,
-      canCloseRoom: true,
-    ),
-    MediaRole.viewer => const MediaCapabilities(
-      canSubscribeVideo: true,
-      canReportNetworkStats: true,
-    ),
-  };
+      canListParticipants: role == MediaRole.host,
+      canRemoveParticipants: role == MediaRole.host,
+      canCloseRoom: role == MediaRole.host,
+    );
+  }
 
   @override
   MediaSessionState get state => _state;
@@ -122,6 +217,7 @@ abstract class _IvsMediaSession
       _engine ??= await engineFactory();
       _setState(MediaSessionState.connecting);
       await _engine!.join(joinInfo, _createEngineEvents());
+      await _probeProcessedVideoInput();
       if (_disposed) return;
       final local = MediaParticipant(
         id: joinInfo.participantId,
@@ -440,6 +536,7 @@ abstract class _IvsMediaSession
   Future<void> _setVideoEnabled(bool enabled) async {
     _requireActive();
     _requireCapability(capabilities.canPublishVideo, 'publishing video');
+    await _processedSink.setEnabled(enabled);
     await _engine!.setVideoEnabled(enabled);
     final info = _joinInfo!;
     final track = enabled
@@ -482,7 +579,13 @@ abstract class _IvsMediaSession
     _requireActive();
     _requireCapability(capabilities.canSwitchCamera, 'switching cameras');
     if (_cameraPosition == position) return;
-    await _engine!.switchCamera(position);
+    if (_processedSink.source != null) {
+      await _processedSink.selectCamera(
+        position == MediaCameraPosition.front ? 'front' : 'back',
+      );
+    } else {
+      await _engine!.switchCamera(position);
+    }
     _cameraPosition = position;
     _trackGeneration++;
     final info = _joinInfo;
@@ -542,6 +645,17 @@ abstract class _IvsMediaSession
   }
 
   Future<void> _releaseEngine({required bool leave}) async {
+    try {
+      await _processedSink.detach();
+    } catch (error) {
+      if (!_events.isClosed) {
+        _events.add(
+          MediaFailureEvent(
+            _mapError(error, 'Unable to detach the processed video input.'),
+          ),
+        );
+      }
+    }
     final engine = _engine;
     if (engine == null) return;
     if (leave) {
@@ -549,8 +663,11 @@ abstract class _IvsMediaSession
         await engine.leave();
       } catch (_) {}
     } else {
-      await engine.dispose();
-      _engine = null;
+      try {
+        await engine.dispose();
+      } finally {
+        _engine = null;
+      }
     }
   }
 

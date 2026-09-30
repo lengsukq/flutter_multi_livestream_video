@@ -1,4 +1,6 @@
 import '../client/media_backend_client.dart';
+import '../model/media_background_effect.dart';
+import '../session/media_background_effects_controller.dart';
 import '../session/media_session_factory.dart';
 import 'media_doctor.dart';
 import 'media_permission_probe.dart';
@@ -97,6 +99,13 @@ class MediaPreJoinRunner {
       role: request.role,
       providerId: resolvedProvider,
       checks: List.unmodifiable(checks),
+      backgroundCapabilities: switch (factory) {
+        final MediaBackgroundCapabilitiesProvider provider
+            when factory != null &&
+                factory.supportedRoles.contains(request.role) =>
+          provider.backgroundCapabilitiesFor(request.role),
+        _ => const MediaBackgroundCapabilities.none(),
+      },
     );
   }
 

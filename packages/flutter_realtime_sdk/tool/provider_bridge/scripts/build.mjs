@@ -9,6 +9,10 @@ const repoRoot = resolve(rootDir, '../../../..');
 const nodeModules = join(rootDir, 'node_modules');
 const distDir = join(rootDir, 'dist');
 const vendorsDir = join(distDir, 'vendors');
+const videoEffectsDir = resolve(
+  repoRoot,
+  'packages/flutter_realtime_video_effects/assets/web',
+);
 const agoraChatMacOSAssetsDir = resolve(
   repoRoot,
   'packages/flutter_realtime_chat_agora/macos/Resources',
@@ -17,9 +21,15 @@ const sdkAssetDir = resolve(
   repoRoot,
   'packages/flutter_realtime_sdk/assets/provider_web_runtime',
 );
+const videoEffectsModelSource = join(
+  rootDir,
+  'assets/video-effects/models/selfie_segmenter_landscape.tflite',
+);
 
 await rm(distDir, { recursive: true, force: true });
 await mkdir(vendorsDir, { recursive: true });
+await rm(videoEffectsDir, { recursive: true, force: true });
+await mkdir(videoEffectsDir, { recursive: true });
 
 const vendorFiles = [
   ['agora-rtc-sdk-ng/AgoraRTC_N-production.js', 'agora-rtc-sdk.js'],
@@ -51,6 +61,42 @@ await build({
   minify: true,
   legalComments: 'eof',
 });
+
+await build({
+  absWorkingDir: rootDir,
+  entryPoints: ['src/video-effects-entry.js'],
+  outfile: join(videoEffectsDir, 'vision.js'),
+  bundle: true,
+  platform: 'browser',
+  format: 'iife',
+  target: ['es2020'],
+  minify: true,
+  legalComments: 'eof',
+});
+
+await cp(
+  join(nodeModules, '@mediapipe/tasks-vision/wasm'),
+  join(videoEffectsDir, 'wasm'),
+  { recursive: true },
+);
+await mkdir(join(videoEffectsDir, 'models'), { recursive: true });
+await cp(
+  videoEffectsModelSource,
+  join(videoEffectsDir, 'models/selfie_segmenter_landscape.tflite'),
+);
+await cp(join(rootDir, 'assets/video-effects/models/blaze_face_short_range.tflite'), join(videoEffectsDir, 'models/blaze_face_short_range.tflite'));
+
+await cp(
+  resolve(
+    repoRoot,
+    'packages/flutter_realtime_video_effects/web/video-effects-bridge.js',
+  ),
+  join(videoEffectsDir, 'video-effects-bridge.js'),
+);
+await cp(
+  join(rootDir, 'assets/video-effects/MODEL_SOURCE.md'),
+  join(videoEffectsDir, 'MODEL_SOURCE.md'),
+);
 
 await build({
   absWorkingDir: rootDir,
@@ -114,6 +160,7 @@ await cp(join(rootDir, 'src/bridge.js'), join(distDir, 'media-provider-bridge.js
 const licensesDir = join(distDir, 'licenses');
 await mkdir(licensesDir, { recursive: true });
 for (const [packageName, licensePrefix] of [
+  ['@mediapipe/tasks-vision', 'mediapipe-tasks-vision'],
   ['@tencentcloud/chat', 'tencent-cloud-chat'],
   ['tim-upload-plugin', 'tim-upload-plugin'],
   ['agora-chat', 'agora-chat'],

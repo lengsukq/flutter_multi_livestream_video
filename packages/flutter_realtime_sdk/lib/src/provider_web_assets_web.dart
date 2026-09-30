@@ -18,7 +18,6 @@ const _allMediaScripts = <String>[
   'vendors/amazon-ivs-web-broadcast.js',
   'vendors/chime-sdk.js',
 ];
-
 final Map<String, Future<void>> _loadedScripts = {};
 
 Future<void> ensureRealtimeProviderWebAssets({
@@ -27,16 +26,23 @@ Future<void> ensureRealtimeProviderWebAssets({
   bool includeAllMediaProviders = false,
 }) async {
   final mediaScripts = <String>{};
+  var includeVideoEffects = false;
   if (includeAllMediaProviders) {
     mediaScripts.addAll(_allMediaScripts);
+    includeVideoEffects = true;
   } else {
     for (final providerId in mediaProviderIds) {
-      final script = _mediaScriptsByProvider[providerId.trim().toLowerCase()];
+      final normalized = providerId.trim().toLowerCase();
+      final script = _mediaScriptsByProvider[normalized];
       if (script != null) mediaScripts.add(script);
+      if (normalized.isNotEmpty) includeVideoEffects = true;
     }
   }
 
   final loads = <Future<void>>[];
+  if (includeVideoEffects) {
+    loads.add(_loadVideoEffectsRuntimeScript());
+  }
   if (includeProductChat) {
     loads.add(
       _loadProviderRuntimeScript('vendors/realtime-chat-provider-bridge.js'),
@@ -52,20 +58,58 @@ Future<void> ensureRealtimeProviderWebAssets({
 }
 
 Future<void> _loadProviderRuntimeScript(String scriptPath) {
-  final current = _loadedScripts[scriptPath];
+  return _loadBundledScript(
+    key: 'provider:$scriptPath',
+    assetPath:
+        'assets/packages/flutter_realtime_sdk/'
+        'assets/provider_web_runtime/$scriptPath',
+    displayName: scriptPath,
+  );
+}
+
+Future<void> _loadVideoEffectsRuntimeScript() {
+  final current = _loadedScripts['effects:runtime'];
   if (current != null) return current;
-  final load = _loadScript(scriptPath);
-  _loadedScripts[scriptPath] = load;
+  final load = () async {
+    await _loadBundledScript(
+      key: 'effects:vision',
+      assetPath:
+          'assets/packages/flutter_realtime_video_effects/'
+          'assets/web/vision.js',
+      displayName: 'video-effects/vision.js',
+    );
+    await _loadBundledScript(
+      key: 'effects:bridge',
+      assetPath:
+          'assets/packages/flutter_realtime_video_effects/'
+          'assets/web/video-effects-bridge.js',
+      displayName: 'video-effects/video-effects-bridge.js',
+    );
+  }();
+  _loadedScripts['effects:runtime'] = load;
   return load.catchError((Object error) {
-    _loadedScripts.remove(scriptPath);
+    _loadedScripts.remove('effects:runtime');
     throw error;
   });
 }
 
-Future<void> _loadScript(String scriptPath) {
-  final uri = Uri.parse(web.document.baseURI).resolve(
-    'assets/packages/flutter_realtime_sdk/assets/provider_web_runtime/$scriptPath',
-  );
+Future<void> _loadBundledScript({
+  required String key,
+  required String assetPath,
+  required String displayName,
+}) {
+  final current = _loadedScripts[key];
+  if (current != null) return current;
+  final load = _loadScript(assetPath, displayName: displayName);
+  _loadedScripts[key] = load;
+  return load.catchError((Object error) {
+    _loadedScripts.remove(key);
+    throw error;
+  });
+}
+
+Future<void> _loadScript(String assetPath, {required String displayName}) {
+  final uri = Uri.parse(web.document.baseURI).resolve(assetPath);
   final source = uri.toString();
   final completer = Completer<void>();
   final script = web.HTMLScriptElement()
@@ -79,9 +123,9 @@ Future<void> _loadScript(String scriptPath) {
       completer.completeError(
         RealtimeException(
           code: RealtimeErrorCode.webSdkUnavailable,
-          message: 'Unable to load the bundled provider runtime: $scriptPath.',
+          message: 'Unable to load the bundled runtime: $displayName.',
           suggestedAction: 'check-web-assets',
-          details: {'asset': scriptPath, 'url': source},
+          details: {'asset': assetPath, 'url': source},
         ),
       );
     }
@@ -91,9 +135,9 @@ Future<void> _loadScript(String scriptPath) {
     const Duration(seconds: 30),
     onTimeout: () => throw RealtimeException(
       code: RealtimeErrorCode.webSdkUnavailable,
-      message: 'Timed out loading the bundled provider runtime: $scriptPath.',
+      message: 'Timed out loading the bundled runtime: $displayName.',
       suggestedAction: 'check-web-assets',
-      details: {'asset': scriptPath, 'url': source},
+      details: {'asset': assetPath, 'url': source},
     ),
   );
 }

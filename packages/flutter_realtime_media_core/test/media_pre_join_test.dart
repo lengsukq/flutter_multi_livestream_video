@@ -332,6 +332,29 @@ void main() {
       expect(result.check(MediaPreJoinCheckType.cameraDevice), isNull);
       client.dispose();
     });
+
+    test(
+      'reports role-specific background capabilities from adapter',
+      () async {
+        final client = _client(
+          factory: _BackgroundProbeFactory(),
+          permissionProbe: const _PermissionProbe(),
+        );
+
+        final participant = await client.runPreJoinCheck(
+          role: MediaRole.participant,
+          providerId: 'fake',
+        );
+        final viewer = await client.runPreJoinCheck(
+          role: MediaRole.viewer,
+          providerId: 'fake',
+        );
+
+        expect(participant.backgroundCapabilities.canBlur, isTrue);
+        expect(viewer.backgroundCapabilities.canBlur, isFalse);
+        client.dispose();
+      },
+    );
   });
 }
 
@@ -343,6 +366,13 @@ class _ThrowingProbeFactory extends FakeMediaSessionFactory
   ) {
     throw StateError('probe failed');
   }
+}
+
+class _BackgroundProbeFactory extends _ProbeFactory
+    implements MediaBackgroundCapabilitiesProvider {
+  @override
+  MediaBackgroundCapabilities backgroundCapabilitiesFor(MediaRole role) =>
+      MediaBackgroundCapabilities(canBlur: role != MediaRole.viewer);
 }
 
 MediaClient _client({

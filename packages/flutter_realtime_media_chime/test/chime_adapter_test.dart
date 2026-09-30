@@ -1,3 +1,6 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter_aws_chime/flutter_aws_chime.dart' as chime;
 import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
@@ -6,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fake_chime_session.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   Map<String, dynamic> backendJson({String role = 'participant'}) => {
     'contractVersion': 1,
     'provider': 'chime',
@@ -66,6 +70,87 @@ void main() {
       session = ChimeMediaSession(session: providerSession);
       joinInfo = ChimeJoinInfo.fromBackendResponse(backendJson());
     });
+
+    test(
+      'processed input owns camera switching and is released on leave',
+      () async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+        addTearDown(() => debugDefaultTargetPlatformOverride = null);
+        final commands = <MethodCall>[];
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        for (final channel in [
+          const MethodChannel('com.oneplusdream.aws.chime.methodChannel'),
+          const MethodChannel('flutter_realtime_video_effects'),
+        ]) {
+          messenger.setMockMethodCallHandler(channel, (call) async {
+            commands.add(call);
+            return null;
+          });
+          addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+        }
+        await session.join(joinInfo);
+        const source = ProcessedVideoSource(
+          id: 'shared-processed-frame-source',
+          platform: VideoEffectsPlatform.android,
+          kind: ProcessedVideoSourceKind.nativeFrameHub,
+          width: 1280,
+          height: 720,
+          frameRate: 24,
+        );
+        await session.attachProcessedVideoSource(source);
+        await session.setVideoEnabled(true);
+        await session.switchCamera(MediaCameraPosition.back);
+        await session.selectMediaDevice(
+          const MediaDevice(
+            id: 'front',
+            label: 'Front',
+            kind: MediaDeviceKind.camera,
+          ),
+        );
+        await session.setVideoEnabled(false);
+        expect(providerSession.actions, isNot(contains('camera:back')));
+        expect(
+          commands
+              .where((c) => c.method == 'selectCamera')
+              .map((c) => (c.arguments as Map)['deviceId']),
+          ['back', 'front'],
+        );
+        await session.leave();
+        expect(
+          commands.where((c) => c.method == 'detachProcessedVideoSource'),
+          hasLength(1),
+        );
+        await session.dispose();
+        expect(
+          commands.where((c) => c.method == 'detachProcessedVideoSource'),
+          hasLength(1),
+        );
+      },
+    );
+
+    test(
+      'macOS declares effects only after a successful native input probe',
+      () async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+        addTearDown(() => debugDefaultTargetPlatformOverride = null);
+        const channel = MethodChannel(
+          'com.oneplusdream.aws.chime.methodChannel',
+        );
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(
+          channel,
+          (call) async => call.method == 'probeProcessedVideoInput',
+        );
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+        expect(session.capabilities.canBlurBackground, isFalse);
+        await session.join(joinInfo);
+        expect(session.capabilities.canBlurBackground, isTrue);
+        expect(session.snapshot.capabilities.canReplaceBackgroundImage, isTrue);
+        await session.dispose();
+      },
+    );
 
     test('maps join state and the local attendee', () async {
       await session.join(joinInfo);

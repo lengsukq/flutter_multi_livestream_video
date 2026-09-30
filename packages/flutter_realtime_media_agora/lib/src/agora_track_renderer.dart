@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'agora_media_track.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 
 /// Renders an Agora camera track through AgoraVideoView.
 class AgoraTrackRenderer extends MediaTrackRenderer {
@@ -23,6 +24,13 @@ class AgoraTrackRenderer extends MediaTrackRenderer {
         track,
         'track',
         'AgoraTrackRenderer requires an AgoraMediaVideoTrack.',
+      );
+    }
+    if (track.isLocal && track.processedSource != null) {
+      return const VideoEffectsTrackRenderer().buildViewWithFit(
+        context,
+        ProcessedVideoTrack(source: track.processedSource!),
+        fit: fit,
       );
     }
     final renderMode = fit == BoxFit.contain

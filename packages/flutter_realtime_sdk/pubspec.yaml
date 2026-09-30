@@ -33,6 +33,8 @@ dependencies:
     path: ../flutter_realtime_media_trtc
   flutter_realtime_media_web:
     path: ../flutter_realtime_media_web
+  flutter_realtime_video_effects:
+    path: ../flutter_realtime_video_effects
   flutter_realtime_chat_agora:
     path: ../flutter_realtime_chat_agora
   flutter_realtime_chat_ivs:

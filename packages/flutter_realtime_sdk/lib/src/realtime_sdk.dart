@@ -2,6 +2,8 @@
 
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 
 import 'default_driver_catalog.dart';
 import 'provider_driver.dart';
@@ -13,6 +15,22 @@ import 'realtime_error.dart';
 import 'realtime_room.dart';
 import 'realtime_chat_room.dart';
 import 'runtime_platform.dart';
+import 'video_effects_local_preview.dart';
+
+const _videoEffectsProviders = {
+  'agora',
+  'artc',
+  'chime',
+  'ivs',
+  'livekit',
+  'trtc',
+};
+
+const _macProcessedVideoProbeChannels = {
+  'artc': 'com.oneplusdream.flutter_realtime_media_artc/methods',
+  'chime': 'com.oneplusdream.aws.chime.methodChannel',
+  'ivs': 'com.oneplusdream.flutter_realtime_media_ivs/methods',
+};
 
 typedef RealtimeClientFactory = RealtimeClient Function();
 
@@ -110,6 +128,40 @@ class RealtimeSdk {
   RealtimeRuntimePlatform get platform =>
       driverRegistry?.platform ?? resolveRealtimeRuntimePlatform();
 
+  Future<bool> _supportsVideoEffectsForProvider({
+    required VideoEffectsBridge bridge,
+    required String? providerId,
+  }) async {
+    final normalized = providerId?.trim().toLowerCase();
+    if (normalized == null || !_videoEffectsProviders.contains(normalized)) {
+      return false;
+    }
+    if (platform != RealtimeRuntimePlatform.android &&
+        platform != RealtimeRuntimePlatform.macos &&
+        platform != RealtimeRuntimePlatform.web) {
+      return false;
+    }
+    try {
+      if (!await bridge.isSupported()) return false;
+      if (platform != RealtimeRuntimePlatform.macos) return true;
+
+      final channelName = _macProcessedVideoProbeChannels[normalized];
+      if (channelName == null) return true;
+      return await MethodChannel(
+            channelName,
+          ).invokeMethod<bool>('probeProcessedVideoInput') ??
+          false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    } catch (_) {
+      // Effects are optional. A broken or unavailable probe must not block
+      // the provider's ordinary local preview path.
+      return false;
+    }
+  }
+
   Iterable<String> get supportedProviderIds =>
       driverRegistry?.supportedProviderIds() ?? plugins.providerIds;
 
@@ -135,6 +187,20 @@ class RealtimeSdk {
           roomMode: mode,
         ) ??
         providerId.trim().toLowerCase();
+    if (role != MediaRole.viewer) {
+      await ensureRealtimeProviderWebAssets(mediaProviderIds: [engineProvider]);
+      final effects = VideoEffectsBridge();
+      if (await _supportsVideoEffectsForProvider(
+        bridge: effects,
+        providerId: engineProvider,
+      )) {
+        return VideoEffectsLocalPreviewSession.create(
+          providerId: engineProvider,
+          role: role,
+          bridge: effects,
+        );
+      }
+    }
     final factory = plugins.media.lookup(engineProvider)?.sessionFactory;
     if (factory is! MediaLocalPreviewFactory) return null;
     return (factory as MediaLocalPreviewFactory).createLocalPreview(role: role);
@@ -360,9 +426,40 @@ class RealtimeSdk {
           role: result.role,
           providerId: publicProvider,
           checks: result.checks,
+          backgroundCapabilities: result.backgroundCapabilities,
         );
       }
-      return _applyPlatformSupportToPreJoin(result);
+      final effectsProvider = (coreProvider ?? result.providerId)
+          ?.trim()
+          .toLowerCase();
+      result = _applyPlatformSupportToPreJoin(result);
+      if (role != MediaRole.viewer) {
+        final effects = VideoEffectsBridge();
+        try {
+          if (effectsProvider != null && effectsProvider.isNotEmpty) {
+            await ensureRealtimeProviderWebAssets(
+              mediaProviderIds: [effectsProvider],
+            );
+          }
+          if (await _supportsVideoEffectsForProvider(
+            bridge: effects,
+            providerId: effectsProvider,
+          )) {
+            result = MediaPreJoinResult(
+              role: result.role,
+              providerId: result.providerId,
+              checks: result.checks,
+              backgroundCapabilities: const MediaBackgroundCapabilities(
+                canBlur: true,
+                canReplaceImage: true,
+              ),
+            );
+          }
+        } catch (_) {
+          // Video effects are optional; diagnostics remain valid without them.
+        }
+      }
+      return result;
     } finally {
       client.dispose();
     }
@@ -546,6 +643,7 @@ class RealtimeSdk {
       role: result.role,
       providerId: providerId,
       checks: List.unmodifiable(checks),
+      backgroundCapabilities: result.backgroundCapabilities,
     );
   }
 

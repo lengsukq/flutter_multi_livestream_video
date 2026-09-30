@@ -1,6 +1,8 @@
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_aws_chime/flutter_aws_chime.dart' as chime;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
@@ -21,7 +23,10 @@ MediaCapabilities get _chimeCapabilities => MediaCapabilities(
 
 /// Adapts the existing [chime.ChimeMeetingSession] without changing its native bridge.
 class ChimeMediaSession
-    implements InteractiveMediaSession, MediaDeviceController {
+    implements
+        InteractiveMediaSession,
+        MediaDeviceController,
+        ProcessedVideoSink {
   ChimeMediaSession({chime.ChimeMeetingSession? session})
     : _session = session ?? chime.ChimeMeetingSession();
 
@@ -45,6 +50,59 @@ class ChimeMediaSession
   /// Existing provider session for advanced Chime-specific integrations.
   chime.ChimeMeetingSession get chimeSession => _session;
 
+  bool _macEffectsInputAvailable = false;
+  bool get _effectsPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          (defaultTargetPlatform == TargetPlatform.macOS &&
+              _macEffectsInputAvailable));
+  Future<void> _probeProcessedVideoInput() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) return;
+    try {
+      _macEffectsInputAvailable =
+          await MethodChannel(
+            _processedSink.channelName,
+          ).invokeMethod<bool>('probeProcessedVideoInput') ??
+          false;
+    } on MissingPluginException {
+      _macEffectsInputAvailable = false;
+    } on PlatformException {
+      _macEffectsInputAvailable = false;
+    }
+  }
+
+  final _processedSink = NativeProcessedVideoSink(
+    providerId: 'chime',
+    channelName: 'com.oneplusdream.aws.chime.methodChannel',
+    attachMethod: 'attachProcessedVideoSource',
+    detachMethod: 'detachProcessedVideoSource',
+  );
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      capabilities.canPublishVideo &&
+      _effectsPlatform &&
+      _processedSink.supports(source) &&
+      source.platform ==
+          (defaultTargetPlatform == TargetPlatform.android
+              ? VideoEffectsPlatform.android
+              : VideoEffectsPlatform.macos);
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
+    _ensureActive();
+    if (!supportsProcessedVideoSource(source)) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        providerId: providerId,
+        message:
+            'Processed video input is unavailable for this role or platform.',
+      );
+    }
+    await _processedSink.attach(source);
+  }
+
+  @override
+  Future<void> detachProcessedVideoSource() => _processedSink.detach();
+
   @override
   String get providerId => ChimeJoinInfo.providerIdValue;
 
@@ -52,13 +110,19 @@ class ChimeMediaSession
   MediaRole get role => MediaRole.participant;
 
   @override
-  MediaCapabilities get capabilities => _chimeCapabilities;
+  MediaCapabilities get capabilities => _chimeCapabilities.copyWith(
+    canBlurBackground: _chimeCapabilities.canPublishVideo && _effectsPlatform,
+    canReplaceBackgroundImage:
+        _chimeCapabilities.canPublishVideo && _effectsPlatform,
+    canEnumerateCameras: _effectsPlatform,
+    canSelectCamera: _effectsPlatform,
+  );
 
   @override
   MediaSessionState get state => _snapshot.state;
 
   @override
-  MediaSnapshot get snapshot => _snapshot;
+  MediaSnapshot get snapshot => _snapshot.copyWith(capabilities: capabilities);
 
   @override
   Stream<MediaSessionState> get states => _stateController.stream;
@@ -103,6 +167,7 @@ class ChimeMediaSession
     _attachProviderStreams();
     try {
       await _session.join(rawJoinInfo.chimeJoinInfo);
+      await _probeProcessedVideoInput();
       _onProviderSnapshot(_session.snapshot, clearLastError: true);
     } on chime.ChimeException catch (error) {
       final mapped = _mapError(error);
@@ -127,21 +192,46 @@ class ChimeMediaSession
     Set<MediaDeviceKind>? kinds,
   }) async {
     final requested = kinds ?? MediaDeviceKind.values.toSet();
-    if (!requested.contains(MediaDeviceKind.audioOutput)) return const [];
-    final devices = await listAudioDevices();
-    return devices
-        .map(
-          (device) => MediaDevice(
-            id: device.id ?? device.label,
-            label: device.label,
-            kind: MediaDeviceKind.audioOutput,
-          ),
-        )
-        .toList(growable: false);
+    _ensureActive();
+    final cameras =
+        capabilities.canEnumerateCameras &&
+            requested.contains(MediaDeviceKind.camera)
+        ? await VideoEffectsBridge().listCameras()
+        : const <VideoEffectsCameraDevice>[];
+    final devices = requested.contains(MediaDeviceKind.audioOutput)
+        ? await listAudioDevices()
+        : const <MediaAudioDevice>[];
+    return [
+      for (final camera in cameras)
+        MediaDevice(
+          id: camera.id,
+          label: camera.label,
+          kind: MediaDeviceKind.camera,
+        ),
+      ...devices.map(
+        (device) => MediaDevice(
+          id: device.id ?? device.label,
+          label: device.label,
+          kind: MediaDeviceKind.audioOutput,
+        ),
+      ),
+    ];
   }
 
   @override
-  Future<void> selectMediaDevice(MediaDevice device) {
+  Future<void> selectMediaDevice(MediaDevice device) async {
+    _ensureActive();
+    if (device.kind == MediaDeviceKind.camera && capabilities.canSelectCamera) {
+      if (_processedSink.source == null) {
+        throw MediaError(
+          code: MediaErrorCode.invalidState,
+          providerId: providerId,
+          message: 'Prepare the SDK video source before selecting a camera.',
+        );
+      }
+      await _processedSink.selectCamera(device.id);
+      return;
+    }
     if (device.kind != MediaDeviceKind.audioOutput) {
       throw MediaError(
         code: MediaErrorCode.unsupportedFeature,
@@ -173,7 +263,11 @@ class ChimeMediaSession
   Future<void> _leave() async {
     if (_disposed || state == MediaSessionState.disposed) return;
     try {
-      await _session.leave();
+      try {
+        await detachProcessedVideoSource();
+      } finally {
+        await _session.leave();
+      }
       _onProviderSnapshot(_session.snapshot);
     } on chime.ChimeException catch (error) {
       throw _mapError(error);
@@ -186,7 +280,11 @@ class ChimeMediaSession
   Future<void> _dispose() async {
     if (_disposed) return;
     try {
-      await _session.dispose();
+      try {
+        await detachProcessedVideoSource();
+      } finally {
+        await _session.dispose();
+      }
       _onProviderSnapshot(_session.snapshot);
     } on chime.ChimeException catch (error) {
       throw _mapError(error);
@@ -231,6 +329,7 @@ class ChimeMediaSession
   Future<void> setVideoEnabled(bool enabled) async {
     _ensureActive();
     try {
+      await _processedSink.setEnabled(enabled);
       await _session.setVideoEnabled(enabled);
       _onProviderSnapshot(_session.snapshot);
     } on chime.ChimeException catch (error) {
@@ -251,6 +350,12 @@ class ChimeMediaSession
   Future<void> switchCamera(MediaCameraPosition position) async {
     _ensureActive();
     try {
+      if (_processedSink.source != null) {
+        await _processedSink.selectCamera(
+          position == MediaCameraPosition.front ? 'front' : 'back',
+        );
+        return;
+      }
       await _session.switchCamera(
         position == MediaCameraPosition.front
             ? chime.CameraPosition.front

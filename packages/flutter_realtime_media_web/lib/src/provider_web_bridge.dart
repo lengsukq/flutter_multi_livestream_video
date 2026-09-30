@@ -25,6 +25,29 @@ class ProviderWebBridge {
     _installListener();
   }
 
+  static Future<void> createLocalPreview({
+    required String providerId,
+    required String previewId,
+    required Map<String, Object?> settings,
+  }) async {
+    try {
+      await _bridge
+          .callMethod<JSPromise<JSAny?>>(
+            'createLocalPreview'.toJS,
+            providerId.toJS,
+            previewId.toJS,
+            jsonEncode(settings).toJS,
+          )
+          .toDart;
+    } catch (error) {
+      throw _mapError(
+        providerId,
+        'Unable to initialize the SDK local video preview.',
+        error,
+      );
+    }
+  }
+
   static void unregisterHandler(String sessionId) {
     _handlers.remove(sessionId);
   }

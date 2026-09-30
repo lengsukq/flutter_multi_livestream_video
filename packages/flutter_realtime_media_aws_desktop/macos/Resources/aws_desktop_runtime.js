@@ -8,6 +8,146 @@
   const snapshots = new Map();
   const pendingChatTokens = new Map();
   let nextChatTokenRequestId = 0;
+  const processedSources = new Map();
+  const processedProviders = new Map();
+  const processedProviderOperations = new Map();
+
+  function processedSourceKey(sourceId) {
+    return String(sourceId).toLowerCase();
+  }
+
+  function enqueueProcessedProviderOperation(providerKey, operation) {
+    const previous = processedProviderOperations.get(providerKey) || Promise.resolve();
+    const current = previous.catch(function() {}).then(operation);
+    processedProviderOperations.set(providerKey, current);
+    return current;
+  }
+
+  function isCurrentProcessedProvider(providerKey, generation) {
+    const provider = processedProviders.get(providerKey);
+    return Boolean(provider && provider.generation === generation);
+  }
+
+  function releaseProcessedSourceReference(sourceKey) {
+    const source = processedSources.get(sourceKey);
+    if (!source) return;
+    source.references = Math.max(0, source.references - 1);
+    if (source.references === 0) disposeProcessedSource(source.sourceId);
+  }
+
+  function failProcessedSource(source, message) {
+    if (!source || source.closed || source.failed) return;
+    source.failed = true;
+    global.clearTimeout(source.timer);
+    if (source.image) {
+      source.image.onload = null;
+      source.image.onerror = null;
+      source.image.src = '';
+      source.image = null;
+    }
+    source.track.enabled = false;
+    source.track.stop();
+    post({ kind: 'processedVideoError', sourceId: source.sourceId, message: String(message) });
+  }
+
+  function getProcessedSource(sourceId) {
+    const source = processedSources.get(processedSourceKey(sourceId));
+    if (!source || source.closed) throw new Error('Unknown native processed video source: ' + sourceId);
+    return source;
+  }
+
+  // This runtime never performs segmentation or opens a camera. Every image is
+  // an encoded view of the shared native processor's output pixel buffer.
+  function createProcessedSource(sourceId) {
+    const sourceKey = processedSourceKey(sourceId);
+    const existing = processedSources.get(sourceKey);
+    if (existing) return existing;
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280;
+    canvas.height = 720;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context || typeof canvas.captureStream !== 'function') {
+      throw new Error('This WebKit version cannot consume native processed video.');
+    }
+    context.fillStyle = '#000';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    const stream = canvas.captureStream(0);
+    const track = stream.getVideoTracks()[0];
+    if (!track || typeof track.requestFrame !== 'function') {
+      stream.getTracks().forEach(function(value) { value.stop(); });
+      throw new Error('WebKit does not expose canvas video frame input.');
+    }
+    const source = { sourceId: sourceId, references: 0, canvas: canvas, context: context,
+      stream: stream, track: track, enabled: true, closed: false, failed: false,
+      timer: null, image: null, requestIndex: 0 };
+    processedSources.set(sourceKey, source);
+    track.requestFrame();
+
+    function pollFrame() {
+      if (source.closed || source.failed) return;
+      if (!source.enabled) {
+        source.timer = global.setTimeout(pollFrame, 50);
+        return;
+      }
+      const image = new Image();
+      source.image = image;
+      image.crossOrigin = 'anonymous';
+      image.onload = function() {
+        source.image = null;
+        if (source.closed || source.failed) return;
+        try {
+          if (source.enabled) {
+            if (canvas.width !== image.naturalWidth || canvas.height !== image.naturalHeight) {
+              canvas.width = image.naturalWidth;
+              canvas.height = image.naturalHeight;
+            }
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            track.requestFrame();
+          }
+          source.timer = global.setTimeout(pollFrame, 1000 / 24);
+        } catch (error) {
+          failProcessedSource(source, error);
+        }
+      };
+      image.onerror = function() {
+        source.image = null;
+        failProcessedSource(source, 'The native processed video frame could not be decoded.');
+      };
+      image.src = 'realtime-video://' + encodeURIComponent(sourceId) + '/frame?request=' + String(++source.requestIndex);
+    }
+    pollFrame();
+    return source;
+  }
+
+  function disposeProcessedSource(sourceId) {
+    const key = processedSourceKey(sourceId);
+    const source = processedSources.get(key);
+    if (!source) return;
+    source.closed = true;
+    global.clearTimeout(source.timer);
+    if (source.image) { source.image.onload = null; source.image.onerror = null; source.image.src = ''; }
+    source.stream.getTracks().forEach(function(track) { track.stop(); });
+    source.canvas.width = 0;
+    source.canvas.height = 0;
+    processedSources.delete(key);
+  }
+
+  global.RealtimeVideoEffectsBridge = {
+    getTrack: function(sourceId) { return getProcessedSource(sourceId).track; },
+    setEnabled: async function(sourceId, enabled) {
+      const source = getProcessedSource(sourceId);
+      if (enabled && source.failed) throw new Error('Native processed video input failed.');
+      source.enabled = Boolean(enabled);
+      source.track.enabled = Boolean(enabled);
+      if (!enabled) {
+        source.context.fillStyle = '#000';
+        source.context.fillRect(0, 0, source.canvas.width, source.canvas.height);
+        source.track.requestFrame();
+      }
+    },
+    setEffect: async function() { throw new Error('Configure the effect through the native SDK bridge.'); },
+    selectCamera: async function() { throw new Error('Select the camera through the native SDK bridge.'); }
+  };
 
   function post(value) {
     if (native) native.postMessage(value);
@@ -156,6 +296,108 @@
     bindTrack: bindTrack,
     unbindTrack: unbindTrack,
     snapshot: function(sessionId) { return snapshots.get(sessionId) || null; },
+    attachProcessedVideo: async function(providerId, sessionId, sourceId, generation) {
+      const providerKey = String(providerId) + ':' + String(sessionId);
+      const normalizedSourceId = String(sourceId);
+      const sourceKey = processedSourceKey(normalizedSourceId);
+      const current = processedProviders.get(providerKey);
+      const requestedGeneration = Number.isSafeInteger(Number(generation))
+        ? Number(generation)
+        : ((current && current.generation) || 0) + 1;
+      if (current && requestedGeneration < current.generation) return false;
+      if (current && requestedGeneration === current.generation && current.sourceKey) {
+        return current.sourceKey === sourceKey;
+      }
+      if (current && current.sourceKey) releaseProcessedSourceReference(current.sourceKey);
+      processedProviders.set(providerKey, {
+        sourceId: null, sourceKey: null, generation: requestedGeneration,
+      });
+      if (!await global.AwsDesktopRuntime.canConsumeProcessedVideo()) {
+        throw new Error('WebKit does not support the native processed video transport.');
+      }
+      if (!isCurrentProcessedProvider(providerKey, requestedGeneration)) return false;
+      const source = createProcessedSource(normalizedSourceId);
+      source.references += 1;
+      processedProviders.set(providerKey, {
+        sourceId: normalizedSourceId,
+        sourceKey: sourceKey,
+        generation: requestedGeneration,
+      });
+      try {
+        await enqueueProcessedProviderOperation(providerKey, function() {
+          if (!isCurrentProcessedProvider(providerKey, requestedGeneration)) return false;
+          return invoke(providerId, sessionId, 'command', {
+            name: 'attachProcessedVideoSource', args: { sourceId: normalizedSourceId }
+          });
+        });
+        return true;
+      } catch (error) {
+        if (isCurrentProcessedProvider(providerKey, requestedGeneration)) {
+          const attached = processedProviders.get(providerKey);
+          if (attached && attached.sourceKey) releaseProcessedSourceReference(attached.sourceKey);
+          processedProviders.set(providerKey, {
+            sourceId: null, sourceKey: null, generation: requestedGeneration,
+          });
+          await enqueueProcessedProviderOperation(providerKey, function() {
+            return invoke(providerId, sessionId, 'command', {
+              name: 'detachProcessedVideoSource', args: {}
+            });
+          }).catch(function() {});
+        }
+        throw error;
+      }
+    },
+    detachProcessedVideo: async function(providerId, sessionId, sourceId, generation) {
+      const providerKey = String(providerId) + ':' + String(sessionId);
+      const current = processedProviders.get(providerKey);
+      const requestedGeneration = Number.isSafeInteger(Number(generation))
+        ? Number(generation)
+        : ((current && current.generation) || 0) + 1;
+      if (current && requestedGeneration < current.generation) return false;
+      if (current && current.sourceKey && sourceId &&
+          current.sourceKey !== processedSourceKey(sourceId)) return false;
+      if (current && current.sourceKey) releaseProcessedSourceReference(current.sourceKey);
+      processedProviders.set(providerKey, {
+        sourceId: null, sourceKey: null, generation: requestedGeneration,
+      });
+      try {
+        return await enqueueProcessedProviderOperation(providerKey, function() {
+          if (!isCurrentProcessedProvider(providerKey, requestedGeneration)) return false;
+          return invoke(providerId, sessionId, 'command', {
+            name: 'detachProcessedVideoSource', args: {}
+          });
+        });
+      } catch (error) {
+        throw error;
+      }
+    },
+    failProcessedVideo: function(sourceId, message) {
+      const source = processedSources.get(processedSourceKey(sourceId));
+      if (source) failProcessedSource(source, message);
+    },
+    disposeProcessedVideo: disposeProcessedSource,
+    canConsumeProcessedVideo: async function() {
+      const canvas = document.createElement('canvas');
+      if (typeof canvas.captureStream !== 'function') return false;
+      const context = canvas.getContext('2d');
+      if (!context) return false;
+      const loaded = await new Promise(function(resolve) {
+        const image = new Image();
+        const timeout = global.setTimeout(function() { resolve(null); }, 3000);
+        image.crossOrigin = 'anonymous';
+        image.onload = function() { global.clearTimeout(timeout); resolve(image); };
+        image.onerror = function() { global.clearTimeout(timeout); resolve(null); };
+        image.src = 'realtime-video://probe/frame';
+      });
+      if (!loaded) return false;
+      try { context.drawImage(loaded, 0, 0); canvas.toDataURL(); }
+      catch (_) { return false; }
+      const stream = canvas.captureStream(0);
+      const track = stream.getVideoTracks()[0];
+      const supported = Boolean(track && typeof track.requestFrame === 'function');
+      stream.getTracks().forEach(function(value) { value.stop(); });
+      return supported;
+    },
   };
 
   global.AwsDesktopChatRuntime = {

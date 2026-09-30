@@ -45,7 +45,10 @@ MediaSessionFactory _wrapWebAssetsMediaFactory(
 }
 
 class _WebAssetsMediaFactory
-    implements MediaSessionFactory, MediaSessionPreparer {
+    implements
+        MediaSessionFactory,
+        MediaSessionPreparer,
+        MediaBackgroundCapabilitiesProvider {
   const _WebAssetsMediaFactory(this.delegate, this.loader);
 
   final MediaSessionFactory delegate;
@@ -56,6 +59,15 @@ class _WebAssetsMediaFactory
 
   @override
   Set<MediaRole> get supportedRoles => delegate.supportedRoles;
+
+  @override
+  MediaBackgroundCapabilities backgroundCapabilitiesFor(MediaRole role) {
+    final source = delegate;
+    return source is MediaBackgroundCapabilitiesProvider
+        ? (source as MediaBackgroundCapabilitiesProvider)
+              .backgroundCapabilitiesFor(role)
+        : const MediaBackgroundCapabilities.none();
+  }
 
   @override
   MediaJoinInfo parseJoinInfo(Map<String, dynamic> json) =>

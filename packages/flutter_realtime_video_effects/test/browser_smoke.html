@@ -1,0 +1,33 @@
+<!doctype html><meta charset="utf-8"><title>Video effects local smoke</title>
+<h1>本地视频处理验证</h1><p id="status">初始化本地模型…</p>
+<video id="output" autoplay muted playsinline style="width:480px"></video>
+<script src="assets/packages/flutter_realtime_video_effects/assets/web/vision.js"></script>
+<script src="assets/packages/flutter_realtime_video_effects/assets/web/video-effects-bridge.js"></script>
+<script>
+(async()=>{
+  const status=document.getElementById('status');
+  let input, timer;
+  try{
+    // Synthetic local frames avoid requesting a real camera for this smoke.
+    const canvas=document.createElement('canvas');canvas.width=1280;canvas.height=720;
+    const ctx=canvas.getContext('2d');let counter=0;
+    const draw=()=>{ctx.fillStyle=counter++%2?'#245b89':'#295c89';ctx.fillRect(0,0,1280,720);};draw();
+    input=canvas.captureStream(24);timer=setInterval(draw,1000/24);
+    Object.defineProperty(navigator.mediaDevices,'getUserMedia',{value:async()=>input, configurable:true});
+    await RealtimeVideoEffectsBridge.createSource('smoke',{effect:{type:'blur'},width:1280,height:720,frameRate:24});
+    const output=document.getElementById('output');output.srcObject=new MediaStream([RealtimeVideoEffectsBridge.getTrack('smoke')]);await output.play();
+    let frames=0,first;
+    const onFrame=(now)=>{
+      first??=now;frames++;
+      if(frames<49){output.requestVideoFrameCallback(onFrame);return;}
+      const fps=(frames-1)*1000/(now-first);
+      RealtimeVideoEffectsBridge.disposeSource('smoke');clearInterval(timer);
+      const stopped=output.srcObject.getVideoTracks()[0].readyState==='ended';
+      status.textContent=`PASS — GPU segmentation + face detection initialized; ${output.videoWidth}×${output.videoHeight}; synthetic output ${fps.toFixed(1)} fps; disposed=${stopped}`;
+    };
+    output.requestVideoFrameCallback(onFrame);
+    globalThis.__flutterVideoEffectsOnError=(_id,error)=>{status.textContent=`FAIL — ${error}`;clearInterval(timer);};
+    setTimeout(()=>{if(!status.textContent.startsWith('PASS')&&!status.textContent.startsWith('FAIL'))status.textContent='FAIL — timed out waiting for processed frames';},15000);
+  }catch(error){clearInterval(timer);input?.getTracks().forEach(t=>t.stop());status.textContent=`FAIL — ${error.message}`;}
+})();
+</script>

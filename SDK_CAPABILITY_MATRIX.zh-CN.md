@@ -88,9 +88,27 @@ AWS 对外统一展示为一个 Vendor，内部按模式路由：`Meeting -> Chi
 | 加入前 Provider 网络探测 | 需要房间凭证时不支持 | 无 | 无 | 无 | 无 | 需要参与者令牌时不支持 |
 | 网络统计 | 支持 | Adapter 未提供 | 支持 | 支持 | Adapter 未提供 | 基础 RTC 统计 |
 | 屏幕共享 | 发布者支持 | Adapter 未提供 | 暂未实现 | Adapter 未提供 | Adapter 未提供 | Adapter 未提供 |
+| Blur Processed-video Sink | Adapter 未提供 | Adapter 未提供 | Web 房主 + participant | Adapter 未提供 | Adapter 未提供 | Adapter 未提供 |
 | 房主查看参与者列表 | 后端验证逻辑房主 | Meeting 创建者通过逻辑房主凭证 | 后端验证逻辑房主 | 后端验证逻辑房主 | 后端验证逻辑房主 | 后端验证逻辑房主 |
 | 房主移除参与者 | 支持 | 不支持 | 不支持 | 不支持 | 不支持 | 通过 IVS `DisconnectParticipant` |
 | 房主关闭房间 | 后端支持 | Meeting 创建者通过控制面关闭 | 后端支持 | 后端支持 | 后端支持 | 后端支持 |
+
+虚拟背景能力分成两层，不能把“本地能处理”和“Provider 能发布”混为一谈：
+
+| Effects 平台 Bridge | Android | macOS | Web | iOS | Windows |
+| --- | --- | --- | --- | --- | --- |
+| 采集 + None/Blur 处理 | 已实现 | 已实现 | 已实现 | 后续 | 后续 |
+| 实时本地预览 | Flutter Texture | Flutter Texture | HTML video | 后续 | 后续 |
+| Processed Source | Native RGBA Frame Hub | Native `CVPixelBuffer` Frame Hub | `MediaStreamTrack` | 后续 | 后续 |
+
+第一层由 `flutter_realtime_video_effects` 统一负责；Provider Adapter 只实现第二层
+`ProcessedVideoSink`。当前 Agora Web 已完成 Sink。Native Provider 只有在能够
+直接消费 Native Frame Hub 后才声明支持，不会把 30fps RGBA/YUV 帧绕回 Dart/
+MethodChannel 来伪装兼容。
+
+Demo 的 Pre-Join 直接使用 Platform Bridge 做实时虚化预览，不进入 Provider 房间。
+正式入房前 `RealtimeRoomView` 会重新创建 processed source 并 attach 给当前
+Provider Sink。如果 Sink 尚未实现，则保持摄像头关闭，避免发送未处理的真实背景。
 
 Meeting 是多人双向音视频模式。Broadcast 是一对多直播模式：房主发布音视频，观众订阅观看。
 Chime 当前只提供 participant 角色，不支持房主/观众直播角色。

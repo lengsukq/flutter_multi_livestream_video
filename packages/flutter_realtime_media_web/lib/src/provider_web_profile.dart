@@ -17,6 +17,8 @@ class ProviderWebProfile {
     this.supportsAudioOutputSelection = false,
     this.canSendData = false,
     this.canReceiveData = false,
+    this.canBlurBackground = true,
+    this.canReplaceBackgroundImage = true,
   });
 
   final String providerId;
@@ -29,6 +31,8 @@ class ProviderWebProfile {
   final bool supportsAudioOutputSelection;
   final bool canSendData;
   final bool canReceiveData;
+  final bool canBlurBackground;
+  final bool canReplaceBackgroundImage;
 
   static ProviderWebProfile forProvider(
     String providerId,
@@ -48,6 +52,8 @@ class ProviderWebProfile {
       providerId: 'agora',
       supportedRoles: {MediaRole.participant, MediaRole.host, MediaRole.viewer},
       supportsAudioOutputSelection: true,
+      canBlurBackground: true,
+      canReplaceBackgroundImage: true,
     ),
     'ivs' => const ProviderWebProfile(
       providerId: 'ivs',

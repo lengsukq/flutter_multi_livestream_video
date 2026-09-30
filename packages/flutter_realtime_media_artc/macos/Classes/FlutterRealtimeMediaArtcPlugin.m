@@ -1,4 +1,5 @@
 #import "FlutterRealtimeMediaArtcPlugin.h"
+#import "ArtcProcessedVideoInput.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <AppKit/AppKit.h>
@@ -20,6 +21,7 @@ static NSString *const kArtcViewType =
 @property(nonatomic, assign) BOOL viewer;
 @property(nonatomic, assign) BOOL inChannel;
 @property(nonatomic, strong) NSHashTable<ArtcVideoPlatformView *> *videoViews;
+@property(nonatomic, strong, nullable) ArtcProcessedVideoInput *processedVideo;
 @end
 
 @interface ArtcVideoPlatformView : NSView
@@ -103,6 +105,12 @@ static NSInteger ArtcSendIntObjectObjectInteger(
       [call.arguments isKindOfClass:NSDictionary.class] ? call.arguments : @{};
   if ([call.method isEqualToString:@"isAvailable"]) {
     result(@([self engineClass] != Nil));
+  } else if ([call.method isEqualToString:@"probeProcessedVideoInput"]) {
+    result(@([ArtcProcessedVideoInput isSupportedWithEngineClass:[self engineClass]]));
+  } else if ([call.method isEqualToString:@"attachProcessedVideoSource"]) {
+    [self attachProcessedVideo:arguments result:result];
+  } else if ([call.method isEqualToString:@"detachProcessedVideoSource"]) {
+    [self.processedVideo dispose]; self.processedVideo = nil; result(nil);
   } else if ([call.method isEqualToString:@"join"]) {
     [self join:arguments result:result];
   } else if ([call.method isEqualToString:@"leave"]) {
@@ -229,6 +237,7 @@ static NSInteger ArtcSendIntObjectObjectInteger(
 }
 
 - (void)leave:(FlutterResult)result {
+  [self.processedVideo dispose]; self.processedVideo = nil;
   if (self.engine == nil || !self.inChannel) {
     result(nil);
     return;
@@ -256,17 +265,43 @@ static NSInteger ArtcSendIntObjectObjectInteger(
   if (![self requirePublisher:result]) return;
   if (enabled && ![self ensurePermission:AVMediaTypeVideo result:result]) return;
   NSInteger capture = ArtcSendIntBool(
-      self.engine, NSSelectorFromString(@"enableLocalVideo:"), enabled);
+      self.engine, NSSelectorFromString(@"enableLocalVideo:"), enabled && self.processedVideo == nil);
   NSInteger publish = capture == 0
                           ? ArtcSendIntBool(
                                 self.engine,
                                 NSSelectorFromString(@"publishLocalVideoStream:"),
                                 enabled)
                           : capture;
-  if (enabled && publish == 0) {
+  if (enabled && publish == 0 && self.processedVideo == nil) {
     ArtcSendInt0(self.engine, NSSelectorFromString(@"startPreview"));
   }
   [self complete:publish result:result message:@"ARTC failed to update video publishing"];
+}
+
+- (void)attachProcessedVideo:(NSDictionary *)arguments result:(FlutterResult)result {
+  if (![self requirePublisher:result]) return;
+  if (![ArtcProcessedVideoInput isSupportedWithEngineClass:[self engineClass]]) {
+    result([FlutterError errorWithCode:@"unsupported_feature"
+      message:@"The installed ARTC macOS framework does not provide a compatible external video input."
+      details:nil]); return;
+  }
+  NSString *sourceId = [self string:arguments key:@"sourceId"];
+  if (!sourceId.length) {
+    result([FlutterError errorWithCode:@"invalid_argument" message:@"A processed source ID is required." details:nil]); return;
+  }
+  [self.processedVideo dispose]; self.processedVideo = nil;
+  ArtcSendInt0(self.engine, NSSelectorFromString(@"stopPreview"));
+  ArtcSendIntBool(self.engine, NSSelectorFromString(@"enableLocalVideo:"), NO);
+  __weak FlutterRealtimeMediaArtcPlugin *weakSelf = self;
+  self.processedVideo = [[ArtcProcessedVideoInput alloc] initWithSourceId:sourceId engine:self.engine
+    onFailure:^(NSString *message) {
+      [weakSelf emit:@{@"type": @"error", @"code": @-1, @"message": message}];
+    }];
+  if (!self.processedVideo) {
+    ArtcSendIntBool(self.engine, NSSelectorFromString(@"publishLocalVideoStream:"), NO);
+    result([FlutterError errorWithCode:@"attach_provider_failed" message:@"ARTC rejected the processed video source." details:nil]); return;
+  }
+  result(nil);
 }
 
 - (void)sendMessage:(NSDictionary *)values result:(FlutterResult)result {
@@ -331,6 +366,7 @@ static NSInteger ArtcSendIntObjectObjectInteger(
 }
 
 - (void)disposeEngine {
+  [self.processedVideo dispose]; self.processedVideo = nil;
   for (ArtcVideoPlatformView *view in self.videoViews) [view detach];
   self.inChannel = NO;
   self.localUserId = nil;
@@ -394,7 +430,7 @@ static NSInteger ArtcSendIntObjectObjectInteger(
     ArtcSendIntObjectInteger(
         self.engine, NSSelectorFromString(@"setLocalViewConfig:forTrack:"),
         canvas, 1);
-    ArtcSendInt0(self.engine, NSSelectorFromString(@"startPreview"));
+    if (self.processedVideo == nil) ArtcSendInt0(self.engine, NSSelectorFromString(@"startPreview"));
   } else {
     ArtcSendIntObjectObjectInteger(
         self.engine, NSSelectorFromString(@"setRemoteViewConfig:uid:forTrack:"),

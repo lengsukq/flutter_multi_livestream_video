@@ -13,6 +13,8 @@ dependencies:
     sdk: flutter
   flutter_realtime_media_core:
     path: ../flutter_realtime_media_core
+  flutter_realtime_video_effects:
+    path: ../flutter_realtime_video_effects
   web: ^1.1.1
 
 dev_dependencies:

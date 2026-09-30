@@ -10,6 +10,8 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 
 import 'livekit_join_info.dart';
 import 'livekit_media_track.dart';
+import 'livekit_processed_video.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 
 const _androidScreenShareChannel = MethodChannel(
   'flutter_realtime_media_livekit/screen_share',
@@ -27,7 +29,21 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
   return MediaCapabilities(
     canPublishAudio: !isViewer,
     canPublishVideo: !isViewer,
-    canSwitchCamera: !isViewer,
+    canBlurBackground:
+        !isViewer &&
+        (kIsWeb ||
+            defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.macOS),
+    canReplaceBackgroundImage:
+        !isViewer &&
+        (kIsWeb ||
+            defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.macOS),
+    canSwitchCamera:
+        !isViewer &&
+        (kIsWeb ||
+            defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS),
     // LiveKit's Flutter Web SDK does not support screen capture on mobile
     // browsers, even though desktop browsers support getDisplayMedia.
     canScreenShare: !isViewer && (!kIsWeb || !lk.lkPlatformIsWebMobile()),
@@ -362,6 +378,7 @@ abstract class LiveKitMediaSessionBase
     if (state == MediaSessionState.disposed) return;
     _setState(MediaSessionState.leaving);
     try {
+      await _detachProcessedVideoBeforeRoomTeardown();
       await _room?.disconnect();
     } catch (error) {
       final mapped = _mapError(error, 'Unable to disconnect from LiveKit.');
@@ -818,14 +835,20 @@ abstract class LiveKitMediaSessionBase
     if (!_eventController.isClosed) _eventController.add(event);
   }
 
+  Future<void> _detachProcessedVideoBeforeRoomTeardown() async {}
+
   Future<void> _tearDownRoom() async {
-    await _stopAndroidScreenShareService();
-    final listener = _listener;
-    _listener = null;
-    if (listener != null) await listener.dispose();
-    final room = _room;
-    _room = null;
-    if (room != null && !room.isDisposed) await room.dispose();
+    try {
+      await _detachProcessedVideoBeforeRoomTeardown();
+    } finally {
+      await _stopAndroidScreenShareService();
+      final listener = _listener;
+      _listener = null;
+      if (listener != null) await listener.dispose();
+      final room = _room;
+      _room = null;
+      if (room != null && !room.isDisposed) await room.dispose();
+    }
   }
 
   Future<void> _prepareAndroidScreenShare() async {
@@ -889,10 +912,102 @@ abstract class LiveKitMediaSessionBase
 
 /// LiveKit session for a symmetric meeting participant.
 class LiveKitInteractiveSession extends LiveKitMediaSessionBase
-    implements InteractiveMediaSession {
+    implements InteractiveMediaSession, ProcessedVideoSink {
   LiveKitInteractiveSession({super.role = MediaRole.participant})
     : assert(role != MediaRole.viewer),
       super(capabilities: _capabilitiesForRole(role));
+
+  ProcessedVideoSource? _processedSource;
+  lk.LocalVideoTrack? _processedTrack;
+  bool _processedPublished = false;
+
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      capabilities.canBlurBackground &&
+      (kIsWeb
+          ? source.platform == VideoEffectsPlatform.web &&
+                source.kind == ProcessedVideoSourceKind.mediaStreamTrack
+          : source.kind == ProcessedVideoSourceKind.nativeFrameHub &&
+                ((defaultTargetPlatform == TargetPlatform.android &&
+                        source.platform == VideoEffectsPlatform.android) ||
+                    (defaultTargetPlatform == TargetPlatform.macOS &&
+                        source.platform == VideoEffectsPlatform.macos)));
+
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
+    _ensureActive();
+    if (!supportsProcessedVideoSource(source)) {
+      _unsupported('processed video input');
+    }
+    await detachProcessedVideoSource();
+    await _requireLocalParticipant().setCameraEnabled(false);
+    try {
+      _processedTrack = await createProcessedLiveKitTrack(source);
+      _processedSource = source;
+    } catch (_) {
+      await disposeProcessedLiveKitTrack(source);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> detachProcessedVideoSource() async {
+    final source = _processedSource;
+    final track = _processedTrack;
+    final published = _processedPublished;
+    _processedSource = null;
+    _processedTrack = null;
+    _processedPublished = false;
+    if (source == null) return;
+    try {
+      try {
+        final sid = track?.sid;
+        if (published && sid != null) {
+          await _room?.localParticipant?.removePublishedTrack(sid);
+        }
+      } finally {
+        await track?.dispose();
+      }
+    } finally {
+      await disposeProcessedLiveKitTrack(source);
+    }
+  }
+
+  @override
+  Future<void> _detachProcessedVideoBeforeRoomTeardown() =>
+      detachProcessedVideoSource();
+
+  @override
+  Future<List<MediaDevice>> listMediaDevices({
+    Set<MediaDeviceKind>? kinds,
+  }) async {
+    if (_processedSource == null) return super.listMediaDevices(kinds: kinds);
+    final requested = kinds ?? MediaDeviceKind.values.toSet();
+    final devices = await super.listMediaDevices(
+      kinds: requested.difference({MediaDeviceKind.camera}),
+    );
+    return List.unmodifiable([
+      ...devices,
+      if (requested.contains(MediaDeviceKind.camera))
+        for (final camera in await VideoEffectsBridge().listCameras())
+          MediaDevice(
+            id: camera.id,
+            label: camera.label,
+            kind: MediaDeviceKind.camera,
+          ),
+    ]);
+  }
+
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) async {
+    _ensureActive();
+    final source = _processedSource;
+    if (source != null && device.kind == MediaDeviceKind.camera) {
+      await VideoEffectsBridge().selectCamera(source, device.id);
+      return;
+    }
+    await super.selectMediaDevice(device);
+  }
 
   @override
   Future<void> setMuted(bool muted) async {
@@ -915,7 +1030,21 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
     _ensureActive();
     if (!capabilities.canPublishVideo) _unsupported('camera publishing');
     try {
-      await _requireLocalParticipant().setCameraEnabled(enabled);
+      final processed = _processedTrack;
+      if (processed == null) {
+        await _requireLocalParticipant().setCameraEnabled(enabled);
+      } else if (enabled) {
+        await VideoEffectsBridge().setEnabled(_processedSource!, true);
+        if (!_processedPublished) {
+          await _requireLocalParticipant().publishVideoTrack(processed);
+          _processedPublished = true;
+        } else {
+          await processed.unmute(stopOnMute: false);
+        }
+      } else {
+        await processed.mute(stopOnMute: false);
+        await VideoEffectsBridge().setEnabled(_processedSource!, false);
+      }
       _refreshSnapshot();
       _emit(MediaLocalMediaChanged(videoEnabled: enabled));
     } catch (error) {
@@ -957,6 +1086,14 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
   Future<void> switchCamera(MediaCameraPosition position) async {
     _ensureActive();
     if (!capabilities.canSwitchCamera) _unsupported('camera switching');
+    final source = _processedSource;
+    if (source != null) {
+      await VideoEffectsBridge().selectCamera(
+        source,
+        position == MediaCameraPosition.front ? 'front' : 'back',
+      );
+      return;
+    }
     final publication = _requireLocalParticipant().getTrackPublicationBySource(
       lk.TrackSource.camera,
     );

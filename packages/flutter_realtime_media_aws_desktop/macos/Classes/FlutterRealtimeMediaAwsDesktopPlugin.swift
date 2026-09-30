@@ -147,6 +147,12 @@ private final class AwsDesktopRuntime: NSObject,
   private var snapshots: [AwsDesktopProvider: [String: Any]] = [:]
   private var payloads: [AwsDesktopProvider: [String: Any]] = [:]
   private var chimeDevices: [[String: Any]] = []
+  private let processedFrameHandler = AwsProcessedFrameSchemeHandler()
+  private var processedFeeds: [AwsDesktopProvider: AwsProcessedFrameFeed] = [:]
+  private var processedFeedPool: [String: AwsProcessedFrameFeed] = [:]
+  private var processedFeedReferenceCounts: [String: Int] = [:]
+  private var processedAttachGenerations: [AwsDesktopProvider: Int] = [:]
+  private var reportedProcessedFailures: Set<String> = []
   private let views = NSMapTable<NSString, AwsDesktopVideoView>(
     keyOptions: .strongMemory,
     valueOptions: .weakMemory
@@ -177,6 +183,14 @@ private final class AwsDesktopRuntime: NSObject,
   func handleChime(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     let arguments = call.arguments as? [String: Any] ?? [:]
     switch call.method {
+    case "probeProcessedVideoInput":
+      probeProcessedVideoInput(result: result)
+    case "attachProcessedVideoSource":
+      attachProcessedVideo(.chime, arguments: arguments, result: result)
+    case "detachProcessedVideoSource":
+      detachProcessedVideo(.chime) { error in
+        error == nil ? result(nil) : result(self.flutterError(error!))
+      }
     case "manageAudioPermissions":
       requestPermission(.audio) { granted in
         granted ? self.chimeSuccess(result) : self.chimeFailure(
@@ -274,6 +288,14 @@ private final class AwsDesktopRuntime: NSObject,
   func handleIvs(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     let arguments = call.arguments as? [String: Any] ?? [:]
     switch call.method {
+    case "probeProcessedVideoInput":
+      probeProcessedVideoInput(result: result)
+    case "attachProcessedVideoSource":
+      attachProcessedVideo(.ivs, arguments: arguments, result: result)
+    case "detachProcessedVideoSource":
+      detachProcessedVideo(.ivs) { error in
+        error == nil ? result(nil) : result(self.flutterError(error!))
+      }
     case "probeDevices":
       result([
         "microphones": AVCaptureDevice.default(for: .audio) == nil ? 0 : 1,
@@ -554,12 +576,222 @@ private final class AwsDesktopRuntime: NSObject,
     _ provider: AwsDesktopProvider,
     completion: @escaping (String?) -> Void
   ) {
-    invoke(provider, operation: "leave", payload: [:]) { _, _ in
-      self.invoke(provider, operation: "dispose", payload: [:]) { _, error in
-        self.snapshots.removeValue(forKey: provider)
-        self.refreshViews(provider, snapshot: nil)
-        completion(error)
+    detachProcessedVideo(provider) { _ in
+      self.invoke(provider, operation: "leave", payload: [:]) { _, _ in
+        self.invoke(provider, operation: "dispose", payload: [:]) { _, error in
+          self.snapshots.removeValue(forKey: provider)
+          self.refreshViews(provider, snapshot: nil)
+          completion(error)
+        }
       }
+    }
+  }
+
+  private func probeProcessedVideoInput(result: @escaping FlutterResult) {
+    ensureReady { error in
+      guard error == nil, let view = self.webView else { result(false); return }
+      Task { @MainActor in
+        let supported = try? await view.callAsyncJavaScript(
+          "return await AwsDesktopRuntime.canConsumeProcessedVideo()",
+          arguments: [:], in: nil, contentWorld: .page
+        ) as? Bool
+        result(supported ?? false)
+      }
+    }
+  }
+
+  private func attachProcessedVideo(
+    _ provider: AwsDesktopProvider,
+    arguments: [String: Any],
+    result: @escaping FlutterResult
+  ) {
+    guard let sourceId = nonEmptyString(arguments["sourceId"]) else {
+      result(FlutterError(code: "invalid_argument", message: "A processed source ID is required.", details: nil))
+      return
+    }
+    guard let payload = payloads[provider], payload["role"] as? String != "viewer" else {
+      result(FlutterError(code: "unsupported_feature", message: "Only joined publishers can attach processed video.", details: nil))
+      return
+    }
+    let generation = nextProcessedAttachGeneration(for: provider)
+    detachProcessedVideo(provider, generation: generation) { detachError in
+      guard self.isCurrentProcessedAttach(provider, generation: generation) else {
+        result(self.processedAttachCancelledError())
+        return
+      }
+      if let detachError { result(self.flutterError(detachError)); return }
+      let feed: AwsProcessedFrameFeed
+      do { feed = try self.acquireProcessedFrameFeed(sourceId: sourceId) }
+      catch { result(self.flutterError(error.localizedDescription)); return }
+      self.ensureMediaProviderBridge(provider) { error in
+        guard self.isCurrentProcessedAttach(provider, generation: generation) else {
+          self.releaseProcessedFrameFeed(feed)
+          result(self.processedAttachCancelledError())
+          return
+        }
+        guard error == nil, let view = self.webView else {
+          self.releaseProcessedFrameFeed(feed)
+          result(self.flutterError(error?.localizedDescription ?? "AWS desktop runtime is unavailable."))
+          return
+        }
+        Task { @MainActor in
+          do {
+            _ = try await view.callAsyncJavaScript(
+              "return await AwsDesktopRuntime.attachProcessedVideo(providerId, sessionId, sourceId, generation)",
+              arguments: [
+                "providerId": provider.rawValue,
+                "sessionId": provider.sessionId,
+                "sourceId": sourceId,
+                "generation": generation,
+              ],
+              in: nil, contentWorld: .page
+            )
+            guard self.isCurrentProcessedAttach(provider, generation: generation) else {
+              self.releaseProcessedFrameFeed(feed)
+              result(self.processedAttachCancelledError())
+              return
+            }
+            if feed.isFailed {
+              self.releaseProcessedFrameFeed(feed)
+              result(self.flutterError(feed.errorMessage ?? "The native processed video feed failed."))
+              return
+            }
+            self.processedFeeds[provider] = feed
+            result(nil)
+          } catch {
+            self.releaseProcessedFrameFeed(feed)
+            result(self.flutterError(Self.jsError(error, operation: "attach processed video")))
+          }
+        }
+      }
+    }
+  }
+
+  private func detachProcessedVideo(
+    _ provider: AwsDesktopProvider,
+    completion: @escaping (String?) -> Void
+  ) {
+    let generation = nextProcessedAttachGeneration(for: provider)
+    detachProcessedVideo(provider, generation: generation, completion: completion)
+  }
+
+  private func detachProcessedVideo(
+    _ provider: AwsDesktopProvider,
+    generation: Int,
+    completion: @escaping (String?) -> Void
+  ) {
+    let feed = processedFeeds.removeValue(forKey: provider)
+    guard let view = webView, bridgeReady else {
+      if let feed { releaseProcessedFrameFeed(feed) }
+      completion(nil)
+      return
+    }
+    Task { @MainActor in
+      do {
+        _ = try await view.callAsyncJavaScript(
+          "return await AwsDesktopRuntime.detachProcessedVideo(providerId, sessionId, sourceId, generation)",
+          arguments: [
+            "providerId": provider.rawValue,
+            "sessionId": provider.sessionId,
+            "sourceId": feed.map { $0.sourceId as Any } ?? NSNull(),
+            "generation": generation,
+          ],
+          in: nil, contentWorld: .page
+        )
+        if let feed { releaseProcessedFrameFeed(feed) }
+        completion(nil)
+      } catch {
+        if let feed { releaseProcessedFrameFeed(feed) }
+        completion(Self.jsError(error, operation: "detach processed video"))
+      }
+    }
+  }
+
+  private func nextProcessedAttachGeneration(for provider: AwsDesktopProvider) -> Int {
+    let generation = (processedAttachGenerations[provider] ?? 0) + 1
+    processedAttachGenerations[provider] = generation
+    return generation
+  }
+
+  private func isCurrentProcessedAttach(_ provider: AwsDesktopProvider, generation: Int) -> Bool {
+    processedAttachGenerations[provider] == generation
+  }
+
+  private func processedAttachCancelledError() -> FlutterError {
+    FlutterError(
+      code: "attach_cancelled",
+      message: "Processed video attachment was cancelled by a newer attach or leave operation.",
+      details: nil
+    )
+  }
+
+  private func acquireProcessedFrameFeed(sourceId: String) throws -> AwsProcessedFrameFeed {
+    let key = sourceId.lowercased()
+    if let feed = processedFeedPool[key] {
+      guard !feed.isFailed else {
+        throw NSError(
+          domain: "flutter_realtime_aws.processed_frame",
+          code: 1,
+          userInfo: [NSLocalizedDescriptionKey: feed.errorMessage ?? "The processed video source has failed."]
+        )
+      }
+      processedFeedReferenceCounts[key, default: 0] += 1
+      return feed
+    }
+
+    let feed = try AwsProcessedFrameFeed(sourceId: sourceId)
+    reportedProcessedFailures.remove(key)
+    feed.onError = { [weak self, weak feed] message in
+      guard let self, let feed else { return }
+      self.processedFrameFeedDidFail(feed, message: message)
+    }
+    processedFeedPool[key] = feed
+    processedFeedReferenceCounts[key] = 1
+    processedFrameHandler.add(feed)
+    if feed.isFailed, let message = feed.errorMessage {
+      processedFrameFeedDidFail(feed, message: message)
+    }
+    return feed
+  }
+
+  private func releaseProcessedFrameFeed(_ feed: AwsProcessedFrameFeed) {
+    let key = feed.sourceId.lowercased()
+    guard processedFeedPool[key] === feed else { return }
+    let references = max(0, (processedFeedReferenceCounts[key] ?? 1) - 1)
+    guard references == 0 else {
+      processedFeedReferenceCounts[key] = references
+      return
+    }
+    processedFeedReferenceCounts.removeValue(forKey: key)
+    processedFeedPool.removeValue(forKey: key)
+    processedFrameHandler.remove(feed)
+    feed.dispose()
+  }
+
+  private func processedFrameFeedDidFail(_ feed: AwsProcessedFrameFeed, message: String) {
+    guard processedFeedPool[feed.sourceId.lowercased()] === feed else { return }
+    reportProcessedVideoSourceError(sourceId: feed.sourceId, message: message)
+  }
+
+  private func reportProcessedVideoSourceError(sourceId: String, message: String) {
+    let key = sourceId.lowercased()
+    guard reportedProcessedFailures.insert(key).inserted else { return }
+    let effects = FlutterMethodChannel(
+      name: "flutter_realtime_video_effects",
+      binaryMessenger: registrar.messenger
+    )
+    effects.invokeMethod("sourceError", arguments: ["sourceId": sourceId, "message": message])
+    for (provider, feed) in processedFeeds where feed.sourceId.lowercased() == key {
+      command(provider, name: "setVideoEnabled", args: ["enabled": false]) { _, _ in }
+    }
+    guard let webView, bridgeReady else { return }
+    Task { @MainActor in
+      _ = try? await webView.callAsyncJavaScript(
+        "AwsDesktopRuntime.failProcessedVideo(sourceId, message)",
+        arguments: ["sourceId": sourceId, "message": message],
+        in: nil,
+        contentWorld: .page
+      )
     }
   }
 
@@ -859,6 +1091,7 @@ private final class AwsDesktopRuntime: NSObject,
       let controller = WKUserContentController()
       controller.add(WeakScriptMessageHandler(target: self), name: "awsDesktop")
       configuration.userContentController = controller
+      configuration.setURLSchemeHandler(processedFrameHandler, forURLScheme: "realtime-video")
       configuration.mediaTypesRequiringUserActionForPlayback = []
       let view = WKWebView(
         frame: NSRect(x: -2, y: -2, width: 1, height: 1),
@@ -1023,9 +1256,20 @@ private final class AwsDesktopRuntime: NSObject,
         let encoded = body["data"] as? String
       else { return }
       views.object(forKey: viewKey as NSString)?.updateFrame(encoded)
+    case "processedVideoError":
+      guard let sourceId = body["sourceId"] as? String else { return }
+      let errorMessage = body["message"] as? String ?? "Native processed video input failed."
+      reportProcessedVideoSourceError(sourceId: sourceId, message: errorMessage)
     default:
       break
     }
+  }
+
+  deinit {
+    readyTimeout?.cancel()
+    processedFeedPool.values.forEach { $0.dispose() }
+    webView?.configuration.userContentController.removeScriptMessageHandler(forName: "awsDesktop")
+    webView?.removeFromSuperview()
   }
 
   private func handleChimeEvent(_ event: [String: Any]) {

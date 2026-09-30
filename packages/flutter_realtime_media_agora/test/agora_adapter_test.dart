@@ -152,6 +152,8 @@ void main() {
 
       expect(participant.capabilities.canPublishAudio, isTrue);
       expect(participant.capabilities.canPublishVideo, isTrue);
+      expect(participant.capabilities.canBlurBackground, isTrue);
+      expect(participant.capabilities.canReplaceBackgroundImage, isTrue);
       expect(participant.capabilities.canSwitchCamera, isTrue);
       expect(participant.capabilities.canScreenShare, isFalse);
       expect(participant.capabilities.canSendData, isTrue);
@@ -164,6 +166,7 @@ void main() {
 
       expect(viewer.capabilities.canPublishAudio, isFalse);
       expect(viewer.capabilities.canPublishVideo, isFalse);
+      expect(viewer.capabilities.canBlurBackground, isFalse);
       expect(viewer.capabilities.canSubscribeVideo, isTrue);
       expect(viewer.capabilities.canSendData, isFalse);
       expect(viewer.capabilities.canReceiveData, isTrue);
@@ -185,6 +188,8 @@ void main() {
       expect(participant.capabilities.canSubscribeVideo, isTrue);
       expect(participant.capabilities.canSendData, isTrue);
       expect(participant.capabilities.canSwitchCamera, isFalse);
+      expect(participant.capabilities.canBlurBackground, isTrue);
+      expect(participant.capabilities.canReplaceBackgroundImage, isTrue);
 
       await expectLater(
         participant.switchCamera(MediaCameraPosition.back),

@@ -78,11 +78,14 @@ class FakeMediaSession
     required this.providerId,
     required this.role,
     this.joinError,
-  }) : capabilities = switch (role) {
-         MediaRole.participant => const MediaCapabilities.meeting(),
-         MediaRole.host => const MediaCapabilities.broadcastHost(),
-         MediaRole.viewer => const MediaCapabilities.broadcastViewer(),
-       };
+    MediaCapabilities? capabilities,
+  }) : capabilities =
+           capabilities ??
+           switch (role) {
+             MediaRole.participant => const MediaCapabilities.meeting(),
+             MediaRole.host => const MediaCapabilities.broadcastHost(),
+             MediaRole.viewer => const MediaCapabilities.broadcastViewer(),
+           };
 
   @override
   final String providerId;

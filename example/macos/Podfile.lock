@@ -5,6 +5,8 @@ PODS:
     - FlutterMacOS
   - flutter_realtime_media_aws_desktop (0.1.0):
     - FlutterMacOS
+  - flutter_realtime_media_livekit (0.1.0):
+    - FlutterMacOS
   - FlutterMacOS (1.0.0)
   - HydraAsync (2.0.6)
   - tencent_cloud_chat_sdk (8.0.0):
@@ -21,6 +23,7 @@ DEPENDENCIES:
   - flutter_realtime_chat_agora (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_chat_agora/macos`)
   - flutter_realtime_media_artc (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_artc/macos`)
   - flutter_realtime_media_aws_desktop (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_aws_desktop/macos`)
+  - flutter_realtime_media_livekit (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_livekit/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - tencent_cloud_chat_sdk (from `Flutter/ephemeral/.symlinks/plugins/tencent_cloud_chat_sdk/macos`)
   - tencent_rtc_sdk (from `Flutter/ephemeral/.symlinks/plugins/tencent_rtc_sdk/macos`)
@@ -38,6 +41,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_artc/macos
   flutter_realtime_media_aws_desktop:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_aws_desktop/macos
+  flutter_realtime_media_livekit:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_livekit/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
   tencent_cloud_chat_sdk:
@@ -48,7 +53,8 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   flutter_realtime_chat_agora: be5633842da785001a7cba516b6ce5df45b238f5
   flutter_realtime_media_artc: 1083f386ce52be5acc3be19571771cc29352b38d
-  flutter_realtime_media_aws_desktop: e01f435cdf8ddb399f8f7a692afd04bbf96050d5
+  flutter_realtime_media_aws_desktop: 29711d54614b4c2fc6e2aacb5e1b824629327343
+  flutter_realtime_media_livekit: 5e989e66c656679b9cee49b3314470b8ce5626d0
   FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
   HydraAsync: 8d589bd725b0224f899afafc9a396327405f8063
   tencent_cloud_chat_sdk: 62850e2969a525306e7a29a70ae80008fd0d82cc

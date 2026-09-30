@@ -1,14 +1,367 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_media_session.dart';
 import 'support/fake_transport.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('Processed video source lifecycle', () {
+    test('changing effects preserves a disabled camera', () async {
+      final platform = _FakeEffectsPlatform();
+      final room = _effectsRoom(platform, _FakeProcessedMediaSession());
+      await room.setBackgroundEffect(const MediaBackgroundEffect.blur());
+      expect(platform.enabled, [false, false]);
+      expect(room.backgroundEffect, const MediaBackgroundEffect.blur());
+      await room.dispose();
+    });
+
+    test('unsupported effects preserve baseline camera when off', () async {
+      final platform = _FakeEffectsPlatform();
+      final room = _effectsRoom(
+        platform,
+        _FakeProcessedMediaSession(supportsBackground: false),
+      );
+      await room.prepareVideoEffects(const MediaLocalPreviewSettings());
+      expect(platform.createCalls, 0);
+      await expectLater(
+        room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
+        throwsA(
+          isA<MediaError>().having(
+            (e) => e.code,
+            'code',
+            MediaErrorCode.unsupportedFeature,
+          ),
+        ),
+      );
+      await room.dispose();
+    });
+
+    test('an unavailable platform never creates an enabled effect', () async {
+      final platform = _FakeEffectsPlatform()..supported = false;
+      final room = _effectsRoom(platform, _FakeProcessedMediaSession());
+      await room.prepareVideoEffects(const MediaLocalPreviewSettings());
+      await expectLater(
+        room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
+        throwsA(isA<MediaError>()),
+      );
+      expect(platform.createCalls, 0);
+      await room.dispose();
+    });
+
+    test('an incompatible source is released and off keeps baseline', () async {
+      final platform = _FakeEffectsPlatform();
+      final session = _FakeProcessedMediaSession()..supportsSource = false;
+      final room = _effectsRoom(platform, session);
+      await room.prepareVideoEffects(const MediaLocalPreviewSettings());
+      expect(platform.disposedSources, ['effects-source-1']);
+      expect(session.attachedSources, isEmpty);
+      await expectLater(
+        room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
+        throwsA(isA<MediaError>()),
+      );
+      expect(platform.disposedSources, hasLength(2));
+      await room.dispose();
+    });
+
+    test(
+      'an unavailable provider binding keeps the off camera path usable',
+      () async {
+        final platform = _FakeEffectsPlatform();
+        final session = _FakeProcessedMediaSession()
+          ..attachError = MissingPluginException('No provider input');
+        final room = _effectsRoom(platform, session);
+        await room.prepareVideoEffects(const MediaLocalPreviewSettings());
+        expect(platform.disposedSources, ['effects-source-1']);
+        await expectLater(
+          room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
+          throwsA(
+            isA<MediaError>().having(
+              (e) => e.code,
+              'code',
+              MediaErrorCode.unsupportedFeature,
+            ),
+          ),
+        );
+        await room.dispose();
+      },
+    );
+
+    test('attachment failure releases the source and permits retry', () async {
+      final platform = _FakeEffectsPlatform();
+      final session = _FakeProcessedMediaSession()
+        ..attachError = StateError('attach');
+      final room = _effectsRoom(platform, session);
+      await expectLater(
+        room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
+        throwsStateError,
+      );
+      expect(platform.disposedSources, ['effects-source-1']);
+      session.attachError = null;
+      await room.setBackgroundEffect(const MediaBackgroundEffect.blur());
+      expect(platform.createCalls, 2);
+      await room.dispose();
+      expect(platform.disposedSources, hasLength(2));
+    });
+
+    test('concurrent updates reuse one source in request order', () async {
+      final platform = _FakeEffectsPlatform()..createGate = Completer<void>();
+      final room = _effectsRoom(platform, _FakeProcessedMediaSession());
+      final initial = room.prepareVideoEffects(
+        const MediaLocalPreviewSettings(),
+      );
+      final update = room.setBackgroundEffect(
+        const MediaBackgroundEffect.blur(),
+      );
+      await Future<void>.delayed(Duration.zero);
+      platform.createGate!.complete();
+      await Future.wait([initial, update]);
+      expect(platform.createCalls, 1);
+      expect(platform.effects, [const MediaBackgroundEffect.blur()]);
+      await room.dispose();
+    });
+
+    test(
+      'dispose during creation releases the source before attaching',
+      () async {
+        final platform = _FakeEffectsPlatform()..createGate = Completer<void>();
+        final session = _FakeProcessedMediaSession();
+        final room = _effectsRoom(platform, session);
+        final initial = room.prepareVideoEffects(
+          const MediaLocalPreviewSettings(),
+        );
+        final expectedFailure = expectLater(
+          initial,
+          throwsA(isA<MediaError>()),
+        );
+        await Future<void>.delayed(Duration.zero);
+        final disposal = room.dispose();
+        platform.createGate!.complete();
+        await expectedFailure;
+        await disposal;
+        expect(session.attachedSources, isEmpty);
+        expect(platform.disposedSources, ['effects-source-1']);
+      },
+    );
+
+    test(
+      'leaving releases the camera without waiting for room disposal',
+      () async {
+        final platform = _FakeEffectsPlatform();
+        final session = _FakeProcessedMediaSession();
+        await session.join(
+          MediaJoinInfo(
+            providerId: session.providerId,
+            roomCode: 'effects',
+            participantId: 'local',
+            role: session.role,
+          ),
+        );
+        final room = _effectsRoom(platform, session);
+        await room.prepareVideoEffects(const MediaLocalPreviewSettings());
+        await session.leave();
+        await Future<void>.delayed(Duration.zero);
+        expect(session.detachCalls, 1);
+        expect(platform.disposedSources, ['effects-source-1']);
+        await room.dispose();
+        expect(session.detachCalls, 1);
+      },
+    );
+
+    test(
+      'room attaches one SDK source to sink and disposes it safely',
+      () async {
+        final platform = _FakeEffectsPlatform();
+        final bridge = VideoEffectsBridge(platform: platform);
+        final session = _FakeProcessedMediaSession();
+        final media = MediaRoomSession.direct(
+          roomCode: 'room-effects',
+          participantId: 'local-user',
+          session: session,
+        );
+        final room = RealtimeRoom(
+          media: media,
+          renderer: const _FakeRenderer(),
+          disposeClients: () {},
+          videoEffectsBridge: bridge,
+        );
+
+        await room.prepareVideoEffects(
+          const MediaLocalPreviewSettings(
+            cameraEnabled: true,
+            backgroundEffect: MediaBackgroundEffect.blur(),
+          ),
+        );
+
+        expect(platform.createCalls, 1);
+        expect(platform.lastConfig?.effect, const MediaBackgroundEffect.blur());
+        expect(session.attachedSources, hasLength(1));
+        expect(session.attachedSources.single.id, 'effects-source-1');
+
+        await room.setBackgroundEffect(const MediaBackgroundEffect.none());
+        expect(platform.createCalls, 1);
+        expect(platform.effects, contains(const MediaBackgroundEffect.none()));
+
+        await room.dispose();
+        expect(session.detachCalls, 1);
+        expect(platform.disposedSources, ['effects-source-1']);
+      },
+    );
+
+    test(
+      'asynchronous processed-source failures reach room event listeners',
+      () async {
+        final platform = _FakeEffectsPlatform();
+        final room = _effectsRoom(platform, _FakeProcessedMediaSession());
+        await room.prepareVideoEffects(const MediaLocalPreviewSettings());
+        final eventFuture = room.events.firstWhere(
+          (event) => event is RealtimeBackendFailure,
+        );
+
+        platform.emitFailure(
+          const VideoEffectsFailure(
+            sourceId: 'effects-source-1',
+            message: 'frame processing failed',
+          ),
+        );
+
+        final event = await eventFuture as RealtimeBackendFailure;
+        expect(event.error.code, RealtimeErrorCode.providerError);
+        expect(event.error.providerId, 'fake-effects-provider');
+        expect(event.error.message, 'frame processing failed');
+        await room.dispose();
+        await platform.close();
+      },
+    );
+  });
+
+  group('SDK processed-video capability probes', () {
+    late FlutterRealtimeVideoEffectsPlatform originalEffectsPlatform;
+    late _FakeEffectsPlatform effectsPlatform;
+
+    setUp(() {
+      originalEffectsPlatform = FlutterRealtimeVideoEffectsPlatform.instance;
+      effectsPlatform = _FakeEffectsPlatform();
+      FlutterRealtimeVideoEffectsPlatform.instance = effectsPlatform;
+    });
+
+    tearDown(() {
+      FlutterRealtimeVideoEffectsPlatform.instance = originalEffectsPlatform;
+    });
+
+    test('Mac Pre-Join gates effects on the provider input probe', () async {
+      const channel = MethodChannel(
+        'com.oneplusdream.flutter_realtime_media_artc/methods',
+      );
+      final calls = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call.method);
+            return false;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+      final sdk = _sdkWithProbeFactory(
+        FakeMediaSessionFactory(providerId: 'artc'),
+      );
+
+      final result = await sdk.preJoin(providerId: 'artc');
+
+      expect(calls, ['probeProcessedVideoInput']);
+      expect(result.backgroundCapabilities.canBlur, isFalse);
+      expect(result.backgroundCapabilities.canReplaceImage, isFalse);
+    });
+
+    test(
+      'Mac Pre-Join advertises effects after a positive provider probe',
+      () async {
+        const channel = MethodChannel(
+          'com.oneplusdream.flutter_realtime_media_artc/methods',
+        );
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async => true);
+        addTearDown(
+          () => TestDefaultBinaryMessengerBinding
+              .instance
+              .defaultBinaryMessenger
+              .setMockMethodCallHandler(channel, null),
+        );
+        final sdk = _sdkWithProbeFactory(
+          FakeMediaSessionFactory(providerId: 'artc'),
+        );
+
+        final result = await sdk.preJoin(providerId: 'artc');
+
+        expect(result.backgroundCapabilities.canBlur, isTrue);
+        expect(result.backgroundCapabilities.canReplaceImage, isTrue);
+      },
+    );
+
+    test('AWS providers probe their own native video input channels', () async {
+      const channels = {
+        'chime': 'com.oneplusdream.aws.chime.methodChannel',
+        'ivs': 'com.oneplusdream.flutter_realtime_media_ivs/methods',
+      };
+      for (final entry in channels.entries) {
+        final channel = MethodChannel(entry.value);
+        var probeCalls = 0;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+              if (call.method == 'probeProcessedVideoInput') probeCalls++;
+              return false;
+            });
+        try {
+          final sdk = _sdkWithProbeFactory(
+            FakeMediaSessionFactory(providerId: entry.key),
+          );
+          await sdk.preJoin(providerId: entry.key);
+          expect(probeCalls, 1, reason: entry.key);
+        } finally {
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(channel, null);
+        }
+      }
+    });
+
+    test(
+      'local preview falls back when Mac provider input is unavailable',
+      () async {
+        const channel = MethodChannel(
+          'com.oneplusdream.flutter_realtime_media_artc/methods',
+        );
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async => false);
+        addTearDown(
+          () => TestDefaultBinaryMessengerBinding
+              .instance
+              .defaultBinaryMessenger
+              .setMockMethodCallHandler(channel, null),
+        );
+        final factory = _FakePreviewMediaSessionFactory(providerId: 'artc');
+        final sdk = _sdkWithProbeFactory(factory);
+
+        final preview = await sdk.createLocalPreview(
+          providerId: 'artc',
+          role: MediaRole.participant,
+        );
+
+        expect(identical(preview, factory.preview), isTrue);
+        expect(factory.localPreviewCalls, 1);
+        expect(effectsPlatform.createCalls, 0);
+      },
+    );
+  });
+
   group('RealtimeMediaAdapters', () {
     test('keeps session factory and renderer under one provider id', () {
       final factory = FakeMediaSessionFactory();
@@ -1618,3 +1971,151 @@ Future<void> _skipWebAssets({
   bool includeProductChat = false,
   bool includeAllMediaProviders = false,
 }) async {}
+
+class _FakeProcessedMediaSession extends FakeMediaSession
+    implements ProcessedVideoSink {
+  _FakeProcessedMediaSession({bool supportsBackground = true})
+    : super(
+        providerId: 'fake-effects-provider',
+        role: MediaRole.participant,
+        capabilities: MediaCapabilities(
+          canPublishAudio: true,
+          canPublishVideo: true,
+          canBlurBackground: supportsBackground,
+          canSwitchCamera: true,
+          canSubscribeVideo: true,
+        ),
+      );
+
+  final List<ProcessedVideoSource> attachedSources = [];
+  int detachCalls = 0;
+  bool supportsSource = true;
+  Object? attachError;
+
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      supportsSource;
+
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
+    if (attachError != null) throw attachError!;
+    attachedSources.add(source);
+  }
+
+  @override
+  Future<void> detachProcessedVideoSource() async {
+    detachCalls++;
+  }
+}
+
+class _FakeEffectsPlatform extends FlutterRealtimeVideoEffectsPlatform {
+  int createCalls = 0;
+  bool supported = true;
+  Completer<void>? createGate;
+  final StreamController<VideoEffectsFailure> _failureController =
+      StreamController<VideoEffectsFailure>.broadcast();
+  final List<bool> enabled = [];
+  VideoEffectsSourceConfig? lastConfig;
+  final List<MediaBackgroundEffect> effects = [];
+  final List<String> disposedSources = [];
+
+  @override
+  Stream<VideoEffectsFailure> get failures => _failureController.stream;
+
+  void emitFailure(VideoEffectsFailure failure) =>
+      _failureController.add(failure);
+
+  Future<void> close() => _failureController.close();
+
+  @override
+  Future<bool> isSupported() async => supported;
+
+  @override
+  Future<ProcessedVideoSource> createSource(
+    VideoEffectsSourceConfig config,
+  ) async {
+    createCalls++;
+    await createGate?.future;
+    lastConfig = config;
+    return const ProcessedVideoSource(
+      id: 'effects-source-1',
+      platform: VideoEffectsPlatform.web,
+      kind: ProcessedVideoSourceKind.mediaStreamTrack,
+      width: 1280,
+      height: 720,
+      frameRate: 24,
+    );
+  }
+
+  @override
+  Future<void> setEffect(String sourceId, MediaBackgroundEffect effect) async {
+    effects.add(effect);
+  }
+
+  @override
+  Future<void> setEnabled(String sourceId, bool value) async {
+    enabled.add(value);
+  }
+
+  @override
+  Future<void> selectCamera(String sourceId, String? deviceId) async {}
+
+  @override
+  Future<List<VideoEffectsCameraDevice>> listCameras() async => const [];
+
+  @override
+  Future<void> disposeSource(String sourceId) async {
+    disposedSources.add(sourceId);
+  }
+}
+
+RealtimeSdk _sdkWithProbeFactory(FakeMediaSessionFactory factory) =>
+    RealtimeSdk.standard(
+      platformResolver: () => RealtimeRuntimePlatform.macos,
+      drivers: [
+        RealtimeProviderDriver(
+          platforms: const {RealtimeRuntimePlatform.macos},
+          plugin: RealtimeProviderPlugin(
+            id: factory.providerId,
+            metadata: const RealtimeProviderMetadata(displayName: 'Test'),
+            mediaFactory: factory,
+            renderer: const _FakeRenderer(),
+          ),
+        ),
+      ],
+    );
+
+class _FakePreviewMediaSessionFactory extends FakeMediaSessionFactory
+    implements MediaLocalPreviewFactory {
+  _FakePreviewMediaSessionFactory({required super.providerId});
+
+  final _FakeLocalPreviewSession preview = _FakeLocalPreviewSession();
+  int localPreviewCalls = 0;
+
+  @override
+  Future<MediaLocalPreviewSession> createLocalPreview({
+    required MediaRole role,
+  }) async {
+    localPreviewCalls++;
+    return preview;
+  }
+}
+
+class _FakeLocalPreviewSession implements MediaLocalPreviewSession {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+RealtimeRoom _effectsRoom(
+  _FakeEffectsPlatform platform,
+  _FakeProcessedMediaSession session,
+) => RealtimeRoom(
+  media: MediaRoomSession.direct(
+    roomCode: 'effects',
+    participantId: 'local',
+    session: session,
+  ),
+  renderer: const _FakeRenderer(),
+  disposeClients: () {},
+  videoEffectsBridge: VideoEffectsBridge(platform: platform),
+);

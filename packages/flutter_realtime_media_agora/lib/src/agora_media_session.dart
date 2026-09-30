@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'agora_join_info.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'agora_media_track.dart';
 
 const _agoraProviderId = AgoraJoinInfo.providerIdValue;
@@ -29,6 +30,22 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
   return MediaCapabilities(
     canPublishAudio: true,
     canPublishVideo: true,
+    canBlurBackground:
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.macOS),
+    canReplaceBackgroundImage:
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.macOS),
+    canEnumerateCameras:
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.macOS),
+    canSelectCamera:
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.macOS),
     canSwitchCamera: canSwitchCamera,
     canScreenShare: false,
     canSendData: true,
@@ -47,7 +64,9 @@ abstract class _AgoraMediaSession
         MediaSession,
         MediaDataMessenger,
         MediaDataPayloadSizer,
-        MediaStatsProvider {
+        MediaStatsProvider,
+        ProcessedVideoSink,
+        MediaDeviceController {
   _AgoraMediaSession(this.role)
     : _capabilities = _capabilitiesForRole(role),
       _snapshot = MediaSnapshot(
@@ -74,6 +93,81 @@ abstract class _AgoraMediaSession
   MediaSnapshot _snapshot;
   MediaSessionState _state = MediaSessionState.idle;
   agora.RtcEngine? _engine;
+  int? _customVideoTrackId;
+  final _processedSink = NativeProcessedVideoSink(providerId: 'agora');
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      role != MediaRole.viewer &&
+      capabilities.canBlurBackground &&
+      _processedSink.supports(source) &&
+      source.platform ==
+          (defaultTargetPlatform == TargetPlatform.android
+              ? VideoEffectsPlatform.android
+              : VideoEffectsPlatform.macos);
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
+    _ensurePublisherActive('processed video');
+    if (!supportsProcessedVideoSource(source)) {
+      throw const MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message: 'Processed video is unavailable.',
+      );
+    }
+    await _requireEngine().enableLocalVideo(false);
+    _customVideoTrackId ??= await _requireEngine().createCustomVideoTrack();
+    await _processedSink.attach(
+      source,
+      arguments: {
+        'engineHandle': await _requireEngine().getNativeHandle(),
+        'trackId': _customVideoTrackId,
+      },
+    );
+    await _updatePublishOptions();
+  }
+
+  @override
+  Future<void> detachProcessedVideoSource() => _processedSink.detach();
+
+  @override
+  Future<List<MediaDevice>> listMediaDevices({
+    Set<MediaDeviceKind>? kinds,
+  }) async {
+    _ensurePublisherActive('camera device selection');
+    if (!capabilities.canEnumerateCameras ||
+        (kinds != null && !kinds.contains(MediaDeviceKind.camera))) {
+      return const [];
+    }
+    return List.unmodifiable([
+      for (final camera in await VideoEffectsBridge().listCameras())
+        MediaDevice(
+          id: camera.id,
+          label: camera.label,
+          kind: MediaDeviceKind.camera,
+        ),
+    ]);
+  }
+
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) async {
+    _ensurePublisherActive('camera device selection');
+    if (device.kind != MediaDeviceKind.camera ||
+        !capabilities.canSelectCamera) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        providerId: providerId,
+        message: 'This media device cannot be selected.',
+      );
+    }
+    if (_processedSink.source == null) {
+      throw MediaError(
+        code: MediaErrorCode.invalidState,
+        providerId: providerId,
+        message: 'Prepare the SDK video source before selecting a camera.',
+      );
+    }
+    await _processedSink.selectCamera(device.id);
+  }
+
   agora.RtcEngineEventHandler? _eventHandler;
   AgoraJoinInfo? _joinInfo;
   Completer<void>? _joinCompleter;
@@ -234,7 +328,11 @@ abstract class _AgoraMediaSession
     autoSubscribeAudio: true,
     autoSubscribeVideo: true,
     publishMicrophoneTrack: _canPublish && !_localMuted,
-    publishCameraTrack: _canPublish && _localVideoEnabled,
+    publishCameraTrack:
+        _canPublish && _localVideoEnabled && _processedSink.source == null,
+    publishCustomVideoTrack:
+        _canPublish && _localVideoEnabled && _processedSink.source != null,
+    customVideoTrackId: _customVideoTrackId,
     publishScreenCaptureAudio: false,
     publishScreenCaptureVideo: false,
     enableAudioRecordingOrPlayout: true,
@@ -588,6 +686,7 @@ abstract class _AgoraMediaSession
       channelId: channel,
       uid: uid,
       local: local,
+      processedSource: local ? _processedSink.source : null,
     );
   }
 
@@ -613,7 +712,11 @@ abstract class _AgoraMediaSession
     _ensurePublisherActive('camera');
     final engine = _requireEngine();
     try {
-      await engine.enableLocalVideo(enabled);
+      if (_processedSink.source == null) {
+        await engine.enableLocalVideo(enabled);
+      } else {
+        await _processedSink.setEnabled(enabled);
+      }
       await engine.muteLocalVideoStream(!enabled);
       _localVideoEnabled = enabled;
       await _updatePublishOptions();
@@ -655,7 +758,13 @@ abstract class _AgoraMediaSession
     _ensurePublisherActive('camera switching');
     if (position == _cameraPosition) return;
     try {
-      await _requireEngine().switchCamera();
+      if (_processedSink.source != null) {
+        await _processedSink.selectCamera(
+          position == MediaCameraPosition.front ? 'front' : 'back',
+        );
+      } else {
+        await _requireEngine().switchCamera();
+      }
       _cameraPosition = position;
     } catch (error) {
       throw _mapError(error, 'Unable to switch the Agora camera.');
@@ -841,6 +950,15 @@ abstract class _AgoraMediaSession
       };
 
   Future<void> _tearDownEngine() async {
+    try {
+      await _processedSink.detach();
+    } catch (error) {
+      _reportFailure(
+        _mapError(error, 'Unable to detach processed video input.'),
+      );
+    }
+    final customTrackId = _customVideoTrackId;
+    _customVideoTrackId = null;
     final engine = _engine;
     final handler = _eventHandler;
     _engine = null;
@@ -852,9 +970,17 @@ abstract class _AgoraMediaSession
       engine.unregisterEventHandler(handler);
     }
     try {
-      await engine.release();
+      if (customTrackId != null) {
+        await engine.destroyCustomVideoTrack(customTrackId);
+      }
     } catch (_) {
-      // Resource release is best-effort after leave/join failures.
+      // Releasing the engine below also releases its custom tracks.
+    } finally {
+      try {
+        await engine.release();
+      } catch (_) {
+        // Resource release is best-effort after leave/join failures.
+      }
     }
   }
 

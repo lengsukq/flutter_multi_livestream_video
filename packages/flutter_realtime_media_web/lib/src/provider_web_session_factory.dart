@@ -4,11 +4,13 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:web/web.dart' as web;
 
 import 'provider_web_bridge.dart';
 import 'provider_web_profile.dart';
 import 'provider_web_track.dart';
+import 'provider_web_track_renderer.dart';
 
 class ProviderWebJoinInfo extends MediaJoinInfo {
   ProviderWebJoinInfo({
@@ -22,7 +24,11 @@ class ProviderWebJoinInfo extends MediaJoinInfo {
 }
 
 /// Browser implementation backed by the provider's official JavaScript SDK.
-class ProviderWebSessionFactory implements MediaSessionFactory {
+class ProviderWebSessionFactory
+    implements
+        MediaSessionFactory,
+        MediaBackgroundCapabilitiesProvider,
+        MediaLocalPreviewFactory {
   ProviderWebSessionFactory(this.providerId)
     : profile = ProviderWebProfile.forProvider(providerId);
 
@@ -32,6 +38,19 @@ class ProviderWebSessionFactory implements MediaSessionFactory {
 
   @override
   Set<MediaRole> get supportedRoles => profile.supportedRoles;
+
+  @override
+  MediaBackgroundCapabilities backgroundCapabilitiesFor(MediaRole role) {
+    if (role == MediaRole.viewer ||
+        (!profile.canBlurBackground && !profile.canReplaceBackgroundImage) ||
+        !_browserSupportsVideoEffects) {
+      return const MediaBackgroundCapabilities.none();
+    }
+    return MediaBackgroundCapabilities(
+      canBlur: profile.canBlurBackground,
+      canReplaceImage: profile.canReplaceBackgroundImage,
+    );
+  }
 
   @override
   ProviderWebJoinInfo parseJoinInfo(Map<String, dynamic> json) {
@@ -145,9 +164,203 @@ class ProviderWebSessionFactory implements MediaSessionFactory {
       ),
     };
   }
+
+  @override
+  Future<MediaLocalPreviewSession> createLocalPreview({
+    required MediaRole role,
+  }) async {
+    if (role == MediaRole.viewer) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message: '$providerId viewers do not publish local camera video.',
+        providerId: providerId,
+      );
+    }
+    final previewId =
+        'preview_${providerId}_${DateTime.now().microsecondsSinceEpoch}_'
+        '${_nextPreviewId++}';
+    final capabilities = _capabilitiesFor(profile, role);
+    await ProviderWebBridge.createLocalPreview(
+      providerId: providerId,
+      previewId: previewId,
+      settings: {
+        'role': role.wireName,
+        'cameraEnabled': true,
+        'microphoneEnabled': false,
+        'backgroundEffect': {
+          'type': MediaBackgroundEffectType.none.name,
+          'blurStrength': MediaBackgroundBlurStrength.medium.name,
+        },
+      },
+    );
+    return ProviderWebLocalPreviewSession(
+      providerId: providerId,
+      role: role,
+      previewId: previewId,
+      capabilities: capabilities,
+    );
+  }
 }
 
 int _nextSessionId = 0;
+int _nextPreviewId = 0;
+
+class ProviderWebLocalPreviewSession
+    implements MediaLocalPreviewSession, MediaBackgroundEffectsController {
+  ProviderWebLocalPreviewSession({
+    required this.providerId,
+    required this.role,
+    required this.previewId,
+    required this.capabilities,
+  }) : _settings = const MediaLocalPreviewSettings(
+         microphoneEnabled: false,
+         cameraEnabled: true,
+       ),
+       _cameraTrack = ProviderWebVideoTrack(
+         providerId: providerId,
+         sessionId: previewId,
+         id: 'preview:video:$previewId',
+         participantId: 'preview:$previewId',
+         isLocal: true,
+         isScreenShare: false,
+       );
+
+  @override
+  final String providerId;
+
+  @override
+  final MediaRole role;
+
+  final String previewId;
+
+  @override
+  final MediaCapabilities capabilities;
+
+  MediaLocalPreviewSettings _settings;
+  final ProviderWebVideoTrack _cameraTrack;
+  bool _disposed = false;
+
+  @override
+  MediaVideoTrack get cameraTrack => _cameraTrack;
+
+  @override
+  MediaTrackRenderer get renderer => const ProviderWebTrackRenderer();
+
+  @override
+  MediaLocalPreviewSettings get settings => _settings;
+
+  @override
+  MediaBackgroundCapabilities get backgroundCapabilities =>
+      MediaBackgroundCapabilities(
+        canBlur: capabilities.canBlurBackground,
+        canReplaceImage: capabilities.canReplaceBackgroundImage,
+      );
+
+  @override
+  MediaBackgroundEffect get backgroundEffect => _settings.backgroundEffect;
+
+  @override
+  Future<List<MediaDevice>> listMediaDevices({
+    Set<MediaDeviceKind>? kinds,
+  }) async {
+    _ensureNotDisposed();
+    final requested = kinds ?? MediaDeviceKind.values.toSet();
+    final values = await ProviderWebBridge.listDevices(providerId, previewId);
+    return values
+        .map(_previewMediaDeviceFromJson)
+        .where((device) => requested.contains(device.kind))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) async {
+    _ensureNotDisposed();
+    await ProviderWebBridge.selectDevice(providerId, previewId, {
+      'id': device.id,
+      'label': device.label,
+      'kind': device.kind.name,
+    });
+    _settings = _settings.copyWith(
+      microphone: device.kind == MediaDeviceKind.microphone
+          ? device
+          : _settings.microphone,
+      camera: device.kind == MediaDeviceKind.camera ? device : _settings.camera,
+      audioOutput: device.kind == MediaDeviceKind.audioOutput
+          ? device
+          : _settings.audioOutput,
+    );
+  }
+
+  @override
+  Future<void> setMicrophoneEnabled(bool enabled) async {
+    _ensureNotDisposed();
+    await ProviderWebBridge.command(providerId, previewId, 'setMuted', {
+      'muted': !enabled,
+    });
+    _settings = _settings.copyWith(microphoneEnabled: enabled);
+  }
+
+  @override
+  Future<void> setCameraEnabled(bool enabled) async {
+    _ensureNotDisposed();
+    await ProviderWebBridge.command(providerId, previewId, 'setVideoEnabled', {
+      'enabled': enabled,
+    });
+    _settings = _settings.copyWith(cameraEnabled: enabled);
+  }
+
+  @override
+  Future<void> setBackgroundEffect(MediaBackgroundEffect effect) async {
+    _ensureNotDisposed();
+    if (!backgroundCapabilities.supports(effect)) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message:
+            '$providerId does not support the requested SDK background '
+            'effect in local preview.',
+        providerId: providerId,
+      );
+    }
+    await ProviderWebBridge.command(
+      providerId,
+      previewId,
+      'setBackgroundEffect',
+      {'type': effect.type.name, 'blurStrength': effect.blurStrength?.name},
+    );
+    _settings = _settings.copyWith(backgroundEffect: effect);
+  }
+
+  @override
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    await ProviderWebBridge.dispose(providerId, previewId);
+  }
+
+  void _ensureNotDisposed() {
+    if (_disposed) {
+      throw MediaError(
+        code: MediaErrorCode.invalidState,
+        message: 'The local preview has already been disposed.',
+        providerId: providerId,
+      );
+    }
+  }
+}
+
+MediaDevice _previewMediaDeviceFromJson(Map<String, Object?> json) {
+  final kind = switch (json['kind']?.toString()) {
+    'microphone' || 'audioinput' => MediaDeviceKind.microphone,
+    'audioOutput' || 'audiooutput' => MediaDeviceKind.audioOutput,
+    _ => MediaDeviceKind.camera,
+  };
+  return MediaDevice(
+    id: json['id']?.toString() ?? '',
+    label: json['label']?.toString() ?? '',
+    kind: kind,
+    groupId: json['groupId']?.toString(),
+  );
+}
 
 MediaCapabilities _capabilitiesFor(ProviderWebProfile profile, MediaRole role) {
   final isViewer = role == MediaRole.viewer;
@@ -161,6 +374,12 @@ MediaCapabilities _capabilitiesFor(ProviderWebProfile profile, MediaRole role) {
   return MediaCapabilities(
     canPublishAudio: !isViewer,
     canPublishVideo: !isViewer,
+    canBlurBackground:
+        !isViewer && profile.canBlurBackground && _browserSupportsVideoEffects,
+    canReplaceBackgroundImage:
+        !isViewer &&
+        profile.canReplaceBackgroundImage &&
+        _browserSupportsVideoEffects,
     canSwitchCamera: !isViewer && profile.canSwitchCamera,
     canScreenShare: canScreenShare,
     canSendData: !isViewer && profile.canSendData,
@@ -185,6 +404,22 @@ bool get _browserSupportsDeviceEnumeration =>
 
 bool get _browserSupportsScreenShare =>
     _hasBrowserMediaDeviceMethod('getDisplayMedia');
+
+bool get _browserSupportsVideoEffects {
+  try {
+    if (!_hasBrowserMediaDeviceMethod('getUserMedia')) return false;
+    final global = web.window as JSObject;
+    final canvas = global.getProperty<JSAny?>('HTMLCanvasElement'.toJS);
+    if (canvas == null) return false;
+    final prototype = (canvas as JSObject).getProperty<JSAny?>(
+      'prototype'.toJS,
+    );
+    return prototype != null &&
+        (prototype as JSObject).hasProperty('captureStream'.toJS).toDart;
+  } catch (_) {
+    return false;
+  }
+}
 
 bool get _browserSupportsAudioOutputSelection {
   try {
@@ -213,7 +448,10 @@ bool _hasBrowserMediaDeviceMethod(String method) {
 }
 
 class ProviderWebParticipantSession extends ProviderWebSessionBase
-    implements InteractiveMediaSession {
+    implements
+        InteractiveMediaSession,
+        MediaBackgroundEffectsController,
+        ProcessedVideoSink {
   ProviderWebParticipantSession({
     required super.providerId,
     required super.role,
@@ -221,10 +459,25 @@ class ProviderWebParticipantSession extends ProviderWebSessionBase
     required super.joinPayload,
     required super.capabilities,
   });
+
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      supportsProcessedVideoSourceInternal(source);
+
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) =>
+      attachProcessedVideoSourceInternal(source);
+
+  @override
+  Future<void> detachProcessedVideoSource() =>
+      detachProcessedVideoSourceInternal();
 }
 
 class ProviderWebBroadcastHostSession extends ProviderWebSessionBase
-    implements BroadcastHostSession {
+    implements
+        BroadcastHostSession,
+        MediaBackgroundEffectsController,
+        ProcessedVideoSink {
   ProviderWebBroadcastHostSession({
     required super.providerId,
     required super.role,
@@ -232,6 +485,18 @@ class ProviderWebBroadcastHostSession extends ProviderWebSessionBase
     required super.joinPayload,
     required super.capabilities,
   });
+
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      supportsProcessedVideoSourceInternal(source);
+
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) =>
+      attachProcessedVideoSourceInternal(source);
+
+  @override
+  Future<void> detachProcessedVideoSource() =>
+      detachProcessedVideoSourceInternal();
 }
 
 class ProviderWebBroadcastViewerSession extends ProviderWebSessionBase
@@ -272,6 +537,8 @@ abstract class ProviderWebSessionBase
 
   MediaSnapshot _snapshot;
   MediaConnectionStats? _connectionStats;
+  MediaBackgroundEffect _backgroundEffect = const MediaBackgroundEffect.none();
+  ProcessedVideoSource? _processedVideoSource;
   bool _disposed = false;
   Future<void>? _joinFuture;
   Future<void>? _leaveFuture;
@@ -307,6 +574,85 @@ abstract class ProviderWebSessionBase
 
   @override
   MediaConnectionStats? get connectionStats => _connectionStats;
+
+  MediaBackgroundCapabilities get backgroundCapabilities =>
+      MediaBackgroundCapabilities(
+        canBlur: capabilities.canBlurBackground,
+        canReplaceImage: capabilities.canReplaceBackgroundImage,
+      );
+
+  MediaBackgroundEffect get backgroundEffect => _backgroundEffect;
+
+  Future<void> setBackgroundEffect(MediaBackgroundEffect effect) async {
+    _ensureActive();
+    if (!capabilities.canBlurBackground &&
+        effect.type == MediaBackgroundEffectType.none) {
+      _backgroundEffect = effect;
+      return;
+    }
+    if (!backgroundCapabilities.supports(effect)) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message:
+            '$providerId does not support the requested SDK video effect '
+            'for this role or browser.',
+        providerId: providerId,
+      );
+    }
+    if (_backgroundEffect == effect) return;
+    final source = _processedVideoSource;
+    if (source == null) {
+      if (effect.type == MediaBackgroundEffectType.none) {
+        _backgroundEffect = effect;
+        return;
+      }
+      throw MediaError(
+        code: MediaErrorCode.invalidState,
+        message:
+            'Attach an SDK processed video source before applying '
+            'background effects.',
+        providerId: providerId,
+      );
+    }
+    await _command('setProcessedVideoEffect', {
+      'sourceId': source.id,
+      ...effect.toJson(),
+    });
+    _backgroundEffect = effect;
+  }
+
+  bool supportsProcessedVideoSourceInternal(ProcessedVideoSource source) =>
+      const {'agora', 'trtc', 'artc', 'chime', 'ivs'}.contains(providerId) &&
+      role != MediaRole.viewer &&
+      source.platform == VideoEffectsPlatform.web &&
+      source.kind == ProcessedVideoSourceKind.mediaStreamTrack;
+
+  Future<void> attachProcessedVideoSourceInternal(
+    ProcessedVideoSource source,
+  ) async {
+    _ensureActive();
+    if (!supportsProcessedVideoSourceInternal(source)) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message:
+            '$providerId cannot publish the supplied SDK processed '
+            'video source on Web.',
+        providerId: providerId,
+      );
+    }
+    await _command('attachProcessedVideoSource', {'sourceId': source.id});
+    _processedVideoSource = source;
+  }
+
+  Future<void> detachProcessedVideoSourceInternal() async {
+    if (_processedVideoSource == null) return;
+    if (state == MediaSessionState.connected ||
+        state == MediaSessionState.reconnecting) {
+      await _command('detachProcessedVideoSource', const {});
+    }
+    _processedVideoSource = null;
+    _backgroundEffect = const MediaBackgroundEffect.none();
+  }
 
   @override
   Stream<MediaConnectionStats> get stats => _statsController.stream;

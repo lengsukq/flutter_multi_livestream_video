@@ -10,6 +10,8 @@ class MediaCapabilities {
   const MediaCapabilities({
     this.canPublishAudio = false,
     this.canPublishVideo = false,
+    this.canBlurBackground = false,
+    this.canReplaceBackgroundImage = false,
     this.canSwitchCamera = false,
     this.canScreenShare = false,
     this.canSendData = false,
@@ -73,6 +75,8 @@ class MediaCapabilities {
 
   final bool canPublishAudio;
   final bool canPublishVideo;
+  final bool canBlurBackground;
+  final bool canReplaceBackgroundImage;
   final bool canSwitchCamera;
   final bool canScreenShare;
   final bool canSendData;
@@ -114,6 +118,8 @@ class MediaCapabilities {
   MediaCapabilities copyWith({
     bool? canPublishAudio,
     bool? canPublishVideo,
+    bool? canBlurBackground,
+    bool? canReplaceBackgroundImage,
     bool? canSwitchCamera,
     bool? canScreenShare,
     bool? canSendData,
@@ -138,6 +144,9 @@ class MediaCapabilities {
   }) => MediaCapabilities(
     canPublishAudio: canPublishAudio ?? this.canPublishAudio,
     canPublishVideo: canPublishVideo ?? this.canPublishVideo,
+    canBlurBackground: canBlurBackground ?? this.canBlurBackground,
+    canReplaceBackgroundImage:
+        canReplaceBackgroundImage ?? this.canReplaceBackgroundImage,
     canSwitchCamera: canSwitchCamera ?? this.canSwitchCamera,
     canScreenShare: canScreenShare ?? this.canScreenShare,
     canSendData: canSendData ?? this.canSendData,
@@ -166,6 +175,7 @@ class MediaCapabilities {
   @override
   String toString() =>
       'MediaCapabilities(audio: $canPublishAudio, video: $canPublishVideo, '
+      'backgroundBlur: $canBlurBackground, '
       'switchCamera: $canSwitchCamera, screenShare: $canScreenShare, '
       'dataSend: $canSendData, dataReceive: $canReceiveData, '
       'subscribeVideo: $canSubscribeVideo, '

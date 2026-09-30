@@ -85,6 +85,14 @@ node_modules/
 /example/web/provider_bridge/dist/
 /packages/flutter_realtime_sdk/tool/provider_bridge/dist/
 
+# flutter_realtime_video_effects commits its generated Web bundle under
+# assets/web/ on purpose (same convention as packages/flutter_realtime_sdk).
+# What stays out of git is the plugin's `flutter create` template example
+# (the demo app lives in /example) and package-level .metadata, which the
+# Flutter tooling regenerates on demand.
+/packages/flutter_realtime_video_effects/example/
+/packages/*/.metadata
+
 # Local demo-server credentials (keep .env.example reviewable if added later).
 /demo-server/.env
 /demo-server/.env.*

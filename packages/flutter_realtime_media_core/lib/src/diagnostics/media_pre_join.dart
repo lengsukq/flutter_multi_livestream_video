@@ -1,3 +1,4 @@
+import '../model/media_background_effect.dart';
 import '../model/media_role.dart';
 
 enum MediaPreJoinStatus { passed, failed, unsupported, unknown }
@@ -91,11 +92,13 @@ class MediaPreJoinResult {
     required this.role,
     required this.checks,
     this.providerId,
+    this.backgroundCapabilities = const MediaBackgroundCapabilities.none(),
   });
 
   final MediaRole role;
   final String? providerId;
   final List<MediaPreJoinCheck> checks;
+  final MediaBackgroundCapabilities backgroundCapabilities;
 
   bool get isReady => blockingIssues.isEmpty;
 

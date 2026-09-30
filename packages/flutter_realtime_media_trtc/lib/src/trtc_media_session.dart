@@ -6,13 +6,33 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'trtc_engine.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'trtc_join_info.dart';
 import 'trtc_media_track.dart';
 
 MediaCapabilities _publisherCapabilities(MediaRole role) => MediaCapabilities(
   canPublishAudio: true,
   canPublishVideo: true,
-  canSwitchCamera: true,
+  canBlurBackground:
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.macOS),
+  canReplaceBackgroundImage:
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.macOS),
+  canEnumerateCameras:
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.macOS),
+  canSelectCamera:
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.macOS),
+  canSwitchCamera:
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS),
   canScreenShare:
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -66,7 +86,12 @@ class TrtcViewerSession extends _TrtcSessionBase
 }
 
 abstract class _TrtcSessionBase
-    implements TrtcMediaSession, MediaStatsProvider, MediaDataPayloadSizer {
+    implements
+        TrtcMediaSession,
+        MediaStatsProvider,
+        MediaDataPayloadSizer,
+        ProcessedVideoSink,
+        MediaDeviceController {
   _TrtcSessionBase(this.role, this._capabilities, this._engineFactory)
     : _snapshot = MediaSnapshot(role: role, capabilities: _capabilities);
 
@@ -80,6 +105,71 @@ abstract class _TrtcSessionBase
   final TrtcEngineFactory _engineFactory;
   MediaSnapshot _snapshot;
   TrtcEngine? _engine;
+  final _processedSink = NativeProcessedVideoSink(providerId: 'trtc');
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      role != MediaRole.viewer &&
+      capabilities.canBlurBackground &&
+      _processedSink.supports(source) &&
+      source.platform ==
+          (defaultTargetPlatform == TargetPlatform.android
+              ? VideoEffectsPlatform.android
+              : VideoEffectsPlatform.macos);
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
+    _requireConnected();
+    if (!supportsProcessedVideoSource(source))
+      throw const MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message: 'Processed video is unavailable.',
+      );
+    _engine!.stopLocalPreview();
+    await _processedSink.attach(source);
+  }
+
+  @override
+  Future<void> detachProcessedVideoSource() => _processedSink.detach();
+
+  @override
+  Future<List<MediaDevice>> listMediaDevices({
+    Set<MediaDeviceKind>? kinds,
+  }) async {
+    _requireConnected();
+    if (!capabilities.canEnumerateCameras ||
+        (kinds != null && !kinds.contains(MediaDeviceKind.camera))) {
+      return const [];
+    }
+    return List.unmodifiable([
+      for (final camera in await VideoEffectsBridge().listCameras())
+        MediaDevice(
+          id: camera.id,
+          label: camera.label,
+          kind: MediaDeviceKind.camera,
+        ),
+    ]);
+  }
+
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) async {
+    _requireConnected();
+    if (device.kind != MediaDeviceKind.camera ||
+        !capabilities.canSelectCamera) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        providerId: providerId,
+        message: 'This media device cannot be selected.',
+      );
+    }
+    if (_processedSink.source == null) {
+      throw MediaError(
+        code: MediaErrorCode.invalidState,
+        providerId: providerId,
+        message: 'Prepare the SDK video source before selecting a camera.',
+      );
+    }
+    await _processedSink.selectCamera(device.id);
+  }
+
   TrtcJoinInfo? _joinInfo;
   MediaCredentialRefreshCallback? _refreshCallback;
   Future<void>? _joinFuture;
@@ -324,10 +414,12 @@ abstract class _TrtcSessionBase
     _setState(MediaSessionState.reconnecting);
     try {
       final refreshed = await _refreshCredentials(current);
+      final source = _processedSink.source;
       await _exitCloudRoom();
       _joinInfo = refreshed;
       _streamGeneration++;
       await _enterRoom(refreshed);
+      if (source != null) await _processedSink.attach(source);
       if (role.canPublishMedia) {
         _engine!.startLocalAudio();
         _engine!.muteLocalAudio(_snapshot.localMuted);
@@ -405,6 +497,13 @@ abstract class _TrtcSessionBase
   }
 
   Future<void> _exitCloudRoom() async {
+    try {
+      await _processedSink.detach();
+    } catch (error) {
+      _reportFailure(
+        _mapError(error, 'Unable to detach processed video input.'),
+      );
+    }
     final engine = _engine;
     if (engine == null || !_enterRequested) return;
     try {
@@ -419,10 +518,13 @@ abstract class _TrtcSessionBase
 
   Future<void> _releaseCloud() async {
     _refreshTimer?.cancel();
-    await _exitCloudRoom();
-    final engine = _engine;
-    _engine = null;
-    if (engine != null) await engine.dispose();
+    try {
+      await _exitCloudRoom();
+    } finally {
+      final engine = _engine;
+      _engine = null;
+      if (engine != null) await engine.dispose();
+    }
   }
 
   void _remoteUserEntered(String userId) {
@@ -802,6 +904,7 @@ abstract class _TrtcInteractiveSession extends _TrtcSessionBase
     _requireConnected();
     if (_snapshot.localVideoEnabled == enabled) return;
     try {
+      await _processedSink.setEnabled(enabled);
       _engine!.muteLocalVideo(!enabled);
       if (!enabled) _engine!.stopLocalPreview();
       final info = _joinInfo!;
@@ -862,6 +965,12 @@ abstract class _TrtcInteractiveSession extends _TrtcSessionBase
   Future<void> switchCamera(MediaCameraPosition position) async {
     _requireConnected();
     try {
+      if (_processedSink.source != null) {
+        await _processedSink.selectCamera(
+          position == MediaCameraPosition.front ? 'front' : 'back',
+        );
+        return;
+      }
       final result = _engine!.switchCamera(
         position == MediaCameraPosition.front,
       );

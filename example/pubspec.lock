@@ -367,6 +367,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_video_effects:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_video_effects"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter

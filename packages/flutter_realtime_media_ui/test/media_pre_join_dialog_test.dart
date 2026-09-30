@@ -113,6 +113,7 @@ void main() {
                   context,
                   runCheck: _readyResult,
                   openPreview: (_, _) async => preview,
+                  permissionRequester: const _TestPermissionRequester(),
                   displayName: 'Morgan',
                 ),
                 child: const Text('Open preparation'),
@@ -149,6 +150,7 @@ void main() {
                   context,
                   runCheck: _readyResult,
                   openPreview: (_, _) async => preview,
+                  permissionRequester: const _TestPermissionRequester(),
                 ),
                 child: const Text('Open preparation'),
               ),
@@ -165,6 +167,46 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     expect(preview.disposeCalls, 1);
+  });
+
+  testWidgets('pre-join blur selection is returned and applied to preview', (
+    tester,
+  ) async {
+    final preview = _FakeLocalPreview();
+    MediaLocalPreviewSettings? chosen;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () async {
+                  chosen = await MediaPreJoinPage.show(
+                    context,
+                    runCheck: _blurReadyResult,
+                    openPreview: (_, _) async => preview,
+                    permissionRequester: const _TestPermissionRequester(),
+                  );
+                },
+                child: const Text('Open preparation'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open preparation'));
+    await tester.pumpAndSettle();
+    expect(find.text('Background blur'), findsOneWidget);
+
+    await tester.tap(find.text('Background blur'));
+    await tester.pumpAndSettle();
+    expect(preview.backgroundCalls, [const MediaBackgroundEffect.blur()]);
+
+    await tester.tap(find.text('Join meeting'));
+    await tester.pumpAndSettle();
+    expect(chosen?.backgroundEffect, const MediaBackgroundEffect.blur());
   });
 
   testWidgets('pre-join page preserves selected devices and media state', (
@@ -186,6 +228,7 @@ void main() {
                     context,
                     runCheck: _readyResult,
                     openPreview: (_, _) async => preview,
+                    permissionRequester: const _TestPermissionRequester(),
                   );
                 },
                 child: const Text('Open preparation'),
@@ -232,6 +275,7 @@ void main() {
                       context,
                       runCheck: _readyResult,
                       openPreview: (_, _) async => null,
+                      permissionRequester: const _TestPermissionRequester(),
                     );
                   },
                   child: const Text('Open preparation'),
@@ -269,8 +313,24 @@ Future<MediaPreJoinResult> _readyResult() async => const MediaPreJoinResult(
   ],
 );
 
-class _FakeLocalPreview implements MediaLocalPreviewSession {
+Future<MediaPreJoinResult> _blurReadyResult() async => const MediaPreJoinResult(
+  role: MediaRole.participant,
+  providerId: 'fake',
+  backgroundCapabilities: MediaBackgroundCapabilities(canBlur: true),
+  checks: [
+    MediaPreJoinCheck(
+      type: MediaPreJoinCheckType.backend,
+      status: MediaPreJoinStatus.passed,
+      severity: MediaPreJoinSeverity.blocking,
+      message: 'Backend reachable.',
+    ),
+  ],
+);
+
+class _FakeLocalPreview
+    implements MediaLocalPreviewSession, MediaBackgroundEffectsController {
   int disposeCalls = 0;
+  final List<MediaBackgroundEffect> backgroundCalls = [];
   MediaLocalPreviewSettings _settings = const MediaLocalPreviewSettings();
   final _track = const _TestVideoTrack();
 
@@ -282,6 +342,7 @@ class _FakeLocalPreview implements MediaLocalPreviewSession {
   MediaCapabilities get capabilities => const MediaCapabilities(
     canPublishAudio: true,
     canPublishVideo: true,
+    canBlurBackground: true,
     canEnumerateAudioDevices: true,
     canEnumerateMicrophones: true,
     canEnumerateCameras: true,
@@ -295,6 +356,19 @@ class _FakeLocalPreview implements MediaLocalPreviewSession {
   MediaTrackRenderer get renderer => const _TestTrackRenderer();
   @override
   MediaLocalPreviewSettings get settings => _settings;
+
+  @override
+  MediaBackgroundCapabilities get backgroundCapabilities =>
+      const MediaBackgroundCapabilities(canBlur: true);
+
+  @override
+  MediaBackgroundEffect get backgroundEffect => _settings.backgroundEffect;
+
+  @override
+  Future<void> setBackgroundEffect(MediaBackgroundEffect effect) async {
+    backgroundCalls.add(effect);
+    _settings = _settings.copyWith(backgroundEffect: effect);
+  }
 
   @override
   Future<List<MediaDevice>> listMediaDevices({
@@ -324,9 +398,7 @@ class _FakeLocalPreview implements MediaLocalPreviewSession {
 
   @override
   Future<void> selectMediaDevice(MediaDevice device) async {
-    _settings = MediaLocalPreviewSettings(
-      microphoneEnabled: _settings.microphoneEnabled,
-      cameraEnabled: _settings.cameraEnabled,
+    _settings = _settings.copyWith(
       microphone: device.kind == MediaDeviceKind.microphone
           ? device
           : _settings.microphone,
@@ -339,24 +411,12 @@ class _FakeLocalPreview implements MediaLocalPreviewSession {
 
   @override
   Future<void> setMicrophoneEnabled(bool enabled) async {
-    _settings = MediaLocalPreviewSettings(
-      microphoneEnabled: enabled,
-      cameraEnabled: _settings.cameraEnabled,
-      microphone: _settings.microphone,
-      camera: _settings.camera,
-      audioOutput: _settings.audioOutput,
-    );
+    _settings = _settings.copyWith(microphoneEnabled: enabled);
   }
 
   @override
   Future<void> setCameraEnabled(bool enabled) async {
-    _settings = MediaLocalPreviewSettings(
-      microphoneEnabled: _settings.microphoneEnabled,
-      cameraEnabled: enabled,
-      microphone: _settings.microphone,
-      camera: _settings.camera,
-      audioOutput: _settings.audioOutput,
-    );
+    _settings = _settings.copyWith(cameraEnabled: enabled);
   }
 
   @override
@@ -388,4 +448,22 @@ class _TestTrackRenderer extends MediaTrackRenderer {
   @override
   Widget buildView(BuildContext context, MediaVideoTrack track) =>
       const ColoredBox(color: Colors.blueGrey);
+}
+
+class _TestPermissionRequester implements MediaPermissionRequester {
+  const _TestPermissionRequester();
+
+  @override
+  bool get canOpenAppSettings => false;
+
+  @override
+  Future<bool> openAppSettings() async => false;
+
+  @override
+  Future<MediaPermissionState> request(MediaPermissionKind kind) async =>
+      MediaPermissionState.granted;
+
+  @override
+  Future<MediaPermissionState> status(MediaPermissionKind kind) async =>
+      MediaPermissionState.granted;
 }

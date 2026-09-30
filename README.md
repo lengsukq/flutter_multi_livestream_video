@@ -380,6 +380,50 @@ backend-selected provider flow. The detailed runtime capability matrix is
 available in [English](SDK_CAPABILITY_MATRIX.md) and
 [简体中文](SDK_CAPABILITY_MATRIX.zh-CN.md).
 
+### Virtual background V1
+
+Virtual background is owned by a standalone
+`flutter_realtime_video_effects` package, not by a media provider. Dart sends
+configuration and a `sourceId`; high-frequency frames stay inside the
+platform bridge.
+
+```text
+App / Demo
+    ↓
+Realtime SDK
+    ↓
+flutter_realtime_video_effects
+    ├── Android: CameraX + MediaPipe -> native RGBA Frame Hub
+    ├── macOS: AVFoundation + Vision/CoreImage -> CVPixelBuffer Frame Hub
+    └── Web: getUserMedia + MediaPipe/Canvas -> MediaStreamTrack
+    ↓
+ProcessedVideoSource(sourceId)
+    ↓
+Provider ProcessedVideoSink
+```
+
+| Platform bridge | V1 status | Output |
+| --- | --- | --- |
+| Android | Implemented | Native Frame Hub, direct RGBA buffer + Flutter Texture preview |
+| macOS | Implemented | Native Frame Hub, `CVPixelBuffer` + Flutter Texture preview |
+| Web | Implemented | Processed `MediaStreamTrack` + HTML preview |
+| iOS | Planned | Same `ProcessedVideoSource` contract |
+| Windows | Planned | Same `ProcessedVideoSource` contract |
+
+The same processed source contract is reused by every provider adapter. The
+Demo still calls only `Realtime.createLocalPreview(...)` and
+`RealtimeRoomView`; it does not branch on platform or provider. Pre-Join
+shows **None / Background blur** and previews the processed source without
+joining a provider room.
+
+Provider publishing is tracked separately from platform processing. Agora Web
+already implements `ProcessedVideoSink` and publishes the SDK track with
+`createCustomVideoTrack`. Android/macOS bridges and native frame hubs are
+complete, while native provider external-source sinks remain unsupported until
+they can subscribe to the native hub directly. Unsupported sinks fail closed
+instead of routing frames through Dart or publishing an unprocessed camera
+frame.
+
 ## Backend-selected provider flow
 
 The app sends room/user intent only. The backend returns the selected provider
@@ -812,6 +856,44 @@ Android/iOS 开放。
 | Agora 声网 | 支持 | 支持 Host/Viewer | Adapter 已实现 |
 | 腾讯云 TRTC | 支持 | 支持 Host/Viewer | 可选 Adapter 已实现 |
 | 阿里云 ARTC | 支持 | 支持 Host/Viewer | Android/iOS/Web 已实现；macOS 需官方 framework |
+
+### 虚拟背景 V1
+
+虚拟背景现在由独立的 `flutter_realtime_video_effects` 包负责，而不是由
+Agora/TRTC/ARTC 等供应商实现。Dart 只传配置和 `sourceId`，30fps 视频帧始终
+留在各平台 Bridge 内部。
+
+```text
+App / Demo
+    ↓
+Realtime SDK
+    ↓
+flutter_realtime_video_effects
+    ├── Android: CameraX + MediaPipe -> Native RGBA Frame Hub
+    ├── macOS: AVFoundation + Vision/CoreImage -> CVPixelBuffer Frame Hub
+    └── Web: getUserMedia + MediaPipe/Canvas -> MediaStreamTrack
+    ↓
+ProcessedVideoSource(sourceId)
+    ↓
+Provider ProcessedVideoSink
+```
+
+| 平台 Bridge | V1 状态 | 输出 |
+| --- | --- | --- |
+| Android | 已实现 | Native Frame Hub：Direct RGBA Buffer + Flutter Texture 预览 |
+| macOS | 已实现 | Native Frame Hub：`CVPixelBuffer` + Flutter Texture 预览 |
+| Web | 已实现 | 处理后的 `MediaStreamTrack` + HTML 预览 |
+| iOS | 后续 | 复用相同 `ProcessedVideoSource` contract |
+| Windows | 后续 | 复用相同 `ProcessedVideoSource` contract |
+
+Demo 不需要平台或 Provider 分支，仍然只调用
+`Realtime.createLocalPreview(...)` 和 `RealtimeRoomView`。加入前检测页会自动
+显示 **无 / 背景虚化**，使用同一 Platform Bridge 实时预览。
+
+当前 Agora Web 已完整实现 `ProcessedVideoSink`，只发布 SDK 输出的 Custom Video
+Track，不会再次打开摄像头。Android/macOS 的采集、分割、合成、预览和 Native
+Frame Hub 已完成；Native Provider 的 external/custom video source Sink 尚未完成时
+会明确 fail closed，不会把帧绕回 Dart 或发送未处理原始画面。
 
 ## 音视频与直播能力
 

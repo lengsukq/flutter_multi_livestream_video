@@ -1,5 +1,7 @@
 import '../model/media_capabilities.dart';
+import '../model/media_background_effect.dart';
 import '../model/media_device.dart';
+import '../model/media_error.dart';
 import '../model/media_role.dart';
 import '../model/media_track.dart';
 import 'media_device_controller.dart';
@@ -16,6 +18,7 @@ class MediaLocalPreviewSettings {
     this.microphone,
     this.camera,
     this.audioOutput,
+    this.backgroundEffect = const MediaBackgroundEffect.none(),
   });
 
   final bool microphoneEnabled;
@@ -23,6 +26,23 @@ class MediaLocalPreviewSettings {
   final MediaDevice? microphone;
   final MediaDevice? camera;
   final MediaDevice? audioOutput;
+  final MediaBackgroundEffect backgroundEffect;
+
+  MediaLocalPreviewSettings copyWith({
+    bool? microphoneEnabled,
+    bool? cameraEnabled,
+    MediaDevice? microphone,
+    MediaDevice? camera,
+    MediaDevice? audioOutput,
+    MediaBackgroundEffect? backgroundEffect,
+  }) => MediaLocalPreviewSettings(
+    microphoneEnabled: microphoneEnabled ?? this.microphoneEnabled,
+    cameraEnabled: cameraEnabled ?? this.cameraEnabled,
+    microphone: microphone ?? this.microphone,
+    camera: camera ?? this.camera,
+    audioOutput: audioOutput ?? this.audioOutput,
+    backgroundEffect: backgroundEffect ?? this.backgroundEffect,
+  );
 }
 
 /// Optional provider surface for opening a local preview before room join.
@@ -57,4 +77,9 @@ abstract interface class MediaLocalPreviewFactory {
   Future<MediaLocalPreviewSession> createLocalPreview({
     required MediaRole role,
   });
+}
+
+/// Optional asynchronous failures emitted after a preview has started.
+abstract interface class MediaLocalPreviewFailureEvents {
+  Stream<MediaError> get failures;
 }

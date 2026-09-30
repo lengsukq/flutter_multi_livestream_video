@@ -1,0 +1,1 @@
+Agora C++ interface headers copied from the locally installed agora_rtc_engine 6.6.4 distribution, September 2026. Original copyright notices remain in each header. No binaries or network downloads are included. These headers must stay aligned with the configured Agora SDK version.

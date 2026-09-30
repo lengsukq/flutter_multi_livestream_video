@@ -11,6 +11,21 @@
     ERROR: 'stageError',
   };
 
+  let nextPreviewSource = 0;
+  async function createSdkProcessedVideo({effect = {type: 'none'}, deviceId = null} = {}) {
+    const bridge = global.RealtimeVideoEffectsBridge;
+    if (!bridge) throw new Error('The SDK video effects runtime is unavailable.');
+    const id = `provider-preview-${Date.now()}-${nextPreviewSource++}`;
+    await bridge.createSource(id, {effect, cameraDeviceId: deviceId});
+    return {
+      get track() { return bridge.getTrack(id); },
+      setEffect: (next) => bridge.setEffect(id, next),
+      setCameraDevice: (next) => bridge.selectCamera(id, next),
+      setEnabled: (enabled) => bridge.setEnabled(id, enabled),
+      stop: () => bridge.disposeSource(id),
+    };
+  }
+
   function parsePayload(value) {
     return typeof value === 'string' ? JSON.parse(value) : value;
   }
@@ -165,6 +180,9 @@
     if (!session.joined) return;
     stopStats(session);
     await session.driver.leave();
+    session.processedTrack?.stop?.();
+    session.processedTrack = null;
+    session.processedSourceId = null;
     session.joined = false;
     session.tracks.clear();
     session.participants.clear();
@@ -201,11 +219,62 @@
     session.timers.clear();
   }
 
+  function effectsTrack(sourceId) {
+    const track = global.RealtimeVideoEffectsBridge?.getTrack(sourceId);
+    if (!track) throw new Error(`Unknown processed video source: ${sourceId}`);
+    return track;
+  }
+
   async function command(session, name, args) {
     if (!session.joined && name !== 'listDevices') {
       throw new Error(`Cannot run ${name} while the session is not connected.`);
     }
-    const result = await session.driver.command(name, args || {});
+    args ||= {};
+    if (session.role === 'viewer' && ['attachProcessedVideoSource', 'setProcessedVideoEffect'].includes(name)) {
+      throw new Error('Viewers cannot process or publish camera video.');
+    }
+    if (name === 'attachProcessedVideoSource' && session.providerId !== 'agora') {
+      const sourceId = String(args.sourceId || '');
+      if (session.processedSourceId === sourceId) return '';
+      if (!session.driver.attachProcessedTrack) throw new Error('Provider has no processed video input.');
+      const sourceTrack = effectsTrack(sourceId);
+      const track = sourceTrack.clone?.() || sourceTrack;
+      try { await session.driver.attachProcessedTrack(track); }
+      catch (error) { if (track !== sourceTrack) track.stop?.(); throw error; }
+      session.processedTrack?.stop?.();
+      session.processedSourceId = sourceId;
+      session.processedTrack = track;
+      publishSnapshot(session);
+      return '';
+    }
+    if (name === 'detachProcessedVideoSource' && session.providerId !== 'agora') {
+      await session.driver.command('setVideoEnabled', {enabled: false});
+      await session.driver.detachProcessedTrack?.();
+      session.processedTrack?.stop?.();
+      session.processedTrack = null;
+      session.processedSourceId = null;
+      publishSnapshot(session);
+      return '';
+    }
+    const sourceId = session.processedSourceId;
+    if (sourceId && name === 'setProcessedVideoEffect') {
+      await global.RealtimeVideoEffectsBridge.setEffect(sourceId, JSON.stringify(args));
+      return '';
+    }
+    if (sourceId && name === 'selectDevice' && (args.device || args).kind === 'camera') {
+      await global.RealtimeVideoEffectsBridge.selectCamera(sourceId, (args.device || args).id);
+      return '';
+    }
+    if (sourceId && name === 'switchCamera') {
+      const cameras = (await listDevices(session)).filter((d) => d.kind === 'camera');
+      const next = cameras[(cameras.findIndex((d) => d.id === session.cameraId) + 1) % cameras.length];
+      if (next) { await global.RealtimeVideoEffectsBridge.selectCamera(sourceId, next.id); session.cameraId = next.id; }
+      return '';
+    }
+    if (sourceId && name === 'setVideoEnabled') {
+      await global.RealtimeVideoEffectsBridge.setEnabled(sourceId, Boolean(args.enabled));
+    }
+    const result = await session.driver.command(name, args);
     publishSnapshot(session);
     return result === undefined ? '' : JSON.stringify(result);
   }
@@ -247,6 +316,90 @@
   }
 
   const bridge = {
+    async createLocalPreview(providerId, previewId, serializedArgs) {
+      const args = parsePayload(serializedArgs || '{}') || {};
+      if (sessions.has(previewId)) {
+        throw new Error(`Duplicate local preview session ${previewId}.`);
+      }
+      const pipeline = await createSdkProcessedVideo({
+        effect: args.backgroundEffect || {
+          type: 'none',
+          blurStrength: 'medium',
+        },
+        deviceId: args.cameraId || null,
+      });
+      const preview = {
+        id: previewId,
+        providerId,
+        payload: {},
+        role: String(args.role || 'participant'),
+        localParticipantId: `preview:${previewId}`,
+        localMuted: !Boolean(args.microphoneEnabled),
+        localVideoEnabled: args.cameraEnabled !== false,
+        joined: true,
+        participants: new Map(),
+        tracks: new Map(),
+        attachments: new Map(),
+        timers: new Set(),
+        screenTrack: null,
+      };
+      const trackId = `preview:video:${previewId}`;
+      pipeline.setEnabled(preview.localVideoEnabled);
+      addParticipant(
+        preview,
+        preview.localParticipantId,
+        'Local preview',
+        true,
+      );
+      addVideoTrack(preview, {
+        id: trackId,
+        participantId: preview.localParticipantId,
+        isLocal: true,
+        native: { mediaStreamTrack: pipeline.track },
+      });
+      preview.driver = {
+        async command(name, commandArgs) {
+          if (name === 'setMuted') {
+            preview.localMuted = Boolean(commandArgs.muted);
+            return;
+          }
+          if (name === 'setVideoEnabled') {
+            preview.localVideoEnabled = Boolean(commandArgs.enabled);
+            pipeline.setEnabled(preview.localVideoEnabled);
+            return;
+          }
+          if (name === 'setBackgroundEffect') {
+            await pipeline.setEffect({
+              type: String(commandArgs.type || 'none'),
+              blurStrength: String(commandArgs.blurStrength || 'medium'),
+              imageBytes: commandArgs.imageBytes || null,
+            });
+            return;
+          }
+          if (name === 'selectDevice') {
+            const selected = commandArgs.device || commandArgs;
+            if (selected.kind === 'camera') {
+              await pipeline.setCameraDevice(selected.id);
+            }
+            return;
+          }
+          if (name === 'listDevices') return listDevices(preview);
+          throw new Error(`Local preview does not support ${name}.`);
+        },
+        async attachVideo(track, container) {
+          const mediaTrack = track.native?.mediaStreamTrack;
+          if (mediaTrack) attachStreamTrack(mediaTrack, container);
+        },
+        detachVideo(_track, container) {
+          container.replaceChildren();
+        },
+        async leave() {
+          pipeline.stop();
+        },
+      };
+      sessions.set(previewId, preview);
+    },
+
     async create(providerId, sessionId, serializedPayload) {
       const payload = parsePayload(serializedPayload);
       const session = createSession(providerId, sessionId, payload);
@@ -306,8 +459,77 @@
     const info = providerBlock(session, 'agora');
     const live = session.role !== 'participant';
     const client = AgoraRTC.createClient({ mode: live ? 'live' : 'rtc', codec: 'vp8' });
-    const localTracks = { audio: null, video: null, screen: null };
+    const localTracks = {
+      audio: null,
+      video: null,
+      screen: null,
+      pipeline: null,
+      videoTrackId: `agora:video:${session.localParticipantId}`,
+      videoPublished: false,
+    };
+    let selectedCameraId = null;
+    let backgroundEffect = { type: 'none', blurStrength: 'medium' };
+    let processedSourceId = null;
+    let providerInputTrack = null;
     const remoteUsers = new Map();
+    const processedTrackForSource = (sourceId) => {
+      const effectsBridge = global.RealtimeVideoEffectsBridge;
+      if (!effectsBridge?.getTrack) {
+        throw new Error('RealtimeVideoEffectsBridge is unavailable.');
+      }
+      const mediaStreamTrack = effectsBridge.getTrack(sourceId);
+      if (!mediaStreamTrack) {
+        throw new Error(
+          `Processed video source ${sourceId} has no MediaStreamTrack.`,
+        );
+      }
+      return mediaStreamTrack;
+    };
+    const ensureVideoTrack = async () => {
+      if (processedSourceId) {
+        if (!localTracks.video) {
+          const sourceTrack = processedTrackForSource(processedSourceId);
+          providerInputTrack = sourceTrack.clone?.() || sourceTrack;
+          localTracks.video = AgoraRTC.createCustomVideoTrack({mediaStreamTrack: providerInputTrack});
+        }
+        return localTracks.video;
+      }
+      if (!localTracks.pipeline) {
+        localTracks.pipeline = await createSdkProcessedVideo({
+          effect: backgroundEffect,
+          deviceId: selectedCameraId,
+        });
+      } else {
+        await localTracks.pipeline.setEffect(backgroundEffect);
+      }
+      if (!localTracks.video) {
+        localTracks.video = AgoraRTC.createCustomVideoTrack({
+          mediaStreamTrack: localTracks.pipeline.track,
+        });
+      }
+      return localTracks.video;
+    };
+    const publishCameraIfNeeded = async () => {
+      if (localTracks.screen || localTracks.videoPublished || !session.localVideoEnabled) return;
+      const videoTrack = await ensureVideoTrack();
+      localTracks.pipeline?.setEnabled(true);
+      await client.publish(videoTrack);
+      localTracks.videoPublished = true;
+      addVideoTrack(session, {
+        id: localTracks.videoTrackId,
+        participantId: session.localParticipantId,
+        isLocal: true,
+        native: { track: videoTrack },
+      });
+    };
+    const unpublishCameraIfNeeded = async () => {
+      if (localTracks.videoPublished && localTracks.video) {
+        await client.unpublish(localTracks.video);
+      }
+      localTracks.videoPublished = false;
+      if (!processedSourceId) localTracks.pipeline?.setEnabled(false);
+      removeVideoTrack(session, localTracks.videoTrackId);
+    };
     const updateRemote = async (user, mediaType) => {
       const participantId = String(user.uid);
       const participant = addParticipant(session, participantId);
@@ -352,18 +574,10 @@
         await client.join(info.appId, info.channelName, info.token, Number(info.uid));
         if (session.role !== 'viewer') {
           localTracks.audio = await AgoraRTC.createMicrophoneAudioTrack();
-          localTracks.video = await AgoraRTC.createCameraVideoTrack();
-          localTracks.videoTrackId = `agora:video:${session.localParticipantId}`;
           localTracks.audio.play();
-          await client.publish([localTracks.audio, localTracks.video]);
+          await client.publish(localTracks.audio);
           session.localMuted = false;
-          session.localVideoEnabled = true;
-          addVideoTrack(session, {
-            id: localTracks.videoTrackId,
-            participantId: session.localParticipantId,
-            isLocal: true,
-            native: { track: localTracks.video },
-          });
+          session.localVideoEnabled = false;
         }
       },
       async command(name, args) {
@@ -372,14 +586,76 @@
           session.localMuted = Boolean(args.muted);
           return;
         }
+        if (name === 'attachProcessedVideoSource') {
+          const sourceId = String(args.sourceId || '');
+          if (!sourceId) throw new Error('Processed video sourceId is required.');
+          processedTrackForSource(sourceId);
+          await unpublishCameraIfNeeded();
+          localTracks.video?.close?.();
+          providerInputTrack?.stop?.(); providerInputTrack = null;
+          localTracks.video = null;
+          localTracks.pipeline?.stop?.();
+          localTracks.pipeline = null;
+          processedSourceId = sourceId;
+          session.processedSourceId = sourceId;
+          if (session.localVideoEnabled) await publishCameraIfNeeded();
+          return;
+        }
+        if (name === 'detachProcessedVideoSource') {
+          await unpublishCameraIfNeeded();
+          localTracks.video?.close?.();
+          providerInputTrack?.stop?.(); providerInputTrack = null;
+          localTracks.video = null;
+          processedSourceId = null;
+          session.processedSourceId = null;
+          return;
+        }
+        if (name === 'setProcessedVideoEffect') {
+          if (!processedSourceId) {
+            throw new Error('No SDK processed video source is attached.');
+          }
+          const effectsBridge = global.RealtimeVideoEffectsBridge;
+          if (!effectsBridge?.setEffect) {
+            throw new Error('RealtimeVideoEffectsBridge is unavailable.');
+          }
+          await effectsBridge.setEffect(
+            processedSourceId,
+            JSON.stringify({
+              type: String(args.type || 'none'),
+              blurStrength: String(args.blurStrength || 'medium'),
+              imageBytes: args.imageBytes || null,
+            }),
+          );
+          return;
+        }
         if (name === 'setVideoEnabled') {
-          if (localTracks.video) await localTracks.video.setEnabled(Boolean(args.enabled));
-          session.localVideoEnabled = Boolean(args.enabled);
+          const enabled = Boolean(args.enabled);
+          session.localVideoEnabled = enabled;
+          if (enabled) await publishCameraIfNeeded();
+          else await unpublishCameraIfNeeded();
+          return;
+        }
+        if (name === 'setBackgroundEffect') {
+          const type = String(args.type || 'none');
+          if (!['none', 'blur', 'replaceImage'].includes(type)) {
+            throw new Error(`Unsupported SDK background effect: ${type}`);
+          }
+          if (type === 'blur' && !global.SdkVideoEffectsVision?.ImageSegmenter) {
+            throw new Error('SDK MediaPipe background processor is unavailable.');
+          }
+          backgroundEffect = {
+            type,
+            blurStrength: String(args.blurStrength || 'medium'),
+            imageBytes: args.imageBytes || null,
+          };
+          if (localTracks.pipeline) {
+            await localTracks.pipeline.setEffect(backgroundEffect);
+          }
           return;
         }
         if (name === 'setScreenShareEnabled') {
           if (args.enabled && !localTracks.screen) {
-            if (localTracks.video) await client.unpublish(localTracks.video);
+            await unpublishCameraIfNeeded();
             localTracks.screen = await AgoraRTC.createScreenVideoTrack({ encoderConfig: '1080p_1' }, 'disable');
             await client.publish(localTracks.screen);
             addVideoTrack(session, { id: 'agora:screen:local', participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: { track: localTracks.screen } });
@@ -389,25 +665,43 @@
             localTracks.screen.close();
             localTracks.screen = null;
             removeVideoTrack(session, 'agora:screen:local');
-            if (localTracks.video) await client.publish(localTracks.video);
+            await publishCameraIfNeeded();
           }
           return;
         }
         if (name === 'selectDevice' || name === 'selectAudioOutput') {
           const selected = args.device || args;
           if (selected.kind === 'microphone' && localTracks.audio) await localTracks.audio.setDevice(selected.id);
-          if (selected.kind === 'camera' && localTracks.video) await localTracks.video.setDevice(selected.id);
+          if (selected.kind === 'camera') {
+            if (processedSourceId) {
+              await global.RealtimeVideoEffectsBridge?.selectCamera?.(
+                processedSourceId,
+                selected.id,
+              );
+              return;
+            }
+            selectedCameraId = selected.id;
+            if (localTracks.pipeline) {
+              await localTracks.pipeline.setCameraDevice(selected.id);
+            }
+          }
           if (selected.kind === 'audioOutput') {
             for (const user of client.remoteUsers || []) if (user.audioTrack?.setPlaybackDevice) await user.audioTrack.setPlaybackDevice(selected.id);
           }
           return;
         }
-        if (name === 'switchCamera' && localTracks.video) {
+        if (name === 'switchCamera') {
           const cameras = await AgoraRTC.getCameras();
-          const current = localTracks.video.getTrackLabel?.();
-          const index = cameras.findIndex((device) => device.label === current);
+          const index = cameras.findIndex(
+            (device) => device.deviceId === selectedCameraId,
+          );
           const next = cameras[(index + 1) % cameras.length];
-          if (next) await localTracks.video.setDevice(next.deviceId);
+          if (next) {
+            selectedCameraId = next.deviceId;
+            if (localTracks.pipeline) {
+              await localTracks.pipeline.setCameraDevice(next.deviceId);
+            }
+          }
           return;
         }
         if (name === 'listDevices') return listDevices(session);
@@ -426,6 +720,11 @@
         for (const track of [localTracks.screen, localTracks.video, localTracks.audio]) {
           if (track?.close) track.close();
         }
+        providerInputTrack?.stop?.(); providerInputTrack = null;
+        localTracks.pipeline?.stop();
+        localTracks.pipeline = null;
+        processedSourceId = null;
+        localTracks.videoPublished = false;
         await client.leave();
       },
       async dispose() { client.removeAllListeners?.(); },
@@ -487,10 +786,8 @@
         });
         if (session.role !== 'viewer') {
           await trtc.startLocalAudio();
-          await trtc.startLocalVideo({ publish: true });
           session.localMuted = false;
-          session.localVideoEnabled = true;
-          refreshLocalTrack();
+          session.localVideoEnabled = false;
         }
       },
       async command(name, args) {
@@ -500,7 +797,11 @@
           return;
         }
         if (name === 'setVideoEnabled') {
-          await trtc.updateLocalVideo({ mute: !args.enabled, publish: Boolean(args.enabled) });
+          if (args.enabled && !session.localVideoEnabled) {
+            await trtc.startLocalVideo({publish: true, ...(session.processedTrack ? {option: {videoTrack: session.processedTrack}} : {})});
+          } else if (!args.enabled) {
+            await trtc.stopLocalVideo();
+          }
           session.localVideoEnabled = Boolean(args.enabled);
           if (!args.enabled) removeVideoTrack(session, localVideoId); else refreshLocalTrack();
           return;
@@ -534,6 +835,10 @@
         if (name === 'listDevices') return listDevices(session);
         throw new Error(`TRTC does not support ${name}.`);
       },
+      async attachProcessedTrack(track) {
+        if (session.localVideoEnabled) await trtc.updateLocalVideo({option: {videoTrack: track}});
+      },
+      async detachProcessedTrack() { await trtc.stopLocalVideo(); },
       async attachVideo(track, container) {
         const native = track.native;
         if (native?.userId) {
@@ -589,17 +894,32 @@
           engine.setChannelProfile(profile.AliRtcInteractiveLive);
           await engine.setClientRole(session.role === 'viewer' ? roles.AliRtcSdkLive : roles.AliRtcSdkInteractive);
         }
+        await engine.enableLocalVideo(false);
+        await engine.publishLocalVideoStream(false);
         await engine.joinChannel(info.authInfo, session.payload.displayName || info.userId);
         if (session.role !== 'viewer') {
-          await engine.startPreview();
+
           session.localMuted = false;
-          session.localVideoEnabled = true;
-          addVideoTrack(session, { id: `artc:video:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, native: { uid: session.localParticipantId, track: cameraTrack } });
+          session.localVideoEnabled = false;
+
         }
       },
       async command(name, args) {
         if (name === 'setMuted') { engine.muteLocalMic(Boolean(args.muted)); session.localMuted = Boolean(args.muted); return; }
-        if (name === 'setVideoEnabled') { await engine.enableLocalVideo(Boolean(args.enabled)); session.localVideoEnabled = Boolean(args.enabled); if (!args.enabled) removeVideoTrack(session, `artc:video:${session.localParticipantId}`); else addVideoTrack(session, { id: `artc:video:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, native: { uid: session.localParticipantId, track: cameraTrack } }); return; }
+        if (name === 'setVideoEnabled') {
+          const enabled = Boolean(args.enabled);
+          if (session.processedTrack) {
+            await engine.muteLocalCamera(!enabled);
+            await engine.publishLocalVideoStream(enabled);
+          } else {
+            await engine.enableLocalVideo(enabled);
+            await engine.publishLocalVideoStream(enabled);
+          }
+          session.localVideoEnabled = enabled;
+          if (!enabled) removeVideoTrack(session, `artc:video:${session.localParticipantId}`);
+          else addVideoTrack(session, {id: `artc:video:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, native: {uid: session.localParticipantId, track: cameraTrack}});
+          return;
+        }
         if (name === 'setScreenShareEnabled') {
           if (args.enabled) { await engine.startPreviewScreen(); await engine.publishLocalScreenShareStream(true); addVideoTrack(session, { id: `artc:screen:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: { uid: session.localParticipantId, track: screenTrack } }); }
           else { await engine.publishLocalScreenShareStream(false); await engine.stopPreviewScreen(); removeVideoTrack(session, `artc:screen:${session.localParticipantId}`); }
@@ -621,6 +941,27 @@
         }
         if (name === 'listDevices') return listDevices(session);
         throw new Error(`ARTC does not support ${name}.`);
+      },
+      async attachProcessedTrack(track) {
+        // Pinned ARTC 7.3.5 ignores switchCamera's external track while capture
+        // is disabled. Its public enableLocalVideo(true) opens a raw camera.
+        // Set only the capture state before supplying the external track.
+        const manager = engine.publisher?.streamManager;
+        if (!manager || !('cameraCaptureDisabled' in manager)) {
+          throw new Error('This ARTC SDK does not support the processed video input contract.');
+        }
+        manager.cameraCaptureDisabled = false;
+        try {
+          await engine.switchCamera(undefined, track);
+          await engine.publishLocalVideoStream(session.localVideoEnabled);
+        } catch (error) {
+          await engine.enableLocalVideo(false);
+          throw error;
+        }
+      },
+      async detachProcessedTrack() {
+        await engine.publishLocalVideoStream(false);
+        await engine.enableLocalVideo(false);
       },
       async attachVideo(track, container) {
         if (track.isLocal) await engine.setLocalViewConfig(container.id, track.isScreenShare ? screenTrack : cameraTrack);
@@ -700,7 +1041,7 @@
           if (!navigator.mediaDevices?.getUserMedia) {
             throw new Error('This browser cannot access camera or microphone media devices.');
           }
-          const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+          const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
           for (const track of media.getTracks()) {
             const localStream = new sdk.LocalStageStream(track);
             localStreams.push(localStream);
@@ -769,6 +1110,30 @@
         }
         if (name === 'listDevices') return listDevices(session);
         throw new Error(`IVS Real-Time does not support ${name}.`);
+      },
+      async attachProcessedTrack(track) {
+        const old = session.localVideoStream;
+        const replacement = new sdk.LocalStageStream(track);
+        replacement.setMuted(!session.localVideoEnabled);
+        if (old) {
+          const index = localStreams.indexOf(old);
+          if (index >= 0) localStreams.splice(index, 1);
+          removeVideoTrack(session, [...session.tracks.values()].find((item) => item.native === old)?.id);
+        }
+        localStreams.push(replacement);
+        session.localVideoStream = replacement;
+        addVideoTrack(session, {id: `ivs:local:${track.id}`, participantId: session.localParticipantId, isLocal: true, native: replacement});
+        stage.refreshStrategy();
+      },
+      async detachProcessedTrack() {
+        const old = session.localVideoStream;
+        if (old) {
+          const index = localStreams.indexOf(old);
+          if (index >= 0) localStreams.splice(index, 1);
+          removeVideoTrack(session, [...session.tracks.values()].find((item) => item.native === old)?.id);
+        }
+        session.localVideoStream = null;
+        stage.refreshStrategy();
       },
       async attachVideo(track, container) { attachStreamTrack(track.native.mediaStreamTrack, container); },
       detachVideo(_track, container) { container.replaceChildren(); },
@@ -866,13 +1231,11 @@
         if (microphones.length) {
           await audioVideo.startAudioInput(microphones[0].deviceId);
         }
-        if (cameras.length) {
-          await audioVideo.startVideoInput(cameras[0].deviceId);
-        }
+
         audioVideo.start();
-        if (cameras.length) audioVideo.startLocalVideoTile();
+
         session.localMuted = microphones.length === 0;
-        session.localVideoEnabled = cameras.length > 0;
+        session.localVideoEnabled = false;
         for (const tile of audioVideo.getAllVideoTiles()) observer.videoTileDidUpdate(tile.state());
       },
       async command(name, args) {
@@ -882,7 +1245,11 @@
           return;
         }
         if (name === 'setVideoEnabled') {
-          if (args.enabled) await audioVideo.startLocalVideoTile(); else audioVideo.stopLocalVideoTile();
+          if (args.enabled) {
+            if (session.processedTrack) await audioVideo.startVideoInput(new MediaStream([session.processedTrack]));
+            else { const cameras = await audioVideo.listVideoInputDevices(); if (cameras[0]) await audioVideo.startVideoInput(cameras[0].deviceId); }
+            audioVideo.startLocalVideoTile();
+          } else audioVideo.stopLocalVideoTile();
           session.localVideoEnabled = Boolean(args.enabled);
           return;
         }
@@ -910,6 +1277,13 @@
           return;
         }
         throw new Error(`Chime does not support ${name}.`);
+      },
+      async attachProcessedTrack(track) {
+        await audioVideo.startVideoInput(new MediaStream([track]));
+      },
+      async detachProcessedTrack() {
+        audioVideo.stopLocalVideoTile();
+        await audioVideo.stopVideoInput?.();
       },
       attachVideo(track, container) {
         const tile = track.native;

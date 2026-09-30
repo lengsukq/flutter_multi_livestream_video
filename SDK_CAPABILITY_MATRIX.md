@@ -100,9 +100,30 @@ the internal engine capabilities used by that AWS routing.
 | Pre-Join provider network probe | Unsupported without issued credentials | No native probe | No native probe | No native probe | No native probe | Unsupported without participant token |
 | Network stats | Yes | Not exposed by adapter | Yes | Yes | Not exposed by adapter | Basic RTC stats |
 | Screen share | Yes for publishers | Not exposed by adapter | Deferred | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter |
+| Processed-video sink for blur | Not exposed by adapter | Not exposed by adapter | Web host + participant | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter |
 | Host participant list | Backend + logical owner | Meeting creator via logical owner credential | Backend + logical owner | Backend + logical owner | Backend + logical owner | Backend + logical owner |
 | Host remove participant | LiveKit host | No | No | No | No | IVS DisconnectParticipant |
 | Host close room | Host via backend | Meeting creator via control plane | Host via backend | Host via backend | Host via backend | Host via backend |
+
+Virtual background has two separate capability layers:
+
+| Effects platform bridge | Android | macOS | Web | iOS | Windows |
+| --- | --- | --- | --- | --- | --- |
+| Capture + None/Blur processing | Yes | Yes | Yes | Planned | Planned |
+| Realtime local preview | Flutter Texture | Flutter Texture | HTML video | Planned | Planned |
+| Processed source type | Native RGBA Frame Hub | Native `CVPixelBuffer` Frame Hub | `MediaStreamTrack` | Planned | Planned |
+
+`flutter_realtime_video_effects` owns the first layer. Provider adapters own
+only the second layer, `ProcessedVideoSink`. Agora Web currently implements
+that sink. Native provider sinks remain explicitly unsupported until they can
+consume the native Frame Hub directly; frames are never routed through
+Dart/MethodChannel simply to claim compatibility.
+
+The Demo's Pre-Join flow uses the platform effects bridge for live blur preview
+without entering a provider room. Before initial camera publication,
+`RealtimeRoomView` prepares a new processed source and attaches it to the
+active provider sink. If no compatible sink exists, camera publication stays
+off.
 
 ## Product chat
 

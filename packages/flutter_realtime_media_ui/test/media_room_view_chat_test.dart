@@ -123,6 +123,38 @@ void main() {
     await fixture.dispose();
   });
 
+  testWidgets('initial blur is applied before camera publishing', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          config: const MediaRoomViewConfig(
+            confirmBeforeLeave: false,
+            initialMediaSettings: MediaLocalPreviewSettings(
+              cameraEnabled: true,
+              backgroundEffect: MediaBackgroundEffect.blur(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(fixture.media.initialMediaCalls, [
+      'background:blur',
+      'muted:true',
+      'video:true',
+    ]);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await fixture.dispose();
+  });
+
   testWidgets('screen share control toggles start and stop', (tester) async {
     final fixture = _RoomFixture(screenShare: true);
 
@@ -568,11 +600,9 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.byTooltip('Participants').first);
-      await tester.pump();
-      await tester.tap(find.text('Manage room'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Room members'), findsNWidgets(2));
+      expect(find.text('Room members'), findsOneWidget);
       expect(find.text('Alice'), findsOneWidget);
       expect(find.text('Media online'), findsNWidgets(2));
       expect(find.text('Chat online'), findsNWidgets(2));
@@ -772,7 +802,8 @@ class _FakeTransport implements MediaBackendTransport {
   void close() {}
 }
 
-class _FakeMediaSession implements InteractiveMediaSession {
+class _FakeMediaSession
+    implements InteractiveMediaSession, MediaBackgroundEffectsController {
   _FakeMediaSession({
     this.screenShare = false,
     this.role = MediaRole.participant,
@@ -786,6 +817,8 @@ class _FakeMediaSession implements InteractiveMediaSession {
   final List<bool> screenShareCalls = <bool>[];
   final List<bool> mutedCalls = <bool>[];
   final List<bool> videoCalls = <bool>[];
+  final List<String> initialMediaCalls = <String>[];
+  MediaBackgroundEffect _backgroundEffect = const MediaBackgroundEffect.none();
   final StreamController<MediaSessionState> _states =
       StreamController<MediaSessionState>.broadcast();
   final StreamController<MediaSnapshot> _snapshots =
@@ -804,6 +837,7 @@ class _FakeMediaSession implements InteractiveMediaSession {
       : MediaCapabilities(
           canPublishAudio: true,
           canPublishVideo: true,
+          canBlurBackground: true,
           canSwitchCamera: true,
           canSendData: true,
           canReceiveData: true,
@@ -839,6 +873,7 @@ class _FakeMediaSession implements InteractiveMediaSession {
   @override
   Future<void> setMuted(bool muted) async {
     mutedCalls.add(muted);
+    initialMediaCalls.add('muted:$muted');
   }
 
   @override
@@ -847,6 +882,27 @@ class _FakeMediaSession implements InteractiveMediaSession {
   @override
   Future<void> setVideoEnabled(bool enabled) async {
     videoCalls.add(enabled);
+    initialMediaCalls.add('video:$enabled');
+  }
+
+  @override
+  MediaBackgroundCapabilities get backgroundCapabilities =>
+      MediaBackgroundCapabilities(canBlur: role != MediaRole.viewer);
+
+  @override
+  MediaBackgroundEffect get backgroundEffect => _backgroundEffect;
+
+  @override
+  Future<void> setBackgroundEffect(MediaBackgroundEffect effect) async {
+    if (!backgroundCapabilities.supports(effect)) {
+      throw const MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message: 'Background effect is not supported.',
+        providerId: 'fake',
+      );
+    }
+    _backgroundEffect = effect;
+    initialMediaCalls.add('background:${effect.type.name}');
   }
 
   @override

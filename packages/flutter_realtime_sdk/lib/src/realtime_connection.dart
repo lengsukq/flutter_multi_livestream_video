@@ -40,8 +40,8 @@ class RealtimeConnection {
     required this.experience,
     this.mediaRoom,
     this.chatRoom,
-    this._disposeAuxiliary,
-  });
+    void Function()? disposeAuxiliary,
+  }) : _disposeAuxiliary = disposeAuxiliary;
 
   factory RealtimeConnection.media({
     required RealtimeExperience experience,

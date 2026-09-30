@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../client/media_backend_error.dart';
+import '../model/media_background_effect.dart';
 import '../model/media_error.dart';
 import '../model/media_event.dart';
 import '../model/media_management_capability.dart';
@@ -10,6 +11,7 @@ import '../model/media_room_participant_summary.dart';
 import '../model/media_snapshot.dart';
 import '../model/media_state.dart';
 import 'media_session.dart';
+import 'media_background_effects_controller.dart';
 import 'media_room_extensions.dart';
 
 /// High-level room lifecycle returned by `MediaClient`.
@@ -20,7 +22,7 @@ import 'media_room_extensions.dart';
 ///
 /// Backend presence failures are reported on [backendErrors] and never stop
 /// healthy media, exactly like the Chime `ChimeRoomSession`.
-class MediaRoomSession {
+class MediaRoomSession implements MediaBackgroundEffectsController {
   /// Creates a room wrapper without a Backend Contract dependency.
   factory MediaRoomSession.direct({
     required String roomCode,
@@ -200,6 +202,58 @@ class MediaRoomSession {
 
   /// Latest media snapshot.
   MediaSnapshot get snapshot => session.snapshot;
+
+  /// Background effects supported by the active media adapter.
+  MediaBackgroundCapabilities get backgroundCapabilities {
+    final active = session;
+    if (active is MediaBackgroundEffectsController) {
+      return (active as MediaBackgroundEffectsController)
+          .backgroundCapabilities;
+    }
+    return MediaBackgroundCapabilities(
+      canBlur: active.capabilities.canBlurBackground,
+      canReplaceImage: active.capabilities.canReplaceBackgroundImage,
+    );
+  }
+
+  /// Currently selected local background effect.
+  MediaBackgroundEffect get backgroundEffect {
+    final active = session;
+    return active is MediaBackgroundEffectsController
+        ? (active as MediaBackgroundEffectsController).backgroundEffect
+        : const MediaBackgroundEffect.none();
+  }
+
+  /// Applies a provider-neutral local camera background effect.
+  Future<void> setBackgroundEffect(MediaBackgroundEffect effect) {
+    if (!effect.enabled && session is! MediaBackgroundEffectsController) {
+      return Future<void>.value();
+    }
+    if (!session.capabilities.canPublishVideo ||
+        !backgroundCapabilities.supports(effect)) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message:
+            'The active provider does not support the requested background '
+            'effect for this role or platform.',
+        providerId: providerId,
+      );
+    }
+    final active = session;
+    final MediaBackgroundEffectsController? controller =
+        active is MediaBackgroundEffectsController
+        ? active as MediaBackgroundEffectsController
+        : null;
+    if (controller == null) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        message:
+            'The active provider does not expose background effect controls.',
+        providerId: providerId,
+      );
+    }
+    return controller.setBackgroundEffect(effect);
+  }
 
   /// Backend presence failures (heartbeat, leave notification, ...).
   Stream<MediaBackendError> get backendErrors => _backendErrorController.stream;

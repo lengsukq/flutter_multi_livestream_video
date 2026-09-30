@@ -1,7 +1,9 @@
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'artc_engine.dart';
@@ -11,8 +13,16 @@ import 'artc_media_track.dart';
 typedef ArtcSessionEngineFactory = Future<ArtcEngine> Function();
 
 abstract class _ArtcMediaSession
-    implements MediaSession, MediaCredentialRefreshable, MediaDataPayloadSizer {
-  _ArtcMediaSession({required this.role, required this._engineFactory});
+    implements
+        MediaSession,
+        MediaCredentialRefreshable,
+        MediaDataPayloadSizer,
+        ProcessedVideoSink,
+        MediaDeviceController {
+  _ArtcMediaSession({
+    required this.role,
+    required ArtcSessionEngineFactory engineFactory,
+  }) : _engineFactory = engineFactory;
 
   static _ArtcMediaSession? _activeSession;
 
@@ -39,11 +49,109 @@ abstract class _ArtcMediaSession
   @override
   final MediaRole role;
 
+  bool _macEffectsInputAvailable = false;
+  bool get _effectsPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          (defaultTargetPlatform == TargetPlatform.macOS &&
+              _macEffectsInputAvailable));
+  Future<void> _probeProcessedVideoInput() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) return;
+    try {
+      _macEffectsInputAvailable =
+          await MethodChannel(
+            _processedSink.channelName,
+          ).invokeMethod<bool>('probeProcessedVideoInput') ??
+          false;
+    } on MissingPluginException {
+      _macEffectsInputAvailable = false;
+    } on PlatformException {
+      _macEffectsInputAvailable = false;
+    }
+  }
+
+  final _processedSink = NativeProcessedVideoSink(
+    providerId: 'artc',
+    channelName: 'com.oneplusdream.flutter_realtime_media_artc/methods',
+    attachMethod: 'attachProcessedVideoSource',
+    detachMethod: 'detachProcessedVideoSource',
+  );
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      capabilities.canPublishVideo &&
+      _effectsPlatform &&
+      _processedSink.supports(source) &&
+      source.platform ==
+          (defaultTargetPlatform == TargetPlatform.android
+              ? VideoEffectsPlatform.android
+              : VideoEffectsPlatform.macos);
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
+    _requireActive();
+    if (!supportsProcessedVideoSource(source))
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        providerId: providerId,
+        message:
+            'Processed video input is unavailable for this role or platform.',
+      );
+    await _processedSink.attach(source);
+  }
+
+  @override
+  Future<void> detachProcessedVideoSource() => _processedSink.detach();
+
+  @override
+  Future<List<MediaDevice>> listMediaDevices({
+    Set<MediaDeviceKind>? kinds,
+  }) async {
+    _requireActive();
+    if (!capabilities.canEnumerateCameras ||
+        (kinds != null && !kinds.contains(MediaDeviceKind.camera))) {
+      return const [];
+    }
+    return List.unmodifiable([
+      for (final camera in await VideoEffectsBridge().listCameras())
+        MediaDevice(
+          id: camera.id,
+          label: camera.label,
+          kind: MediaDeviceKind.camera,
+        ),
+    ]);
+  }
+
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) async {
+    _requireActive();
+    if (device.kind != MediaDeviceKind.camera ||
+        !capabilities.canSelectCamera) {
+      throw MediaError(
+        code: MediaErrorCode.unsupportedFeature,
+        providerId: providerId,
+        message: 'This media device cannot be selected.',
+      );
+    }
+    if (_processedSink.source == null) {
+      throw MediaError(
+        code: MediaErrorCode.invalidState,
+        providerId: providerId,
+        message: 'Prepare the SDK video source before selecting a camera.',
+      );
+    }
+    await _processedSink.selectCamera(device.id);
+  }
+
   @override
   String get providerId => ArtcJoinInfo.providerIdValue;
 
   @override
-  MediaCapabilities get capabilities => _capabilities;
+  MediaCapabilities get capabilities => _capabilities.copyWith(
+    canBlurBackground: _capabilities.canPublishVideo && _effectsPlatform,
+    canReplaceBackgroundImage:
+        _capabilities.canPublishVideo && _effectsPlatform,
+    canEnumerateCameras: _capabilities.canPublishVideo && _effectsPlatform,
+    canSelectCamera: _capabilities.canPublishVideo && _effectsPlatform,
+  );
 
   @override
   MediaSessionState get state => _state;
@@ -130,8 +238,9 @@ abstract class _ArtcMediaSession
         canSendData: false,
       ),
     };
-    if (defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS) {
+    if (role != MediaRole.viewer &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)) {
       _capabilities = _capabilities.copyWith(canSwitchCamera: true);
     }
     _setState(MediaSessionState.joining);
@@ -139,6 +248,7 @@ abstract class _ArtcMediaSession
       _engine ??= await _engineFactory();
       _setState(MediaSessionState.connecting);
       await _engine!.join(joinInfo, _createEngineEvents());
+      await _probeProcessedVideoInput();
       if (_disposed) return;
       final local = MediaParticipant(
         id: joinInfo.userId,
@@ -154,7 +264,7 @@ abstract class _ArtcMediaSession
           localParticipantId: joinInfo.userId,
           localMuted: role != MediaRole.viewer,
           localVideoEnabled: false,
-          capabilities: _capabilities,
+          capabilities: capabilities,
           clearLastError: true,
         ),
       );
@@ -211,6 +321,17 @@ abstract class _ArtcMediaSession
   }
 
   Future<void> _releaseEngine({required bool leave}) async {
+    try {
+      await _processedSink.detach();
+    } catch (error) {
+      if (!_events.isClosed) {
+        _events.add(
+          MediaFailureEvent(
+            _mapError(error, 'Unable to detach the processed video input.'),
+          ),
+        );
+      }
+    }
     final engine = _engine;
     if (engine == null) return;
     if (leave) {
@@ -220,8 +341,11 @@ abstract class _ArtcMediaSession
         // Always release the provider even when its leave callback fails.
       }
     } else {
-      await engine.dispose();
-      _engine = null;
+      try {
+        await engine.dispose();
+      } finally {
+        _engine = null;
+      }
     }
   }
 
@@ -405,10 +529,17 @@ abstract class _ArtcMediaSession
     try {
       final rawRefreshed = await callback(current);
       final refreshed = _validateRefreshedInfo(current, rawRefreshed);
+      final source = _processedSink.source;
+      await _processedSink.detach();
       await _engine!.leave();
       _joinInfo = refreshed;
       _trackGeneration++;
       await _engine!.join(refreshed, _createEngineEvents());
+      await _probeProcessedVideoInput();
+      if (source != null) {
+        await _processedSink.attach(source);
+        await _engine!.setVideoEnabled(_snapshot.localVideoEnabled);
+      }
       _setSnapshot(_snapshot.copyWith(clearLastError: true));
       _setState(MediaSessionState.connected);
       _scheduleCredentialRefresh();
@@ -563,6 +694,7 @@ abstract class _ArtcMediaSession
   Future<void> _setVideoEnabled(bool enabled) async {
     _requireActive();
     _requireCapability(_capabilities.canPublishVideo, 'publishing video');
+    await _processedSink.setEnabled(enabled);
     await _engine!.setVideoEnabled(enabled);
     if (_joinInfo case final info?) {
       final localTrack = enabled
@@ -607,7 +739,13 @@ abstract class _ArtcMediaSession
     _requireActive();
     _requireCapability(_capabilities.canSwitchCamera, 'switching cameras');
     if (_cameraPosition == position) return;
-    await _engine!.switchCamera(position);
+    if (_processedSink.source != null) {
+      await _processedSink.selectCamera(
+        position == MediaCameraPosition.front ? 'front' : 'back',
+      );
+    } else {
+      await _engine!.switchCamera(position);
+    }
     _cameraPosition = position;
   }
 
