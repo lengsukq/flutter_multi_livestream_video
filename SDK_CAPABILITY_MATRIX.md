@@ -100,7 +100,7 @@ the internal engine capabilities used by that AWS routing.
 | Pre-Join provider network probe | Unsupported without issued credentials | No native probe | No native probe | No native probe | No native probe | Unsupported without participant token |
 | Network stats | Yes | Not exposed by adapter | Yes | Yes | Not exposed by adapter | Basic RTC stats |
 | Screen share | Yes for publishers | Not exposed by adapter | Deferred | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter |
-| Processed-video sink for blur | Not exposed by adapter | Not exposed by adapter | Web host + participant | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter |
+| Processed-video sink for blur / image replacement | Android/macOS/Web | Android/macOS/Web* | Android/macOS/Web | Android/macOS/Web | Android/macOS*/Web | Android/macOS/Web* |
 | Host participant list | Backend + logical owner | Meeting creator via logical owner credential | Backend + logical owner | Backend + logical owner | Backend + logical owner | Backend + logical owner |
 | Host remove participant | LiveKit host | No | No | No | No | IVS DisconnectParticipant |
 | Host close room | Host via backend | Meeting creator via control plane | Host via backend | Host via backend | Host via backend | Host via backend |
@@ -109,21 +109,66 @@ Virtual background has two separate capability layers:
 
 | Effects platform bridge | Android | macOS | Web | iOS | Windows |
 | --- | --- | --- | --- | --- | --- |
-| Capture + None/Blur processing | Yes | Yes | Yes | Planned | Planned |
+| Capture + None/Blur/Replace image | Yes | Yes | Yes | Planned | Planned |
 | Realtime local preview | Flutter Texture | Flutter Texture | HTML video | Planned | Planned |
 | Processed source type | Native RGBA Frame Hub | Native `CVPixelBuffer` Frame Hub | `MediaStreamTrack` | Planned | Planned |
 
-`flutter_realtime_video_effects` owns the first layer. Provider adapters own
-only the second layer, `ProcessedVideoSink`. Agora Web currently implements
-that sink. Native provider sinks remain explicitly unsupported until they can
-consume the native Frame Hub directly; frames are never routed through
-Dart/MethodChannel simply to claim compatibility.
+`flutter_realtime_video_effects` owns capture, segmentation and composition.
+Every provider adapter implements the sink side only (`ProcessedVideoSink`):
 
-The Demo's Pre-Join flow uses the platform effects bridge for live blur preview
-without entering a provider room. Before initial camera publication,
-`RealtimeRoomView` prepares a new processed source and attaches it to the
-active provider sink. If no compatible sink exists, camera publication stays
-off.
+| Provider sink | Android input | macOS input | Web input |
+| --- | --- | --- | --- |
+| LiveKit | I420 + rotation → WebRTC | `CVPixelBuffer` → WebRTC | Shared track |
+| Chime | I420 + rotation → custom video source | Shared native frame → local WebKit encoded transport* | Track clone → video input |
+| Agora | Packed RGBA, stride in pixels, rotation metadata | BGRA pixel buffer, stride in pixels | Track clone → custom video track |
+| TRTC | Packed RGBA + rotation | `CVPixelBuffer` | Track clone → custom video track |
+| ARTC | Packed RGBA + rotation | `CVPixelBuffer` custom input* | Track clone → custom video track |
+| IVS Real-Time | RGBA → upright EGL input surface | Shared native frame → local WebKit encoded transport* | Track clone → local stage stream |
+
+\* macOS ARTC requires the installed vendor SDK's custom-input API. macOS
+Chime/IVS require a positive WebKit canvas capture / image decode capability
+probe. These adapters reject unsupported runtimes; implementation does not
+imply support on every OS/browser version. iOS and Windows effects bridges
+are deferred, and cannot advertise virtual background support.
+
+"Same frames" means one capture and one effects pipeline per source. Provider
+sinks may convert pixel formats, apply the shared rotation metadata, or clone a
+track for ownership. They do not open another camera or run another segmenter.
+Pixels never pass through Dart/MethodChannel. The macOS AWS sink uses JPEG
+inside its local native-to-WebKit transport; that extra encode/decode cost still
+exists, but fixed 24 fps polling is removed. New frame notifications coalesce
+when decoding is busy. Its provider video display also follows decoded frames
+up to 30 fps instead of a fixed 10 fps timer.
+
+The Demo's Pre-Join uses the SDK platform bridge without joining a room.
+`RealtimeRoomView` attaches an SDK source before initial camera publication.
+Both SDK paths request 30 fps; achieved FPS depends on capture, processing and
+vendor/network constraints. Selecting None bypasses segmentation/composition;
+the stable source remains usable by the preview and provider. Platforms without
+a compatible bridge retain their ordinary camera path when effects are off.
+Video views default to contain the whole frame; explicit cover remains available
+where supported by the renderer.
+
+### Verification status (2026-10-01)
+
+- Android preview/effects and switching back to None: previously confirmed on the
+  attached phone by the user. The latest provider stride/rotation changes compile;
+  native geometry, frame pacing, source fan-out and error handling regressions pass.
+- Web regressions verify that the five vendor bridge engines share track clones
+  from one source and camera selection stays in the SDK; LiveKit uses the shared
+  track directly. Effects pacing and reuse of the matte buffer are covered.
+- SDK regressions cover Pre-Join, room attachment, disabled-camera preservation,
+  failure recovery and disposal. macOS Demo builds with the native/AWS changes;
+  AWS transport/display scheduling and cancellation regressions pass. A real
+  native-to-WebKit integration check uses a local 640x360 gradient at a requested
+  30 fps: the latest run sent/received 60/60 frames and verified all four corners.
+  It also exposed/fixed the invalid KVC access to the `CVPixelBufferRef` getter.
+  This short synthetic check does not measure sustained HD call performance.
+- Live remote publication/receive quality has **not** been revalidated for every
+  provider on Android, macOS and Web. Build/unit checks do not substitute for
+  that device/network acceptance. Verify portrait/landscape orientation, full
+  framing, None/Blur/Replace transitions, camera switching, mute/unmute, leaving
+  and rejoining, and capture/receive FPS on each supported runtime.
 
 ## Product chat
 
