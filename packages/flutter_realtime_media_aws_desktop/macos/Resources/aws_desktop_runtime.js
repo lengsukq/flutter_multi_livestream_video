@@ -79,16 +79,14 @@
     }
     const source = { sourceId: sourceId, references: 0, canvas: canvas, context: context,
       stream: stream, track: track, enabled: true, closed: false, failed: false,
-      timer: null, image: null, requestIndex: 0 };
+      timer: null, image: null, requestIndex: 0, pendingTimestamp: null, renderedTimestamp: null, loadFrame: null };
     processedSources.set(sourceKey, source);
     track.requestFrame();
 
-    function pollFrame() {
-      if (source.closed || source.failed) return;
-      if (!source.enabled) {
-        source.timer = global.setTimeout(pollFrame, 50);
-        return;
-      }
+    function loadFrame() {
+      if (source.closed || source.failed || !source.enabled || source.image) return;
+      if (source.pendingTimestamp === source.renderedTimestamp && source.requestIndex > 0) return;
+      const timestamp = source.pendingTimestamp;
       const image = new Image();
       source.image = image;
       image.crossOrigin = 'anonymous';
@@ -103,8 +101,10 @@
             }
             context.drawImage(image, 0, 0, canvas.width, canvas.height);
             track.requestFrame();
+            source.renderedTimestamp = timestamp;
           }
-          source.timer = global.setTimeout(pollFrame, 1000 / 24);
+          // Decode the newest pending frame immediately, without a second FPS timer.
+          if (source.pendingTimestamp !== timestamp) loadFrame();
         } catch (error) {
           failProcessedSource(source, error);
         }
@@ -115,7 +115,8 @@
       };
       image.src = 'realtime-video://' + encodeURIComponent(sourceId) + '/frame?request=' + String(++source.requestIndex);
     }
-    pollFrame();
+    source.loadFrame = loadFrame;
+    loadFrame();
     return source;
   }
 
@@ -143,6 +144,8 @@
         source.context.fillStyle = '#000';
         source.context.fillRect(0, 0, source.canvas.width, source.canvas.height);
         source.track.requestFrame();
+      } else {
+        source.loadFrame();
       }
     },
     setEffect: async function() { throw new Error('Configure the effect through the native SDK bridge.'); },
@@ -242,43 +245,53 @@
 
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d', { alpha: false });
-    let busy = false;
-    const timer = global.setInterval(function() {
-      if (busy) return;
+    const binding = { providerId: providerId, sessionId: sessionId, trackId: trackId,
+      container: container, frameHandle: null, video: null, closed: false,
+      usesVideoCallback: false, nextFrameAt: 0, lastMediaTime: null };
+    bindings.set(viewKey, binding);
+
+    function render(now, mediaTime) {
+      if (binding.closed) return;
       const video = container.querySelector('video');
-      if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
-      busy = true;
-      try {
-        const maxWidth = 960;
-        const scale = Math.min(1, maxWidth / video.videoWidth);
-        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
-        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        post({
-          kind: 'frame',
-          viewKey: viewKey,
-          data: canvas.toDataURL('image/jpeg', 0.72),
-          width: canvas.width,
-          height: canvas.height,
-        });
-      } catch (_) {
-      } finally {
-        busy = false;
+      if (video && video.readyState >= 2 && video.videoWidth && video.videoHeight &&
+          (mediaTime == null || mediaTime !== binding.lastMediaTime) &&
+          (!binding.nextFrameAt || now + 1 >= binding.nextFrameAt)) {
+        try {
+          const scale = Math.min(1, 960 / video.videoWidth);
+          const width = Math.max(1, Math.round(video.videoWidth * scale));
+          const height = Math.max(1, Math.round(video.videoHeight * scale));
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width; canvas.height = height;
+          }
+          context.drawImage(video, 0, 0, width, height);
+          post({ kind: 'frame', viewKey: viewKey,
+            data: canvas.toDataURL('image/jpeg', 0.72), width: width, height: height });
+          binding.lastMediaTime = mediaTime;
+          binding.nextFrameAt = !binding.nextFrameAt || now - binding.nextFrameAt > 1000 / 30
+            ? now + 1000 / 30 : binding.nextFrameAt + 1000 / 30;
+        } catch (_) {}
       }
-    }, 100);
-    bindings.set(viewKey, {
-      providerId: providerId,
-      sessionId: sessionId,
-      trackId: trackId,
-      container: container,
-      timer: timer,
-    });
+      schedule();
+    }
+
+    function schedule() {
+      if (binding.closed) return;
+      const video = container.querySelector('video');
+      binding.video = video;
+      binding.usesVideoCallback = Boolean(video && typeof video.requestVideoFrameCallback === 'function');
+      binding.frameHandle = binding.usesVideoCallback
+        ? video.requestVideoFrameCallback((now, metadata) => render(now, metadata.mediaTime))
+        : global.requestAnimationFrame(now => render(now, video && video.currentTime));
+    }
+    schedule();
   }
 
   function unbindTrack(viewKey) {
     const binding = bindings.get(viewKey);
     if (!binding) return;
-    global.clearInterval(binding.timer);
+    binding.closed = true;
+    if (binding.usesVideoCallback) binding.video?.cancelVideoFrameCallback(binding.frameHandle);
+    else global.cancelAnimationFrame(binding.frameHandle);
     try {
       requireBridge().detachVideo(
         binding.providerId,
@@ -292,6 +305,14 @@
   }
 
   global.AwsDesktopRuntime = {
+    notifyProcessedFrame: function(sourceId, timestampNs) {
+      const source = processedSources.get(processedSourceKey(sourceId));
+      if (!source || source.closed || source.failed) return;
+      const timestamp = String(timestampNs);
+      if (source.pendingTimestamp === timestamp) return;
+      source.pendingTimestamp = timestamp;
+      source.loadFrame();
+    },
     invoke: invoke,
     bindTrack: bindTrack,
     unbindTrack: unbindTrack,

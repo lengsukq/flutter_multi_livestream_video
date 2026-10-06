@@ -150,6 +150,8 @@ private final class AwsDesktopRuntime: NSObject,
   private let processedFrameHandler = AwsProcessedFrameSchemeHandler()
   private var processedFeeds: [AwsDesktopProvider: AwsProcessedFrameFeed] = [:]
   private var processedFeedPool: [String: AwsProcessedFrameFeed] = [:]
+  private var pendingProcessedFrames: [String: Int64] = [:]
+  private var notifyingProcessedFrames: Set<String> = []
   private var processedFeedReferenceCounts: [String: Int] = [:]
   private var processedAttachGenerations: [AwsDesktopProvider: Int] = [:]
   private var reportedProcessedFailures: Set<String> = []
@@ -657,6 +659,9 @@ private final class AwsDesktopRuntime: NSObject,
               return
             }
             self.processedFeeds[provider] = feed
+            if let frame = feed.snapshot() {
+              self.processedFrameFeedDidProduceFrame(feed, timestampNs: frame.timestampNs)
+            }
             result(nil)
           } catch {
             self.releaseProcessedFrameFeed(feed)
@@ -745,6 +750,10 @@ private final class AwsDesktopRuntime: NSObject,
       guard let self, let feed else { return }
       self.processedFrameFeedDidFail(feed, message: message)
     }
+    feed.onFrameAvailable = { [weak self, weak feed] timestamp in
+      guard let self, let feed else { return }
+      self.processedFrameFeedDidProduceFrame(feed, timestampNs: timestamp)
+    }
     processedFeedPool[key] = feed
     processedFeedReferenceCounts[key] = 1
     processedFrameHandler.add(feed)
@@ -764,8 +773,39 @@ private final class AwsDesktopRuntime: NSObject,
     }
     processedFeedReferenceCounts.removeValue(forKey: key)
     processedFeedPool.removeValue(forKey: key)
+    pendingProcessedFrames.removeValue(forKey: key)
+    notifyingProcessedFrames.remove(key)
     processedFrameHandler.remove(feed)
     feed.dispose()
+  }
+
+  // Keep at most one WebKit notification in flight per shared source. If encoding
+  // outpaces WebKit, overwrite the pending timestamp instead of queuing old frames.
+  private func processedFrameFeedDidProduceFrame(_ feed: AwsProcessedFrameFeed, timestampNs: Int64) {
+    let key = feed.sourceId.lowercased()
+    guard processedFeedPool[key] === feed, !feed.isFailed, bridgeReady, let webView else { return }
+    pendingProcessedFrames[key] = timestampNs
+    guard notifyingProcessedFrames.insert(key).inserted else { return }
+    Task { @MainActor in
+      while self.processedFeedPool[key] === feed,
+            let timestamp = self.pendingProcessedFrames.removeValue(forKey: key) {
+        do {
+          _ = try await webView.callAsyncJavaScript(
+            "AwsDesktopRuntime.notifyProcessedFrame(sourceId, timestampNs)",
+            arguments: ["sourceId": feed.sourceId, "timestampNs": String(timestamp)],
+            in: nil, contentWorld: .page
+          )
+        } catch {
+          if self.processedFeedPool[key] === feed {
+            self.pendingProcessedFrames.removeValue(forKey: key)
+            self.reportProcessedVideoSourceError(sourceId: feed.sourceId,
+              message: Self.jsError(error, operation: "notify processed video frame"))
+          }
+          break
+        }
+      }
+      if self.processedFeedPool[key] === feed { self.notifyingProcessedFrames.remove(key) }
+    }
   }
 
   private func processedFrameFeedDidFail(_ feed: AwsProcessedFrameFeed, message: String) {

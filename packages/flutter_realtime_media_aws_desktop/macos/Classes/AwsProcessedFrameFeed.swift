@@ -18,6 +18,8 @@ final class AwsProcessedFrameFeed: NSObject {
   private var latest: (data: Data, timestampNs: Int64)?
   private var failed = false
   private var failureMessage: String?
+  private var notificationScheduled = false
+  var onFrameAvailable: ((Int64) -> Void)?
   var onError: ((String) -> Void)?
 
   init(sourceId: String) throws {
@@ -60,13 +62,26 @@ final class AwsProcessedFrameFeed: NSObject {
       pendingFrame = nil
       lock.unlock()
       autoreleasepool {
-        // The public frame is an Objective-C-compatible CVPixelBuffer holder.
-        guard let value = frame.value(forKey: "pixelBuffer") else {
+        // CVPixelBufferRef is a Core Foundation pointer, which KVC cannot box.
+        // Invoke the public Objective-C getters with their actual return types.
+        let frameClass: AnyClass = type(of: frame)
+        let bufferSelector = NSSelectorFromString("pixelBuffer")
+        let timestampSelector = NSSelectorFromString("timestampNs")
+        guard let bufferMethod = class_getInstanceMethod(frameClass, bufferSelector),
+              let timestampMethod = class_getInstanceMethod(frameClass, timestampSelector) else {
+          reportFailure("Native processed video frame had no pixel buffer or timestamp getter.")
+          return
+        }
+        let getBuffer = unsafeBitCast(method_getImplementation(bufferMethod),
+          to: (@convention(c) (NSObject, Selector) -> UnsafeRawPointer?).self)
+        let getTimestamp = unsafeBitCast(method_getImplementation(timestampMethod),
+          to: (@convention(c) (NSObject, Selector) -> Int64).self)
+        guard let pointer = getBuffer(frame, bufferSelector) else {
           reportFailure("Native processed video frame had no pixel buffer.")
           return
         }
-        let buffer = value as! CVPixelBuffer
-        let timestamp = (frame.value(forKey: "timestampNs") as? NSNumber)?.int64Value ?? 0
+        let buffer = Unmanaged<CVPixelBuffer>.fromOpaque(pointer).takeUnretainedValue()
+        let timestamp = getTimestamp(frame, timestampSelector)
         let image = CIImage(cvPixelBuffer: buffer)
         let options: [CIImageRepresentationOption: Any] = [
           CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.9
@@ -78,7 +93,19 @@ final class AwsProcessedFrameFeed: NSObject {
         }
         lock.lock()
         if !disposed, !failed { latest = (data, timestamp) }
+        let notify = !disposed && !failed && !notificationScheduled
+        if notify { notificationScheduled = true }
         lock.unlock()
+        if notify {
+          DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            self.notificationScheduled = false
+            let timestamp = self.disposed || self.failed ? nil : self.latest?.timestampNs
+            self.lock.unlock()
+            if let timestamp { self.onFrameAvailable?(timestamp) }
+          }
+        }
       }
     }
   }

@@ -285,3 +285,62 @@ test('reports native image decoding failures and stops the captured track', asyn
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(tracks[1].readyState, 'ended');
 });
+
+
+test('native frame notifications replace fixed polling and coalesce decode backlog', async () => {
+  const h = createVideoRuntime();
+  const runtime = h.context.AwsDesktopRuntime;
+  await runtime.attachProcessedVideo('chime', 'meeting', 'shared-frames', 1);
+  await waitFor(() => h.frameRequestCount === 1, 'initial native frame');
+  // Idle camera: no recurring requests or duplicate encoded frames.
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.equal(h.frameRequestCount, 1);
+  runtime.notifyProcessedFrame('shared-frames', '100000001');
+  runtime.notifyProcessedFrame('SHARED-FRAMES', '100000001');
+  runtime.notifyProcessedFrame('shared-frames', '100000002');
+  runtime.notifyProcessedFrame('shared-frames', '100000003');
+  await waitFor(() => h.frameRequestCount === 3, 'current plus newest pending frame');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(h.frameRequestCount, 3);
+  runtime.notifyProcessedFrame('shared-frames', '100000003');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(h.frameRequestCount, 3);
+  await h.context.RealtimeVideoEffectsBridge.setEnabled('shared-frames', false);
+  runtime.notifyProcessedFrame('shared-frames', '100000004');
+  runtime.notifyProcessedFrame('shared-frames', '100000005');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(h.frameRequestCount, 3);
+  await h.context.RealtimeVideoEffectsBridge.setEnabled('shared-frames', true);
+  await waitFor(() => h.frameRequestCount === 4, 'newest muted frame on resume');
+  await runtime.detachProcessedVideo('chime', 'meeting', 'shared-frames', 2);
+  runtime.notifyProcessedFrame('shared-frames', '100000006');
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(h.frameRequestCount, 4);
+});
+
+
+test('desktop video display follows decoded frames up to 30 fps and cancels on detach', async () => {
+  const h = createRuntime();
+  const video = {readyState:2, videoWidth:1280, videoHeight:720,
+    requestVideoFrameCallback(callback) {this.callback=callback; return 1;},
+    cancelVideoFrameCallback() {this.callback=null;}};
+  const canvas = {width:0,height:0,getContext(){return {drawImage(){}};},
+    toDataURL(){return 'data:image/jpeg;base64,AA==';}};
+  const container = {querySelector(){return video;},remove(){}};
+  h.context.document = {body:{appendChild(){}},
+    createElement(name){return name==='canvas'?canvas:container;}};
+  h.context.MediaProviderBridge = {async attachVideo(){},detachVideo(){}};
+  const runtime=h.context.AwsDesktopRuntime;
+  await runtime.bindTrack('chime','session','remote','view');
+  for(let index=0;index<30;index++) video.callback(index*1000/30,{mediaTime:index/30});
+  assert.equal(h.messages.filter(value=>value.kind==='frame').length,30);
+  assert.equal(canvas.width,960); assert.equal(canvas.height,540);
+  // Repeated decoded frame must not generate another JPEG or platform update.
+  video.callback(1100,{mediaTime:29/30});
+  assert.equal(h.messages.filter(value=>value.kind==='frame').length,30);
+  const staleCallback=video.callback;
+  runtime.unbindTrack('view');
+  assert.equal(video.callback,null);
+  staleCallback(1200,{mediaTime:1.2});
+  assert.equal(h.messages.filter(value=>value.kind==='frame').length,30);
+});
