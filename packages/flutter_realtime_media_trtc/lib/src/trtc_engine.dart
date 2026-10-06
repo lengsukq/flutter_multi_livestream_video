@@ -233,14 +233,21 @@ class _NativeTrtcEngine implements TrtcEngine {
   void stopLocalPreview() => _cloud!.stopLocalPreview();
 
   @override
-  void startLocalPreview(int viewId) => _cloud!.startLocalPreview(true, viewId);
+  void startLocalPreview(int viewId) {
+    _cloud!.setLocalRenderParams(
+      TRTCRenderParams(fillMode: TRTCVideoFillMode.fit),
+    );
+    _cloud!.startLocalPreview(true, viewId);
+  }
 
   @override
   void clearLocalView() => _cloud?.updateLocalView(null);
 
   @override
-  void startRemoteView(String userId, int viewId) =>
-      _cloud!.startRemoteView(userId, TRTCVideoStreamType.big, viewId);
+  void startRemoteView(String userId, int viewId) {
+    setRemoteFillMode(userId, false, true);
+    _cloud!.startRemoteView(userId, TRTCVideoStreamType.big, viewId);
+  }
 
   @override
   void stopRemoteView(String userId) =>

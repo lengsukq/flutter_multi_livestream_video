@@ -925,7 +925,7 @@ private final class IvsVideoPlatformView:
         container.subviews.forEach { $0.removeFromSuperview() }
         guard
             let imageDevice = stream?.device as? IVSImageDevice,
-            let preview = try? imageDevice.previewView()
+            let preview = try? imageDevice.previewView(with: .fit)
         else {
             return
         }

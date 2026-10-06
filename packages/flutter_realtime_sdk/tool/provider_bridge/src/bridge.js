@@ -540,7 +540,7 @@
         remoteUsers.set(trackId, remote);
         addVideoTrack(session, { id: trackId, participantId, native: remote });
         const attachment = getTrackAttachment(session, trackId);
-        if (attachment) user.videoTrack.play(attachment.elementId);
+        if (attachment) user.videoTrack.play(attachment.elementId, { fit: 'contain' });
       }
       participant.isMuted = !user.audioTrack;
       publishSnapshot(session);
@@ -709,7 +709,7 @@
       },
       async attachVideo(track, container) {
         const native = track.native?.track || remoteUsers.get(track.id)?.track;
-        if (native?.play) native.play(container.id);
+        if (native?.play) native.play(container.id, { fit: 'contain' });
       },
       detachVideo(track, container) {
         const native = track.native?.track || remoteUsers.get(track.id)?.track;
@@ -798,7 +798,13 @@
         }
         if (name === 'setVideoEnabled') {
           if (args.enabled && !session.localVideoEnabled) {
-            await trtc.startLocalVideo({publish: true, ...(session.processedTrack ? {option: {videoTrack: session.processedTrack}} : {})});
+            await trtc.startLocalVideo({
+              publish: true,
+              option: {
+                fillMode: 'contain',
+                ...(session.processedTrack ? {videoTrack: session.processedTrack} : {}),
+              },
+            });
           } else if (!args.enabled) {
             await trtc.stopLocalVideo();
           }
@@ -842,7 +848,7 @@
       async attachVideo(track, container) {
         const native = track.native;
         if (native?.userId) {
-          await trtc.startRemoteVideo({ userId: native.userId, streamType: native.streamType, view: container.id });
+          await trtc.startRemoteVideo({ userId: native.userId, streamType: native.streamType, view: container.id, option: { fillMode: 'contain' } });
         } else {
           const mediaTrack = native?.mediaStreamTrack || native;
           if (mediaTrack && mediaTrack.kind === 'video') attachStreamTrack(mediaTrack, container);
@@ -964,8 +970,10 @@
         await engine.enableLocalVideo(false);
       },
       async attachVideo(track, container) {
-        if (track.isLocal) await engine.setLocalViewConfig(container.id, track.isScreenShare ? screenTrack : cameraTrack);
-        else engine.setRemoteViewConfig(container.id, track.participantId, track.isScreenShare ? screenTrack : cameraTrack);
+        const video = makeVideoElement(container);
+        if (track.isLocal) await engine.setLocalViewConfig(video, track.isScreenShare ? screenTrack : cameraTrack);
+        else engine.setRemoteViewConfig(video, track.participantId, track.isScreenShare ? screenTrack : cameraTrack);
+        video.style.objectFit = 'contain';
       },
       detachVideo(track) {
         if (track.isLocal) engine.setLocalViewConfig(null, track.isScreenShare ? screenTrack : cameraTrack);

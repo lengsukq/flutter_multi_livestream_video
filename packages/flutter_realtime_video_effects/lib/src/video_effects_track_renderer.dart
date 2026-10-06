@@ -10,10 +10,18 @@ class VideoEffectsTrackRenderer extends MediaTrackRenderer {
   const VideoEffectsTrackRenderer();
 
   @override
-  Widget buildView(BuildContext context, MediaVideoTrack track) {
+  Widget buildView(BuildContext context, MediaVideoTrack track) =>
+      buildViewWithFit(context, track);
+
+  @override
+  Widget buildViewWithFit(
+    BuildContext context,
+    MediaVideoTrack track, {
+    BoxFit fit = BoxFit.contain,
+  }) {
     if (track is! ProcessedVideoTrack) {
       return const SizedBox.shrink();
     }
-    return platform.buildProcessedVideoView(track);
+    return platform.buildProcessedVideoView(track, fit: fit);
   }
 }

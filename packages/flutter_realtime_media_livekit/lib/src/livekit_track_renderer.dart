@@ -16,7 +16,7 @@ class LiveKitTrackRenderer extends MediaTrackRenderer {
   Widget buildViewWithFit(
     BuildContext context,
     MediaVideoTrack track, {
-    BoxFit fit = BoxFit.cover,
+    BoxFit fit = BoxFit.contain,
   }) {
     if (track is! LiveKitMediaVideoTrack) {
       throw ArgumentError.value(

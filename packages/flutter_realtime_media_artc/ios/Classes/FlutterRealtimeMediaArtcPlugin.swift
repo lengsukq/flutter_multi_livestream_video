@@ -357,7 +357,7 @@ private final class ArtcVideoPlatformView: NSObject, FlutterPlatformView {
         boundEngine = engine
         let canvas = AliVideoCanvas()
         canvas.view = containerView
-        canvas.renderMode = fitMode == 1 ? .fill : .clip
+        canvas.renderMode = fitMode == 1 ? .fill : .crop
         if isLocal {
             _ = engine.setLocalViewConfig(canvas, for: .camera)
             if engine.isCameraOn() { _ = engine.startPreview() }

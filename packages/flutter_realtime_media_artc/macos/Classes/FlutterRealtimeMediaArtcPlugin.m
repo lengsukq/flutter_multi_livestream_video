@@ -27,9 +27,11 @@ static NSString *const kArtcViewType =
 @interface ArtcVideoPlatformView : NSView
 @property(nonatomic, copy) NSString *userId;
 @property(nonatomic, assign) BOOL local;
+@property(nonatomic, assign) NSInteger fitMode;
 @property(nonatomic, weak) FlutterRealtimeMediaArtcPlugin *plugin;
 - (instancetype)initWithUserId:(NSString *)userId
                        isLocal:(BOOL)isLocal
+                       fitMode:(NSInteger)fitMode
                         plugin:(FlutterRealtimeMediaArtcPlugin *)plugin;
 - (void)attach;
 - (void)detach;
@@ -425,7 +427,8 @@ static NSInteger ArtcSendIntObjectObjectInteger(
   if (canvasClass == Nil) return;
   id canvas = [[canvasClass alloc] init];
   [canvas setValue:view forKey:@"view"];
-  [canvas setValue:@0 forKey:@"renderMode"];
+  // AliRtcRenderModeFill (2) preserves the full frame; Crop (3) fills the view.
+  [canvas setValue:@(view.fitMode == 1 ? 2 : 3) forKey:@"renderMode"];
   if (view.local) {
     ArtcSendIntObjectInteger(
         self.engine, NSSelectorFromString(@"setLocalViewConfig:forTrack:"),
@@ -529,11 +532,13 @@ static NSInteger ArtcSendIntObjectObjectInteger(
 
 - (instancetype)initWithUserId:(NSString *)userId
                        isLocal:(BOOL)isLocal
+                       fitMode:(NSInteger)fitMode
                         plugin:(FlutterRealtimeMediaArtcPlugin *)plugin {
   self = [super initWithFrame:NSZeroRect];
   if (self) {
     _userId = [userId copy];
     _local = isLocal;
+    _fitMode = fitMode;
     _plugin = plugin;
     self.wantsLayer = YES;
     self.layer.backgroundColor = NSColor.blackColor.CGColor;
@@ -571,6 +576,7 @@ static NSInteger ArtcSendIntObjectObjectInteger(
                          ? values[@"userId"]
                          : @""
            isLocal:[values[@"isLocal"] boolValue]
+           fitMode:(values[@"fitMode"] != nil ? [values[@"fitMode"] integerValue] : 1)
             plugin:self.plugin];
 }
 

@@ -9,12 +9,15 @@ import 'processed_video_track.dart';
 @JS('globalThis')
 external JSObject get _globalThis;
 
-Widget buildProcessedVideoView(ProcessedVideoTrack track) =>
-    _ProcessedVideoWebView(track: track);
+Widget buildProcessedVideoView(
+  ProcessedVideoTrack track, {
+  BoxFit fit = BoxFit.contain,
+}) => _ProcessedVideoWebView(track: track, fit: fit);
 
 class _ProcessedVideoWebView extends StatefulWidget {
-  const _ProcessedVideoWebView({required this.track});
+  const _ProcessedVideoWebView({required this.track, required this.fit});
   final ProcessedVideoTrack track;
+  final BoxFit fit;
   @override
   State<_ProcessedVideoWebView> createState() => _ProcessedVideoWebViewState();
 }
@@ -34,13 +37,15 @@ class _ProcessedVideoWebViewState extends State<_ProcessedVideoWebView> {
       'attachPreviewElement'.toJS,
       widget.track.source.id.toJS,
       element,
+      (widget.fit == BoxFit.cover ? 'cover' : 'contain').toJS,
     );
   }
 
   @override
   void didUpdateWidget(covariant _ProcessedVideoWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.track.source.id != widget.track.source.id &&
+    if ((oldWidget.track.source.id != widget.track.source.id ||
+            oldWidget.fit != widget.fit) &&
         _element != null) {
       _attach(_element!);
     }

@@ -20,7 +20,7 @@ class ArtcTrackRenderer extends MediaTrackRenderer {
   Widget buildViewWithFit(
     BuildContext context,
     MediaVideoTrack track, {
-    BoxFit fit = BoxFit.cover,
+    BoxFit fit = BoxFit.contain,
   }) {
     if (track is! ArtcMediaVideoTrack) {
       throw ArgumentError.value(

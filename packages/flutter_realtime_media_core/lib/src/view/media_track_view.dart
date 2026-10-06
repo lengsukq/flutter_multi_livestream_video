@@ -20,7 +20,7 @@ abstract class MediaTrackRenderer {
   Widget buildViewWithFit(
     BuildContext context,
     MediaVideoTrack track, {
-    BoxFit fit = BoxFit.cover,
+    BoxFit fit = BoxFit.contain,
   }) => buildView(context, track);
 }
 
@@ -34,7 +34,7 @@ class MediaTrackView extends StatelessWidget {
     required this.renderer,
     this.track,
     this.placeholder,
-    this.fit = BoxFit.cover,
+    this.fit = BoxFit.contain,
   });
 
   /// Provider renderer, for example `LiveKitTrackRenderer()`.
@@ -46,7 +46,8 @@ class MediaTrackView extends StatelessWidget {
   /// Widget shown while [track] is null.
   final Widget? placeholder;
 
-  /// How the video fills the available space.
+  /// How the video fills the available space. Defaults to preserving the whole
+  /// frame, with empty space when the video and view have different proportions.
   final BoxFit fit;
 
   @override
