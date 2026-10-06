@@ -114,6 +114,11 @@
     let stopped = false;
     let frameHandle = null;
     let lastSegmentationAt = 0;
+    let nextFrameAt = 0;
+    let lastVideoFrame = -1;
+    let maskPixels = null;
+    let maskImageData = null;
+    const frameInterval = 1000 / frameRate;
 
     async function openCamera(nextDeviceId = null) {
       const nextStream = await mediaDevices.getUserMedia({
@@ -149,6 +154,8 @@
       sourceStream = nextStream;
       latestMask = null;
       faceBoxes = [];
+      nextFrameAt = 0;
+      lastVideoFrame = -1;
       previousTrack?.stop?.();
       previousStream?.getTracks?.().forEach((track) => {
         if (track !== previousTrack) track.stop?.();
@@ -169,7 +176,13 @@
       foregroundCanvas.height = outputHeight;
 
       if (!outputTrack) {
-        const outputStream = outputCanvas.captureStream(frameRate);
+        // Capture exactly the frames we render. A separate capture timer can
+        // discard frames when its phase differs from the camera/pacing clock.
+        let outputStream = outputCanvas.captureStream(0);
+        if (typeof outputStream.getVideoTracks()[0]?.requestFrame !== 'function') {
+          outputStream.getTracks().forEach((track) => track.stop());
+          outputStream = outputCanvas.captureStream(frameRate);
+        }
         outputTrack = outputStream.getVideoTracks()[0];
         if (!outputTrack) {
           throw new Error('Canvas capture did not produce a video track.');
@@ -222,7 +235,11 @@
       if (!values || maskWidth <= 0 || maskHeight <= 0) return;
       if (maskCanvas.width !== maskWidth) maskCanvas.width = maskWidth;
       if (maskCanvas.height !== maskHeight) maskCanvas.height = maskHeight;
-      const pixels = new Uint8ClampedArray(maskWidth * maskHeight * 4);
+      if (!maskPixels || maskImageData.width !== maskWidth || maskImageData.height !== maskHeight) {
+        maskPixels = new Uint8ClampedArray(maskWidth * maskHeight * 4);
+        maskImageData = new ImageData(maskPixels, maskWidth, maskHeight);
+      }
+      const pixels = maskPixels;
       // The landscape model outputs a small matte. Expand uncertain person
       // edges by at most one matte pixel and remap their confidence so hair
       // and shoulders stay in the sharp foreground. Feathering is confined
@@ -259,7 +276,7 @@
         pixels[offset + 3] = Math.round(opacity * 255);
       }
       maskContext.putImageData(
-        new ImageData(pixels, maskWidth, maskHeight),
+        maskImageData,
         0,
         0,
       );
@@ -268,13 +285,17 @@
 
     async function updateSegmentation(now) {
       if (currentEffect.type === 'none' || !enabled || outputSuspended || video.readyState < 2) return;
-      if (now - lastSegmentationAt < 1000 / frameRate - 1) return;
-      lastSegmentationAt = now;
+      const revision = effectRevision;
       await ensureSegmenter();
-      const faces = faceDetector.detectForVideo(video, now);
+      if (stopped || !enabled || outputSuspended || revision !== effectRevision || currentEffect.type === 'none') return;
+      // Inference runs once per accepted camera frame, with a monotonic task
+      // timestamp even when browser callback timestamps have limited precision.
+      const timestamp = Math.max(now, lastSegmentationAt + 1);
+      lastSegmentationAt = timestamp;
+      const faces = faceDetector.detectForVideo(video, timestamp);
       faceBoxes = (faces?.detections || []).map((face) => face.boundingBox)
         .filter((box) => box && box.width > 0 && box.height > 0).slice(0, 4);
-      const result = segmenter.segmentForVideo(video, now);
+      const result = segmenter.segmentForVideo(video, timestamp);
       try {
         const masks = result?.confidenceMasks;
         updateMask(masks?.[masks.length > 1 ? 1 : 0]);
@@ -294,6 +315,7 @@
         outputContext.filter = 'none';
         outputContext.drawImage(video, 0, 0, outputWidth, outputHeight);
         outputContext.restore();
+        outputTrack?.requestFrame?.();
         return;
       }
 
@@ -334,14 +356,38 @@
         );
       }
       outputContext.restore();
+      outputTrack?.requestFrame?.();
+    }
+
+    function currentVideoFrame() {
+      const quality = video.getVideoPlaybackQuality?.();
+      if (quality?.totalVideoFrames > 0) return quality.totalVideoFrames;
+      if (video.webkitDecodedFrameCount > 0) return video.webkitDecodedFrameCount;
+      return video.currentTime;
+    }
+
+    function acceptFrame(now, frame) {
+      if (!enabled || outputSuspended || video.readyState < 2) return false;
+      // requestAnimationFrame follows display refresh, which may be much faster
+      // than the camera. Do not redraw or infer the same decoded frame twice.
+      if (Number.isFinite(frame) && frame === lastVideoFrame) return false;
+      if (nextFrameAt && now + 1 < nextFrameAt) return false;
+      // Preserve the deadline instead of resetting it to each capture time:
+      // otherwise a 30 fps camera limited to 24 fps falls to about 15 fps.
+      nextFrameAt = !nextFrameAt || now - nextFrameAt > frameInterval
+        ? now + frameInterval : nextFrameAt + frameInterval;
+      if (Number.isFinite(frame)) lastVideoFrame = frame;
+      return true;
     }
 
     function scheduleFrame() {
       if (stopped) return;
-      const render = async (now) => {
+      const render = async (now, frame = currentVideoFrame()) => {
         try {
-          await updateSegmentation(now);
-          drawFrame();
+          if (acceptFrame(now, frame)) {
+            await updateSegmentation(now);
+            drawFrame();
+          }
         } catch (error) {
           failClosed(error);
         }
@@ -349,7 +395,7 @@
       };
       if (typeof video.requestVideoFrameCallback === 'function') {
         frameHandle = video.requestVideoFrameCallback(
-          () => render(performance.now()),
+          (now, metadata) => render(now, metadata?.mediaTime),
         );
       } else {
         frameHandle = global.requestAnimationFrame(render);
@@ -378,6 +424,8 @@
         const previous = backgroundImage;
         backgroundImage = nextImage;
         latestMask = null;
+        nextFrameAt = 0;
+        lastVideoFrame = -1;
         currentEffect = { type, blurStrength: nextEffect?.blurStrength || 'medium' };
         previous?.close?.();
         outputSuspended = false;
@@ -412,7 +460,7 @@
       },
       get info() {
         const settings = sourceTrack?.getSettings?.() || {};
-        return { width: outputCanvas.width, height: outputCanvas.height, frameRate: settings.frameRate || frameRate, cameraDeviceId: settings.deviceId || null, rotationDegrees: 0, pixelFormat: 'rgba8888', mirrored: false };
+        return { width: outputCanvas.width, height: outputCanvas.height, frameRate: Math.min(Number(settings.frameRate) || frameRate, frameRate), cameraDeviceId: settings.deviceId || null, rotationDegrees: 0, pixelFormat: 'rgba8888', mirrored: false };
       },
       get effect() {
         return { ...currentEffect };
@@ -445,6 +493,7 @@
         segmenter?.close?.();
         faceDetector?.close?.();
         segmenter = null; faceDetector = null; faceBoxes = [];
+        maskPixels = null; maskImageData = null;
         video.srcObject = null;
       },
     };
@@ -514,7 +563,7 @@
       if (container) this.attachPreviewElement(sourceId, container);
     },
 
-    attachPreviewElement(sourceId, container) {
+    attachPreviewElement(sourceId, container, fit = 'contain') {
       if (!container) throw new Error('A preview container is required.');
       let video = container.querySelector('video');
       if (!video) {
@@ -524,9 +573,10 @@
         video.muted = true;
         video.style.width = '100%';
         video.style.height = '100%';
-        video.style.objectFit = 'cover';
         container.replaceChildren(video);
       }
+      video.style.objectFit = fit === 'cover' ? 'cover' : 'contain';
+      container.style.backgroundColor = '#000000';
       video.srcObject = new MediaStream([requireSource(sourceId).track]);
       video.play().catch(() => {});
     },

@@ -151,6 +151,7 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     if (source == null) {
       source = await _videoEffectsBridge.createSource(
         config: VideoEffectsSourceConfig(
+          frameRate: 30,
           cameraDeviceId: settings.camera?.id,
           effect: settings.backgroundEffect,
         ),

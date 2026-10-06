@@ -137,6 +137,8 @@ private final class MacOSVideoEffectsSource: NSObject,
   }()
 
   private var currentPixelBuffer: CVPixelBuffer?
+  private var outputPixelBufferPool: CVPixelBufferPool?
+  private var outputPoolSize = CGSize.zero
   private var currentInput: AVCaptureDeviceInput?
   private var videoOutput: AVCaptureVideoDataOutput?
   private var cameraDeviceId: String?
@@ -265,7 +267,10 @@ private final class MacOSVideoEffectsSource: NSObject,
 
   private func configureCapture() throws {
     session.beginConfiguration()
-    defer { session.commitConfiguration() }
+    defer {
+      session.commitConfiguration()
+      configureFrameRate()
+    }
     session.sessionPreset = requestedWidth >= 1280 ? .hd1280x720 : .vga640x480
     try addCameraInput()
     let output = AVCaptureVideoDataOutput()
@@ -284,7 +289,10 @@ private final class MacOSVideoEffectsSource: NSObject,
 
   private func replaceCameraInput() throws {
     session.beginConfiguration()
-    defer { session.commitConfiguration() }
+    defer {
+      session.commitConfiguration()
+      configureFrameRate()
+    }
     let previous = currentInput
     if let previous { session.removeInput(previous) }
     currentInput = nil
@@ -297,8 +305,21 @@ private final class MacOSVideoEffectsSource: NSObject,
   private func addCameraInput() throws {
     let device = selectedCamera()
     guard let device else { throw VideoEffectsError.cameraUnavailable }
+    let input = try AVCaptureDeviceInput(device: device)
+    guard session.canAddInput(input) else {
+      throw VideoEffectsError.captureConfigurationFailed
+    }
+    session.addInput(input)
+    currentInput = input
+  }
+
+  private func configureFrameRate() {
+    // Session presets/input changes can reset the duration. Tune the format
+    // that is actually active after committing the capture configuration.
+    guard let device = currentInput?.device else { return }
     do {
       try device.lockForConfiguration()
+      defer { device.unlockForConfiguration() }
       let duration = CMTime(
         value: 1,
         timescale: CMTimeScale(max(1, frameRate))
@@ -312,16 +333,9 @@ private final class MacOSVideoEffectsSource: NSObject,
         device.activeVideoMinFrameDuration = duration
         device.activeVideoMaxFrameDuration = duration
       }
-      device.unlockForConfiguration()
     } catch {
       // Frame-rate tuning is best effort.
     }
-    let input = try AVCaptureDeviceInput(device: device)
-    guard session.canAddInput(input) else {
-      throw VideoEffectsError.captureConfigurationFailed
-    }
-    session.addInput(input)
-    currentInput = input
   }
 
   private func selectedCamera() -> AVCaptureDevice? {
@@ -341,6 +355,12 @@ private final class MacOSVideoEffectsSource: NSObject,
     else { return }
 
     let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+    if effectType == "none" {
+      // Flutter and provider sinks retain the camera buffer for their lifetime.
+      // Raw preview needs no Core Image render or second pixel-buffer allocation.
+      publishFrame(inputBuffer, timestamp: timestamp)
+      return
+    }
     let original = CIImage(cvPixelBuffer: inputBuffer)
     let processed: CIImage
 
@@ -403,9 +423,12 @@ private final class MacOSVideoEffectsSource: NSObject,
       return
     }
     ciContext.render(processed, to: outputBuffer)
+    publishFrame(outputBuffer, timestamp: timestamp)
+  }
 
+  private func publishFrame(_ buffer: CVPixelBuffer, timestamp: CMTime) {
     frameLock.lock()
-    currentPixelBuffer = outputBuffer
+    currentPixelBuffer = buffer
     frameLock.unlock()
 
     if textureId != 0 {
@@ -415,7 +438,7 @@ private final class MacOSVideoEffectsSource: NSObject,
     FlutterRealtimeProcessedVideoFrameHub.publish(
       FlutterRealtimeProcessedVideoFrame(
         sourceId: sourceId,
-        pixelBuffer: outputBuffer,
+        pixelBuffer: buffer,
         timestamp: timestamp
       )
     )
@@ -493,19 +516,34 @@ private final class MacOSVideoEffectsSource: NSObject,
     width: Int,
     height: Int
   ) -> CVPixelBuffer? {
+    let size = CGSize(width: width, height: height)
+    if outputPixelBufferPool == nil || outputPoolSize != size {
+      let attributes: [CFString: Any] = [
+        kCVPixelBufferWidthKey: width,
+        kCVPixelBufferHeightKey: height,
+        kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+        kCVPixelBufferCGImageCompatibilityKey: true,
+        kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+        kCVPixelBufferMetalCompatibilityKey: true,
+        kCVPixelBufferIOSurfacePropertiesKey: [:],
+      ]
+      var pool: CVPixelBufferPool?
+      guard CVPixelBufferPoolCreate(
+        kCFAllocatorDefault,
+        [kCVPixelBufferPoolMinimumBufferCountKey: 3] as CFDictionary,
+        attributes as CFDictionary,
+        &pool
+      ) == kCVReturnSuccess else { return nil }
+      outputPixelBufferPool = pool
+      outputPoolSize = size
+    }
+    guard let pool = outputPixelBufferPool else { return nil }
     var buffer: CVPixelBuffer?
-    let attributes: [CFString: Any] = [
-      kCVPixelBufferCGImageCompatibilityKey: true,
-      kCVPixelBufferCGBitmapContextCompatibilityKey: true,
-      kCVPixelBufferMetalCompatibilityKey: true,
-      kCVPixelBufferIOSurfacePropertiesKey: [:],
-    ]
-    let status = CVPixelBufferCreate(
+    // Buffers return to the pool after Flutter and all provider sinks release
+    // them; never overwrite a buffer that is still being displayed or encoded.
+    let status = CVPixelBufferPoolCreatePixelBuffer(
       kCFAllocatorDefault,
-      width,
-      height,
-      kCVPixelFormatType_32BGRA,
-      attributes as CFDictionary,
+      pool,
       &buffer
     )
     return status == kCVReturnSuccess ? buffer : nil
@@ -531,6 +569,7 @@ private final class MacOSVideoEffectsSource: NSObject,
     captureQueue.sync {
       disposed = true
       replacementImage = nil
+      outputPixelBufferPool = nil
       FlutterRealtimeProcessedVideoFrameHub.clear(sourceId)
       videoOutput?.setSampleBufferDelegate(nil, queue: nil)
       if session.isRunning { session.stopRunning() }

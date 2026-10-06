@@ -8,6 +8,22 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ProcessedVideoContractTest {
+    @Test fun uprightSurfaceUsesRotationAndKeepsAllSensorCorners() {
+        // Label sensor corners TL=0, TR=1, BL=2, BR=3. GL strip order is BL,BR,TL,TR.
+        val expected = mapOf(0 to listOf(2, 3, 0, 1), 90 to listOf(3, 1, 2, 0),
+            180 to listOf(1, 0, 3, 2), 270 to listOf(0, 2, 1, 3))
+        expected.forEach { (rotation, corners) ->
+            assertEquals(if (rotation % 180 == 0) 640 else 480,
+                ProcessedFrameGeometry.outputWidth(640, 480, rotation))
+            assertEquals(if (rotation % 180 == 0) 480 else 640,
+                ProcessedFrameGeometry.outputHeight(640, 480, rotation))
+            val coordinates = ProcessedFrameGeometry.textureCoordinates(rotation)
+            val actual = coordinates.toList().chunked(2).map { (x, y) -> y.toInt() * 2 + x.toInt() }
+            assertEquals(corners, actual)
+            assertEquals(setOf(0, 1, 2, 3), actual.toSet())
+        }
+    }
+
     @Test fun selectsForegroundMaskForSingleAndMulticlassSegmenters() {
         assertEquals(null, PersonConfidenceMatte.foregroundConfidenceMaskIndex(0))
         assertEquals(0, PersonConfidenceMatte.foregroundConfidenceMaskIndex(1))

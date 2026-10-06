@@ -8,6 +8,7 @@ import android.opengl.EGLExt;
 import android.opengl.EGLSurface;
 import android.opengl.GLES20;
 import com.amazonaws.ivs.broadcast.CustomImageSource;
+import com.oneplusdream.flutter_realtime_video_effects.ProcessedFrameGeometry;
 import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrame;
 import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameHub;
 import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameSink;
@@ -28,6 +29,9 @@ final class ProcessedIvsVideoSink implements ProcessedVideoFrameSink {
     private int texture;
     private int width;
     private int height;
+    private int textureWidth;
+    private int textureHeight;
+    private int rotation = -1;
     private boolean disposed;
     private boolean failed;
     private final FloatBuffer vertices = floats(-1f,-1f, 1f,-1f, -1f,1f, 1f,1f);
@@ -45,9 +49,17 @@ final class ProcessedIvsVideoSink implements ProcessedVideoFrameSink {
     @Override public synchronized void onVideoFrame(ProcessedVideoFrame frame) {
         if (disposed || failed) return;
         try {
-            if (width != frame.getWidth() || height != frame.getHeight()) {
-                width = frame.getWidth(); height = frame.getHeight();
+            int inputWidth = frame.getWidth(), inputHeight = frame.getHeight();
+            int outputWidth = ProcessedFrameGeometry.outputWidth(inputWidth, inputHeight, frame.getRotationDegrees());
+            int outputHeight = ProcessedFrameGeometry.outputHeight(inputWidth, inputHeight, frame.getRotationDegrees());
+            if (width != outputWidth || height != outputHeight) {
+                width = outputWidth; height = outputHeight;
                 source.setSize(width, height);
+            }
+            if (rotation != frame.getRotationDegrees()) {
+                rotation = frame.getRotationDegrees();
+                texCoords.clear();
+                texCoords.put(ProcessedFrameGeometry.textureCoordinates(rotation)).rewind();
             }
             if (display == EGL14.EGL_NO_DISPLAY) initialize();
             require(EGL14.eglMakeCurrent(display, surface, surface, context), "eglMakeCurrent");
@@ -57,9 +69,15 @@ final class ProcessedIvsVideoSink implements ProcessedVideoFrameSink {
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
             GLES20.glPixelStorei(GLES20.GL_UNPACK_ALIGNMENT, 1);
             // The shared SDK output is tightly packed; do not send rows from a vendor camera.
-            if (frame.getRowStride() != width * 4) throw new IllegalArgumentException("IVS requires tightly packed RGBA.");
-            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height,
-                    0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, frame.getRgba());
+            if (frame.getRowStride() != inputWidth * 4) throw new IllegalArgumentException("IVS requires tightly packed RGBA.");
+            if (textureWidth != inputWidth || textureHeight != inputHeight) {
+                GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, inputWidth, inputHeight,
+                        0, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, frame.getRgba());
+                textureWidth = inputWidth; textureHeight = inputHeight;
+            } else {
+                GLES20.glTexSubImage2D(GLES20.GL_TEXTURE_2D, 0, 0, 0, inputWidth, inputHeight,
+                        GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, frame.getRgba());
+            }
             int position = GLES20.glGetAttribLocation(program, "position");
             int coordinates = GLES20.glGetAttribLocation(program, "coordinates");
             GLES20.glEnableVertexAttribArray(position);

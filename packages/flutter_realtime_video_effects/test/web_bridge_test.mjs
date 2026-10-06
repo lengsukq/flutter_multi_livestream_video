@@ -6,11 +6,11 @@ import vm from 'node:vm';
 const runtime = await readFile(new URL('../web/video-effects-bridge.js', import.meta.url), 'utf8');
 function harness({model, mask = null, faces = [], imageSize = [1920,1080]} = {}) {
   const calls = [], cameras = [], videos = [], images = [], mattes = [];
-  let sequence = 0;
+  let sequence = 0, frameTime = 0;
   const output = {id:'processed', enabled:true, stop(){calls.push('output.stop');}, requestFrame(){}};
   function makeVideo() {
     const video = {style:{}, readyState:2, videoWidth:640, videoHeight:360, srcObject:null, async play(){}, pause(){},
-      requestVideoFrameCallback(cb){this.callback=cb;return 1;}, cancelVideoFrameCallback(){this.callback=null;}};
+      requestVideoFrameCallback(cb){this.callback=(now = (frameTime += 50), metadata = {mediaTime:now/1000})=>cb(now,metadata);return 1;}, cancelVideoFrameCallback(){this.callback=null;}};
     videos.push(video); return video;
   }
   const context = vm.createContext({console, URL, Blob, performance:{now:()=>100},
@@ -45,7 +45,7 @@ function harness({model, mask = null, faces = [], imageSize = [1920,1080]} = {})
 test('preview binds the actual element before DOM insertion',async()=>{
   const h=harness(); const info=await h.bridge.createSource('one',{});
   assert.equal(info.width,640);assert.equal(info.height,360);assert.equal(info.cameraDeviceId,'default-camera');
-  const element={querySelector:()=>null,replaceChildren(video){this.video=video;}};
+  const element={style:{},querySelector:()=>null,replaceChildren(video){this.video=video;}};
   h.bridge.attachPreviewElement('one',element);
   assert.equal(element.video.srcObject.tracks[0],h.output);
   h.bridge.disposeSource('one');
@@ -117,4 +117,31 @@ test('face protection preserves cheek pixels missed by person segmentation',asyn
   assert.equal(pixels[(6*20+12)*4+3],255,'right cheek remains sharp');
   assert.equal(pixels[3],0,'background stays outside face protection');
   h.bridge.disposeSource('one');assert.ok(h.calls.includes('faces.close'));
+});
+
+
+test('24 fps pacing preserves its deadline with a 30 fps camera', async () => {
+  const h=harness(); await h.bridge.createSource('one',{frameRate:24});
+  for(let index=0;index<30;index++) await h.videos[0].callback(index*1000/30,{mediaTime:index/30});
+  assert.equal(h.calls.filter(call=>call==='raw.draw').length,24);
+  assert.equal(h.calls.includes('model.create'),false,'none never initializes segmentation');
+  h.bridge.disposeSource('one');
+});
+
+test('camera callbacks do not render the same decoded frame twice', async () => {
+  const h=harness(); await h.bridge.createSource('one',{frameRate:30});
+  await h.videos[0].callback(0,{mediaTime:0});
+  await h.videos[0].callback(40,{mediaTime:0});
+  await h.videos[0].callback(80,{mediaTime:1/30});
+  assert.equal(h.calls.filter(call=>call==='raw.draw').length,2);
+  h.bridge.disposeSource('one');
+});
+
+test('steady mask dimensions reuse the same matte allocation', async () => {
+  const mask={width:4,height:4,getAsFloat32Array:()=>new Float32Array(16).fill(1)};
+  const h=harness({mask}); await h.bridge.createSource('one',{effect:{type:'blur'}});
+  await h.videos[0].callback(100,{mediaTime:0.1});
+  await h.videos[0].callback(150,{mediaTime:0.15});
+  assert.equal(h.mattes.length,2); assert.strictEqual(h.mattes[0],h.mattes[1]);
+  h.bridge.disposeSource('one');
 });

@@ -471,6 +471,7 @@ async function createAgoraHarness() {
   };
 
   const canvasTrack = mediaTrack('video', 'sdk-processed-video');
+  canvasTrack.requestFrame = () => {};
   const canvasContext = {
     save() {},
     restore() {},
@@ -487,6 +488,7 @@ async function createAgoraHarness() {
     getContext: () => canvasContext,
     captureStream: () => ({
       getVideoTracks: () => [canvasTrack],
+      getTracks: () => [canvasTrack],
     }),
   });
   const createVideo = () => ({

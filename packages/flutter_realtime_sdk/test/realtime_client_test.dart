@@ -203,6 +203,7 @@ void main() {
 
         expect(platform.createCalls, 1);
         expect(platform.lastConfig?.effect, const MediaBackgroundEffect.blur());
+        expect(platform.lastConfig?.frameRate, 30);
         expect(session.attachedSources, hasLength(1));
         expect(session.attachedSources.single.id, 'effects-source-1');
 

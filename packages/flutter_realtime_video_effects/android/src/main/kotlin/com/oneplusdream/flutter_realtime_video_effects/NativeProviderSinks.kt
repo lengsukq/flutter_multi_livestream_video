@@ -9,7 +9,7 @@ internal interface NativeProviderSink : ProcessedVideoFrameSink { fun dispose() 
 internal object AgoraFramePusher {
     init { System.loadLibrary("realtime_frame_push") }
     external fun create(engineHandle: Long): Long
-    external fun push(media: Long, rgba: ByteBuffer, width: Int, height: Int, timestampNs: Long, trackId: Int): Int
+    external fun push(media: Long, rgba: ByteBuffer, width: Int, height: Int, timestampNs: Long, rotationDegrees: Int, trackId: Int): Int
     external fun release(media: Long)
 }
 internal class AgoraProcessedSink(sourceId: String, engine: Long, private val trackId: Int) : NativeProviderSink {
@@ -21,7 +21,7 @@ internal class AgoraProcessedSink(sourceId: String, engine: Long, private val tr
     }
     @Synchronized override fun onVideoFrame(frame: ProcessedVideoFrame) {
         if (media == 0L) return
-        val result = AgoraFramePusher.push(media, frame.rgba, frame.width, frame.height, frame.timestampNs, trackId)
+        val result = AgoraFramePusher.push(media, frame.rgba, frame.width, frame.height, frame.timestampNs, frame.rotationDegrees, trackId)
         check(result == 0) { "Agora rejected processed frame: $result" }
     }
     @Synchronized override fun dispose() {
