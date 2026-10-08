@@ -8,6 +8,7 @@ import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameHub;
 import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameSink;
 import org.webrtc.*;
 import java.nio.ByteBuffer;
+import android.util.Log;
 import java.util.*;
 
 final class ProcessedWebRtcTrack implements ProcessedVideoFrameSink {
@@ -19,6 +20,11 @@ final class ProcessedWebRtcTrack implements ProcessedVideoFrameSink {
     final MediaStream stream;
     final MethodCallHandlerImpl handler;
     volatile boolean disposed;
+    private final boolean logFramePerformance = Log.isLoggable("LiveKitFramePerf", Log.DEBUG);
+    private long performanceStartNs;
+    private long conversionNs;
+    private long deliveryNs;
+    private int deliveredFrames;
 
     ProcessedWebRtcTrack(String sourceId) throws Exception {
         this.sourceId = sourceId;
@@ -54,16 +60,55 @@ final class ProcessedWebRtcTrack implements ProcessedVideoFrameSink {
 
     @Override public synchronized void onVideoFrame(ProcessedVideoFrame input) {
         if (disposed) return;
-        int w=input.getWidth(), h=input.getHeight(), cw=(w+1)/2, ch=(h+1)/2;
-        ByteBuffer data=input.toI420();
-        ByteBuffer y=plane(data,0,w*h), u=plane(data,w*h,cw*ch), v=plane(data,w*h+cw*ch,cw*ch);
-        JavaI420Buffer buffer=JavaI420Buffer.wrap(w,h,y,w,u,cw,v,cw,null);
-        VideoFrame frame=new VideoFrame(buffer,input.getRotationDegrees(),input.getTimestampNs());
-        try { videoSource.getCapturerObserver().onFrameCaptured(frame); }
-        finally { frame.release(); }
-    }
-    private static ByteBuffer plane(ByteBuffer data,int offset,int length) {
-        ByteBuffer view=data.duplicate(); view.position(offset); view.limit(offset+length); return view.slice();
+        final int width = input.getWidth(), height = input.getHeight();
+        final int stride = input.getRowStride();
+        final ByteBuffer rgba = input.getRgba().duplicate();
+        final long required = (long) stride * (height - 1) + (long) width * 4;
+        if (!"rgba8888".equals(input.getPixelFormat()) || !rgba.isDirect()
+                || width <= 0 || height <= 0 || stride < (long) width * 4
+                || required > rgba.limit()) {
+            throw new IllegalArgumentException("Expected a direct RGBA frame with valid row strides.");
+        }
+        rgba.position(0);
+        final long started = logFramePerformance ? System.nanoTime() : 0;
+        // RGBA bytes are called ABGR by libyuv on little-endian Android.
+        // Use WebRTC's native SIMD converter instead of Kotlin pixel loops.
+        // A refcounted I420 buffer stays valid if the encoder retains this frame.
+        final JavaI420Buffer buffer = JavaI420Buffer.allocate(width, height);
+        try {
+            YuvHelper.ABGRToI420(rgba, stride,
+                    buffer.getDataY(), buffer.getStrideY(),
+                    buffer.getDataU(), buffer.getStrideU(),
+                    buffer.getDataV(), buffer.getStrideV(), width, height);
+        } catch (RuntimeException | Error error) {
+            buffer.release();
+            throw error;
+        }
+        final long converted = logFramePerformance ? System.nanoTime() : 0;
+        final VideoFrame frame = new VideoFrame(buffer, input.getRotationDegrees(), input.getTimestampNs());
+        try {
+            videoSource.getCapturerObserver().onFrameCaptured(frame);
+        } finally {
+            frame.release();
+        }
+        if (logFramePerformance) {
+            if (performanceStartNs == 0) performanceStartNs = started;
+            conversionNs += converted - started;
+            deliveryNs += System.nanoTime() - converted;
+            deliveredFrames++;
+            final double seconds = (System.nanoTime() - performanceStartNs) / 1_000_000_000.0;
+            if (seconds >= 5) {
+                Log.d("LiveKitFramePerf", String.format(Locale.US,
+                        "%dx%d delivered=%.1ffps convert=%.2fms capture=%.2fms",
+                        width, height, deliveredFrames / seconds,
+                        conversionNs / 1_000_000.0 / deliveredFrames,
+                        deliveryNs / 1_000_000.0 / deliveredFrames));
+                performanceStartNs = 0;
+                conversionNs = 0;
+                deliveryNs = 0;
+                deliveredFrames = 0;
+            }
+        }
     }
     synchronized void dispose() {
         if (disposed) return; disposed=true;

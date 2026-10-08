@@ -5,7 +5,8 @@ import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'tencent_chat_engine.dart';
 import 'tencent_chat_join_info.dart';
 
-class TencentChatSession implements ChatSession, ChatSessionIdentity {
+class TencentChatSession
+    implements ChatSession, ChatSessionIdentity, ChatSystemMessaging {
   TencentChatSession({
     required this.role,
     required this.engineFactory,
@@ -22,6 +23,10 @@ class TencentChatSession implements ChatSession, ChatSessionIdentity {
       StreamController<List<ChatMessage>>.broadcast();
   final StreamController<ChatEvent> _events =
       StreamController<ChatEvent>.broadcast();
+  final StreamController<String> _systemMessages =
+      StreamController<String>.broadcast();
+  @override
+  Stream<String> get systemMessages => _systemMessages.stream;
 
   @override
   final ChatRole role;
@@ -46,6 +51,15 @@ class TencentChatSession implements ChatSession, ChatSessionIdentity {
     final info = _joinInfo;
     if (info == null) return const ChatCapabilities.none();
     return ChatCapabilities(canSendMessage: info.canSendMessage);
+  }
+
+  @override
+  Future<void> sendSystemMessage(String payload) async {
+    _requireConnected();
+    if (!capabilities.canSendMessage) {
+      throw _error(ChatErrorCode.forbidden, 'Chat cannot send system hints.');
+    }
+    await _engine!.sendMessage(ChatSystemMessageCodec.encode(payload));
   }
 
   @override
@@ -168,6 +182,13 @@ class TencentChatSession implements ChatSession, ChatSessionIdentity {
   );
 
   void _onMessage(Map<String, Object?> raw) {
+    final system = ChatSystemMessageCodec.decode(
+      raw['message']?.toString() ?? '',
+    );
+    if (system != null) {
+      if (!_systemMessages.isClosed) _systemMessages.add(system);
+      return;
+    }
     final id = raw['id']?.toString().trim() ?? '';
     final userId = raw['userId']?.toString().trim() ?? '';
     if (id.isEmpty || userId.isEmpty) return;
@@ -186,7 +207,9 @@ class TencentChatSession implements ChatSession, ChatSessionIdentity {
       id: id,
       userId: userId,
       displayName: raw['displayName']?.toString() ?? userId,
-      message: raw['message']?.toString() ?? '',
+      message: ChatSystemMessageCodec.decodeUserText(
+        raw['message']?.toString() ?? '',
+      ),
       timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMs),
       providerId: providerId,
       attributes: Map.unmodifiable(attributes),
@@ -212,7 +235,7 @@ class TencentChatSession implements ChatSession, ChatSessionIdentity {
     if (value.isEmpty) {
       throw _error(ChatErrorCode.invalidArgument, 'Message must not be empty.');
     }
-    await _engine!.sendMessage(value);
+    await _engine!.sendMessage(ChatSystemMessageCodec.encodeUserText(value));
   }
 
   @override
@@ -246,6 +269,7 @@ class TencentChatSession implements ChatSession, ChatSessionIdentity {
     await _states.close();
     await _snapshots.close();
     await _events.close();
+    await _systemMessages.close();
   }
 
   void _setState(ChatConnectionState next) {

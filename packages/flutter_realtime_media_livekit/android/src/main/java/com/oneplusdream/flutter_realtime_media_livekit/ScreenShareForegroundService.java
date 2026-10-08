@@ -8,8 +8,12 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Bundle;
+import android.os.ResultReceiver;
 
 public final class ScreenShareForegroundService extends Service {
+    static final String EXTRA_RESULT_RECEIVER = "screen_share_result_receiver";
+    static final int RESULT_READY = 1;
     private static final String CHANNEL_ID =
             "flutter_realtime_media_livekit_screen_share";
     private static final int NOTIFICATION_ID = 21041;
@@ -22,14 +26,28 @@ public final class ScreenShareForegroundService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Notification notification = buildNotification();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
-        } else {
-            startForeground(NOTIFICATION_ID, notification);
+        ResultReceiver receiver = intent == null ? null :
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                        ? intent.getParcelableExtra(EXTRA_RESULT_RECEIVER, ResultReceiver.class)
+                        : intent.getParcelableExtra(EXTRA_RESULT_RECEIVER));
+        try {
+            Notification notification = buildNotification();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+            // Capturing is legal only after startForeground completes, not just
+            // after Context.startForegroundService schedules this command.
+            if (receiver != null) receiver.send(RESULT_READY, Bundle.EMPTY);
+        } catch (RuntimeException error) {
+            Bundle data = new Bundle();
+            data.putString("message", error.getMessage());
+            if (receiver != null) receiver.send(0, data);
+            stopSelf(startId);
         }
         return START_NOT_STICKY;
     }

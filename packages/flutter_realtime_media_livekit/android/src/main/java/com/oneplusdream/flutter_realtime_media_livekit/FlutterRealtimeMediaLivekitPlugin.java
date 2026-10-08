@@ -3,6 +3,10 @@ package com.oneplusdream.flutter_realtime_media_livekit;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.ResultReceiver;
 
 import androidx.annotation.NonNull;
 
@@ -20,6 +24,10 @@ public final class FlutterRealtimeMediaLivekitPlugin
     private Context applicationContext;
     private MethodChannel channel;
     private MethodChannel processedChannel;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private Result pendingScreenStart;
+    private Runnable screenStartTimeout;
+    private boolean screenServiceStarted;
     private final java.util.Map<String,ProcessedWebRtcTrack> processedTracks = new java.util.HashMap<>();
 
     @Override
@@ -48,11 +56,11 @@ public final class FlutterRealtimeMediaLivekitPlugin
     @Override
     public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
         if ("start".equals(call.method)) {
-            startForegroundService();
-            result.success(null);
+            startForegroundService(result);
             return;
         }
         if ("stop".equals(call.method)) {
+            finishScreenStart("screen_share_cancelled", "Screen sharing was stopped before the service was ready.");
             stopForegroundService();
             result.success(null);
             return;
@@ -60,24 +68,70 @@ public final class FlutterRealtimeMediaLivekitPlugin
         result.notImplemented();
     }
 
-    private void startForegroundService() {
-        if (applicationContext == null) return;
-        Intent intent = new Intent(applicationContext, ScreenShareForegroundService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            applicationContext.startForegroundService(intent);
-        } else {
-            applicationContext.startService(intent);
+    private void startForegroundService(Result result) {
+        if (applicationContext == null) {
+            result.error("screen_share_unavailable", "The Android plugin is detached.", null);
+            return;
         }
+        if (pendingScreenStart != null) {
+            result.error("screen_share_busy", "Screen-sharing service is already starting.", null);
+            return;
+        }
+        pendingScreenStart = result;
+        Intent intent = new Intent(applicationContext, ScreenShareForegroundService.class);
+        intent.putExtra(ScreenShareForegroundService.EXTRA_RESULT_RECEIVER,
+                new ResultReceiver(mainHandler) {
+                    @Override protected void onReceiveResult(int code, Bundle data) {
+                        // Ignore a late acknowledgment belonging to an earlier start.
+                        if (pendingScreenStart != result) return;
+                        if (code == ScreenShareForegroundService.RESULT_READY) {
+                            screenServiceStarted = true;
+                            finishScreenStart(null, null);
+                        } else {
+                            finishScreenStart("screen_share_service_failed",
+                                    data == null ? "Unable to start screen-sharing service."
+                                            : data.getString("message"));
+                        }
+                    }
+                });
+        screenStartTimeout = () -> {
+            finishScreenStart("screen_share_service_timeout", "Screen-sharing service did not become ready.");
+            stopForegroundService();
+        };
+        mainHandler.postDelayed(screenStartTimeout, 10_000);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                applicationContext.startForegroundService(intent);
+            } else {
+                applicationContext.startService(intent);
+            }
+        } catch (RuntimeException error) {
+            finishScreenStart("screen_share_service_failed", error.getMessage());
+        }
+    }
+
+    private void finishScreenStart(String code, String message) {
+        if (screenStartTimeout != null) mainHandler.removeCallbacks(screenStartTimeout);
+        screenStartTimeout = null;
+        Result result = pendingScreenStart;
+        pendingScreenStart = null;
+        if (result == null) return;
+        if (code == null) result.success(null);
+        else result.error(code, message, null);
     }
 
     private void stopForegroundService() {
         if (applicationContext == null) return;
         Intent intent = new Intent(applicationContext, ScreenShareForegroundService.class);
         applicationContext.stopService(intent);
+        screenServiceStarted = false;
     }
 
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        final boolean shouldStopScreenService = screenServiceStarted || pendingScreenStart != null;
+        finishScreenStart("screen_share_unavailable", "The Android plugin was detached.");
+        if (shouldStopScreenService) stopForegroundService();
         for (ProcessedWebRtcTrack track: processedTracks.values()) track.dispose();
         processedTracks.clear();
         if (processedChannel != null) processedChannel.setMethodCallHandler(null);

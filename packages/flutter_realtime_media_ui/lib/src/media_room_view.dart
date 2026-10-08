@@ -59,6 +59,13 @@ class MediaRoomView extends StatefulWidget {
     this.participantBuilder,
     this.onLeave,
     this.backgroundEffects,
+    this.canEnableMicrophone,
+    this.microphonePermissionUpdates,
+    this.screenShareOverlayBuilder,
+    this.contentStageBuilder,
+    this.contentStageUpdates,
+    this.contentControlsBuilder,
+    this.extraControlsBuilder,
   });
   final MediaRoomSession room;
   final MediaTrackRenderer renderer;
@@ -69,6 +76,27 @@ class MediaRoomView extends StatefulWidget {
   final MediaParticipantBuilder? participantBuilder;
   final VoidCallback? onLeave;
   final MediaBackgroundEffectsController? backgroundEffects;
+
+  /// Optional SDK-layer advisory classroom microphone gate.
+  /// Backend/provider enforcement must be implemented separately.
+  final bool Function()? canEnableMicrophone;
+  final Stream<Object?>? microphonePermissionUpdates;
+
+  /// Occupies the same contained content rectangle as the shared video.
+  /// Hosts may add provider-neutral annotations without replacing rendering.
+  final Widget Function(BuildContext context, MediaVideoTrack track)?
+  screenShareOverlayBuilder;
+
+  /// Null stage uses member view while retaining camera renderers.
+  final Widget? Function(BuildContext, MediaSnapshot)? contentStageBuilder;
+  final Stream<Object?>? contentStageUpdates;
+
+  /// Null controls preserve the legacy screen-share button.
+  final Widget? Function(BuildContext)? contentControlsBuilder;
+
+  /// Optional additional controls placed into the bottom dock controls,
+  /// placed after content sharing controls and before room administration.
+  final List<Widget> Function(BuildContext)? extraControlsBuilder;
   @override
   State<MediaRoomView> createState() => _MediaRoomViewState();
 }
@@ -78,6 +106,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   final _rtcDataMessage = TextEditingController();
   final _chatScroll = ScrollController();
   StreamSubscription<List<ChatMessage>>? _chatUnreadSub;
+  StreamSubscription<Object?>? _micPermissionSub;
+  StreamSubscription<Object?>? _contentSub;
   Widget? _cachedMediaStage;
   List<Object?> _mediaStageKey = [];
   final _memberRevision = ValueNotifier<int>(0);
@@ -220,6 +250,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   void initState() {
     super.initState();
     _watchUnreadChat();
+    _watchMicPermission();
+    _watchContent();
   }
 
   @override
@@ -241,6 +273,35 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         oldWidget.chatSession != widget.chatSession) {
       _watchUnreadChat();
     }
+    if (oldWidget.contentStageUpdates != widget.contentStageUpdates) {
+      _watchContent();
+    }
+    if (oldWidget.microphonePermissionUpdates !=
+        widget.microphonePermissionUpdates) {
+      _watchMicPermission();
+    }
+  }
+
+  void _watchContent() {
+    _contentSub?.cancel();
+    _contentSub = widget.contentStageUpdates?.listen((_) {
+      if (mounted) setState(() => _cachedMediaStage = null);
+    });
+  }
+
+  void _watchMicPermission() {
+    _micPermissionSub?.cancel();
+    _micPermissionSub = widget.microphonePermissionUpdates?.listen((_) {
+      if (!mounted) return;
+      _controlRevision.value++;
+      if (widget.canEnableMicrophone?.call() == false &&
+          session is InteractiveMediaSession &&
+          !session.snapshot.localMuted) {
+        unawaited(
+          _run(() => (session as InteractiveMediaSession).setMuted(true)),
+        );
+      }
+    });
   }
 
   @override
@@ -351,7 +412,10 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     if (!mounted || targetRoom != widget.room) return;
     if (current is InteractiveMediaSession) {
       try {
-        await current.setMuted(!settings.microphoneEnabled);
+        await current.setMuted(
+          !settings.microphoneEnabled ||
+              widget.canEnableMicrophone?.call() == false,
+        );
         await current.setVideoEnabled(
           settings.cameraEnabled && allowInitialVideoPublish,
         );
@@ -443,6 +507,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   @override
   void dispose() {
     _chatUnreadSub?.cancel();
+    _micPermissionSub?.cancel();
+    _contentSub?.cancel();
     _copyTimer?.cancel();
     for (final timer in _heartTimers) {
       timer.cancel();
@@ -926,6 +992,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       value.localVideoEnabled,
       value.localMuted,
       value.contentShareTrack,
+      value.contentShareTrack?.aspectRatio,
+      widget.screenShareOverlayBuilder,
       ...value.participants,
     ];
     // RTC chat and statistics share the media snapshot stream. Reuse the video
@@ -939,9 +1007,20 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   Widget _buildMediaStage(MediaSnapshot value) {
     final isLive = widget.room.role != MediaRole.participant;
-    final stageContent =
-        value.contentShareTrack == null &&
-            _layoutMode != MediaRoomLayoutMode.presentation
+    final customContent = widget.contentStageBuilder?.call(context, value);
+    final stageContent = customContent != null
+        ? Column(
+            children: [
+              Expanded(child: customContent),
+              if (value.participants.isNotEmpty)
+                SizedBox(height: 116, child: _participantStrip(value)),
+            ],
+          )
+        : widget.contentStageBuilder != null &&
+              widget.contentControlsBuilder?.call(context) != null
+        ? (value.participants.isEmpty ? _waiting() : _grid(value))
+        : value.contentShareTrack == null &&
+              _layoutMode != MediaRoomLayoutMode.presentation
         ? value.participants.isEmpty
               ? _waiting()
               : _grid(value)
@@ -1113,16 +1192,17 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                     ],
                   ),
                 ),
-                PopupMenuItem(
-                  value: MediaRoomLayoutMode.presentation,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.present_to_all_rounded, size: 18),
-                      const SizedBox(width: 8),
-                      Text(strings.presentationMode),
-                    ],
+                if (widget.contentControlsBuilder?.call(context) == null)
+                  PopupMenuItem(
+                    value: MediaRoomLayoutMode.presentation,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.present_to_all_rounded, size: 18),
+                        const SizedBox(width: 8),
+                        Text(strings.presentationMode),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -1443,6 +1523,17 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                 fit: BoxFit.contain,
               ),
             ),
+            if (value.contentShareTrack != null &&
+                widget.screenShareOverlayBuilder != null)
+              Center(
+                child: AspectRatio(
+                  aspectRatio: value.contentShareTrack!.aspectRatio,
+                  child: widget.screenShareOverlayBuilder!(
+                    context,
+                    value.contentShareTrack!,
+                  ),
+                ),
+              ),
             Positioned(
               left: 10,
               top: 10,

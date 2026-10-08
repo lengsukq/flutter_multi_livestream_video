@@ -400,12 +400,14 @@ internal class AndroidVideoEffectsSource(
     }
 
     private fun publishFrame(pixels: ByteBuffer, width: Int, height: Int, timestampNs: Long, rotation: Int) {
+        val startedNs = System.nanoTime()
         ProcessedVideoFrameHub.publish(
             ProcessedVideoFrame(
                 sourceId = sourceId, rgba = pixels, width = width, height = height,
                 timestampNs = timestampNs, rotationDegrees = rotation, mirrored = false,
             ),
         )
+        performance.stage("publish", System.nanoTime() - startedNs)
     }
 
     private fun cameraBitmap(image: ImageProxy): Bitmap {

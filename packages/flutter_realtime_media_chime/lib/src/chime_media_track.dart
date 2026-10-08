@@ -2,7 +2,8 @@ import 'package:flutter_aws_chime/flutter_aws_chime.dart' as chime;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 /// Core video-track handle backed by an existing Chime native video tile.
-class ChimeMediaVideoTrack extends MediaVideoTrack {
+class ChimeMediaVideoTrack extends MediaVideoTrack
+    implements MediaContentOwnerTrack {
   const ChimeMediaVideoTrack(this.tile);
 
   final chime.MeetingVideoTile tile;
@@ -12,6 +13,12 @@ class ChimeMediaVideoTrack extends MediaVideoTrack {
 
   @override
   String get participantId => tile.attendeeId;
+
+  @override
+  String get contentOwnerParticipantId =>
+      tile.isContentShare && tile.attendeeId.endsWith('#content')
+      ? tile.attendeeId.substring(0, tile.attendeeId.length - '#content'.length)
+      : tile.attendeeId;
 
   @override
   bool get isLocal => tile.isLocal;

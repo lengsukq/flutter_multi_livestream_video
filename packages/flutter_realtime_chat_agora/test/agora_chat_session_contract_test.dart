@@ -51,7 +51,64 @@ Map<String, dynamic> _joinJson({String token = 'token-1'}) => {
   },
 };
 
+const hint =
+    '{"v":1,"type":"classroom.state.changed","roomCode":"123456","revision":3,"eventId":"hint-3","timestampMs":1000}';
+
 void main() {
+  test('Agora system hints do not appear in regular chat history', () async {
+    final engine = _FakeEngine();
+    final factory = AgoraChatSessionFactory(engineFactory: () async => engine);
+    final joinInfo = factory.parseJoinInfo(_joinJson());
+    final session = factory.createSession(joinInfo);
+    await session.connect(joinInfo);
+    final signals = <String>[];
+    final system = session as ChatSystemMessaging;
+    final sub = system.systemMessages.listen(signals.add);
+    await system.sendSystemMessage(hint);
+    final frame = ChatSystemMessageCodec.encode(hint);
+    expect(engine.calls, contains('send:$frame'));
+    engine.events.onMessage?.call({
+      'id': 'system-1',
+      'userId': 'other',
+      'message': frame,
+      'timestampMs': 1000,
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(signals, [hint]);
+    expect(session.messages, isEmpty);
+    final literalTexts = [
+      '${ChatSystemMessageCodec.prefix}$hint',
+      '${ChatSystemMessageCodec.textPrefix}literal text',
+    ];
+    for (var index = 0; index < literalTexts.length; index++) {
+      final literal = literalTexts[index];
+      await session.sendMessage(literal);
+      final wire = ChatSystemMessageCodec.encodeUserText(literal);
+      expect(engine.calls, contains('send:$wire'));
+      engine.events.onMessage?.call({
+        'id': 'literal-$index',
+        'userId': 'other',
+        'message': wire,
+        'timestampMs': 1001 + index,
+      });
+    }
+    engine.events.onMessage?.call({
+      'id': 'malformed',
+      'userId': 'other',
+      'message': '${ChatSystemMessageCodec.prefix}not-json',
+      'timestampMs': 1003,
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(signals, [hint]);
+    expect(session.messages.map((m) => m.message), [
+      ...literalTexts,
+      '${ChatSystemMessageCodec.prefix}not-json',
+    ]);
+
+    await sub.cancel();
+    await session.dispose();
+  });
+
   test('Agora adapter exposes send but not unsafe moderation', () async {
     final engine = _FakeEngine();
     final factory = AgoraChatSessionFactory(engineFactory: () async => engine);

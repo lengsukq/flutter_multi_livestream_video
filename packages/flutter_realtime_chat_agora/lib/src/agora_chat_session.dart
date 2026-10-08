@@ -5,7 +5,8 @@ import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'agora_chat_engine.dart';
 import 'agora_chat_join_info.dart';
 
-class AgoraChatSession implements ChatSession, ChatSessionIdentity {
+class AgoraChatSession
+    implements ChatSession, ChatSessionIdentity, ChatSystemMessaging {
   AgoraChatSession({
     required this.role,
     required this.engineFactory,
@@ -22,6 +23,10 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
       StreamController<List<ChatMessage>>.broadcast();
   final StreamController<ChatEvent> _events =
       StreamController<ChatEvent>.broadcast();
+  final StreamController<String> _systemMessages =
+      StreamController<String>.broadcast();
+  @override
+  Stream<String> get systemMessages => _systemMessages.stream;
 
   @override
   final ChatRole role;
@@ -97,6 +102,15 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
     }
   }
 
+  @override
+  Future<void> sendSystemMessage(String payload) async {
+    _requireConnected();
+    if (!capabilities.canSendMessage) {
+      throw _error(ChatErrorCode.forbidden, 'Chat cannot send system hints.');
+    }
+    await _engine!.sendMessage(ChatSystemMessageCodec.encode(payload));
+  }
+
   Future<AgoraChatJoinInfo> _refreshCredentials(
     AgoraChatJoinInfo current,
   ) async {
@@ -160,6 +174,12 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
   );
 
   void _onMessage(Map<String, Object?> raw) {
+    final content = raw['message']?.toString() ?? '';
+    final system = ChatSystemMessageCodec.decode(content);
+    if (system != null) {
+      if (!_systemMessages.isClosed) _systemMessages.add(system);
+      return;
+    }
     final id = raw['id']?.toString().trim() ?? '';
     final userId = raw['userId']?.toString().trim() ?? '';
     if (id.isEmpty || userId.isEmpty) return;
@@ -178,7 +198,9 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
       id: id,
       userId: userId,
       displayName: raw['displayName']?.toString() ?? userId,
-      message: raw['message']?.toString() ?? '',
+      message: ChatSystemMessageCodec.decodeUserText(
+        raw['message']?.toString() ?? '',
+      ),
       timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMs),
       providerId: providerId,
       attributes: Map.unmodifiable(attributes),
@@ -204,7 +226,7 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
     if (value.isEmpty) {
       throw _error(ChatErrorCode.invalidArgument, 'Message must not be empty.');
     }
-    await _engine!.sendMessage(value);
+    await _engine!.sendMessage(ChatSystemMessageCodec.encodeUserText(value));
   }
 
   @override
@@ -238,6 +260,7 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
     await _states.close();
     await _snapshots.close();
     await _events.close();
+    await _systemMessages.close();
   }
 
   void _setState(ChatConnectionState next) {

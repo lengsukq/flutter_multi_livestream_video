@@ -9,6 +9,65 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
+    'content canvas events retain camera tiles; mode changes update the stage and replace legacy controls',
+    (tester) async {
+      final fixture = _RoomFixture(
+        participants: const [
+          MediaParticipant(id: 'remote', displayName: 'Remote'),
+        ],
+      );
+      final stageChanges = StreamController<Object?>.broadcast();
+      final marks = ValueNotifier<int>(0);
+      var whiteboard = true;
+      var builds = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+            contentStageUpdates: stageChanges.stream,
+            contentStageBuilder: (_, _) => whiteboard
+                ? ValueListenableBuilder<int>(
+                    valueListenable: marks,
+                    builder: (_, count, _) => Text('Marks $count'),
+                  )
+                : null,
+            contentControlsBuilder: (_) => const Text('Unified content'),
+            participantBuilder: (_, participant, _) {
+              builds++;
+              return Text(participant.displayName);
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      final before = builds;
+      for (var i = 1; i <= 10; i++) {
+        marks.value = i;
+        await tester.pump();
+      }
+      expect(builds, before);
+      expect(find.text('Marks 10'), findsOneWidget);
+      expect(find.text('Unified content'), findsOneWidget);
+      await tester.tap(find.byTooltip('Layout mode'));
+      await tester.pumpAndSettle();
+      expect(find.text('Presentation view'), findsNothing);
+      await tester.tap(find.text('Grid view'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Screen share'), findsNothing);
+      whiteboard = false;
+      stageChanges.add('members');
+      await tester.pumpAndSettle();
+      expect(find.text('Marks 10'), findsNothing);
+      expect(find.text('Remote'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await stageChanges.close();
+      marks.dispose();
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets(
     'RTC message snapshots reuse video while participant changes rebuild it',
     (tester) async {
       final fixture = _RoomFixture(
@@ -586,6 +645,29 @@ void main() {
     await fixture.dispose();
   });
 
+  testWidgets(
+    'classroom mic gate rejects student unmute before teacher approval',
+    (tester) async {
+      final fixture = _RoomFixture();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+            canEnableMicrophone: () => false,
+            config: const MediaRoomViewConfig(confirmBeforeLeave: false),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byTooltip('Microphone').first);
+      await tester.pump();
+      expect(find.textContaining('等待教师允许发言'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await fixture.dispose();
+    },
+  );
+
   testWidgets('screen share control toggles start and stop', (tester) async {
     final fixture = _RoomFixture(screenShare: true);
 
@@ -937,6 +1019,38 @@ void main() {
     await fixture.dispose();
   });
 
+  testWidgets(
+    'screen overlays use the contained video rectangle on phone and desktop',
+    (tester) async {
+      for (final size in [const Size(360, 740), const Size(1200, 800)]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        final fixture = _RoomFixture(screenShare: true);
+        await fixture.media.setScreenShareEnabled(true);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaRoomView(
+              room: fixture.room,
+              renderer: const _FakeRenderer(),
+              screenShareOverlayBuilder: (_, track) =>
+                  const SizedBox.expand(key: ValueKey('annotation-content')),
+            ),
+          ),
+        );
+        await tester.pump();
+        final content = tester.getSize(
+          find.byKey(const ValueKey('annotation-content')),
+        );
+        expect(content.width / content.height, closeTo(16 / 9, .001));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await fixture.dispose();
+      }
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    },
+  );
+
   testWidgets('screen share occupies the primary room stage', (tester) async {
     final fixture = _RoomFixture(screenShare: true);
 
@@ -1013,6 +1127,10 @@ void main() {
   testWidgets(
     'room management merges Media and Chat members by logical userId',
     (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
       final fixture = _ManagedRoomFixture();
       final chat = _FakeChatSession();
       final moderation = _FakeChatModeration();

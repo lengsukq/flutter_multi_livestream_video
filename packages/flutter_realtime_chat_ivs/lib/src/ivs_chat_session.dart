@@ -5,7 +5,8 @@ import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'ivs_chat_engine.dart';
 import 'ivs_chat_join_info.dart';
 
-class IvsChatSession implements ChatSession, ChatSessionIdentity {
+class IvsChatSession
+    implements ChatSession, ChatSessionIdentity, ChatSystemMessaging {
   IvsChatSession({
     required this.role,
     required this.engineFactory,
@@ -22,6 +23,10 @@ class IvsChatSession implements ChatSession, ChatSessionIdentity {
       StreamController<List<ChatMessage>>.broadcast();
   final StreamController<ChatEvent> _events =
       StreamController<ChatEvent>.broadcast();
+  final StreamController<String> _systemMessages =
+      StreamController<String>.broadcast();
+  @override
+  Stream<String> get systemMessages => _systemMessages.stream;
 
   @override
   final ChatRole role;
@@ -53,6 +58,15 @@ class IvsChatSession implements ChatSession, ChatSessionIdentity {
       canDeleteMessage: info.canDeleteMessage,
       canDisconnectUser: info.canDisconnectUser,
     );
+  }
+
+  @override
+  Future<void> sendSystemMessage(String payload) async {
+    _requireConnected();
+    if (!capabilities.canSendMessage) {
+      throw _error(ChatErrorCode.forbidden, 'Chat cannot send system hints.');
+    }
+    await _engine!.sendMessage(ChatSystemMessageCodec.encode(payload));
   }
 
   @override
@@ -178,9 +192,18 @@ class IvsChatSession implements ChatSession, ChatSessionIdentity {
   );
 
   void _onMessage(Map<String, Object?> raw) {
+    final system = ChatSystemMessageCodec.decode(
+      raw['message']?.toString() ?? '',
+    );
+    if (system != null) {
+      if (!_systemMessages.isClosed) _systemMessages.add(system);
+      return;
+    }
     final id = raw['id']?.toString().trim() ?? '';
     final userId = raw['userId']?.toString().trim() ?? '';
-    final content = raw['message']?.toString() ?? '';
+    final content = ChatSystemMessageCodec.decodeUserText(
+      raw['message']?.toString() ?? '',
+    );
     if (id.isEmpty || userId.isEmpty) return;
 
     final timestampMs =
@@ -227,7 +250,7 @@ class IvsChatSession implements ChatSession, ChatSessionIdentity {
     if (value.isEmpty) {
       throw _error(ChatErrorCode.invalidArgument, 'Message must not be empty.');
     }
-    await _engine!.sendMessage(value);
+    await _engine!.sendMessage(ChatSystemMessageCodec.encodeUserText(value));
   }
 
   @override
@@ -281,6 +304,7 @@ class IvsChatSession implements ChatSession, ChatSessionIdentity {
     await _states.close();
     await _snapshots.close();
     await _events.close();
+    await _systemMessages.close();
   }
 
   void _setState(ChatConnectionState next) {

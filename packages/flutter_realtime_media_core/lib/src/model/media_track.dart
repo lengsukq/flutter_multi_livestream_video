@@ -41,3 +41,15 @@ abstract class MediaVideoTrack {
       'MediaVideoTrack($id, participant: $participantId, local: $isLocal, '
       'screenShare: $isScreenShare)';
 }
+
+/// Optional owner mapping when a provider uses a separate screen modality ID.
+/// Existing tracks need no changes: the extension falls back to participantId.
+abstract interface class MediaContentOwnerTrack {
+  String get contentOwnerParticipantId;
+}
+
+extension MediaContentOwnership on MediaVideoTrack {
+  String get contentOwnerParticipantId => this is MediaContentOwnerTrack
+      ? (this as MediaContentOwnerTrack).contentOwnerParticipantId
+      : participantId;
+}

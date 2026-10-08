@@ -16,7 +16,19 @@ import kotlin.test.assertTrue
 class ProcessedChimeVideoSourceTest {
     @Test fun forwardsProcessedFrameMetadataAndI420WithoutAnotherCamera() {
         val sourceId = "chime-test-source"
-        val source = ProcessedChimeVideoSource(sourceId)
+        // Host JVM checks forwarding/ownership; Chime's native converter runs on Android.
+        val source = ProcessedChimeVideoSource(sourceId) { input ->
+            val data = input.toI420()
+            val ySize = input.width * input.height
+            val chromaWidth = (input.width + 1) / 2
+            val chromaSize = chromaWidth * ((input.height + 1) / 2)
+            fun plane(offset: Int, size: Int) = data.duplicate().apply {
+                position(offset); limit(offset + size)
+            }.slice()
+            VideoFrameI420Buffer(input.width, input.height,
+                plane(0, ySize), plane(ySize, chromaSize), plane(ySize + chromaSize, chromaSize),
+                input.width, chromaWidth, chromaWidth, Runnable {})
+        }
         val received = mutableListOf<VideoFrame>()
         val first = object : VideoSink {
             override fun onVideoFrameReceived(frame: VideoFrame) { frame.retain(); received.add(frame) }

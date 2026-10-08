@@ -34,6 +34,13 @@ class ProviderWebProfile {
   final bool canBlurBackground;
   final bool canReplaceBackgroundImage;
 
+  String contentOwner(String participantId, {required bool isScreenShare}) =>
+      usesChimeAttendeePayload &&
+          isScreenShare &&
+          participantId.endsWith('#content')
+      ? participantId.substring(0, participantId.length - '#content'.length)
+      : participantId;
+
   static ProviderWebProfile forProvider(
     String providerId,
   ) => switch (providerId) {

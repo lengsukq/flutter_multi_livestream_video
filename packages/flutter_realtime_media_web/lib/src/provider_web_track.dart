@@ -1,6 +1,8 @@
+// ignore_for_file: prefer_initializing_formals
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
-class ProviderWebVideoTrack extends MediaVideoTrack {
+class ProviderWebVideoTrack extends MediaVideoTrack
+    implements MediaContentOwnerTrack {
   const ProviderWebVideoTrack({
     required this.providerId,
     required this.sessionId,
@@ -10,8 +12,13 @@ class ProviderWebVideoTrack extends MediaVideoTrack {
     required this.isScreenShare,
     this.width = 0,
     this.height = 0,
-  });
+    String? contentOwnerParticipantId,
+  }) : _contentOwnerParticipantId = contentOwnerParticipantId;
 
+  final String? _contentOwnerParticipantId;
+  @override
+  String get contentOwnerParticipantId =>
+      _contentOwnerParticipantId ?? participantId;
   final String providerId;
   final String sessionId;
 

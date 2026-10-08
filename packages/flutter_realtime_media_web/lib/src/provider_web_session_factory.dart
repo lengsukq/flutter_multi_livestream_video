@@ -967,6 +967,11 @@ abstract class ProviderWebSessionBase
           sessionId: sessionId,
           id: id,
           participantId: value['participantId']?.toString() ?? '',
+          contentOwnerParticipantId: ProviderWebProfile.forProvider(providerId)
+              .contentOwner(
+                value['participantId']?.toString() ?? '',
+                isScreenShare: value['isScreenShare'] == true,
+              ),
           isLocal: value['isLocal'] == true,
           isScreenShare: value['isScreenShare'] == true,
           width: _asInt(value['width']) ?? 0,

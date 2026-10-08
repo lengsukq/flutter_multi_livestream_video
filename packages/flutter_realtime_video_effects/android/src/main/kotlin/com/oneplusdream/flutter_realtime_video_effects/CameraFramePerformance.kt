@@ -24,8 +24,8 @@ internal class CameraFramePerformance(private val enabled: Boolean) {
         if (seconds < 5.0) return
         fun average(name: String) = (stages[name] ?: 0L) / 1_000_000.0 / outputs.coerceAtLeast(1)
         android.util.Log.i("VideoEffectsPerf", String.format(java.util.Locale.US,
-            "mode=%s input=%.1ffps preview=%.1ffps copy=%.1fms segment=%.1fms gpu=%.1fms draw=%.1fms",
-            mode, inputs / seconds, outputs / seconds, average("copy"), average("segment"), average("gpu"), average("draw")))
+            "mode=%s input=%.1ffps preview=%.1ffps copy=%.1fms segment=%.1fms gpu=%.1fms draw=%.1fms publish=%.1fms",
+            mode, inputs / seconds, outputs / seconds, average("copy"), average("segment"), average("gpu"), average("draw"), average("publish")))
         startNs = 0L
     }
 }

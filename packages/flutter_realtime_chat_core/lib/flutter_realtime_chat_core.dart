@@ -20,6 +20,7 @@ export 'src/session/chat_join_info.dart';
 export 'src/session/chat_moderation.dart';
 export 'src/session/chat_room_session.dart';
 export 'src/session/chat_session.dart';
+export 'src/session/chat_system_messaging.dart';
 export 'src/session/chat_session_factory.dart';
 
 export 'src/model/chat_message_buffer.dart';

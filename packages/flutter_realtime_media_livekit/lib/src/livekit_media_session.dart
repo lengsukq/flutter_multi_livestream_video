@@ -854,7 +854,11 @@ abstract class LiveKitMediaSessionBase
   Future<void> _prepareAndroidScreenShare() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
 
-    final permissionGranted = await rtc.Helper.requestCapturePermission();
+    // System annotation windows must be visible in the shared display; an
+    // Android single-app projection excludes windows belonging to other apps.
+    final permissionGranted = await rtc.Helper.requestCapturePermission(
+      fullScreenOnly: true,
+    );
     if (!permissionGranted) {
       throw MediaError(
         code: MediaErrorCode.permissionDenied,

@@ -25,7 +25,18 @@ extension _RoomControlRendering on _MediaRoomViewState {
         _control(
           value.localMuted ? Icons.mic_off_outlined : Icons.mic_none_rounded,
           strings.microphone,
-          () => _run(interactive.toggleMute),
+          () {
+            if (value.localMuted &&
+                widget.canEnableMicrophone?.call() == false) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('请先举手，等待教师允许发言 / Await teacher permission'),
+                ),
+              );
+              return;
+            }
+            _run(interactive.toggleMute);
+          },
           active: !value.localMuted,
           showLabel: showLabels,
         ),
@@ -67,7 +78,10 @@ extension _RoomControlRendering on _MediaRoomViewState {
         ),
       );
     }
-    if (interactive != null && caps.canScreenShare) {
+    final contentControls = widget.contentControlsBuilder?.call(context);
+    if (contentControls != null) {
+      controls.add(contentControls);
+    } else if (interactive != null && caps.canScreenShare) {
       controls.add(
         _control(
           value.localScreenShareEnabled
@@ -83,6 +97,10 @@ extension _RoomControlRendering on _MediaRoomViewState {
           showLabel: showLabels,
         ),
       );
+    }
+    final extraControls = widget.extraControlsBuilder?.call(context);
+    if (extraControls != null && extraControls.isNotEmpty) {
+      controls.addAll(extraControls);
     }
     controls.add(
       _control(

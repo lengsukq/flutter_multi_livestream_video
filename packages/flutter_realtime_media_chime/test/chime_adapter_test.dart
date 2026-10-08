@@ -34,6 +34,24 @@ void main() {
     },
   };
 
+  test(
+    'content modality retains its native ID and maps to its classroom owner',
+    () {
+      final track = ChimeMediaVideoTrack(
+        const chime.MeetingVideoTile(
+          tileId: 3,
+          attendeeId: 'teacher#content',
+          width: 1920,
+          height: 1080,
+          isLocal: false,
+          isContentShare: true,
+        ),
+      );
+      expect(track.participantId, 'teacher#content');
+      expect((track as MediaVideoTrack).contentOwnerParticipantId, 'teacher');
+      expect(track.isScreenShare, true);
+    },
+  );
   group('ChimeJoinInfo', () {
     test('wraps the existing Chime JoinInfo without changing its payload', () {
       final info = ChimeJoinInfo.fromBackendResponse(backendJson());
