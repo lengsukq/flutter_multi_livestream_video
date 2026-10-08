@@ -6,10 +6,16 @@ import 'agora_chat_engine.dart';
 import 'agora_chat_join_info.dart';
 
 class AgoraChatSession implements ChatSession, ChatSessionIdentity {
-  AgoraChatSession({required this.role, required this.engineFactory});
+  AgoraChatSession({
+    required this.role,
+    required this.engineFactory,
+    int maxMessages = 500,
+  }) : _buffer = ChatMessageBuffer(maxMessages: maxMessages);
+
+  int get maxMessages => _buffer.maxMessages;
 
   final AgoraChatEngineFactory engineFactory;
-  final List<ChatMessage> _messages = [];
+  final ChatMessageBuffer _buffer;
   final StreamController<ChatConnectionState> _states =
       StreamController<ChatConnectionState>.broadcast();
   final StreamController<List<ChatMessage>> _snapshots =
@@ -40,7 +46,7 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
   @override
   ChatConnectionState get state => _state;
   @override
-  List<ChatMessage> get messages => List.unmodifiable(_messages);
+  List<ChatMessage> get messages => _buffer.messages;
   @override
   Stream<ChatConnectionState> get states => _states.stream;
   @override
@@ -177,19 +183,13 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
       providerId: providerId,
       attributes: Map.unmodifiable(attributes),
     );
-    final index = _messages.indexWhere((item) => item.id == id);
-    if (index >= 0) {
-      _messages[index] = message;
-    } else {
-      _messages.add(message);
-    }
-    _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    final isNew = _buffer.upsert(message);
     _emitMessages();
-    _events.add(ChatMessageReceived(message));
+    if (isNew) _events.add(ChatMessageReceived(message));
   }
 
   void _onMessageDeleted(String messageId) {
-    _messages.removeWhere((message) => message.id == messageId);
+    _buffer.remove(messageId);
     _emitMessages();
     _events.add(ChatMessageDeleted(messageId));
   }
@@ -248,7 +248,7 @@ class AgoraChatSession implements ChatSession, ChatSessionIdentity {
   }
 
   void _emitMessages() {
-    if (!_snapshots.isClosed) _snapshots.add(List.unmodifiable(_messages));
+    if (!_snapshots.isClosed) _snapshots.add(_buffer.messages);
   }
 
   void _requireConnected() {

@@ -7,9 +7,11 @@ import 'ivs_chat_session.dart';
 
 class IvsChatSessionFactory implements ChatSessionFactory {
   const IvsChatSessionFactory({
+    this.maxMessages = 500,
     this.engineFactory = createDefaultIvsChatEngine,
-  });
+  }) : assert(maxMessages > 0, 'maxMessages must be positive');
 
+  final int maxMessages;
   final IvsChatEngineFactory engineFactory;
 
   @override
@@ -28,6 +30,10 @@ class IvsChatSessionFactory implements ChatSessionFactory {
         providerId: IvsChatJoinInfo.providerIdValue,
       );
     }
-    return IvsChatSession(role: joinInfo.role, engineFactory: engineFactory);
+    return IvsChatSession(
+      role: joinInfo.role,
+      engineFactory: engineFactory,
+      maxMessages: maxMessages,
+    );
   }
 }

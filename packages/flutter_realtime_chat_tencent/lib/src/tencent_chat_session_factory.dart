@@ -7,9 +7,11 @@ import 'tencent_chat_session.dart';
 
 class TencentChatSessionFactory implements ChatSessionFactory {
   const TencentChatSessionFactory({
+    this.maxMessages = 500,
     this.engineFactory = createDefaultTencentChatEngine,
-  });
+  }) : assert(maxMessages > 0, 'maxMessages must be positive');
 
+  final int maxMessages;
   final TencentChatEngineFactory engineFactory;
 
   @override
@@ -31,6 +33,7 @@ class TencentChatSessionFactory implements ChatSessionFactory {
     return TencentChatSession(
       role: joinInfo.role,
       engineFactory: engineFactory,
+      maxMessages: maxMessages,
     );
   }
 }

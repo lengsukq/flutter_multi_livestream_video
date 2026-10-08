@@ -7,9 +7,11 @@ import 'agora_chat_session.dart';
 
 class AgoraChatSessionFactory implements ChatSessionFactory {
   const AgoraChatSessionFactory({
+    this.maxMessages = 500,
     this.engineFactory = createDefaultAgoraChatEngine,
-  });
+  }) : assert(maxMessages > 0, 'maxMessages must be positive');
 
+  final int maxMessages;
   final AgoraChatEngineFactory engineFactory;
 
   @override
@@ -28,6 +30,10 @@ class AgoraChatSessionFactory implements ChatSessionFactory {
         providerId: AgoraChatJoinInfo.providerIdValue,
       );
     }
-    return AgoraChatSession(role: joinInfo.role, engineFactory: engineFactory);
+    return AgoraChatSession(
+      role: joinInfo.role,
+      engineFactory: engineFactory,
+      maxMessages: maxMessages,
+    );
   }
 }

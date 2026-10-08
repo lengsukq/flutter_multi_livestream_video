@@ -38,7 +38,8 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
     String? displayName,
     this.maxMessages = 200,
     this.topic = rtcDataChatTopic,
-  }) : _media = session,
+  }) : _buffer = ChatMessageBuffer(maxMessages: maxMessages),
+       _media = session,
        _participantId = participantId,
        _mediaProviderId = session.providerId,
        _userId = _normalizedIdentity(userId, participantId),
@@ -100,7 +101,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
   final String _displayName;
   final int maxMessages;
   final String topic;
-  final List<ChatMessage> _messages = <ChatMessage>[];
+  final ChatMessageBuffer _buffer;
   final StreamController<ChatConnectionState> _states =
       StreamController<ChatConnectionState>.broadcast();
   final StreamController<List<ChatMessage>> _messageSnapshots =
@@ -139,7 +140,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
   ChatConnectionState get state => _state;
 
   @override
-  List<ChatMessage> get messages => List.unmodifiable(_messages);
+  List<ChatMessage> get messages => _buffer.messages;
 
   @override
   Stream<ChatConnectionState> get states => _states.stream;
@@ -329,7 +330,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
     if (participantId.isEmpty) return;
 
     final id = _canonicalMessageId(participantId, wireId);
-    if (_messages.any((item) => item.id == id)) return;
+    if (_buffer.contains(id)) return;
 
     final claimedUserId = json['senderId']?.toString().trim() ?? '';
     final claimedDisplayName = json['displayName']?.toString().trim() ?? '';
@@ -375,22 +376,9 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
   }
 
   void _upsert(ChatMessage message, {bool emitEvent = true}) {
-    final existing = _messages.indexWhere((item) => item.id == message.id);
-    final isNew = existing < 0;
-    if (existing >= 0) {
-      _messages[existing] = message;
-    } else {
-      _messages.add(message);
-    }
-    _messages.sort((a, b) {
-      final byTime = a.timestamp.compareTo(b.timestamp);
-      return byTime != 0 ? byTime : a.id.compareTo(b.id);
-    });
-    if (_messages.length > maxMessages) {
-      _messages.removeRange(0, _messages.length - maxMessages);
-    }
+    final isNew = _buffer.upsert(message);
     if (!_messageSnapshots.isClosed) {
-      _messageSnapshots.add(List.unmodifiable(_messages));
+      _messageSnapshots.add(_buffer.messages);
     }
     if (emitEvent && isNew && !_events.isClosed) {
       _events.add(ChatMessageReceived(message));
