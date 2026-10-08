@@ -1366,7 +1366,6 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                   itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final q = filtered[index];
-                    final isPending = q.status == ClassroomQuestionStatus.pending;
                     final isAnswered = q.status == ClassroomQuestionStatus.answered;
                     final isResolved = q.status == ClassroomQuestionStatus.resolved;
 
