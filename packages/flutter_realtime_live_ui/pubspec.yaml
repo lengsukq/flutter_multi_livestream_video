@@ -1,0 +1,21 @@
+name: flutter_realtime_live_ui
+description: Optional live gift panels and event animations for realtime rooms.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.47.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_realtime_live_core:
+    path: ../flutter_realtime_live_core
+  flutter_realtime_media_ui:
+    path: ../flutter_realtime_media_ui
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  uses-material-design: true
+
