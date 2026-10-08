@@ -1,3 +1,4 @@
+import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
 import 'dart:async';
 
 // ignore_for_file: prefer_initializing_formals
@@ -5,10 +6,12 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
+import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 
 import 'realtime_error.dart';
+import 'shared_content_controller.dart';
 import 'realtime_event.dart';
 import 'realtime_room_state.dart';
 import 'realtime_moderation.dart';
@@ -20,6 +23,8 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     String? publicProviderId,
     required this.renderer,
     this.chat,
+    this.classroom,
+    this.liveInteractions,
     ChatRoomSession? productChatRoom,
     RtcDataChatSession? rtcChatRoom,
     required void Function() disposeClients,
@@ -48,6 +53,18 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     });
     _mediaEventSubscription = media.session.events.listen(_onMediaEvent);
     _mediaStateSubscription = media.session.states.listen(_onMediaState);
+    if (classroom != null) {
+      sharedContent = SharedContentController(
+        media: media.session,
+        classroom: classroom!,
+      );
+      _annotationMediaSubscription = media.session.snapshots.listen(
+        (_) => _syncAnnotationSource(),
+      );
+      _annotationClassroomSubscription = classroom!.states.listen(
+        (_) => _syncAnnotationSource(),
+      );
+    }
     _backendErrorSubscription = media.backendErrors.listen((error) {
       _eventController.add(
         RealtimeBackendFailure(
@@ -66,6 +83,11 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   final String publicProviderId;
   final MediaTrackRenderer renderer;
   final ChatSession? chat;
+
+  /// Optional provider-neutral classroom SDK. Null for live/direct rooms.
+  final ClassroomSession? classroom;
+  SharedContentController? sharedContent;
+  final LiveInteractionSession? liveInteractions;
   final ChatRoomSession? _productChatRoom;
   final RtcDataChatSession? _rtcChatRoom;
   final void Function() _disposeClients;
@@ -74,6 +96,11 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   final StreamController<RealtimeRoomState> _stateController =
       StreamController<RealtimeRoomState>.broadcast();
   StreamSubscription<VideoEffectsFailure>? _videoEffectsErrorSubscription;
+  StreamSubscription<MediaSnapshot>? _annotationMediaSubscription;
+  StreamSubscription<ClassroomState>? _annotationClassroomSubscription;
+  Future<void>? _annotationOperation;
+  String? _annotationAppliedSource;
+  String _annotationTargetSource = '';
   StreamSubscription<MediaEvent>? _mediaEventSubscription;
   StreamSubscription<MediaSessionState>? _mediaStateSubscription;
   StreamSubscription<MediaBackendError>? _backendErrorSubscription;
@@ -328,6 +355,38 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     );
   }
 
+  void _syncAnnotationSource() {
+    if (_disposed || classroom?.state?.capabilities.canPublishTools != true) {
+      return;
+    }
+    if (classroom?.state?.tools?.content != null) return;
+    final track = media.session.snapshot.contentShareTrack;
+    _annotationTargetSource = track?.isLocal == true ? track!.id : '';
+    if (_annotationAppliedSource == _annotationTargetSource ||
+        _annotationOperation != null) {
+      return;
+    }
+    _annotationOperation =
+        (() async {
+              while (!_disposed &&
+                  _annotationAppliedSource != _annotationTargetSource) {
+                final source = _annotationTargetSource;
+                await classroom!.annotations.setSource(source);
+                _annotationAppliedSource = source;
+              }
+            })()
+            .catchError((Object error) {
+              if (!_disposed) {
+                _eventController.add(
+                  RealtimeBackendFailure(
+                    mapRealtimeException(error, providerId: providerId),
+                  ),
+                );
+              }
+            })
+            .whenComplete(() => _annotationOperation = null);
+  }
+
   void _onMediaEvent(MediaEvent event) {
     if (_disposed) return;
     _eventController.add(RealtimeMediaEvent(event));
@@ -352,6 +411,12 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     _disposed = true;
     await _videoOperation;
     try {
+      await _annotationMediaSubscription?.cancel();
+      await _annotationClassroomSubscription?.cancel();
+      await _annotationOperation;
+      await sharedContent?.dispose();
+      await classroom?.dispose();
+      await liveInteractions?.dispose();
       await _videoEffectsErrorSubscription?.cancel();
       await _mediaEventSubscription?.cancel();
       await _mediaStateSubscription?.cancel();

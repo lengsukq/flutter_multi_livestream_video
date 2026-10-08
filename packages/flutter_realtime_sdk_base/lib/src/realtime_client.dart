@@ -1,3 +1,5 @@
+import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
+import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
@@ -8,6 +10,8 @@ import 'media_adapter.dart';
 import 'realtime_room.dart';
 import 'realtime_requirements.dart';
 import 'realtime_chat_room.dart';
+import 'classroom_media_transport.dart';
+import 'classroom_chat_transport.dart';
 
 typedef RealtimeTokenProvider = Future<String?> Function();
 typedef RealtimeMediaClientFactory = MediaClient Function();
@@ -265,12 +269,90 @@ class RealtimeClient {
         providerId: room.providerId,
       );
 
+      final classroomChat = chat;
+      final ChatSystemMessaging? classroomSignals =
+          classroomChat is ChatSystemMessaging
+          ? classroomChat as ChatSystemMessaging
+          : null;
+      final bool canSendChatSignals =
+          classroomChat?.capabilities.canSendMessage ?? false;
       return RealtimeRoom(
         media: room,
         publicProviderId:
             _publicProviderResolver?.call(room.providerId) ?? room.providerId,
         renderer: renderer,
         chat: chat,
+        classroom:
+            backendUrl != null &&
+                room.participantCredential != null &&
+                room.backendMetadata['roomMode'] == 'meeting'
+            ? ClassroomSession(
+                HttpClassroomRepository(
+                  backendUrl: backendUrl!,
+                  roomCode: room.roomCode,
+                  participantId: room.participantId,
+                  participantCredential: room.participantCredential!,
+                  roomOwnerCredential: room.roomOwnerCredential,
+                  tokenProvider: _tokenProvider,
+                ),
+                mediaTracks: () => {
+                  for (final p in room.session.snapshot.participants)
+                    p.id: (
+                      // For remote peers, missing track information is
+                      // unknown, not proof that a device is enabled.
+                      microphoneOn: p.isLocal
+                          ? !room.session.snapshot.localMuted
+                          : p.isSpeaking
+                          ? true
+                          : p.isMuted
+                          ? false
+                          : null,
+                      cameraOn: p.isVideoEnabled
+                          ? true
+                          : p.videoTrack == null
+                          ? null
+                          : false,
+                    ),
+                },
+                chatMessages: () => chat?.messages.length ?? 0,
+                revisionTransport:
+                    classroomSignals != null && canSendChatSignals
+                    ? ClassroomChatRevisionTransport(
+                        classroomSignals,
+                        roomCode: room.roomCode,
+                      )
+                    : ClassroomMediaRevisionTransport(
+                        room.session,
+                        roomCode: room.roomCode,
+                      ),
+              )
+            : null,
+        liveInteractions:
+            backendUrl != null &&
+                room.participantCredential != null &&
+                room.backendMetadata['liveInteractions'] == true
+            ? LiveInteractionSession(
+                HttpLiveInteractionRepository(
+                  backendUrl: backendUrl!,
+                  roomCode: room.roomCode,
+                  participantId: room.participantId,
+                  participantCredential: room.participantCredential!,
+                  tokenProvider: _tokenProvider,
+                ),
+                revisionTransport:
+                    classroomSignals != null && canSendChatSignals
+                    ? ClassroomChatRevisionTransport(
+                        classroomSignals,
+                        roomCode: room.roomCode,
+                        eventType: 'live.interaction.changed',
+                      )
+                    : ClassroomMediaRevisionTransport(
+                        room.session,
+                        roomCode: room.roomCode,
+                        eventType: 'live.interaction.changed',
+                      ),
+              )
+            : null,
         productChatRoom: productChatRoom,
         rtcChatRoom: rtcChatRoom,
         disposeClients: () {

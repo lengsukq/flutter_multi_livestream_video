@@ -971,6 +971,55 @@ void main() {
   });
 
   group('RealtimeClient', () {
+    test(
+      'backend capabilities attach optional classroom and live sessions without vendor branches',
+      () async {
+        for (final mode in ['meeting', 'broadcast']) {
+          final factory = FakeMediaSessionFactory();
+          final transport = FakeTransport(
+            (request) => jsonResponse({
+              ...liveKitJoinPayload(
+                provider: 'fake',
+                role: mode == 'meeting' ? 'participant' : 'host',
+                participantCredential: 'proof',
+                roomOwnerCredential: 'owner',
+              ),
+              'roomMode': mode,
+              if (mode == 'broadcast') 'liveInteractions': true,
+            }),
+          );
+          final adapters = RealtimeMediaAdapters([
+            RealtimeMediaAdapter(
+              sessionFactory: factory,
+              renderer: const _FakeRenderer(),
+            ),
+          ]);
+          final client = RealtimeClient(
+            backendUrl: 'https://example.test',
+            mediaAdapters: adapters,
+            mediaClientFactory: () => MediaClient(
+              backendUrl: 'https://example.test',
+              registry: adapters.registry,
+              transport: transport,
+              heartbeatInterval: Duration.zero,
+            ),
+          );
+          final room = await client.createRoomAndJoinIdentity(
+            identity: const MediaIdentity(
+              userId: 'owner',
+              displayName: 'Owner',
+            ),
+            roomMode: mode == 'meeting'
+                ? MediaRoomMode.meeting
+                : MediaRoomMode.broadcast,
+          );
+          expect(room.classroom != null, mode == 'meeting');
+          expect(room.liveInteractions != null, mode == 'broadcast');
+          await room.dispose();
+        }
+      },
+    );
+
     test('joins media-only room and resolves its renderer', () async {
       final factory = FakeMediaSessionFactory();
       const renderer = _FakeRenderer();
