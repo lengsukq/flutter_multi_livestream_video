@@ -8,6 +8,437 @@ import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'RTC message snapshots reuse video while participant changes rebuild it',
+    (tester) async {
+      final fixture = _RoomFixture(
+        participants: const [
+          MediaParticipant(id: 'remote', displayName: 'Remote'),
+        ],
+      );
+      var builds = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+            participantBuilder: (_, participant, renderer) {
+              builds++;
+              return Text(participant.displayName);
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      final before = builds;
+      fixture.media._snapshot = fixture.media.snapshot.copyWith(
+        messages: [
+          const MediaMessage(
+            participantId: 'remote',
+            message: 'RTC data',
+            topic: 'chat',
+            timestampMs: 1,
+          ),
+        ],
+      );
+      fixture.media._snapshots.add(fixture.media.snapshot);
+      await tester.pump();
+      expect(builds, before);
+      fixture.media._snapshot = fixture.media.snapshot.copyWith(
+        participants: const [
+          MediaParticipant(id: 'replacement', displayName: 'Replacement'),
+        ],
+      );
+      fixture.media._snapshots.add(fixture.media.snapshot);
+      await tester.pump();
+      expect(builds, greaterThan(before));
+      expect(find.text('Replacement'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets('chat send failure remains visible and retains the draft', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture(
+      participants: const [
+        MediaParticipant(id: 'remote', displayName: 'Remote'),
+      ],
+    );
+    final chat = _FakeChatSession()..sendGate = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          chatSession: chat,
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Chat').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'retry draft');
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pump();
+    chat.sendGate!.completeError(
+      const ChatError(
+        code: ChatErrorCode.network,
+        message: 'Message delivery failed',
+        providerId: 'fake-chat',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Message delivery failed'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      'retry draft',
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await chat.dispose();
+    await fixture.dispose();
+  });
+
+  testWidgets(
+    'deleting latest does not announce new messages; out-of-order arrival does',
+    (tester) async {
+      final chat = _FakeChatSession(
+        messages: List.generate(
+          60,
+          (i) => ChatMessage(
+            id: '$i',
+            userId: 'remote',
+            message: 'Message $i',
+            timestamp: DateTime(2026).add(Duration(seconds: i)),
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: RealtimeChatView(session: chat)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final scroll = tester
+          .widget<ListView>(find.byType(ListView).first)
+          .controller!;
+      scroll.jumpTo(300);
+      await tester.pumpAndSettle();
+      chat._messages.removeLast();
+      chat._snapshots.add(chat.messages);
+      await tester.pumpAndSettle();
+      expect(find.text('New messages'), findsNothing);
+      expect(scroll.offset, 300);
+      chat._messages.insert(
+        0,
+        ChatMessage(
+          id: 'late',
+          userId: 'remote',
+          message: 'Delayed message',
+          timestamp: DateTime(2025),
+        ),
+      );
+      chat._snapshots.add(chat.messages);
+      await tester.pumpAndSettle();
+      expect(find.text('New messages'), findsOneWidget);
+      expect(scroll.offset, 300);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await chat.dispose();
+    },
+  );
+
+  testWidgets('pending send cannot clear the replacement chat input', (
+    tester,
+  ) async {
+    final oldChat = _FakeChatSession();
+    final newChat = _FakeChatSession();
+    final gate = Completer<void>();
+    oldChat.sendGate = gate;
+    Widget view(ChatSession chat) => MaterialApp(
+      home: Scaffold(body: RealtimeChatView(session: chat)),
+    );
+    await tester.pumpWidget(view(oldChat));
+    await tester.enterText(find.byType(TextField), 'old draft');
+    await tester.tap(find.byIcon(Icons.send_rounded));
+    await tester.pump();
+    await tester.pumpWidget(view(newChat));
+    await tester.enterText(find.byType(TextField), 'new draft');
+    gate.complete();
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'new draft',
+    );
+    oldChat.emitIncomingMessage(
+      ChatMessage(
+        id: 'old',
+        userId: 'remote',
+        message: 'old room',
+        timestamp: DateTime.now(),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('old room'), findsNothing);
+    expect(oldChat._snapshots.hasListener, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(newChat._snapshots.hasListener, isFalse);
+    await oldChat.dispose();
+    await newChat.dispose();
+  });
+
+  testWidgets('incoming messages and member refresh retain a chat draft', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture();
+    final chat = _FakeChatSession();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          chatSession: chat,
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Chat').first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'draft');
+    chat.emitIncomingMessage(
+      ChatMessage(
+        id: 'incoming',
+        userId: 'remote',
+        message: 'hello',
+        timestamp: DateTime.now(),
+      ),
+    );
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      'draft',
+    );
+    await tester.tap(find.byTooltip('Participants').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Chat').first);
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(find.byType(TextField).first).controller!.text,
+      'draft',
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(chat._snapshots.hasListener, isFalse);
+    await chat.dispose();
+    await fixture.dispose();
+  });
+
+  testWidgets('unsupported collaborative controls are hidden', (tester) async {
+    for (final role in [MediaRole.participant, MediaRole.viewer]) {
+      final fixture = _RoomFixture(role: role);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Raise hand'), findsNothing);
+      expect(find.text('Apply co-host'), findsNothing);
+      expect(find.byIcon(Icons.pan_tool_outlined), findsNothing);
+      if (role == MediaRole.viewer) {
+        expect(find.text('My likes 0'), findsOneWidget);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await fixture.dispose();
+    }
+  });
+
+  for (final failures in [
+    <String>{},
+    {'b'},
+    {'a', 'b'},
+  ]) {
+    testWidgets(
+      'bulk mute reports failures $failures and retries only failures',
+      (tester) async {
+        final media = _ModeratedMediaSession(failures: failures);
+        final room = MediaRoomSession.direct(
+          roomCode: 'test',
+          participantId: 'me',
+          session: media,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaRoomView(room: room, renderer: const _FakeRenderer()),
+          ),
+        );
+        await tester.pump();
+        await tester.tap(find.byTooltip('Participants').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Mute all'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(FilledButton, 'Mute all'));
+        await tester.pumpAndSettle();
+        expect(media.muteCalls, ['a', 'b']);
+        if (failures.isEmpty) {
+          expect(find.text('All participants muted'), findsOneWidget);
+        } else {
+          expect(
+            find.text(
+              'Muted ${2 - failures.length}; failed ${failures.length}',
+            ),
+            findsOneWidget,
+          );
+          expect(find.text('All participants muted'), findsNothing);
+          media.failures.clear();
+          await tester.tap(find.text('Retry failed participants'));
+          await tester.pumpAndSettle();
+          expect(media.muteCalls, ['a', 'b', ...failures]);
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(room.dispose);
+      },
+    );
+  }
+
+  testWidgets('bulk mute with no remote targets does not claim success', (
+    tester,
+  ) async {
+    final media = _ModeratedMediaSession(empty: true);
+    final room = MediaRoomSession.direct(
+      roomCode: 'test',
+      participantId: 'me',
+      session: media,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(room: room, renderer: const _FakeRenderer()),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('Participants').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mute all'));
+    await tester.pump();
+    expect(find.text('No participants to mute'), findsOneWidget);
+    expect(media.muteCalls, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(room.dispose);
+  });
+
+  testWidgets('timer and chat at a full cache do not rebuild video', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture(
+      participants: const [
+        MediaParticipant(id: 'remote', displayName: 'Remote'),
+      ],
+    );
+    final chat = _FakeChatSession();
+    var videoBuilds = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          chatSession: chat,
+          participantBuilder: (_, participant, renderer) {
+            videoBuilds++;
+            return Text(participant.displayName);
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    final initialBuilds = videoBuilds;
+    await tester.pump(const Duration(seconds: 3));
+    expect(videoBuilds, initialBuilds);
+    for (var i = 0; i < 3; i++) {
+      chat._messages.clear(); // Simulates a one-message rolling window.
+      chat.emitIncomingMessage(
+        ChatMessage(
+          id: '$i',
+          userId: 'remote',
+          message: 'hello $i',
+          timestamp: DateTime.now(),
+        ),
+      );
+      await tester.pump();
+    }
+    expect(videoBuilds, initialBuilds);
+    expect(find.text('3'), findsWidgets);
+    chat.emitIncomingMessage(
+      ChatMessage(
+        id: '2',
+        userId: 'remote',
+        message: 'duplicate',
+        timestamp: DateTime.now(),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('4'), findsNothing);
+    chat.emitIncomingMessage(
+      ChatMessage(
+        id: 'own',
+        userId: 'user-me',
+        message: 'own',
+        timestamp: DateTime.now(),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('4'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await chat.dispose();
+    await fixture.dispose();
+  });
+
+  testWidgets(
+    'bulk mute disables duplicate submissions until the batch finishes',
+    (tester) async {
+      final gate = Completer<void>();
+      final media = _ModeratedMediaSession(muteGate: gate);
+      final room = MediaRoomSession.direct(
+        roomCode: 'test',
+        participantId: 'me',
+        session: media,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaRoomView(room: room, renderer: const _FakeRenderer()),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byTooltip('Participants').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mute all'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Mute all'));
+      await tester.pumpAndSettle();
+      expect(media.muteCalls, ['a']);
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Mute all'),
+            )
+            .onPressed,
+        isNull,
+      );
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(media.muteCalls, ['a', 'b']);
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Mute all'),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(room.dispose);
+    },
+  );
+
   testWidgets('standalone chat UI follows zh-CN host locale', (tester) async {
     final chat = _FakeChatSession();
 
@@ -1000,10 +1431,12 @@ class _FakeChatSession implements ChatSession, ChatSessionIdentity {
   }) async {}
 
   final List<String> sentMessages = [];
+  Completer<void>? sendGate;
 
   @override
   Future<void> sendMessage(String message) async {
     sentMessages.add(message);
+    await sendGate?.future;
   }
 
   void emitIncomingMessage(ChatMessage message) {
@@ -1036,4 +1469,54 @@ class _FakeRenderer extends MediaTrackRenderer {
   @override
   Widget buildView(BuildContext context, MediaVideoTrack track) =>
       const SizedBox.shrink();
+}
+
+class _ModeratedMediaSession extends _FakeMediaSession
+    implements MediaRoomModeration {
+  _ModeratedMediaSession({
+    Set<String> failures = const {},
+    bool empty = false,
+    this.muteGate,
+  }) : failures = {...failures},
+       super(
+         role: MediaRole.host,
+         participants: empty
+             ? const []
+             : const [
+                 MediaParticipant(id: 'me', displayName: 'Me', isLocal: true),
+                 MediaParticipant(id: 'a', displayName: 'Alice'),
+                 MediaParticipant(id: 'b', displayName: 'Bob'),
+               ],
+       );
+  final Completer<void>? muteGate;
+  final Set<String> failures;
+  final List<String> muteCalls = [];
+  @override
+  MediaCapabilities get capabilities => const MediaCapabilities(
+    canPublishAudio: true,
+    canPublishVideo: true,
+    management: MediaManagementCapabilities(
+      muteParticipant: ManagementCapability.client(),
+    ),
+  );
+  @override
+  Future<void> muteParticipant(
+    String roomCode, {
+    required String requesterParticipantId,
+    required String targetParticipantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async {
+    muteCalls.add(targetParticipantId);
+    await muteGate?.future;
+    if (failures.contains(targetParticipantId)) {
+      throw const MediaError(
+        code: MediaErrorCode.nativeError,
+        message: 'Mute rejected',
+      );
+    }
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

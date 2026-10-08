@@ -118,11 +118,12 @@ abstract class _TrtcSessionBase
   @override
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _requireConnected();
-    if (!supportsProcessedVideoSource(source))
+    if (!supportsProcessedVideoSource(source)) {
       throw const MediaError(
         code: MediaErrorCode.unsupportedFeature,
         message: 'Processed video is unavailable.',
       );
+    }
     _engine!.stopLocalPreview();
     await _processedSink.attach(source);
   }

@@ -166,7 +166,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
 
   MediaManagementCapabilities get managementCapabilities {
     final client = session.capabilities.managementCapabilities;
-    if (!isLogicalOwner) return client;
+    if (!isLogicalOwner || _management == null) return client;
     ManagementCapability preferClient(
       ManagementCapability clientCapability, {
       required String backendKey,
@@ -204,6 +204,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   MediaSnapshot get snapshot => session.snapshot;
 
   /// Background effects supported by the active media adapter.
+  @override
   MediaBackgroundCapabilities get backgroundCapabilities {
     final active = session;
     if (active is MediaBackgroundEffectsController) {
@@ -217,6 +218,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   }
 
   /// Currently selected local background effect.
+  @override
   MediaBackgroundEffect get backgroundEffect {
     final active = session;
     return active is MediaBackgroundEffectsController
@@ -225,6 +227,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   }
 
   /// Applies a provider-neutral local camera background effect.
+  @override
   Future<void> setBackgroundEffect(MediaBackgroundEffect effect) {
     if (!effect.enabled && session is! MediaBackgroundEffectsController) {
       return Future<void>.value();

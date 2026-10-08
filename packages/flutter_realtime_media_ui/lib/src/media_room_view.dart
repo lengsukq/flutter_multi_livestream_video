@@ -2,15 +2,21 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'media_provider_label.dart';
+import 'room_regions.dart';
 import 'background_effect_selector.dart';
 import 'media_background_image_preset.dart';
 import 'realtime_strings.dart';
 import 'realtime_ui_style.dart';
+
+part 'room_members_panel.dart';
+part 'room_chat_panel.dart';
+part 'room_controls.dart';
 
 typedef MediaParticipantBuilder =
     Widget Function(
@@ -20,11 +26,7 @@ typedef MediaParticipantBuilder =
     );
 
 /// Layout modes supported in the room view.
-enum MediaRoomLayoutMode {
-  grid,
-  speaker,
-  presentation,
-}
+enum MediaRoomLayoutMode { grid, speaker, presentation }
 
 class MediaRoomViewConfig {
   const MediaRoomViewConfig({
@@ -76,10 +78,18 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   final _rtcDataMessage = TextEditingController();
   final _chatScroll = ScrollController();
   StreamSubscription<List<ChatMessage>>? _chatUnreadSub;
-  Timer? _timer;
-  int _seconds = 0;
-  int _lastChatMessageCount = 0;
-  int _seenChatMessageCount = 0;
+  Widget? _cachedMediaStage;
+  List<Object?> _mediaStageKey = [];
+  final _memberRevision = ValueNotifier<int>(0);
+  final _controlRevision = ValueNotifier<int>(0);
+  final _likeRevision = ValueNotifier<int>(0);
+  final _chatRevision = ValueNotifier<int>(0);
+  final Set<String> _seenChatIds = {};
+  final Set<String> _visibleChatIds = {};
+  bool _chatTimelineInitialized = false;
+  bool _hasNewChatMessages = false;
+  final Set<Timer> _heartTimers = {};
+  Timer? _copyTimer;
   int _unreadChatCount = 0;
   bool _chatOpen = false;
   bool _participantsOpen = false;
@@ -93,33 +103,14 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   Object? _roomMembersError;
   bool _loadingRoomMembers = false;
   MediaRoomLayoutMode _layoutMode = MediaRoomLayoutMode.grid;
-  bool _handRaised = false;
-  final Set<String> _raisedHandParticipantIds = {};
   bool _cleanScreen = false;
   int _likeCount = 0;
   final List<_FloatingHeartItem> _floatingHearts = [];
-  bool _coHostRequested = false;
+  bool _mutingAll = false;
+  final Map<MediaParticipant, Object> _muteFailures = {};
   MediaSession get session => widget.room.session;
   MediaBackgroundEffectsController get _backgroundEffects =>
       widget.backgroundEffects ?? widget.room;
-
-  void _toggleRaiseHand() {
-    final strings = RealtimeStrings.of(context);
-    setState(() {
-      _handRaised = !_handRaised;
-      if (_handRaised) {
-        _raisedHandParticipantIds.add(widget.room.participantId);
-      } else {
-        _raisedHandParticipantIds.remove(widget.room.participantId);
-      }
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_handRaised ? strings.handRaised : strings.lowerHand),
-        duration: const Duration(seconds: 1),
-      ),
-    );
-  }
 
   void _sendLike() {
     final random = math.Random();
@@ -135,110 +126,171 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       color: hues[random.nextInt(hues.length)],
       startX: 0.65 + (random.nextDouble() * 0.25),
     );
-    setState(() {
-      _likeCount++;
+    _likeCount++;
+    _controlRevision.value++;
+    {
       _floatingHearts.add(heart);
-    });
-    Future<void>.delayed(const Duration(milliseconds: 1600), () {
+    }
+    _likeRevision.value++;
+    late final Timer timer;
+    timer = Timer(const Duration(milliseconds: 1600), () {
+      _heartTimers.remove(timer);
       if (mounted) {
-        setState(() => _floatingHearts.removeWhere((h) => h.id == heart.id));
+        _floatingHearts.removeWhere((h) => h.id == heart.id);
+        _likeRevision.value++;
       }
     });
+    _heartTimers.add(timer);
   }
 
   void _toggleCleanScreen() {
     setState(() => _cleanScreen = !_cleanScreen);
   }
 
-  void _toggleCoHostRequest() {
+  Future<void> _muteAllParticipants({bool retry = false}) async {
+    if (_mutingAll) return;
     final strings = RealtimeStrings.of(context);
-    setState(() => _coHostRequested = !_coHostRequested);
+    final targetRoom = widget.room;
+    final targets = retry
+        ? _muteFailures.keys.toList()
+        : session.snapshot.participants.where((p) => !p.isLocal).toList();
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.noMuteTargets)));
+      return;
+    }
+    _updateMembers(() => _mutingAll = true);
+    if (!retry) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => RealtimeGlassDialog(
+          icon: Icons.volume_off_rounded,
+          title: Text(strings.muteAll),
+          content: Text(strings.muteAllConfirmation),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(strings.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(strings.muteAll),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || targetRoom != widget.room) return;
+      if (confirmed != true) {
+        _updateMembers(() => _mutingAll = false);
+        return;
+      }
+    }
+    final failures = <MediaParticipant, Object>{};
+    for (final participant in targets) {
+      try {
+        await targetRoom.muteParticipant(participant.id);
+      } on Object catch (error) {
+        failures[participant] = error;
+      }
+      if (!mounted || targetRoom != widget.room) return;
+    }
+    _updateMembers(() {
+      _mutingAll = false;
+      _muteFailures
+        ..clear()
+        ..addAll(failures);
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _coHostRequested ? strings.coHostApplied : strings.lowerHand,
+          failures.isEmpty
+              ? strings.muteAllSuccess
+              : strings.muteSummary(
+                  targets.length - failures.length,
+                  failures.length,
+                ),
         ),
-        duration: const Duration(seconds: 1),
       ),
     );
-  }
-
-  Future<void> _muteAllParticipants() async {
-    final strings = RealtimeStrings.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => RealtimeGlassDialog(
-        icon: Icons.volume_off_rounded,
-        iconColor: RealtimeUiTokens.warning,
-        iconBackground: RealtimeUiTokens.warningSubtle,
-        title: Text(strings.muteAll),
-        content: Text(strings.muteAllConfirmation),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(strings.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: RealtimeUiTokens.warning,
-            ),
-            child: Text(strings.muteAll),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    final participants = session.snapshot.participants
-        .where((p) => !p.isLocal)
-        .toList();
-    for (final p in participants) {
-      try {
-        await widget.room.muteParticipant(p.id);
-      } catch (_) {}
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(strings.muteAllSuccess),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      await _refreshRoomMembers();
-    }
+    await _refreshRoomMembers();
   }
 
   @override
   void initState() {
     super.initState();
     _watchUnreadChat();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _seconds++);
-    });
   }
 
   @override
   void didUpdateWidget(covariant MediaRoomView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.chatSession != widget.chatSession) {
+    _cachedMediaStage = null;
+    if (oldWidget.room != widget.room) {
+      _initialSettingsApplied = false;
+      _roomMembers = null;
+      _roomMembersError = null;
+      _muteFailures.clear();
+      _mutingAll = false;
+      _loadingRoomMembers = false;
+      _focusedParticipantId = null;
+      _message.clear();
+      _rtcDataMessage.clear();
+    }
+    if (oldWidget.room != widget.room ||
+        oldWidget.chatSession != widget.chatSession) {
       _watchUnreadChat();
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _cachedMediaStage = null;
   }
 
   void _watchUnreadChat() {
     _chatUnreadSub?.cancel();
     final chat = widget.chatSession;
-    _seenChatMessageCount = chat?.messages.length ?? 0;
+    _seenChatIds
+      ..clear()
+      ..addAll(chat?.messages.map((m) => m.id) ?? const <String>[]);
     _unreadChatCount = 0;
+    _visibleChatIds.clear();
+    _chatTimelineInitialized = false;
+    _hasNewChatMessages = false;
+    _chatSending = false;
     if (chat == null) return;
     _chatUnreadSub = chat.messageSnapshots.listen((messages) {
-      if (!mounted) return;
-      final newMessageCount = messages.length - _seenChatMessageCount;
-      _seenChatMessageCount = messages.length;
-      if (_chatOpen || newMessageCount <= 0) return;
-      setState(() => _unreadChatCount += newMessageCount);
+      if (!mounted || chat != widget.chatSession) return;
+      final added = messages
+          .where((m) => !_seenChatIds.contains(m.id))
+          .toList();
+      // Retain only the current bounded window; evicted historical replay does
+      // not re-enter that window in the bundled adapters.
+      _seenChatIds
+        ..clear()
+        ..addAll(messages.map((m) => m.id));
+      final remoteCount = added
+          .where((m) => !_isOwnChatMessage(chat, m))
+          .length;
+      if (!_chatOpen && remoteCount > 0) {
+        _unreadChatCount += remoteCount;
+        _controlRevision.value++;
+        _chatRevision.value++;
+      }
     });
+  }
+
+  void _updateRoom(VoidCallback update) => setState(update);
+  void _updateChat(VoidCallback update) {
+    update();
+    _chatRevision.value++;
+  }
+
+  void _updateMembers(VoidCallback update) {
+    update();
+    _memberRevision.value++;
   }
 
   Future<void> _applyInitialSettings() async {
@@ -246,6 +298,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     _initialSettingsApplied = true;
     final settings = widget.config.initialMediaSettings;
     if (settings == null) return;
+    final targetRoom = widget.room;
+    final effects = _backgroundEffects;
     final current = session;
     if (current is MediaDeviceController) {
       for (final device in [
@@ -256,18 +310,19 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         if (device == null) continue;
         try {
           await current.selectMediaDevice(device);
+          if (!mounted || targetRoom != widget.room) return;
         } catch (error) {
-          if (mounted) setState(() => _error = error.toString());
+          if (mounted && targetRoom == widget.room) {
+            setState(() => _error = error.toString());
+          }
         }
       }
     }
     var allowInitialVideoPublish = true;
     if (settings.backgroundEffect.enabled) {
-      if (!_backgroundEffects.backgroundCapabilities.supports(
-        settings.backgroundEffect,
-      )) {
+      if (!effects.backgroundCapabilities.supports(settings.backgroundEffect)) {
         allowInitialVideoPublish = false;
-        if (mounted) {
+        if (mounted && targetRoom == widget.room) {
           setState(
             () => _error =
                 'The current media provider cannot apply the selected '
@@ -276,21 +331,24 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         }
       } else {
         try {
-          await _backgroundEffects.setBackgroundEffect(
-            settings.backgroundEffect,
-          );
+          await effects.setBackgroundEffect(settings.backgroundEffect);
         } catch (error) {
           allowInitialVideoPublish = false;
-          if (mounted) setState(() => _error = error.toString());
+          if (mounted && targetRoom == widget.room) {
+            setState(() => _error = error.toString());
+          }
         }
       }
     } else {
       try {
-        await _backgroundEffects.setBackgroundEffect(settings.backgroundEffect);
+        await effects.setBackgroundEffect(settings.backgroundEffect);
       } catch (error) {
-        if (mounted) setState(() => _error = error.toString());
+        if (mounted && targetRoom == widget.room) {
+          setState(() => _error = error.toString());
+        }
       }
     }
+    if (!mounted || targetRoom != widget.room) return;
     if (current is InteractiveMediaSession) {
       try {
         await current.setMuted(!settings.microphoneEnabled);
@@ -298,7 +356,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           settings.cameraEnabled && allowInitialVideoPublish,
         );
       } catch (error) {
-        if (mounted) setState(() => _error = error.toString());
+        if (mounted && targetRoom == widget.room) {
+          setState(() => _error = error.toString());
+        }
       }
     }
   }
@@ -314,7 +374,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   Future<void> _refreshRoomMembers() async {
     if (_loadingRoomMembers) return;
-    setState(() {
+    final requestedRoom = widget.room;
+    _updateMembers(() {
       _loadingRoomMembers = true;
       _roomMembersError = null;
     });
@@ -341,8 +402,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         loadErrors.add(error);
       }
     }
-    if (!mounted) return;
-    setState(() {
+    if (!mounted || requestedRoom != widget.room) return;
+    _updateMembers(() {
       _roomMembers = _mergeManagedMembers(
         mediaParticipants,
         chatMembers,
@@ -382,7 +443,14 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   @override
   void dispose() {
     _chatUnreadSub?.cancel();
-    _timer?.cancel();
+    _copyTimer?.cancel();
+    for (final timer in _heartTimers) {
+      timer.cancel();
+    }
+    _memberRevision.dispose();
+    _controlRevision.dispose();
+    _likeRevision.dispose();
+    _chatRevision.dispose();
     _message.dispose();
     _rtcDataMessage.dispose();
     _chatScroll.dispose();
@@ -473,13 +541,15 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   void _copyCode() {
     Clipboard.setData(ClipboardData(text: widget.room.roomCode));
     setState(() => _copied = true);
-    Future<void>.delayed(const Duration(seconds: 2), () {
+    _copyTimer?.cancel();
+    _copyTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copied = false);
     });
   }
 
   @override
   Widget build(BuildContext context) => StreamBuilder<MediaSnapshot>(
+    key: ValueKey(widget.room),
     stream: session.snapshots,
     initialData: session.snapshot,
     builder: (context, snap) {
@@ -534,7 +604,12 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                         value.state == MediaSessionState.failed ||
                         value.state == MediaSessionState.ended)
                       _connectionBanner(value.state),
-                    if (_error != null) _errorView(),
+                    RoomRegion(
+                      revision: _chatRevision,
+                      builder: (_) => _error == null
+                          ? const SizedBox.shrink()
+                          : _errorView(),
+                    ),
                     Expanded(
                       child: wide
                           ? _wideContent(value, constraints)
@@ -647,7 +722,12 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     );
   }
 
-  Widget _sidePanel(MediaSnapshot value) {
+  Widget _sidePanel(MediaSnapshot value) => RoomRegion(
+    revision: _chatRevision,
+    builder: (_) => _buildSidePanel(value),
+  );
+
+  Widget _buildSidePanel(MediaSnapshot value) {
     final strings = RealtimeStrings.of(context);
     final chatAvailable = widget.config.showChat && widget.chatSession != null;
     return Column(
@@ -730,337 +810,19 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     ),
   );
 
-  Widget _participantsList(MediaSnapshot value) {
-    final strings = RealtimeStrings.of(context);
-    final capabilities = widget.room.managementCapabilities;
-    final chatModeration = widget.chatModeration;
-    final chatCapabilities = chatModeration is ChatModerationCapabilitySource
-        ? (chatModeration as ChatModerationCapabilitySource)
-              .moderationCapabilities
-        : const ChatManagementCapabilities();
-    final members = [...?_roomMembers];
-    for (final participant in value.participants) {
-      final alreadyListed = members.any(
-        (member) => member.media?.participantId == participant.id,
-      );
-      if (alreadyListed) continue;
-      members.add(
-        _ManagedRoomMember(
-          userId: '',
-          displayName: participant.displayName.isEmpty
-              ? participant.id
-              : participant.displayName,
-          media: MediaRoomParticipantSummary(
-            participantId: participant.id,
-            displayName: participant.displayName,
-            role: participant.isLocal ? widget.room.role : null,
-          ),
-          isSelf: participant.isLocal,
-        ),
-      );
-    }
-    final canCloseChat =
-        chatModeration != null && chatCapabilities.closeRoom.supported;
-    final canCloseMedia = capabilities.closeRoom.supported;
-    return RealtimeGlassSurface(
-      radius: RealtimeUiTokens.controlRadius,
-      opacity: .97,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    strings.roomMembers,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-                Text('${members.length}'),
-                const SizedBox(width: 2),
-                IconButton(
-                  tooltip: strings.refresh,
-                  onPressed: _loadingRoomMembers
-                      ? null
-                      : () => unawaited(_refreshRoomMembers()),
-                  visualDensity: VisualDensity.compact,
-                  icon: _loadingRoomMembers
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh_rounded, size: 19),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          if (capabilities.muteParticipant.supported &&
-              widget.room.role == MediaRole.host)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _muteAllParticipants,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: RealtimeUiTokens.warning,
-                        side: const BorderSide(
-                          color: RealtimeUiTokens.warning,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      icon: const Icon(Icons.volume_off_rounded, size: 16),
-                      label: Text(
-                        strings.muteAll,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (_roomMembersError != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _roomMembersError.toString(),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-            ),
-          Expanded(
-            child: members.isEmpty
-                ? Center(
-                    child: _loadingRoomMembers
-                        ? const CircularProgressIndicator(strokeWidth: 2)
-                        : Text(strings.noManagedMembers),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(8),
-                    itemCount: members.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 4),
-                    itemBuilder: (context, index) {
-                      final member = members[index];
-                      final media = member.media;
-                      final chat = member.chat;
-                      final canRemoveMedia =
-                          !member.isSelf &&
-                          media != null &&
-                          capabilities.removeParticipant.supported;
-                      final canMuteMedia =
-                          !member.isSelf &&
-                          media != null &&
-                          capabilities.muteParticipant.supported;
-                      final canStopVideo =
-                          !member.isSelf &&
-                          media != null &&
-                          capabilities.stopParticipantVideo.supported;
-                      final canRemoveChat =
-                          !member.isSelf &&
-                          chat != null &&
-                          chatModeration != null &&
-                          chatCapabilities.removeMember.supported;
-                      final canGrantHost =
-                          !member.isSelf &&
-                          media != null &&
-                          widget.room.role == MediaRole.host &&
-                          capabilities.changeParticipantRole.supported;
-                      final hasActions =
-                          canRemoveMedia ||
-                          canMuteMedia ||
-                          canStopVideo ||
-                          canRemoveChat ||
-                          canGrantHost;
-                      return ListTile(
-                        minLeadingWidth: 36,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 2,
-                        ),
-                        leading: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: RealtimeUiTokens.primarySubtle,
-                          child: const Icon(
-                            Icons.person_outline_rounded,
-                            size: 18,
-                            color: RealtimeUiTokens.primary,
-                          ),
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                member.displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (member.isSelf)
-                              RealtimePill(
-                                label: strings.you,
-                                foreground: RealtimeUiTokens.primary,
-                                background: RealtimeUiTokens.primarySubtle,
-                                borderColor: RealtimeUiTokens.primaryBorder,
-                              ),
-                            if ((member.isSelf && _handRaised) ||
-                                _raisedHandParticipantIds
-                                    .contains(media?.participantId)) ...[
-                              const SizedBox(width: 4),
-                              RealtimePill(
-                                label: strings.handRaised,
-                                icon: Icons.pan_tool_outlined,
-                                foreground: const Color(0xFFD97706),
-                                background: const Color(0xFFFFFBEB),
-                                borderColor: const Color(0xFFFDE68A),
-                              ),
-                            ],
-                          ],
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(member.roleLabel(strings)),
-                            const SizedBox(height: 5),
-                            Wrap(
-                              spacing: 5,
-                              runSpacing: 4,
-                              children: [
-                                if (media != null)
-                                  RealtimePill(
-                                    label: strings.mediaOnline,
-                                    icon: Icons.videocam_outlined,
-                                    foreground: const Color(0xFF047857),
-                                    background: const Color(0xFFECFDF5),
-                                    borderColor: const Color(0xFFA7F3D0),
-                                  ),
-                                if (chat != null)
-                                  RealtimePill(
-                                    label: strings.chatOnline,
-                                    icon: Icons.forum_outlined,
-                                    foreground: RealtimeUiTokens.primary,
-                                    background: RealtimeUiTokens.primarySubtle,
-                                    borderColor: RealtimeUiTokens.primaryBorder,
-                                  ),
-                              ],
-                            ),
-                            if (hasActions) ...[
-                              const SizedBox(height: 6),
-                              Wrap(
-                                spacing: 4,
-                                runSpacing: 4,
-                                children: [
-                                  if (canRemoveMedia)
-                                    _memberActionButton(
-                                      label: strings.removeFromMedia,
-                                      icon: Icons.person_remove_outlined,
-                                      danger: true,
-                                      onPressed: () => _runMemberManagement(
-                                        () => widget.room.removeParticipant(
-                                          media.participantId,
-                                        ),
-                                      ),
-                                    ),
-                                  if (canMuteMedia)
-                                    _memberActionButton(
-                                      label: strings.muteParticipant,
-                                      icon: Icons.mic_off_outlined,
-                                      onPressed: () => _runMemberManagement(
-                                        () => widget.room.muteParticipant(
-                                          media.participantId,
-                                        ),
-                                      ),
-                                    ),
-                                  if (canStopVideo)
-                                    _memberActionButton(
-                                      label: strings.stopParticipantVideo,
-                                      icon: Icons.videocam_off_outlined,
-                                      onPressed: () => _runMemberManagement(
-                                        () => widget.room.stopParticipantVideo(
-                                          media.participantId,
-                                        ),
-                                      ),
-                                    ),
-                                  if (canGrantHost)
-                                    _memberActionButton(
-                                      label: strings.grantHost,
-                                      icon: Icons.shield_outlined,
-                                      onPressed: () => _runMemberManagement(
-                                        () => widget.room.changeParticipantRole(
-                                          media.participantId,
-                                          MediaRole.host,
-                                        ),
-                                      ),
-                                    ),
-                                  if (canRemoveChat)
-                                    _memberActionButton(
-                                      label: strings.removeFromChat,
-                                      icon: Icons.forum_outlined,
-                                      danger: true,
-                                      onPressed: () => _runMemberManagement(
-                                        () => chatModeration.removeMember(
-                                          chat.userId,
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          if (canCloseChat || canCloseMedia)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  if (canCloseChat)
-                    OutlinedButton.icon(
-                      onPressed: _closeChatRoomForEveryone,
-                      icon: const Icon(Icons.forum_outlined, size: 17),
-                      label: Text(strings.closeChatRoom),
-                    ),
-                  if (canCloseMedia)
-                    OutlinedButton.icon(
-                      onPressed: _closeRoomForEveryone,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: RealtimeUiTokens.danger,
-                        side: const BorderSide(
-                          color: RealtimeUiTokens.dangerBorder,
-                        ),
-                      ),
-                      icon: const Icon(Icons.stop_circle_outlined, size: 17),
-                      label: Text(strings.closeRoomForEveryone),
-                    ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _participantsList(MediaSnapshot value) =>
+      _RoomMembersPanel(host: this, snapshot: value);
 
   Future<void> _runMemberManagement(Future<void> Function() action) async {
-    await _run(action);
-    if (mounted) await _refreshRoomMembers();
+    final room = widget.room;
+    try {
+      await action();
+      if (mounted && room == widget.room) await _refreshRoomMembers();
+    } on Object catch (error) {
+      if (mounted && room == widget.room) {
+        _updateMembers(() => _roomMembersError = error);
+      }
+    }
   }
 
   Widget _memberActionButton({
@@ -1090,10 +852,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     final chat = widget.chatSession;
     if (chat == null || chat.messages.isEmpty) return const SizedBox.shrink();
     final recent = chat.messages.reversed.take(4).toList().reversed.toList();
-    final identity =
-        widget.chatSession is ChatSessionIdentity
-            ? widget.chatSession as ChatSessionIdentity
-            : null;
+    final identity = widget.chatSession is ChatSessionIdentity
+        ? widget.chatSession as ChatSessionIdentity
+        : null;
     final myId = identity?.localUserId;
     return Positioned(
       left: 14,
@@ -1131,10 +892,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                     ),
                     TextSpan(
                       text: m.message,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.white,
-                      ),
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
                     ),
                   ],
                 ),
@@ -1151,10 +909,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       child: Stack(
         children: _floatingHearts
             .map(
-              (heart) => _FloatingHeartParticle(
-                key: ValueKey(heart.id),
-                heart: heart,
-              ),
+              (heart) =>
+                  _FloatingHeartParticle(key: ValueKey(heart.id), heart: heart),
             )
             .toList(),
       ),
@@ -1162,20 +918,40 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   );
 
   Widget _mediaStage(MediaSnapshot value) {
+    final key = <Object?>[
+      _layoutMode,
+      _focusedParticipantId,
+      _cleanScreen,
+      value.state,
+      value.localVideoEnabled,
+      value.localMuted,
+      value.contentShareTrack,
+      ...value.participants,
+    ];
+    // RTC chat and statistics share the media snapshot stream. Reuse the video
+    // subtree until its actual inputs change; retain no historical messages.
+    if (_cachedMediaStage != null && listEquals(key, _mediaStageKey)) {
+      return _cachedMediaStage!;
+    }
+    _mediaStageKey = key;
+    return _cachedMediaStage = _buildMediaStage(value);
+  }
+
+  Widget _buildMediaStage(MediaSnapshot value) {
     final isLive = widget.room.role != MediaRole.participant;
     final stageContent =
         value.contentShareTrack == null &&
-                _layoutMode != MediaRoomLayoutMode.presentation
-            ? value.participants.isEmpty
-                ? _waiting()
-                : _grid(value)
-            : Column(
-                children: [
-                  Expanded(child: _screenShare(value)),
-                  if (value.participants.isNotEmpty)
-                    SizedBox(height: 116, child: _participantStrip(value)),
-                ],
-              );
+            _layoutMode != MediaRoomLayoutMode.presentation
+        ? value.participants.isEmpty
+              ? _waiting()
+              : _grid(value)
+        : Column(
+            children: [
+              Expanded(child: _screenShare(value)),
+              if (value.participants.isNotEmpty)
+                SizedBox(height: 116, child: _participantStrip(value)),
+            ],
+          );
 
     return ColoredBox(
       color: isLive ? Colors.black : RealtimeUiTokens.background,
@@ -1185,7 +961,12 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           stageContent,
           if (isLive && !_cleanScreen) ...[
             _danmakuOverlay(),
-            _floatingHeartsOverlay(),
+            Positioned.fill(
+              child: RoomRegion(
+                revision: _likeRevision,
+                builder: (_) => Stack(children: [_floatingHeartsOverlay()]),
+              ),
+            ),
           ],
         ],
       ),
@@ -1209,8 +990,6 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   Widget _topBar(MediaSnapshot value, {required bool compact}) {
     final strings = RealtimeStrings.of(context);
-    final mm = (_seconds ~/ 60).toString().padLeft(2, '0');
-    final ss = (_seconds % 60).toString().padLeft(2, '0');
     final isLive = widget.room.role != MediaRole.participant;
     return RealtimeGlassSurface(
       margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
@@ -1348,12 +1127,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
             ),
           ],
           const SizedBox(width: 8),
-          RealtimePill(
-            label: '$mm:$ss',
-            leadingDotColor: _seconds.isEven
-                ? const Color(0xFF10B981)
-                : const Color(0xFF34D399),
-          ),
+          RoomElapsedPill(key: ValueKey(widget.room)),
           const SizedBox(width: 4),
           Tooltip(
             message: _stateLabel(strings, value.state),
@@ -1499,28 +1273,15 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 600),
-                curve: Curves.easeInOut,
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RealtimeUiTokens.primaryGradient,
-                  boxShadow: [
-                    BoxShadow(
-                      color: RealtimeUiTokens.primary.withValues(
-                        alpha: _seconds.isEven ? 0.32 : 0.16,
-                      ),
-                      blurRadius: _seconds.isEven ? 24 : 14,
-                      spreadRadius: _seconds.isEven ? 3 : 0,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.wifi_tethering_rounded,
-                  size: 36,
-                  color: Colors.white,
+              const RoomWaitingPulse(
+                child: SizedBox(
+                  width: 88,
+                  height: 88,
+                  child: Icon(
+                    Icons.wifi_tethering_rounded,
+                    size: 36,
+                    color: Colors.white,
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -1572,7 +1333,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           focused ??
           (isSpeaker && count > 1
               ? (participants.where((p) => p.isSpeaking).firstOrNull ??
-                  participants.first)
+                    participants.first)
               : null);
 
       if (effectiveFocused != null) {
@@ -1700,413 +1461,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   Widget _productChat(ChatSession chat, {bool showHeader = true}) =>
-      StreamBuilder<ChatConnectionState>(
-        stream: chat.states,
-        initialData: chat.state,
-        builder: (context, stateSnapshot) {
-          final connectionState = stateSnapshot.data ?? chat.state;
-          return StreamBuilder<List<ChatMessage>>(
-            stream: chat.messageSnapshots,
-            initialData: chat.messages,
-            builder: (context, messageSnapshot) {
-              final messages = messageSnapshot.data ?? chat.messages;
-              _syncChatScroll(messages.length);
-              return RealtimeGlassSurface(
-                radius: RealtimeUiTokens.cardRadius,
-                opacity: .90,
-                child: Column(
-                  children: [
-                    if (showHeader) ...[
-                      _chatHeader(connectionState, messages.length),
-                      const Divider(height: 1, color: Color(0xFFE2E8F0)),
-                    ],
-                    Expanded(
-                      child: messages.isEmpty
-                          ? _emptyChat()
-                          : ListView.builder(
-                              key: const ValueKey('chat-message-list'),
-                              controller: _chatScroll,
-                              reverse: true,
-                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                              itemCount: messages.length,
-                              itemBuilder: (context, index) {
-                                final messageIndex =
-                                    messages.length - 1 - index;
-                                final message = messages[messageIndex];
-                                final previous = messageIndex > 0
-                                    ? messages[messageIndex - 1]
-                                    : null;
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: _chatMessage(
-                                    chat,
-                                    message,
-                                    previousMessage: previous,
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                    _chatComposer(chat, connectionState),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      );
-
-  Widget _chatHeader(ChatConnectionState connectionState, int messageCount) =>
-      Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 10, 10),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: RealtimeUiTokens.primarySubtle,
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.compactRadius,
-                ),
-                border: Border.all(color: RealtimeUiTokens.primaryBorder),
-              ),
-              child: const Icon(
-                Icons.forum_outlined,
-                size: 17,
-                color: RealtimeUiTokens.primary,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        RealtimeStrings.of(context).chat,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: RealtimeUiTokens.text,
-                        ),
-                      ),
-                      if (messageCount > 0) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: RealtimeUiTokens.primarySubtle,
-                            borderRadius: BorderRadius.circular(
-                              RealtimeUiTokens.pillRadius,
-                            ),
-                          ),
-                          child: Text(
-                            '$messageCount',
-                            style: const TextStyle(
-                              fontSize: 10.5,
-                              color: RealtimeUiTokens.primary,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: connectionState.isConnected
-                              ? const Color(0xFF22C55E)
-                              : const Color(0xFF94A3B8),
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Flexible(
-                        child: Text(
-                          RealtimeStrings.of(
-                            context,
-                          ).chatConnectionState(connectionState.name),
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 10.5,
-                            color: RealtimeUiTokens.textMuted,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: RealtimeStrings.of(context).closeChat,
-              visualDensity: VisualDensity.compact,
-              onPressed: _toggleChat,
-              icon: const Icon(Icons.close_rounded, size: 19),
-            ),
-          ],
-        ),
-      );
-
-  Widget _emptyChat() {
-    final strings = RealtimeStrings.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: RealtimeUiTokens.primarySubtle,
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.compactRadius,
-                ),
-              ),
-              child: const Icon(
-                Icons.forum_outlined,
-                size: 22,
-                color: RealtimeUiTokens.primary,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              strings.noMessagesYet,
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: RealtimeUiTokens.text,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              strings.startConversation,
-              style: const TextStyle(
-                fontSize: 11,
-                color: RealtimeUiTokens.textMuted,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _chatMessage(
-    ChatSession chat,
-    ChatMessage message, {
-    ChatMessage? previousMessage,
-  }) {
-    if (message.type != 'message') {
-      return Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-            color: RealtimeUiTokens.surfaceSubtle,
-            borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
-            border: Border.all(color: RealtimeUiTokens.border),
-          ),
-          child: Text(
-            message.message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 10.5,
-              color: RealtimeUiTokens.textMuted,
-            ),
-          ),
-        ),
-      );
-    }
-
-    final own = _isOwnChatMessage(chat, message);
-    final sameSenderAsPrevious =
-        previousMessage != null && previousMessage.userId == message.userId;
-    final displayName = message.displayName.trim().isEmpty
-        ? message.userId
-        : message.displayName.trim();
-    return LayoutBuilder(
-      builder: (context, constraints) => Align(
-        alignment: own ? Alignment.centerRight : Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: constraints.maxWidth * .82),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: own
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              if (!own && !sameSenderAsPrevious)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 4),
-                  child: Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      color: RealtimeUiTokens.textMuted,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              Container(
-                key: ValueKey(
-                  'chat-message-${message.id}-${own ? 'local' : 'remote'}',
-                ),
-                padding: const EdgeInsets.fromLTRB(12, 9, 11, 7),
-                decoration: BoxDecoration(
-                  gradient: own ? RealtimeUiTokens.primaryGradient : null,
-                  color: own ? null : Colors.white.withValues(alpha: 0.90),
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(
-                      RealtimeUiTokens.controlRadius,
-                    ),
-                    topRight: const Radius.circular(
-                      RealtimeUiTokens.controlRadius,
-                    ),
-                    bottomLeft: Radius.circular(
-                      own ? RealtimeUiTokens.controlRadius : 6,
-                    ),
-                    bottomRight: Radius.circular(
-                      own ? 6 : RealtimeUiTokens.controlRadius,
-                    ),
-                  ),
-                  border: own
-                      ? null
-                      : Border.all(color: RealtimeUiTokens.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        message.message,
-                        style: TextStyle(
-                          color: own ? Colors.white : const Color(0xFF1E293B),
-                          fontSize: 12.5,
-                          height: 1.3,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      _formatChatTime(message.timestamp),
-                      style: TextStyle(
-                        color: own
-                            ? Colors.white.withValues(alpha: .74)
-                            : const Color(0xFF94A3B8),
-                        fontSize: 9.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _chatComposer(ChatSession chat, ChatConnectionState connectionState) {
-    final strings = RealtimeStrings.of(context);
-    final enabled =
-        connectionState.isConnected &&
-        chat.capabilities.canSendMessage &&
-        !_chatSending;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.68),
-        border: const Border(top: BorderSide(color: RealtimeUiTokens.border)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.88),
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.controlRadius,
-                ),
-                border: Border.all(color: RealtimeUiTokens.border),
-              ),
-              child: TextField(
-                key: const ValueKey('chat-message-input'),
-                controller: _message,
-                enabled: enabled,
-                minLines: 1,
-                maxLines: 3,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  hintText: connectionState.isConnected
-                      ? chat.capabilities.canSendMessage
-                            ? strings.messageHint
-                            : strings.readOnly
-                      : strings.chatState(connectionState.name),
-                  hintStyle: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF94A3B8),
-                  ),
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                ),
-                onSubmitted: enabled ? (_) => _sendChat(chat) : null,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 40,
-            height: 40,
-            child: FilledButton(
-              key: const ValueKey('chat-send-button'),
-              onPressed: enabled ? () => _sendChat(chat) : null,
-              style: FilledButton.styleFrom(
-                padding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.compactRadius,
-                  ),
-                ),
-              ),
-              child: _chatSending
-                  ? const SizedBox(
-                      width: 15,
-                      height: 15,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.arrow_upward_rounded, size: 18),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+      _RoomChatPanel(host: this, chat: chat, showHeader: showHeader);
 
   bool _isOwnChatMessage(ChatSession chat, ChatMessage message) {
     if (chat is ChatSessionIdentity) {
@@ -2130,20 +1485,26 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     return '$hour:$minute';
   }
 
-  void _syncChatScroll(int messageCount) {
-    if (_lastChatMessageCount == messageCount) return;
-    final previousCount = _lastChatMessageCount;
-    _lastChatMessageCount = messageCount;
+  void _syncChatScroll(List<ChatMessage> messages) {
+    final first = !_chatTimelineInitialized;
+    final added = messages.any((m) => !_visibleChatIds.contains(m.id));
+    _chatTimelineInitialized = true;
+    _visibleChatIds
+      ..clear()
+      ..addAll(messages.map((m) => m.id));
+    if (!first && !added) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_chatScroll.hasClients) return;
-      final nearLatest =
-          previousCount == 0 || _chatScroll.position.pixels <= 72;
+      final nearLatest = first || _chatScroll.position.pixels <= 72;
       if (nearLatest) {
         _chatScroll.animateTo(
           0,
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
         );
+      } else {
+        _hasNewChatMessages = true;
+        _chatRevision.value++;
       }
     });
   }
@@ -2154,7 +1515,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       _participantsOpen = false;
       if (_chatOpen) {
         _unreadChatCount = 0;
-        _seenChatMessageCount = widget.chatSession?.messages.length ?? 0;
+        _hasNewChatMessages = false;
       }
     });
     if (_chatOpen) {
@@ -2167,14 +1528,14 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   Future<void> _sendChat(ChatSession chat) async {
     final text = _message.text.trim();
     if (text.isEmpty || _chatSending) return;
-    setState(() => _chatSending = true);
+    _updateChat(() => _chatSending = true);
     try {
       await chat.sendMessage(text);
-      if (!mounted) return;
+      if (!mounted || chat != widget.chatSession) return;
       _message.clear();
-      setState(() => _error = null);
+      _updateChat(() => _error = null);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_chatScroll.hasClients) {
+        if (mounted && chat == widget.chatSession && _chatScroll.hasClients) {
           _chatScroll.animateTo(
             0,
             duration: const Duration(milliseconds: 180),
@@ -2183,9 +1544,13 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         }
       });
     } on Object catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted && chat == widget.chatSession) {
+        _updateChat(() => _error = error.toString());
+      }
     } finally {
-      if (mounted) setState(() => _chatSending = false);
+      if (mounted && chat == widget.chatSession) {
+        _updateChat(() => _chatSending = false);
+      }
     }
   }
 
@@ -2300,296 +1665,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     );
   }
 
-  Widget _controls(MediaSnapshot value) {
-    final interactive = session is InteractiveMediaSession
-        ? session as InteractiveMediaSession
-        : null;
-    final caps = value.capabilities;
-    final strings = RealtimeStrings.of(context);
-    final showLabels = MediaQuery.sizeOf(context).width >= 760;
-    final controls = <Widget>[];
-    if (interactive != null && caps.canPublishAudio) {
-      controls.add(
-        _control(
-          value.localMuted ? Icons.mic_off_outlined : Icons.mic_none_rounded,
-          strings.microphone,
-          () => _run(interactive.toggleMute),
-          active: !value.localMuted,
-          showLabel: showLabels,
-        ),
-      );
-    }
-    if (interactive != null && caps.canPublishVideo) {
-      controls.add(
-        _control(
-          value.localVideoEnabled
-              ? Icons.videocam_outlined
-              : Icons.videocam_off_outlined,
-          strings.camera,
-          () =>
-              _run(() => interactive.setVideoEnabled(!value.localVideoEnabled)),
-          active: value.localVideoEnabled,
-          showLabel: showLabels,
-        ),
-      );
-    }
-    if (interactive != null && caps.canSwitchCamera) {
-      controls.add(
-        _control(
-          Icons.cameraswitch_outlined,
-          strings.switchCamera,
-          () => _run(() => interactive.switchCamera(MediaCameraPosition.back)),
-          showLabel: showLabels,
-        ),
-      );
-    }
-    if (caps.canPublishVideo &&
-        _backgroundEffects.backgroundCapabilities.isSupported) {
-      controls.add(
-        _control(
-          Icons.blur_on_outlined,
-          strings.virtualBackground,
-          _openBackgroundEffects,
-          active: _backgroundEffects.backgroundEffect.enabled,
-          showLabel: showLabels,
-        ),
-      );
-    }
-    if (interactive != null && caps.canScreenShare) {
-      controls.add(
-        _control(
-          value.localScreenShareEnabled
-              ? Icons.stop_screen_share_outlined
-              : Icons.screen_share_outlined,
-          strings.screenShare,
-          () => _run(
-            () => interactive.setScreenShareEnabled(
-              !value.localScreenShareEnabled,
-            ),
-          ),
-          active: value.localScreenShareEnabled,
-          showLabel: showLabels,
-        ),
-      );
-    }
-    controls.add(
-      _control(
-        Icons.people_outline_rounded,
-        strings.participants,
-        _openParticipants,
-        active: _participantsOpen,
-        badgeCount: value.participants.length,
-        showLabel: showLabels,
-      ),
-    );
-    if (widget.config.showChat && widget.chatSession != null) {
-      controls.add(
-        _control(
-          Icons.chat_bubble_outline_rounded,
-          strings.chat,
-          _toggleChat,
-          active: _chatOpen,
-          badgeCount: _unreadChatCount,
-          showLabel: showLabels,
-        ),
-      );
-    }
-    if (widget.config.showRtcDataMessages && caps.canSendData) {
-      controls.add(
-        _control(
-          Icons.data_object_rounded,
-          strings.rtcData,
-          () => setState(() => _rtcDataOpen = !_rtcDataOpen),
-          active: _rtcDataOpen,
-          showLabel: showLabels,
-        ),
-      );
-    }
-    final isLive = widget.room.role != MediaRole.participant;
-    if (!isLive) {
-      controls.add(
-        _control(
-          Icons.pan_tool_outlined,
-          _handRaised ? strings.lowerHand : strings.raiseHand,
-          _toggleRaiseHand,
-          active: _handRaised,
-          showLabel: showLabels,
-        ),
-      );
-    } else {
-      controls.add(
-        _control(
-          Icons.favorite_rounded,
-          '${strings.totalLikes} $_likeCount',
-          _sendLike,
-          showLabel: showLabels,
-        ),
-      );
-      if (widget.room.role == MediaRole.viewer) {
-        controls.add(
-          _control(
-            Icons.pan_tool_outlined,
-            _coHostRequested ? strings.coHostApplied : strings.applyCoHost,
-            _toggleCoHostRequest,
-            active: _coHostRequested,
-            showLabel: showLabels,
-          ),
-        );
-      }
-      controls.add(
-        _control(
-          _cleanScreen
-              ? Icons.fullscreen_exit_rounded
-              : Icons.fullscreen_rounded,
-          _cleanScreen ? strings.exitCleanScreen : strings.cleanScreen,
-          _toggleCleanScreen,
-          active: _cleanScreen,
-          showLabel: showLabels,
-        ),
-      );
-    }
-    controls.add(
-      _control(
-        Icons.call_end_rounded,
-        widget.room.role == MediaRole.host &&
-                widget.room.managementCapabilities.closeRoom.supported
-            ? strings.endLiveRoom
-            : widget.room.role == MediaRole.participant
-            ? strings.leave
-            : strings.leaveLiveRoom,
-        _leave,
-        endCall: true,
-        showLabel: showLabels,
-      ),
-    );
-    return RealtimeGlassSurface(
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      radius: RealtimeUiTokens.dockRadius,
-      opacity: .96,
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: showLabels ? 16 : 4,
-        runSpacing: 2,
-        children: controls,
-      ),
-    );
-  }
-
-  Widget _control(
-    IconData icon,
-    String label,
-    VoidCallback action, {
-    bool active = false,
-    bool endCall = false,
-    int badgeCount = 0,
-    bool showLabel = false,
-  }) => Semantics(
-    label: label,
-    button: true,
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        RealtimeGlassIconButton(
-          tooltip: label,
-          icon: icon,
-          onPressed: action,
-          active: active,
-          danger: endCall,
-          badgeCount: badgeCount,
-          size: 46,
-          radius: RealtimeUiTokens.controlRadius,
-        ),
-        if (showLabel) ...[
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: endCall ? RealtimeUiTokens.danger : RealtimeUiTokens.text,
-            ),
-          ),
-        ],
-      ],
-    ),
-  );
-}
-
-class _ManagedRoomMember {
-  const _ManagedRoomMember({
-    required this.userId,
-    required this.displayName,
-    this.media,
-    this.chat,
-    required this.isSelf,
-  });
-
-  final String userId;
-  final String displayName;
-  final MediaRoomParticipantSummary? media;
-  final ChatMember? chat;
-  final bool isSelf;
-
-  String roleLabel(RealtimeStrings strings) {
-    final mediaRole = media?.role?.wireName;
-    final chatRole = chat?.role.name;
-    return strings.roleLabel(mediaRole ?? chatRole ?? 'participant');
-  }
-}
-
-List<_ManagedRoomMember> _mergeManagedMembers(
-  List<MediaRoomParticipantSummary> media,
-  List<ChatMember> chat, {
-  required String localMediaParticipantId,
-  String? localChatUserId,
-}) {
-  final mediaByKey = <String, MediaRoomParticipantSummary>{};
-  final chatByKey = <String, ChatMember>{};
-  final orderedKeys = <String>[];
-
-  String mediaKey(MediaRoomParticipantSummary item) =>
-      item.userId.trim().isNotEmpty
-      ? item.userId.trim()
-      : 'media:${item.participantId}';
-
-  for (final item in media) {
-    final key = mediaKey(item);
-    mediaByKey[key] = item;
-    if (!orderedKeys.contains(key)) orderedKeys.add(key);
-  }
-  for (final item in chat) {
-    final key = item.userId.trim();
-    if (key.isEmpty) continue;
-    chatByKey[key] = item;
-    if (!orderedKeys.contains(key)) orderedKeys.add(key);
-  }
-
-  return orderedKeys
-      .map((key) {
-        final mediaMember = mediaByKey[key];
-        final chatMember = chatByKey[key];
-        final rawName = mediaMember?.displayName.trim().isNotEmpty == true
-            ? mediaMember!.displayName.trim()
-            : chatMember?.displayName.trim().isNotEmpty == true
-            ? chatMember!.displayName.trim()
-            : key;
-        final selfByMedia =
-            mediaMember?.participantId == localMediaParticipantId;
-        final selfByChat =
-            localChatUserId != null &&
-            localChatUserId.isNotEmpty &&
-            chatMember?.userId == localChatUserId;
-        return _ManagedRoomMember(
-          userId: key,
-          displayName: rawName,
-          media: mediaMember,
-          chat: chatMember,
-          isSelf: selfByMedia || selfByChat,
-        );
-      })
-      .toList(growable: false);
+  Widget _controls(MediaSnapshot value) =>
+      _RoomControls(host: this, snapshot: value);
 }
 
 class MediaParticipantTile extends StatelessWidget {

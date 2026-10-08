@@ -53,11 +53,12 @@ void main() {
       for (final channel in channels) {
         messenger.setMockMethodCallHandler(channel, (call) async {
           commands.add(call);
-          if (call.method == 'listCameras')
+          if (call.method == 'listCameras') {
             return [
               {'id': 'front', 'label': 'Front'},
               {'id': 'back', 'label': 'Back'},
             ];
+          }
           return null;
         });
         addTearDown(() => messenger.setMockMethodCallHandler(channel, null));

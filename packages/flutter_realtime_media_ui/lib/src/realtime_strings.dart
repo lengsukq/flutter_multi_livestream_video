@@ -292,12 +292,18 @@ class RealtimeStrings {
   String get approveCoHost => isZh ? '同意连麦' : 'Approve';
   String get rejectCoHost => isZh ? '拒绝' : 'Decline';
   String get endLive => isZh ? '结束直播' : 'End livestream';
-  String get endLiveConfirmation =>
-      isZh ? '确定要结束当前直播吗？所有观众将被断开。' : 'End this livestream? All viewers will be disconnected.';
+  String get endLiveConfirmation => isZh
+      ? '确定要结束当前直播吗？所有观众将被断开。'
+      : 'End this livestream? All viewers will be disconnected.';
   String get liveSummary => isZh ? '直播小结' : 'Livestream Summary';
   String get liveDuration => isZh ? '直播时长' : 'Live duration';
   String get peakViewers => isZh ? '最高在线' : 'Peak viewers';
-  String get totalLikes => isZh ? '获赞总数' : 'Total likes';
+  String get totalLikes => myLikes;
+  String get myLikes => isZh ? '我的点赞次数' : 'My likes';
+  String get noMuteTargets => isZh ? '暂无可静音成员' : 'No participants to mute';
+  String get retryFailed => isZh ? '重试失败成员' : 'Retry failed participants';
+  String muteSummary(int success, int failed) =>
+      isZh ? '静音成功 $success 人，失败 $failed 人' : 'Muted $success; failed $failed';
 
   // --- Extended Meeting Strings ---
   String get gridMode => isZh ? '宫格视图' : 'Grid view';
@@ -308,8 +314,9 @@ class RealtimeStrings {
   String get lowerHand => isZh ? '手放下' : 'Lower hand';
   String get handRaised => isZh ? '已举手' : 'Hand raised';
   String get muteAll => isZh ? '全员静音' : 'Mute all';
-  String get muteAllConfirmation =>
-      isZh ? '确定要将除自己外的所有人静音吗？' : 'Mute everyone in the meeting except yourself?';
+  String get muteAllConfirmation => isZh
+      ? '确定要将除自己外的所有人静音吗？'
+      : 'Mute everyone in the meeting except yourself?';
   String get muteAllSuccess => isZh ? '已将所有成员静音' : 'All participants muted';
   String get hostBadge => isZh ? '主持人' : 'Host';
   String get moderatorBadge => isZh ? '管理员' : 'Admin';

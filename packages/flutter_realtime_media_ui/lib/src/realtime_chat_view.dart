@@ -31,6 +31,7 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
   final _scrollController = ScrollController();
   bool _sending = false;
   bool _copiedCode = false;
+  Timer? _copyTimer;
   bool _showScrollToBottom = false;
   String? _error;
 
@@ -42,6 +43,45 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
     _scrollController.addListener(_onScroll);
   }
 
+  final Set<String> _visibleMessageIds = {};
+  bool _timelineInitialized = false;
+  bool _newMessages = false;
+
+  @override
+  void didUpdateWidget(covariant RealtimeChatView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session != widget.session) {
+      _visibleMessageIds.clear();
+      _timelineInitialized = false;
+      _sending = false;
+      _error = null;
+      _newMessages = false;
+      _message.clear();
+    }
+  }
+
+  void _syncMessages(List<ChatMessage> messages) {
+    final first = !_timelineInitialized;
+    final added = messages.any((m) => !_visibleMessageIds.contains(m.id));
+    _timelineInitialized = true;
+    _visibleMessageIds
+      ..clear()
+      ..addAll(messages.map((m) => m.id));
+    if (!first && !added) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      if (first || _scrollController.offset <= 72) {
+        _scrollController.animateTo(
+          0,
+          duration: RealtimeUiTokens.animNormal,
+          curve: Curves.easeOut,
+        );
+      } else {
+        setState(() => _newMessages = true);
+      }
+    });
+  }
+
   void _onScroll() {
     final show = _scrollController.hasClients && _scrollController.offset > 100;
     if (show != _showScrollToBottom) {
@@ -51,6 +91,7 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
 
   @override
   void dispose() {
+    _copyTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _message.dispose();
@@ -62,7 +103,8 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
     if (code == null || code.isEmpty) return;
     Clipboard.setData(ClipboardData(text: code));
     setState(() => _copiedCode = true);
-    Future<void>.delayed(const Duration(seconds: 2), () {
+    _copyTimer?.cancel();
+    _copyTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copiedCode = false);
     });
   }
@@ -93,6 +135,7 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
     final strings = RealtimeStrings.of(context);
     final resolvedTitle = widget.title ?? strings.chat;
     final body = StreamBuilder<ChatConnectionState>(
+      key: ValueKey(widget.session),
       stream: widget.session.states,
       initialData: widget.session.state,
       builder: (context, stateSnapshot) => StreamBuilder<List<ChatMessage>>(
@@ -101,6 +144,7 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
         builder: (context, messagesSnapshot) {
           final state = stateSnapshot.data ?? widget.session.state;
           final messages = messagesSnapshot.data ?? widget.session.messages;
+          _syncMessages(messages);
           return Column(
             children: [
               RealtimeGlassSurface(
@@ -249,17 +293,26 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                                       widget.session is ChatSessionIdentity
                                       ? widget.session as ChatSessionIdentity
                                       : null;
-                                  final own = message.userId == identity?.localUserId;
-                                  final canDelete =
-                                      widget.session.capabilities.canDeleteMessage;
+                                  final own =
+                                      message.userId == identity?.localUserId;
+                                  final canDelete = widget
+                                      .session
+                                      .capabilities
+                                      .canDeleteMessage;
                                   final canRemoveUser =
-                                      widget.session.capabilities.canDisconnectUser &&
+                                      widget
+                                          .session
+                                          .capabilities
+                                          .canDisconnectUser &&
                                       !own;
-                                  final initialChar = message.displayName.isNotEmpty
-                                      ? message.displayName.characters.first.toUpperCase()
+                                  final initialChar =
+                                      message.displayName.isNotEmpty
+                                      ? message.displayName.characters.first
+                                            .toUpperCase()
                                       : (message.userId.isNotEmpty
-                                          ? message.userId.characters.first.toUpperCase()
-                                          : '?');
+                                            ? message.userId.characters.first
+                                                  .toUpperCase()
+                                            : '?');
                                   final avatarColor = _avatarColor(
                                     message.displayName.isNotEmpty
                                         ? message.displayName
@@ -274,7 +327,8 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                                             canRemoveUser: canRemoveUser,
                                           )
                                         : null,
-                                    borderRadius: RealtimeUiTokens.controlRadius,
+                                    borderRadius:
+                                        RealtimeUiTokens.controlRadius,
                                     child: Container(
                                       constraints: const BoxConstraints(
                                         maxWidth: 520,
@@ -290,7 +344,9 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                                             : null,
                                         color: own
                                             ? null
-                                            : Colors.white.withValues(alpha: .92),
+                                            : Colors.white.withValues(
+                                                alpha: .92,
+                                              ),
                                         borderRadius: BorderRadius.only(
                                           topLeft: const Radius.circular(
                                             RealtimeUiTokens.controlRadius,
@@ -306,7 +362,8 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                                           bottomRight: Radius.circular(
                                             own
                                                 ? 4
-                                                : RealtimeUiTokens.controlRadius,
+                                                : RealtimeUiTokens
+                                                      .controlRadius,
                                           ),
                                         ),
                                         border: own
@@ -317,7 +374,8 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                                         boxShadow: own
                                             ? [
                                                 BoxShadow(
-                                                  color: RealtimeUiTokens.primary
+                                                  color: RealtimeUiTokens
+                                                      .primary
                                                       .withValues(alpha: 0.22),
                                                   blurRadius: 14,
                                                   offset: const Offset(0, 4),
@@ -362,8 +420,11 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                                               _formatTime(message.timestamp),
                                               style: TextStyle(
                                                 color: own
-                                                    ? Colors.white.withValues(alpha: .72)
-                                                    : RealtimeUiTokens.textMuted,
+                                                    ? Colors.white.withValues(
+                                                        alpha: .72,
+                                                      )
+                                                    : RealtimeUiTokens
+                                                          .textMuted,
                                                 fontSize: 10,
                                               ),
                                             ),
@@ -383,12 +444,13 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         CircleAvatar(
                                           radius: 16,
-                                          backgroundColor:
-                                              avatarColor.withValues(alpha: 0.15),
+                                          backgroundColor: avatarColor
+                                              .withValues(alpha: 0.15),
                                           child: Text(
                                             initialChar,
                                             style: TextStyle(
@@ -425,6 +487,7 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                           opacity: .94,
                           child: InkWell(
                             onTap: () {
+                              setState(() => _newMessages = false);
                               _scrollController.animateTo(
                                 0.0,
                                 duration: RealtimeUiTokens.animNormal,
@@ -441,7 +504,9 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  strings.scrollToBottom,
+                                  _newMessages
+                                      ? strings.newMessages
+                                      : strings.scrollToBottom,
                                   style: const TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w700,
@@ -690,13 +755,18 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
       _sending = true;
       _error = null;
     });
+    final session = widget.session;
     try {
-      await widget.session.sendMessage(text);
-      _message.clear();
+      await session.sendMessage(text);
+      if (mounted && session == widget.session) _message.clear();
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted && session == widget.session) {
+        setState(() => _error = error.toString());
+      }
     } finally {
-      if (mounted) setState(() => _sending = false);
+      if (mounted && session == widget.session) {
+        setState(() => _sending = false);
+      }
     }
   }
 

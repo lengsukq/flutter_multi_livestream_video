@@ -19,14 +19,11 @@ abstract class _ArtcMediaSession
         MediaDataPayloadSizer,
         ProcessedVideoSink,
         MediaDeviceController {
-  _ArtcMediaSession({
-    required this.role,
-    required ArtcSessionEngineFactory engineFactory,
-  }) : _engineFactory = engineFactory;
+  _ArtcMediaSession({required this.role, required this.engineFactory});
 
   static _ArtcMediaSession? _activeSession;
 
-  final ArtcSessionEngineFactory _engineFactory;
+  final ArtcSessionEngineFactory engineFactory;
   final StreamController<MediaSessionState> _states =
       StreamController<MediaSessionState>.broadcast();
   final StreamController<MediaSnapshot> _snapshots =
@@ -88,13 +85,14 @@ abstract class _ArtcMediaSession
   @override
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _requireActive();
-    if (!supportsProcessedVideoSource(source))
+    if (!supportsProcessedVideoSource(source)) {
       throw MediaError(
         code: MediaErrorCode.unsupportedFeature,
         providerId: providerId,
         message:
             'Processed video input is unavailable for this role or platform.',
       );
+    }
     await _processedSink.attach(source);
   }
 
@@ -245,7 +243,7 @@ abstract class _ArtcMediaSession
     }
     _setState(MediaSessionState.joining);
     try {
-      _engine ??= await _engineFactory();
+      _engine ??= await engineFactory();
       _setState(MediaSessionState.connecting);
       await _engine!.join(joinInfo, _createEngineEvents());
       await _probeProcessedVideoInput();
