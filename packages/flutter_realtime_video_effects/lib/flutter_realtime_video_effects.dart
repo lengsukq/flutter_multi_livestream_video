@@ -7,3 +7,5 @@ export 'src/video_effects_camera_device.dart';
 export 'src/video_effects_source_config.dart';
 export 'src/video_effects_failure.dart';
 export 'src/native_processed_video_sink.dart';
+
+export 'src/video_effects_assets.dart';

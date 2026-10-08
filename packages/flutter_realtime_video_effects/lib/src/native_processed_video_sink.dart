@@ -31,12 +31,13 @@ class NativeProcessedVideoSink {
     ProcessedVideoSource value, {
     Map<String, Object?> arguments = const {},
   }) async {
-    if (!supports(value))
+    if (!supports(value)) {
       throw MediaError(
         code: MediaErrorCode.unsupportedFeature,
         providerId: providerId,
         message: 'Unsupported processed-video source.',
       );
+    }
     await detach();
     await _channel(value).invokeMethod<void>(attachMethod, {
       'providerId': providerId,
@@ -65,7 +66,8 @@ class NativeProcessedVideoSink {
   }
 
   Future<void> selectCamera(String? deviceId) async {
-    if (source != null)
+    if (source != null) {
       await VideoEffectsBridge().selectCamera(source!, deviceId);
+    }
   }
 }

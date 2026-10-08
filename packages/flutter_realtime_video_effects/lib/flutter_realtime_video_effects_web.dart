@@ -10,6 +10,7 @@ import 'flutter_realtime_video_effects_platform_interface.dart';
 import 'src/processed_video_source.dart';
 import 'src/video_effects_failure.dart';
 import 'src/video_effects_camera_device.dart';
+import 'src/video_effects_assets.dart';
 import 'src/video_effects_source_config.dart';
 
 @JS('globalThis')
@@ -54,8 +55,7 @@ class FlutterRealtimeVideoEffectsWeb
   @override
   Future<bool> isSupported() async {
     try {
-      if (!_globalThis.has('RealtimeVideoEffectsBridge')) return false;
-      if (!_globalThis.has('SdkVideoEffectsVision')) return false;
+      if (!web.window.isSecureContext) return false;
       final canvas = _globalThis.getProperty<JSAny?>('HTMLCanvasElement'.toJS);
       if (canvas == null) return false;
       final prototype = (canvas as JSObject).getProperty<JSAny?>(
@@ -72,6 +72,7 @@ class FlutterRealtimeVideoEffectsWeb
   Future<ProcessedVideoSource> createSource(
     VideoEffectsSourceConfig config,
   ) async {
+    await ensureVideoEffectsWebAssets();
     final sourceId =
         'effects_web_${DateTime.now().microsecondsSinceEpoch}_'
         '${_nextSourceId++}';
@@ -104,6 +105,7 @@ class FlutterRealtimeVideoEffectsWeb
 
   @override
   Future<void> setEffect(String sourceId, MediaBackgroundEffect effect) async {
+    await ensureVideoEffectsWebAssets();
     await _bridge
         .callMethod<JSPromise<JSAny?>>(
           'setEffect'.toJS,
@@ -135,6 +137,7 @@ class FlutterRealtimeVideoEffectsWeb
 
   @override
   Future<List<VideoEffectsCameraDevice>> listCameras() async {
+    await ensureVideoEffectsWebAssets();
     final mediaDevices = web.window.navigator.mediaDevices;
     final devices = await mediaDevices.enumerateDevices().toDart;
     return devices.toDart
