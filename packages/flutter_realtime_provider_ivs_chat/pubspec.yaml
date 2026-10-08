@@ -1,0 +1,20 @@
+name: flutter_realtime_provider_ivs_chat
+description: Optional ivs_chat platform drivers and bundled Web runtime.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.47.0"
+dependencies:
+  flutter_realtime_sdk_base:
+    path: ../flutter_realtime_sdk_base
+  flutter_realtime_chat_ivs:
+    path: ../flutter_realtime_chat_ivs
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  assets:
+    - assets/
+    - assets/licenses/

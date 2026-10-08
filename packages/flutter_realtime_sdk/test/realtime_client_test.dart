@@ -13,8 +13,58 @@ import 'support/fake_transport.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  const permissionChannel = MethodChannel(
+    'flutter.baseflow.com/permissions/methods',
+  );
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          permissionChannel,
+          (call) async => call.method == 'checkPermissionStatus' ? 1 : null,
+        );
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(permissionChannel, null);
+  });
 
   group('Processed video source lifecycle', () {
+    test(
+      'protected initialization suspends publishing and failure keeps it off',
+      () async {
+        final gate = Completer<void>();
+        final platform = _FakeEffectsPlatform()..createGate = gate;
+        final session = _FakeProcessedMediaSession();
+        final room = _effectsRoom(platform, session);
+        await session.setVideoEnabled(true);
+        final operation = room.setBackgroundEffect(
+          const MediaBackgroundEffect.blur(),
+        );
+        final failure = expectLater(operation, throwsStateError);
+        await Future<void>.delayed(Duration.zero);
+        expect(session.snapshot.localVideoEnabled, isFalse);
+        gate.completeError(StateError('effects runtime unavailable'));
+        await failure;
+        expect(session.snapshot.localVideoEnabled, isFalse);
+        expect(session.attachedSources, isEmpty);
+        await room.dispose();
+      },
+    );
+
+    test(
+      'successful protection restores only a previously enabled camera',
+      () async {
+        final platform = _FakeEffectsPlatform();
+        final session = _FakeProcessedMediaSession();
+        final room = _effectsRoom(platform, session);
+        await session.setVideoEnabled(true);
+        await room.setBackgroundEffect(const MediaBackgroundEffect.blur());
+        expect(session.snapshot.localVideoEnabled, isTrue);
+        expect(session.actions, ['video:true', 'video:false', 'video:true']);
+        await room.dispose();
+      },
+    );
+
     test('changing effects preserves a disabled camera', () async {
       final platform = _FakeEffectsPlatform();
       final room = _effectsRoom(platform, _FakeProcessedMediaSession());

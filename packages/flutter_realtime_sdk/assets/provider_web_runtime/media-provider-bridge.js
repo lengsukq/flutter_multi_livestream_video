@@ -739,7 +739,7 @@
   function createTrtcSession(session) {
     const info = providerBlock(session, 'trtc');
     const sdk = global.TRTC;
-    const trtc = sdk.create({ assetsPath: new URL('assets/packages/flutter_realtime_sdk/assets/provider_web_runtime/vendors/trtc-assets/', document.baseURI).toString() });
+    const trtc = sdk.create({ assetsPath: (globalThis.__realtimeTrtcAssetsPath || new URL('assets/packages/flutter_realtime_sdk/assets/provider_web_runtime/vendors/trtc-assets/', document.baseURI).toString()) });
     const localVideoId = `trtc:video:${session.localParticipantId}`;
     const remoteTracks = new Map();
     const refreshLocalTrack = () => {

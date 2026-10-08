@@ -5,7 +5,7 @@ import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.da
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/src/video_effects_local_preview.dart';
+import 'package:flutter_realtime_sdk/src/video_effects_local_preview.dart';
 
 void main() {
   test(

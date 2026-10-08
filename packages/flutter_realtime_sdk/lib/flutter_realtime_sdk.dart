@@ -22,3 +22,6 @@ export 'src/realtime_room_view.dart';
 export 'src/realtime_requirements.dart';
 export 'src/realtime_sdk.dart';
 export 'src/runtime_platform.dart';
+
+export 'package:flutter_realtime_sdk_base/flutter_realtime_sdk_base.dart'
+    show RealtimeLite, RealtimeProviderBundle;

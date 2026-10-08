@@ -1,4 +1,1 @@
-import 'runtime_platform_type.dart';
-
-RealtimeRuntimePlatform currentRealtimeRuntimePlatform() =>
-    RealtimeRuntimePlatform.unknown;
+export 'package:flutter_realtime_sdk_base/src/runtime_platform_stub.dart';

@@ -184,3 +184,5 @@ for (const [packageName, licensePrefix] of [
 
 await rm(sdkAssetDir, { recursive: true, force: true });
 await cp(distDir, sdkAssetDir, { recursive: true });
+
+await import('./build-optional-providers.mjs');

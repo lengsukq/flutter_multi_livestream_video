@@ -18,6 +18,11 @@ const _allMediaScripts = <String>[
   'vendors/amazon-ivs-web-broadcast.js',
   'vendors/chime-sdk.js',
 ];
+const _chatScripts = {
+  'agora-chat': 'vendors/agora-chat-provider.js',
+  'ivs-chat': 'vendors/ivs-chat-provider.js',
+  'tencent-chat': 'vendors/tencent-chat-provider.js',
+};
 final Map<String, Future<void>> _loadedScripts = {};
 
 Future<void> ensureRealtimeProviderWebAssets({
@@ -26,27 +31,22 @@ Future<void> ensureRealtimeProviderWebAssets({
   bool includeAllMediaProviders = false,
 }) async {
   final mediaScripts = <String>{};
-  var includeVideoEffects = false;
   if (includeAllMediaProviders) {
     mediaScripts.addAll(_allMediaScripts);
-    includeVideoEffects = true;
   } else {
     for (final providerId in mediaProviderIds) {
       final normalized = providerId.trim().toLowerCase();
       final script = _mediaScriptsByProvider[normalized];
       if (script != null) mediaScripts.add(script);
-      if (normalized.isNotEmpty) includeVideoEffects = true;
     }
   }
 
   final loads = <Future<void>>[];
-  if (includeVideoEffects) {
-    loads.add(_loadVideoEffectsRuntimeScript());
-  }
   if (includeProductChat) {
-    loads.add(
-      _loadProviderRuntimeScript('vendors/realtime-chat-provider-bridge.js'),
-    );
+    final selected = mediaProviderIds.where(_chatScripts.containsKey).toList();
+    for (final id in selected.isEmpty ? _chatScripts.keys : selected) {
+      loads.add(_loadProviderRuntimeScript(_chatScripts[id]!));
+    }
   }
   if (mediaScripts.isNotEmpty) {
     for (final scriptPath in mediaScripts) {
@@ -57,40 +57,31 @@ Future<void> ensureRealtimeProviderWebAssets({
   await Future.wait(loads);
 }
 
-Future<void> _loadProviderRuntimeScript(String scriptPath) {
-  return _loadBundledScript(
+const _runtimePackages = {
+  'vendors/aliyun-rtc-sdk.js': 'flutter_realtime_provider_artc',
+  'vendors/agora-rtc-sdk.js': 'flutter_realtime_provider_agora',
+  'vendors/trtc.js': 'flutter_realtime_provider_trtc',
+  'vendors/amazon-ivs-web-broadcast.js': 'flutter_realtime_provider_aws',
+  'vendors/chime-sdk.js': 'flutter_realtime_provider_aws',
+  'vendors/agora-chat-provider.js': 'flutter_realtime_provider_agora_chat',
+  'vendors/ivs-chat-provider.js': 'flutter_realtime_provider_ivs_chat',
+  'vendors/tencent-chat-provider.js': 'flutter_realtime_provider_tencent_chat',
+};
+Future<void> _loadProviderRuntimeScript(String scriptPath) async {
+  final package = _runtimePackages[scriptPath] ?? 'flutter_realtime_sdk_base';
+  final file = scriptPath.split('/').last;
+  if (file == 'trtc.js') {
+    await _loadBundledScript(
+      key: 'trtc:asset-path',
+      assetPath: 'assets/packages/$package/assets/asset-path.js',
+      displayName: 'TRTC asset path',
+    );
+  }
+  await _loadBundledScript(
     key: 'provider:$scriptPath',
-    assetPath:
-        'assets/packages/flutter_realtime_sdk/'
-        'assets/provider_web_runtime/$scriptPath',
+    assetPath: 'assets/packages/$package/assets/$file',
     displayName: scriptPath,
   );
-}
-
-Future<void> _loadVideoEffectsRuntimeScript() {
-  final current = _loadedScripts['effects:runtime'];
-  if (current != null) return current;
-  final load = () async {
-    await _loadBundledScript(
-      key: 'effects:vision',
-      assetPath:
-          'assets/packages/flutter_realtime_video_effects/'
-          'assets/web/vision.js',
-      displayName: 'video-effects/vision.js',
-    );
-    await _loadBundledScript(
-      key: 'effects:bridge',
-      assetPath:
-          'assets/packages/flutter_realtime_video_effects/'
-          'assets/web/video-effects-bridge.js',
-      displayName: 'video-effects/video-effects-bridge.js',
-    );
-  }();
-  _loadedScripts['effects:runtime'] = load;
-  return load.catchError((Object error) {
-    _loadedScripts.remove('effects:runtime');
-    throw error;
-  });
 }
 
 Future<void> _loadBundledScript({

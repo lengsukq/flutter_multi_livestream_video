@@ -2,12 +2,8 @@ import 'provider_web_assets_stub.dart'
     if (dart.library.js_interop) 'provider_web_assets_web.dart'
     as platform;
 
-typedef RealtimeProviderWebAssetsLoader =
-    Future<void> Function({
-      Iterable<String> mediaProviderIds,
-      bool includeProductChat,
-      bool includeAllMediaProviders,
-    });
+export 'package:flutter_realtime_sdk_base/src/provider_web_assets.dart'
+    show RealtimeProviderWebAssetsLoader;
 
 /// Loads only the SDK-bundled browser runtimes required by a connection.
 ///

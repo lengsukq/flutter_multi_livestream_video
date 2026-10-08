@@ -7,6 +7,24 @@ environment:
   sdk: ^3.12.0
   flutter: ">=3.47.0"
 dependencies:
+  flutter_realtime_provider_livekit:
+    path: ../flutter_realtime_provider_livekit
+  flutter_realtime_provider_agora:
+    path: ../flutter_realtime_provider_agora
+  flutter_realtime_provider_trtc:
+    path: ../flutter_realtime_provider_trtc
+  flutter_realtime_provider_artc:
+    path: ../flutter_realtime_provider_artc
+  flutter_realtime_provider_aws:
+    path: ../flutter_realtime_provider_aws
+  flutter_realtime_provider_agora_chat:
+    path: ../flutter_realtime_provider_agora_chat
+  flutter_realtime_provider_ivs_chat:
+    path: ../flutter_realtime_provider_ivs_chat
+  flutter_realtime_provider_tencent_chat:
+    path: ../flutter_realtime_provider_tencent_chat
+  flutter_realtime_sdk_base:
+    path: ../flutter_realtime_sdk_base
   flutter:
     sdk: flutter
   flutter_realtime_media_core:
@@ -47,10 +65,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^5.0.0
 flutter:
+  # Runtime assets are supplied once by the optional provider packages.
   assets:
-    - assets/provider_web_runtime/
     - assets/provider_web_runtime/licenses/
-    - assets/provider_web_runtime/vendors/
-    - assets/provider_web_runtime/vendors/trtc-assets/
-    - assets/provider_web_runtime/vendors/trtc-assets/mediapipe/
   uses-material-design: true
