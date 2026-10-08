@@ -205,7 +205,7 @@
     NSButton *b = [[NSButton alloc] initWithFrame:NSMakeRect(startX, 8, btnW, btnH)];
     b.tag = i;
     b.target = self;
-    b.action = @selector(button:)];
+    b.action = @selector(button:);
     b.bordered = NO;
     b.wantsLayer = YES;
     b.layer.cornerRadius = 8.0;

@@ -491,6 +491,12 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
     ClassroomActivity activity,
     ClassroomStrings s,
   ) => Card(
+    elevation: 0,
+    color: RealtimeUiTokens.surface,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+      side: const BorderSide(color: RealtimeUiTokens.border),
+    ),
     child: Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
