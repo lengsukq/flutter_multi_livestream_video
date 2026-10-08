@@ -1,0 +1,12 @@
+group 'com.oneplusdream.flutter_realtime_screen_annotation'
+version '1.0-SNAPSHOT'
+apply plugin: 'com.android.library'
+android {
+    namespace 'com.oneplusdream.flutter_realtime_screen_annotation'
+    compileSdk 37
+    defaultConfig { minSdk 24 }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

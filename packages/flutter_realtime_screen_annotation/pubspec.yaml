@@ -1,0 +1,30 @@
+name: flutter_realtime_screen_annotation
+description: SDK system overlay annotation tools for shared displays.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_realtime_whiteboard_core:
+    path: ../flutter_realtime_whiteboard_core
+  flutter_realtime_whiteboard_ui:
+    path: ../flutter_realtime_whiteboard_ui
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.oneplusdream.flutter_realtime_screen_annotation
+        pluginClass: FlutterRealtimeScreenAnnotationPlugin
+      macos:
+        pluginClass: FlutterRealtimeScreenAnnotationPlugin
+      windows:
+        pluginClass: FlutterRealtimeScreenAnnotationPluginCApi
+      linux:
+        pluginClass: FlutterRealtimeScreenAnnotationPlugin

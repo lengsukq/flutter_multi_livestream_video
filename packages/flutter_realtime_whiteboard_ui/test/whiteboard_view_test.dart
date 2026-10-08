@@ -1,0 +1,187 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
+import 'package:flutter_realtime_whiteboard_ui/flutter_realtime_whiteboard_ui.dart';
+
+class _CountedScreen extends StatelessWidget {
+  const _CountedScreen(this.onBuild);
+  final VoidCallback onBuild;
+  @override
+  Widget build(BuildContext context) {
+    onBuild();
+    return const ColoredBox(color: Colors.blue);
+  }
+}
+
+void main() {
+  testWidgets(
+    'screen stage shares all tools, keeps the screen renderer and respects portrait/landscape letterboxes',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      for (final size in [
+        const Size(360, 640),
+        const Size(640, 360),
+        const Size(1200, 800),
+      ]) {
+        tester.view.physicalSize = size;
+        final session = WhiteboardSession.local();
+        await session.start();
+        var builds = 0;
+        final background = _CountedScreen(() => builds++);
+        Widget stage(bool edit) => MaterialApp(
+          home: Scaffold(
+            body: SharedContentStage(
+              mode: SharedContentMode.screen,
+              whiteboard: session,
+              screen: background,
+              screenAspectRatio: 4 / 3,
+              screenAnnotations: session,
+              canAnnotateScreen: edit,
+            ),
+          ),
+        );
+        await tester.pumpWidget(stage(true));
+        await tester.pumpAndSettle();
+        final before = builds;
+        final rect = tester.getRect(find.byType(AnnotationSurface));
+        expect(rect.width / rect.height, closeTo(4 / 3, .001));
+        await tester.tap(find.byTooltip('Draw / navigate'));
+        await tester.pumpAndSettle();
+        for (final label in ['Pen', 'Highlight', 'Circle', 'Arrow']) {
+          await tester.tap(find.byTooltip(label));
+          await tester.pump();
+          await tester.dragFrom(rect.center, const Offset(25, 25));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.byTooltip('Text'));
+        await tester.pump();
+        await tester.tapAt(rect.center);
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'Shared screen');
+        await tester.tap(find.text('Add'));
+        await tester.pumpAndSettle();
+        expect(session.canvas.shapes.length, 5);
+        expect(builds, before);
+        await tester.tap(find.byTooltip('Undo'));
+        await tester.pumpAndSettle();
+        expect(session.canvas.shapes.length, 4);
+        await tester.tap(find.byTooltip('Clear'));
+        await tester.pumpAndSettle();
+        expect(session.canvas.shapes, isEmpty);
+        await tester.pumpWidget(stage(false));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('Draw / navigate'), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.runAsync(session.dispose);
+      }
+    },
+  );
+
+  testWidgets(
+    'independent board draws, pages, undo/clear with no media session',
+    (tester) async {
+      final session = WhiteboardSession.local();
+      await session.start();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: WhiteboardView(session: session)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Draw / navigate'));
+      await tester.pumpAndSettle();
+      final surface = find.byType(AnnotationSurface);
+      final rect = tester.getRect(surface);
+      for (final label in ['Pen', 'Highlight', 'Circle', 'Arrow']) {
+        await tester.tap(find.byTooltip(label));
+        await tester.pump();
+        await tester.dragFrom(rect.center, const Offset(35, 20));
+        await tester.pumpAndSettle();
+      }
+      expect(session.canvas.shapes.length, 4);
+      await tester.tap(find.byTooltip('Text'));
+      await tester.pump();
+      await tester.tapAt(rect.center);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Lesson');
+      await tester.tap(find.text('Add'));
+      await tester.pumpAndSettle();
+      expect(session.canvas.shapes.last.text, 'Lesson');
+      await tester.tap(find.byTooltip('Undo'));
+      await tester.pumpAndSettle();
+      expect(session.canvas.shapes.length, 4);
+      await tester.tap(find.byTooltip('Add page'));
+      await tester.pumpAndSettle();
+      expect(session.state!.pages.length, 2);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byTooltip('Delete current page'));
+      await tester.pumpAndSettle();
+      expect(session.canvas.shapes.length, 4);
+      await tester.tap(find.byTooltip('Draw / navigate'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Clear'));
+      await tester.pumpAndSettle();
+      expect(session.canvas.shapes, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(session.dispose);
+    },
+  );
+  testWidgets(
+    'student cannot edit or change pages, content excludes letterbox',
+    (tester) async {
+      final session = WhiteboardSession.local(canEdit: false);
+      await session.start();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox(
+            width: 400,
+            height: 700,
+            child: WhiteboardView(session: session),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Draw / navigate'), findsNothing);
+      expect(find.byTooltip('Add page'), findsNothing);
+      expect(find.byTooltip('Delete current page'), findsNothing);
+      final size = tester.getSize(find.byType(AnnotationSurface));
+      expect(size.width / size.height, closeTo(16 / 9, .001));
+      await tester.drag(find.byType(AnnotationSurface), const Offset(40, 20));
+      await tester.pumpAndSettle();
+      expect(session.canvas.shapes, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(session.dispose);
+    },
+  );
+  testWidgets(
+    'inverse zoom transform maps draw coordinates to content; toolbar stays outside transform',
+    (tester) async {
+      final session = WhiteboardSession.local();
+      await session.start();
+      await tester.pumpWidget(
+        MaterialApp(home: WhiteboardView(session: session)),
+      );
+      await tester.pumpAndSettle();
+      final viewer = tester.widget<InteractiveViewer>(
+        find.byType(InteractiveViewer),
+      );
+      viewer.transformationController!.value = Matrix4.identity()
+        ..scaleByDouble(2, 2, 1, 1);
+      await tester.pump();
+      await tester.tap(find.byTooltip('Draw / navigate'));
+      await tester.pumpAndSettle();
+      final rect = tester.getRect(find.byType(AnnotationSurface));
+      final start = rect.topLeft + Offset(rect.width * .5, rect.height * .5);
+      final gesture = await tester.startGesture(start);
+      await gesture.moveBy(const Offset(20, 20));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(session.canvas.shapes.single.points.first.x, closeTo(.25, .01));
+      expect(session.canvas.shapes.single.points.first.y, closeTo(.25, .01));
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(session.dispose);
+    },
+  );
+}

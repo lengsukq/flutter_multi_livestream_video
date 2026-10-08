@@ -1,0 +1,8 @@
+#ifndef FLUTTER_REALTIME_SCREEN_ANNOTATION_PLUGIN_H_
+#define FLUTTER_REALTIME_SCREEN_ANNOTATION_PLUGIN_H_
+#include <flutter_linux/flutter_linux.h>
+G_BEGIN_DECLS
+G_DECLARE_FINAL_TYPE(FlutterRealtimeScreenAnnotationPlugin, flutter_realtime_screen_annotation_plugin, FLUTTER, REALTIME_SCREEN_ANNOTATION_PLUGIN, GObject)
+__attribute__((visibility("default"))) void flutter_realtime_screen_annotation_plugin_register_with_registrar(FlPluginRegistrar* registrar);
+G_END_DECLS
+#endif
