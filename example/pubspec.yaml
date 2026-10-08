@@ -67,7 +67,7 @@ flutter:
   config:
     # IVS Media/Chat are SwiftPM-only. Agora Chat still comes from CocoaPods;
     # the Podfile de-duplicates their shared aosl.framework at embed time.
-    enable-swift-package-manager: false
+    enable-swift-package-manager: true
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

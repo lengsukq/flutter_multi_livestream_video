@@ -283,3 +283,111 @@ For Pre-Join, implement `MediaPreJoinProbe` only when the adapter can perform a
 real diagnostic without joining a room. Return explicit `unsupported` or
 `unknown` checks for unavailable diagnostics and preserve the requirement
 severity supplied by Core.
+
+## Teaching tools and Live interactions
+
+This is a **2026-10-08 working-tree snapshot**, including uncommitted
+implementation, not a published-release claim. Features live in the
+provider-neutral SDK; the reference backend authorizes state/actions and the
+Demo opens the common SDK widgets.
+
+Legend: **✅ basic implementation exists; △ partial or conditional;
+❌ unimplemented; — not applicable.** Implementation is separate from real-device
+acceptance. Web, Android, iOS and macOS application builds have passed;
+registered Windows combinations still need a native build and new-interaction
+acceptance for this snapshot.
+
+### Requirements and platform implementation
+
+| Planned feature | Web | Android | iOS | macOS | Implementation and remaining gap |
+| --- | :---: | :---: | :---: | :---: | --- |
+| Live with Chat | ✅ | ✅ | ✅ | △ | Independent media/product Chat composition; ARTC macOS needs its official framework; real combinations remain pending |
+| Web client | ✅ | — | — | — | Standard JavaScript Flutter Web implemented and built; full SDK is not Wasm-ready |
+| Live gifts without payments | ✅ | ✅ | ✅ | ✅ | Virtual gifts, quantity, shared history/totals, animation and retry; no balances or settlement |
+| Raise hand | ✅ | ✅ | ✅ | ✅ | Student raise/lower and teacher queue |
+| Allow a student to speak | △ | △ | △ | △ | LiveKit has server microphone grants; other vendors only gate SDK UI, not vendor publishing |
+| Classroom chat | ✅ | ✅ | ✅ | ✅ | Independent product Chat; absent product Chat, RTC fallback needs bidirectional data |
+| Q&A | ✅ | ✅ | ✅ | ✅ | Ask, answer, resolve, search and filter |
+| Student roster | △ | △ | △ | △ | Presence, hands and speaking grants; missing camera/mic telemetry stays unknown |
+| Interaction reminders | ✅ | ✅ | ✅ | ✅ | Hand, question, answer and speak-grant reminders; Chat unread indicator |
+| Participation stats | ✅ | ✅ | ✅ | ✅ | Online members/students, hands and questions; chat count is device-local cached messages |
+| Independent paged whiteboard | ✅ | ✅ | ✅ | ✅ | Pure Dart Core + optional UI, default 20-page limit; real devices pending |
+| Unified content stage | ✅ | ✅ | ✅ | ✅ | Members/whiteboard/screen, teacher control and student follow; capture follows vendor capabilities below |
+| Pen | △ | △ | △ | △ | Standalone whiteboard implemented; screen requires a renderable track; operates in SDK preview |
+| Highlight | △ | △ | △ | △ | Standalone whiteboard implemented; screen requires a renderable track |
+| Circle | △ | △ | △ | △ | Standalone whiteboard implemented; screen requires a renderable track |
+| Arrow | △ | △ | △ | △ | Standalone whiteboard implemented; screen requires a renderable track |
+| Text annotation | △ | △ | △ | △ | Standalone whiteboard implemented; screen requires a renderable track |
+| Undo | △ | △ | △ | △ | Removes the last mark on the current canvas |
+| Clear | △ | △ | △ | △ | Clears the current canvas |
+| Synchronized annotations | △ | △ | △ | △ | Sync, late-join restore and source resets exist; remote pixels pending; two-second polling without hints |
+| Quiz | ✅ | ✅ | ✅ | ✅ | Single choice, answer replacement and teacher results; correct answer hidden from students until close |
+| Poll | ✅ | ✅ | ✅ | ✅ | Single choice, replacement, close and result counts |
+| Announcement | ✅ | ✅ | ✅ | ✅ | Teacher publication and student delivery |
+| Focus reminder | ✅ | ✅ | ✅ | ✅ | Text reminder; no app-switch monitoring |
+| Homework | ✅ | ✅ | ✅ | ✅ | Title, instructions, deadline, publish/view; no submission or grading extension |
+| Attendance | ✅ | ✅ | ✅ | ✅ | Session first join, last leave and online duration; no expected roster or absence determination |
+| Teaching materials | △ | △ | △ | △ | Link sharing/opening exists; file picker, actual uploads and embedded document preview are absent; host uploader hook only |
+| Classroom timer | ✅ | ✅ | ✅ | ✅ | Server deadline, synchronized countdown and stop |
+| Course recording/replay | ❌ | ❌ | ❌ | ❌ | Deferred by current scope; neither recording nor replay implemented |
+
+A ✅ requires an appropriate control plane and configured media/Chat drivers.
+New teaching-tool and gift state lasts for the room lifecycle, without
+cross-course history. Storage and recording remain outside this delivery.
+
+### Live and product Chat platform coverage
+
+The built-in driver tables above cover five media vendors and three product
+Chat vendors. Live uses LiveKit, Agora, TRTC, ARTC or AWS IVS; AWS Meeting uses
+Chime. ARTC macOS is conditional on its native framework. Windows registers
+LiveKit/Agora/TRTC media and Tencent Chat; AWS/ARTC media and IVS/Agora Chat have
+no Windows driver. Linux has no default driver.
+
+AWS Live no longer forces IVS Chat. A room retains the Chat binding selected
+at creation; dashboard changes affect new rooms. Without product Chat,
+user-chat fallback requires bidirectional RTC data. Agora/TRTC/ARTC viewers and
+IVS cannot rely on that fallback to send user messages. Gift/classroom state
+has an independent polling control plane.
+
+### Teacher screen-share publishing by platform
+
+Annotation tools exist, but publishing shared content still depends on media:
+
+| Meeting vendor | Desktop Web | Android | iOS | macOS |
+| --- | :---: | :---: | :---: | :---: |
+| LiveKit | ✅ if browser supports capture | ✅ | △ current in-app capture | ✅ screen-recording permission required |
+| TRTC | ✅ if browser supports capture | ✅ | △ native SDK call exists; full device flow pending | ❌ adapter not exposed |
+| Agora | ✅ if browser supports capture | ❌ | ❌ | ❌ |
+| ARTC | ✅ if browser supports capture | ❌ | ❌ | ❌ |
+| AWS Chime | ✅ if browser supports capture | ❌ | ❌ | ❌ |
+
+Desktop Web support does not imply mobile-browser capture support. LiveKit iOS
+currently sets `useiOSBroadcastExtension: false`; in-app capture must not be
+advertised as cross-app whole-screen sharing. Receiving a share/annotations
+does not imply publishing capability. Annotation operates in the SDK preview;
+a system-wide desktop drawing layer is not implemented.
+
+### Outstanding work and acceptance
+
+- **Unimplemented:** material file selection/actual upload/embedded preview and
+  course recording/replay. Upload storage and recording were deferred;
+  applications may supply their own uploader.
+- **Vendor coverage gaps:** server-enforced speaking permissions beyond LiveKit,
+  missing native screen-sharing paths above and iOS cross-app capture.
+- **Real acceptance pending:** media × Chat × platform combinations, viewer
+  chat, actual LiveKit microphone denial, remote annotation coordinates/pixels,
+  orientation, reconnect and resource cleanup.
+- **Outside current extensions:** homework submission/grading, expected
+  attendance roster/absence rules, server-wide chat analytics and long-lived
+  course history. Do not present these as implemented.
+
+The implementation run recorded 55 backend + 156 Dart/Flutter tests (**211**)
+and successful Web/Android/iOS/macOS builds. This is separate from real-provider,
+multi-device and remote-pixel acceptance. See
+[delivery and acceptance](doc/INTERACTION_ACCEPTANCE.md),
+[Classroom SDK](doc/CLASSROOM_SDK.md) and
+[Live interaction SDK](doc/LIVE_INTERACTIONS_SDK.md).
+
+See [Whiteboard SDK](doc/WHITEBOARD_SDK.md) for public APIs and compatibility. The current whiteboard
+delivery records 306 targeted passing tests in the [acceptance record](doc/INTERACTION_ACCEPTANCE.md#independent-whiteboard-delivery--2026-10-08).
+State/drawing code is shared across all four platforms; capture and remote-pixel acceptance remain separate.

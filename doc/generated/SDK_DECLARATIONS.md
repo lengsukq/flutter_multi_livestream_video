@@ -97,12 +97,12 @@ These fingerprints make CI reject stale declarations, including changes to the f
 - `packages/flutter_realtime_media_chime/lib/src/chime_session_factory.dart`: `d6c7497cc184cb65`
 - `packages/flutter_realtime_media_ivs/lib/src/ivs_media_session.dart`: `31b7e2df086a4a49`
 - `packages/flutter_realtime_media_ivs/lib/src/ivs_session_factory.dart`: `cbf35f041d635df7`
-- `packages/flutter_realtime_media_livekit/lib/src/livekit_media_session.dart`: `2470883b10053944`
+- `packages/flutter_realtime_media_livekit/lib/src/livekit_media_session.dart`: `f3b191fd08cb69b9`
 - `packages/flutter_realtime_media_livekit/lib/src/livekit_session_factory.dart`: `5b98fdbad49619be`
 - `packages/flutter_realtime_media_trtc/lib/src/trtc_media_session.dart`: `e5262412df207a82`
 - `packages/flutter_realtime_media_trtc/lib/src/trtc_session_factory.dart`: `cb4feae6fecfa027`
-- `packages/flutter_realtime_media_web/lib/src/provider_web_profile.dart`: `ae0162dbdbab1f73`
-- `packages/flutter_realtime_media_web/lib/src/provider_web_session_factory.dart`: `c5fdf546f573693d`
+- `packages/flutter_realtime_media_web/lib/src/provider_web_profile.dart`: `767eba65b2f9f5ea`
+- `packages/flutter_realtime_media_web/lib/src/provider_web_session_factory.dart`: `126a7c5d5d7d34c2`
 - `packages/flutter_realtime_provider_agora/lib/src/drivers_native.dart`: `f24244ffef214375`
 - `packages/flutter_realtime_provider_agora/lib/src/drivers_web.dart`: `fa32bfbf8ac91021`
 - `packages/flutter_realtime_provider_agora_chat/lib/src/drivers_native.dart`: `8560b62e603c1946`

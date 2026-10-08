@@ -82,6 +82,12 @@ jobs:
       matrix:
         project:
           - packages/flutter_realtime_chat_agora
+          - packages/flutter_realtime_live_core
+          - packages/flutter_realtime_live_ui
+          - packages/flutter_realtime_classroom_core
+          - packages/flutter_realtime_whiteboard_core
+          - packages/flutter_realtime_whiteboard_ui
+          - packages/flutter_realtime_classroom_ui
           - packages/flutter_realtime_chat_core
           - packages/flutter_realtime_chat_ivs
           - packages/flutter_realtime_chat_rtc
@@ -306,7 +312,7 @@ jobs:
         run: flutter pub get
       - name: Build macOS example with CocoaPods
         working-directory: flutter_aws_chime/example
-        run: flutter build macos
+        run: python3 ../scripts/build_flutter_macos.py --debug --no-pub
       - name: Test native macOS frame feed
         working-directory: flutter_aws_chime
         run: packages/flutter_realtime_media_aws_desktop/test/run_macos_native_frame_feed_test.sh

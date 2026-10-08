@@ -5,6 +5,44 @@
 Flutter Realtime Media is a **frontend SDK-first**, provider-neutral Flutter
 architecture for real-time audio/video, live sessions, and chat.
 
+### SDK teaching tools and Live gifts
+
+The optional classroom SDK now includes announcements, focus reminders,
+homework publication, material links, session attendance, timers and single-choice
+Quiz/Poll. Shared-screen annotations provide pen, highlight, circle, arrow,
+text, undo and clear with normalized content coordinates. Live gifts use a
+separate provider-neutral SDK without payments or balances. The common room
+view supplies the UI; the Demo does not implement teaching or gift logic.
+
+See [Classroom SDK](doc/CLASSROOM_SDK.md),
+[Live interaction SDK](doc/LIVE_INTERACTIONS_SDK.md), and
+[delivery/acceptance](doc/INTERACTION_ACCEPTANCE.md). Media and product Chat
+remain independently selectable, including AWS Live. New interaction state is
+transient; storage and recording are not included.
+
+The [feature/platform comparison](SDK_CAPABILITY_MATRIX.md#teaching-tools-and-live-interactions)
+separates basic implementation, conditional vendor support and outstanding
+work. Material uploads/embedded previews and recording/replay remain absent;
+server-enforced speaking grants are LiveKit-only, and shared-screen publishing
+varies by platform. Tests/builds do not replace real-provider acceptance.
+
+### Meeting classroom interactions (SDK V1)
+
+The optional Classroom packages add teacher/student hand raising, speaking
+grants, Q&A, roster, reminders and participation stats without business logic
+in the Demo. The Meeting room exposes a provider-neutral
+ClassroomSession at room.classroom, and RealtimeRoomView renders the optional
+classroom panel. Typed ClassroomStateEvent and ClassroomCapabilities are
+available for apps that use their own UI; the bundled UI follows the host
+English/Chinese locale and has search/filter controls. The reference backend
+authorizes teacher actions and offers optional single-host classroom state
+persistence via CLASSROOM_STATE_DIR. Product IM system hints (Agora Chat,
+Tencent Chat, IVS Chat), or RTC Data where unavailable, accelerate state
+refresh without replacing the trusted backend. LiveKit Meeting implements
+server-enforced microphone source grants/revocations; other providers use
+advisory permissions. Details and limitations:
+[Classroom SDK](doc/CLASSROOM_SDK.md).
+
 The Flutter application works against one high-level API. Provider-specific
 SDKs live only in adapter packages, while `flutter_realtime_sdk` bundles the
 built-in adapters and selects the correct provider + runtime-platform driver
@@ -832,6 +870,18 @@ Live 自动使用 Amazon IVS Real-Time**。产品聊天是独立 Provider 轴，
 **Agora Chat**。原有
 `flutter_aws_chime` v3 包继续保留，供已有 Chime-only 项目兼容使用。
 
+### 教学与直播互动进度
+
+[功能与平台对照表](SDK_CAPABILITY_MATRIX.zh-CN.md#教学工具与直播互动)逐项记录
+Live + Chat、打赏、学生互动、教师标注和教学工具的实现及缺口。
+公告、作业发布、考勤、计时器、单选 Quiz/Poll 和无支付礼物已有基础实现；
+资料实际上传/内置预览、课堂录制与回放尚未实现。强制发言权限目前仅
+LiveKit 提供服务端实现，教师屏幕共享仍有供应商和平台差异。
+
+[交付验收记录](doc/INTERACTION_ACCEPTANCE.md)保留上一轮 211 项测试与四平台
+构建证据，并列出待完成的真实多人、供应商 Chat、远端标注和资源清理验收。
+当前进度包含未提交工作区代码，不能视为已发布版本；存储和录制按现有范围暂缓。
+
 ### 轻量 UI 国际化
 
 SDK 内置 Flutter UI 目前提供 English 与简体中文两套文案，覆盖 Meeting / Live、
@@ -1267,3 +1317,9 @@ await session.dispose();
 更完整的后续路线见 [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)。
 
 本轮七项优化的交付范围、离线回归、构建结果与待真实验收项见 [优化验证记录](doc/OPTIMIZATION_VALIDATION.md)。
+
+## Independent whiteboard and unified content
+
+See [Whiteboard SDK](doc/WHITEBOARD_SDK.md) for the independent Core/UI packages, multi-page whiteboard, unified content menu, screen annotations, synchronization and failure semantics. The teaching Meeting Demo uses the common SDK stage by default.
+
+See [System screen annotation SDK](doc/SYSTEM_SCREEN_ANNOTATION_SDK.md) for the independent cross-app drawing plugin, Android/macOS/Windows/X11 adapters, authorization flow, movable toolbars and platform validation limits. Applications use `room.sharedContent.startSystemAnnotations()` through the SDK; the Demo adds no native overlay implementation.
