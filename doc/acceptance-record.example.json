@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "date": null,
+  "platform": null,
+  "deviceModelAndOs": null,
+  "provider": null,
+  "engine": null,
+  "vendorSdkVersion": null,
+  "implemented": "declared-see-generated-matrix",
+  "build": "pending",
+  "realCall": "pending",
+  "remoteVisual": "pending",
+  "cycles": 20,
+  "holdSeconds": 1800,
+  "scenarios": {
+    "meetingTwoPeers": "pending",
+    "liveHostTwoViewers": "pending",
+    "credentialRenewal": "pending",
+    "networkRecovery": "pending",
+    "cameraSwitch": "pending",
+    "blur": "pending",
+    "imageReplacement": "pending"
+  },
+  "evidence": [],
+  "cleanup": {
+    "localReleased": "pending",
+    "providerResourceDeleted": "pending",
+    "deletionEvidence": null
+  }
+}

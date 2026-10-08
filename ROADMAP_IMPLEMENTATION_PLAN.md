@@ -78,3 +78,12 @@ LiveKit MVP 通过验收后，第 3、4 项保持进行中状态。Agora、TRTC�
 - [LiveKit 连接与 token 权限](https://docs.livekit.io/intro/basics/connect/)
 - [LiveKit Egress 概览](https://docs.livekit.io/transport/media/ingress-egress/egress/)
 - [AWS Chime iOS issue #699：与另一套 WebRTC 同应用时的视频互操作报告](https://github.com/aws/amazon-chime-sdk-ios/issues/699)
+
+## 2026-10 优化与验收入口
+
+全量入口保持兼容；新增供应商无关基础包、RealtimeLite 和八组可选注册包。
+聊天缓存和界面区域更新已纳入回归，Web 效果按需加载。
+[声明矩阵](doc/generated/SDK_DECLARATIONS.md)由源码生成；
+[统一验收](doc/ACCEPTANCE.md)默认 20 次进退房和 30 分钟通话。
+真实连麦和服务端聊天历史分页继续独立推进。
+真实供应商通话、Windows 原生构建与远端画面验收不得从本地单测或声明推定通过。

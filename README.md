@@ -63,6 +63,30 @@ repository example includes a small English/中文 switcher. The demo-server
 Dashboard also supports English / 简体中文, follows the browser language on
 first visit, and persists the selected language locally.
 
+## Lightweight provider composition
+
+The full `Realtime.standard()` entry point remains compatible. Applications that
+need fewer vendor dependencies can use `flutter_realtime_sdk_base` and explicitly
+register optional bundles with `RealtimeLite`:
+
+```dart
+final realtime = RealtimeLite(
+  backendUrl: backendUrl,
+  providers: [createLivekitProvider(), createIvsChatProvider()],
+);
+```
+
+See [lightweight integration](doc/LIGHTWEIGHT_SDK.md), the runnable
+[single-media example](examples/lite_media) and
+[media + independent Chat example](examples/lite_media_chat).
+Bundled effects initialize only when preview/processed video needs them.
+Product Chat keeps the latest 500 messages by default; RTC fallback keeps 200.
+Both limits are configurable. Room collaboration controls appear only when
+implemented; the local like counter describes the current user's own likes.
+
+简体中文：保留全量入口，新增显式注册的轻量接入；产品聊天默认保留最近 500 条，
+RTC fallback 默认 200 条。视频效果按需初始化，申请连麦和举手等尚未实现的协作入口暂时隐藏。
+
 ## Core philosophy
 
 This repository follows these architectural rules:
@@ -1241,3 +1265,5 @@ await session.dispose();
 
 当前多 Provider 使用方式见 [`MULTI_PROVIDER_GUIDE.md`](MULTI_PROVIDER_GUIDE.md)，
 更完整的后续路线见 [`ROADMAP_IMPLEMENTATION_PLAN.md`](ROADMAP_IMPLEMENTATION_PLAN.md)。
+
+本轮七项优化的交付范围、离线回归、构建结果与待真实验收项见 [优化验证记录](doc/OPTIMIZATION_VALIDATION.md)。

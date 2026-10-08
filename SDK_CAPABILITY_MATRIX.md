@@ -6,6 +6,13 @@ The application should branch on `MediaCapabilities` / `MediaFeature`, not
 on `providerId`. A provider may expose a smaller capability set on a specific
 platform or role.
 
+## Generated declarations and acceptance evidence
+
+[Platform, role and feature declarations](doc/generated/SDK_DECLARATIONS.md) are generated from optional drivers and adapter source.
+`python3 scripts/generate_capability_matrix.py --check` rejects stale output.
+Declarations, target builds and real calls are separate evidence; the [unified acceptance entry point](doc/ACCEPTANCE.md) records devices, vendor versions, remote visuals and cleanup.
+
+
 ## Built-in platform drivers
 
 `RealtimeSdk.standard()` owns this routing table. Application code uses the
@@ -99,7 +106,7 @@ the internal engine capabilities used by that AWS routing.
 | Pre-Join native device probe | Mic/camera | No native probe | No native probe | No native probe | No native probe | Mic/camera |
 | Pre-Join provider network probe | Unsupported without issued credentials | No native probe | No native probe | No native probe | No native probe | Unsupported without participant token |
 | Network stats | Yes | Not exposed by adapter | Yes | Yes | Not exposed by adapter | Basic RTC stats |
-| Screen share | Yes for publishers | Not exposed by adapter | Deferred | Not exposed by adapter | Not exposed by adapter | Not exposed by adapter |
+| Screen share | Publishers; mobile Web restricted | Native not exposed; conditional Web | Native not exposed; conditional Web | Android/iOS publishers; conditional Web | Conditional Web | Conditional Web |
 | Processed-video sink for blur / image replacement | Android/macOS/Web | Android/macOS/Web* | Android/macOS/Web | Android/macOS/Web | Android/macOS*/Web | Android/macOS/Web* |
 | Host participant list | Backend + logical owner | Meeting creator via logical owner credential | Backend + logical owner | Backend + logical owner | Backend + logical owner | Backend + logical owner |
 | Host remove participant | LiveKit host | No | No | No | No | IVS DisconnectParticipant |

@@ -1263,8 +1263,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                   decoration: BoxDecoration(
                     color: live
                         ? const Color(0xFFFFF1F2).withValues(alpha: 0.8)
-                        : RealtimeUiTokens.primarySubtle
-                            .withValues(alpha: 0.6),
+                        : RealtimeUiTokens.primarySubtle.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(
                       RealtimeUiTokens.compactRadius,
                     ),
@@ -1288,11 +1287,11 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                         child: Text(
                           live
                               ? (DemoStrings.of(context).isZh
-                                  ? '高清互动直播 · 悬浮弹幕流 · 实时飘心点赞 · 清屏沉浸模式'
-                                  : 'Interactive livestream · Floating danmaku · Flying heart likes · Clean screen')
+                                    ? '高清互动直播 · 悬浮弹幕流 · 实时飘心点赞 · 清屏沉浸模式'
+                                    : 'Interactive livestream · Floating danmaku · Flying heart likes · Clean screen')
                               : (DemoStrings.of(context).isZh
-                                  ? '多人协作会议 · 宫格与演讲者布局 · 屏幕共享 · 全员静音管理'
-                                  : 'Multi-party meeting · Grid & Speaker layouts · Screen sharing · Host controls'),
+                                    ? '多人协作会议 · 宫格与演讲者布局 · 屏幕共享 · 全员静音管理'
+                                    : 'Multi-party meeting · Grid & Speaker layouts · Screen sharing · Host controls'),
                           style: TextStyle(
                             fontSize: 12,
                             color: live
@@ -1442,7 +1441,8 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                 background: _roomFilter == MediaRoomMode.meeting
                     ? RealtimeUiTokens.primary
                     : RealtimeUiTokens.primarySubtle,
-                onTap: () => setState(() => _roomFilter = MediaRoomMode.meeting),
+                onTap: () =>
+                    setState(() => _roomFilter = MediaRoomMode.meeting),
               ),
               const SizedBox(width: 6),
               RealtimePill(
@@ -1481,8 +1481,8 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
               _roomFilter == MediaRoomMode.broadcast
                   ? strings.noActiveLiveStreams
                   : (_roomFilter == MediaRoomMode.meeting
-                      ? strings.noActiveMeetings
-                      : strings.noActiveRooms),
+                        ? strings.noActiveMeetings
+                        : strings.noActiveRooms),
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 12.5,

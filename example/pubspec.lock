@@ -360,10 +360,73 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_provider_agora:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_provider_agora"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_provider_agora_chat:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_provider_agora_chat"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_provider_artc:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_provider_artc"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_provider_aws:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_provider_aws"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_provider_ivs_chat:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_provider_ivs_chat"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_provider_livekit:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_provider_livekit"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_provider_tencent_chat:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_provider_tencent_chat"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_provider_trtc:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_provider_trtc"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_sdk:
     dependency: "direct main"
     description:
       path: "../packages/flutter_realtime_sdk"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_sdk_base:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_sdk_base"
       relative: true
     source: path
     version: "0.1.0"

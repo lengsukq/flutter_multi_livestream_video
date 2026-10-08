@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -34,7 +33,6 @@ class _ChimeMeetingViewState extends State<ChimeMeetingView> {
   static const _cardRadius = 28.0;
   static const _controlRadius = 22.0;
   static const _compactRadius = 16.0;
-  static const _blur = 24.0;
 
   late final PageController _pageController;
   int _page = 0;

@@ -41,3 +41,16 @@ Both dependency managers compile the same Swift source tree under
 ## Real-device media verification
 
 See [`DEVICE_E2E.md`](DEVICE_E2E.md) for the opt-in physical-device workflow.
+
+## macOS validation
+
+The full Demo validates macOS with CocoaPods. Use the command-scoped override:
+
+```sh
+FLUTTER_SWIFT_PACKAGE_MANAGER=false flutter build macos --release --no-pub
+```
+
+The separate macOS CI job sets this override; iOS retains its existing SwiftPM
+configuration and device-target build. Flutter project/global configuration has
+higher priority than the environment override. Do not change user-wide settings
+just to run this check.

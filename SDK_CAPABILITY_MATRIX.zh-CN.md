@@ -5,6 +5,13 @@
 应用应根据 `MediaCapabilities` / `MediaFeature` 判断当前可用功能，而不是根据
 `providerId` 推断。不同平台和角色可能拥有不同的能力集合。
 
+## 自动生成的声明与验收边界
+
+[平台、角色和功能声明](doc/generated/SDK_DECLARATIONS.md)从可选驱动和 Adapter 源码生成。
+`python3 scripts/generate_capability_matrix.py --check` 会拒绝过期内容。
+声明、平台构建和真实通话是三种独立证据；[统一验收入口](doc/ACCEPTANCE.md)记录设备、供应商版本、远端画面与资源清理。
+
+
 ## 内置平台 Driver
 
 `RealtimeSdk.standard()` 内置并维护以下路由表。业务代码在所有平台调用同一套
@@ -87,8 +94,8 @@ AWS 对外统一展示为一个 Vendor，内部按模式路由：`Meeting -> Chi
 | 加入前原生设备探测 | 麦克风/摄像头 | 无 | 无 | 无 | 无 | 麦克风/摄像头 |
 | 加入前 Provider 网络探测 | 需要房间凭证时不支持 | 无 | 无 | 无 | 无 | 需要参与者令牌时不支持 |
 | 网络统计 | 支持 | Adapter 未提供 | 支持 | 支持 | Adapter 未提供 | 基础 RTC 统计 |
-| 屏幕共享 | 发布者支持 | Adapter 未提供 | 暂未实现 | Adapter 未提供 | Adapter 未提供 | Adapter 未提供 |
-| Blur Processed-video Sink | Adapter 未提供 | Adapter 未提供 | Web 房主 + participant | Adapter 未提供 | Adapter 未提供 | Adapter 未提供 |
+| 屏幕共享 | 发布者支持，Web 移动端限制 | 原生 Adapter 未提供；Web 按能力检查 | 原生暂未实现；Web 按能力检查 | Android/iOS 发布者；Web 按能力检查 | Web 按能力检查 | Web 按能力检查 |
+| Blur / image processed-video sink | Android/macOS/Web | Android/macOS conditional/Web | Android/macOS/Web | Android/macOS/Web | Android/macOS conditional/Web | Android/macOS conditional/Web |
 | 房主查看参与者列表 | 后端验证逻辑房主 | Meeting 创建者通过逻辑房主凭证 | 后端验证逻辑房主 | 后端验证逻辑房主 | 后端验证逻辑房主 | 后端验证逻辑房主 |
 | 房主移除参与者 | 支持 | 不支持 | 不支持 | 不支持 | 不支持 | 通过 IVS `DisconnectParticipant` |
 | 房主关闭房间 | 后端支持 | Meeting 创建者通过控制面关闭 | 后端支持 | 后端支持 | 后端支持 | 后端支持 |
@@ -101,10 +108,10 @@ AWS 对外统一展示为一个 Vendor，内部按模式路由：`Meeting -> Chi
 | 实时本地预览 | Flutter Texture | Flutter Texture | HTML video | 后续 | 后续 |
 | Processed Source | Native RGBA Frame Hub | Native `CVPixelBuffer` Frame Hub | `MediaStreamTrack` | 后续 | 后续 |
 
-第一层由 `flutter_realtime_video_effects` 统一负责；Provider Adapter 只实现第二层
-`ProcessedVideoSink`。当前 Agora Web 已完成 Sink。Native Provider 只有在能够
-直接消费 Native Frame Hub 后才声明支持，不会把 30fps RGBA/YUV 帧绕回 Dart/
-MethodChannel 来伪装兼容。
+第一层由 `flutter_realtime_video_effects` 统一负责，提供模糊和图片替换；六个媒体 Engine 已有
+`ProcessedVideoSink` 实现。Native 帧仍在 Native Frame Hub 中传递。
+Android/macOS/Web 的发布者按平台与运行时能力启用；ARTC、Chime、IVS 的 macOS 输入需要真实能力探测。
+iOS/Windows 的效果桥尚未注册。实现不等于真实远端画面验收通过。
 
 Demo 的 Pre-Join 直接使用 Platform Bridge 做实时虚化预览，不进入 Provider 房间。
 正式入房前 `RealtimeRoomView` 会重新创建 processed source 并 attach 给当前
