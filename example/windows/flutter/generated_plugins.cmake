@@ -5,12 +5,14 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   agora_rtc_engine
   connectivity_plus
+  flutter_realtime_screen_annotation
   flutter_webrtc
   iris_method_channel
   livekit_client
   permission_handler_windows
   tencent_cloud_chat_sdk
   tencent_rtc_sdk
+  url_launcher_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

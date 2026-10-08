@@ -86,3 +86,22 @@ application runtime code does not maintain adapter registration. TRTC and ARTC
 device E2E instructions are in [`../TRTC_E2E.md`](../TRTC_E2E.md) and
 [`../ARTC_E2E.md`](../ARTC_E2E.md). The ARTC 7.11.0 iOS pod does not support
 simulator linking.
+
+
+## Teaching and Live interaction demos
+
+Meeting rooms show the SDK classroom entry with hands, Q&A, roster and teaching
+tools. Live rooms show the SDK gift entry when the backend advertises the
+optional interaction API. No Demo-specific classroom/gift state is maintained.
+Material sharing uses existing links; storage, file upload and recording are
+not implemented. Screen annotations are drawn in the shared-content preview.
+
+For macOS builds that hit the Iris SwiftPM FlutterMacOS linker issue, use
+`python3 ../scripts/build_flutter_macos.py --release --no-pub` instead of a
+global Flutter configuration change. It temporarily selects CocoaPods for the
+Demo manifest and restores that manifest afterwards.
+
+See [interaction acceptance](../doc/INTERACTION_ACCEPTANCE.md) for current
+build/test evidence and pending real-device checks.
+
+教学 Meeting 的 SDK 房间界面新增「课堂内容」入口，教师可选择成员、独立分页白板或屏幕共享。学生跟随教师，屏幕预览和白板共用完整标注工具。供应商没有共享能力时仍可使用白板；旧后端保留原共享流程。详见 [白板 SDK](../doc/WHITEBOARD_SDK.md)。

@@ -12,6 +12,7 @@ import flutter_realtime_chat_agora
 import flutter_realtime_media_artc
 import flutter_realtime_media_aws_desktop
 import flutter_realtime_media_livekit
+import flutter_realtime_screen_annotation
 import flutter_realtime_video_effects
 import flutter_webrtc
 import iris_method_channel
@@ -19,6 +20,7 @@ import livekit_client
 import shared_preferences_foundation
 import tencent_cloud_chat_sdk
 import tencent_rtc_sdk
+import url_launcher_macos
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   AgoraRtcNgPlugin.register(with: registry.registrar(forPlugin: "AgoraRtcNgPlugin"))
@@ -28,6 +30,7 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FlutterRealtimeMediaArtcPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaArtcPlugin"))
   FlutterRealtimeMediaAwsDesktopPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaAwsDesktopPlugin"))
   FlutterRealtimeMediaLivekitPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaLivekitPlugin"))
+  FlutterRealtimeScreenAnnotationPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeScreenAnnotationPlugin"))
   FlutterRealtimeVideoEffectsPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeVideoEffectsPlugin"))
   FlutterWebRTCPlugin.register(with: registry.registrar(forPlugin: "FlutterWebRTCPlugin"))
   IrisMethodChannelPlugin.register(with: registry.registrar(forPlugin: "IrisMethodChannelPlugin"))
@@ -35,4 +38,5 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   SharedPreferencesPlugin.register(with: registry.registrar(forPlugin: "SharedPreferencesPlugin"))
   TencentCloudChatSdkPlugin.register(with: registry.registrar(forPlugin: "TencentCloudChatSdkPlugin"))
   TencentRTCCloud.register(with: registry.registrar(forPlugin: "TencentRTCCloud"))
+  UrlLauncherPlugin.register(with: registry.registrar(forPlugin: "UrlLauncherPlugin"))
 }
