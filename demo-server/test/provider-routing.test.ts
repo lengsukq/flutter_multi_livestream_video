@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import type { classroomToolsSnapshot } from '../classroom/classroom-tools.ts';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { writeFileSync } from 'node:fs';
@@ -13,8 +14,21 @@ let baseUrl: string | undefined;
 let output = '';
 const liveKitRoomServiceCalls: string[] = [];
 let failLiveKitDeleteRoom = false;
+let failLiveKitUpdateParticipant = false;
+const liveKitUpdates: Array<{identity: string; permission: {canPublishSources: string[]}}> = [];
+let updateGate: { entered: () => void; wait: Promise<void> } | null = null;
+function holdNextUpdate() {
+  let enter!: () => void, release!: () => void;
+  const entered = new Promise<void>(resolve => { enter = resolve; });
+  const wait = new Promise<void>(resolve => { release = resolve; });
+  updateGate = { entered: enter, wait };
+  return { entered, release };
+}
 
 interface ApiBody {
+  liveInteractions?: boolean;
+  tools?: Record<string, unknown>;
+  totals?: Record<string, number>;
   activeProvider?: string;
   activeChatProvider?: string | null;
   provider?: string;
@@ -25,6 +39,13 @@ interface ApiBody {
   roomOwnerCredential?: string;
   role?: string;
   roomMode?: string;
+  speakEnforcement?: string;
+  livekit?: { token: string };
+  revision?: number;
+  selfUserId?: string;
+  stats?: { onlineCount: number; handsRaised: number; pendingQuestions: number };
+  students?: Array<{ userId: string; handRaised: boolean; canSpeak: boolean; online?: boolean }>;
+  questions?: Array<{ id: string; text: string; status: string; answer?: string }>;
   providerList?: Array<{
     id: string;
     capabilities?: Array<{
@@ -72,11 +93,31 @@ before(async () => {
   liveKitServer = createServer((req, res) => {
     if (req.url?.startsWith('/twirp/livekit.RoomService/')) {
       liveKitRoomServiceCalls.push(req.url);
+      if (req.url === '/twirp/livekit.RoomService/UpdateParticipant') {
+        let body = '';
+        req.setEncoding('utf8');
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+          liveKitUpdates.push(JSON.parse(body));
+          const gate = updateGate;
+          updateGate = null;
+          if (gate) { gate.entered(); await gate.wait; }
+          res.writeHead(failLiveKitUpdateParticipant ? 500 : 200, { 'Content-Type': 'application/json' });
+          res.end('{}');
+        });
+        return;
+      }
       req.resume();
       if (
         failLiveKitDeleteRoom &&
         req.url === '/twirp/livekit.RoomService/DeleteRoom'
       ) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end('{}');
+        return;
+      }
+      if (failLiveKitUpdateParticipant &&
+          req.url === '/twirp/livekit.RoomService/UpdateParticipant') {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end('{}');
         return;
@@ -236,6 +277,96 @@ test('switching the active provider does not change an existing room provider', 
   });
   assert.equal(meetingGuest.status, 200);
   assert.equal(meetingGuest.body.role, 'participant');
+  assert.ok(meetingGuest.body.livekit?.token);
+  const guestToken = JSON.parse(
+    Buffer.from(meetingGuest.body.livekit.token.split('.')[1]!, 'base64url').toString(),
+  ) as {video: {canPublishSources?: string[]}};
+  assert.ok(!guestToken.video.canPublishSources?.includes('microphone'));
+
+  const studentAuth = {
+    requesterParticipantId: meetingGuest.body.participantId,
+    participantCredential: meetingGuest.body.participantCredential,
+  };
+  const teacherAuth = {
+    requesterParticipantId: rejoinedSameDevice.body.participantId,
+    participantCredential: rejoinedSameDevice.body.participantCredential,
+    roomOwnerCredential: rejoinedSameDevice.body.roomOwnerCredential,
+  };
+  const initialClassroom = await post('/rooms/stickyRoom1/classroom/snapshot', studentAuth);
+  assert.equal(initialClassroom.status, 200);
+  assert.equal(initialClassroom.body.role, 'student');
+  assert.equal(initialClassroom.body.selfUserId, 'meeting-guest');
+  assert.equal(initialClassroom.body.speakEnforcement, 'provider');
+  const unauthenticated = await post('/rooms/stickyRoom1/classroom/snapshot', {
+    requesterParticipantId: meetingGuest.body.participantId,
+  });
+  assert.equal(unauthenticated.status, 403);
+  const hand = await post('/rooms/stickyRoom1/classroom/action', {
+    ...studentAuth, action: 'hand.raise',
+  });
+  assert.equal(hand.status, 200);
+  assert.equal(hand.body.stats?.handsRaised, 1);
+  const forgedGrant = await post('/rooms/stickyRoom1/classroom/action', {
+    ...studentAuth, action: 'speak.grant', userId: 'meeting-guest',
+  });
+  assert.equal(forgedGrant.status, 403);
+  const granted = await post('/rooms/stickyRoom1/classroom/action', {
+    ...teacherAuth, action: 'speak.grant', userId: 'meeting-guest',
+  });
+  assert.equal(granted.status, 200);
+  assert.equal(granted.body.students?.find(s => s.userId === 'meeting-guest')?.canSpeak, true);
+  assert.ok(liveKitRoomServiceCalls.includes('/twirp/livekit.RoomService/UpdateParticipant'));
+  const vendorUpdatesAfterGrant = liveKitRoomServiceCalls.filter(
+    call => call === '/twirp/livekit.RoomService/UpdateParticipant',
+  ).length;
+  const unchangedGrant = await post('/rooms/stickyRoom1/classroom/action', {
+    ...teacherAuth, action: 'speak.grant', userId: 'meeting-guest',
+  });
+  assert.equal(unchangedGrant.status, 200);
+  assert.equal(liveKitRoomServiceCalls.filter(
+    call => call === '/twirp/livekit.RoomService/UpdateParticipant',
+  ).length, vendorUpdatesAfterGrant);
+  const invalidReplayId = await post('/rooms/stickyRoom1/classroom/action', {
+    ...teacherAuth, action: 'speak.revoke', userId: 'meeting-guest',
+    eventId: 'invalid!',
+  });
+  assert.equal(invalidReplayId.status, 400);
+  assert.equal(liveKitRoomServiceCalls.filter(
+    call => call === '/twirp/livekit.RoomService/UpdateParticipant',
+  ).length, vendorUpdatesAfterGrant);
+  failLiveKitUpdateParticipant = true;
+  const remoteRevokeFailure = await post('/rooms/stickyRoom1/classroom/action', {
+    ...teacherAuth, action: 'speak.revoke', userId: 'meeting-guest',
+  });
+  failLiveKitUpdateParticipant = false;
+  assert.equal(remoteRevokeFailure.status, 502);
+  const unchangedPermission = await post('/rooms/stickyRoom1/classroom/snapshot', studentAuth);
+  assert.equal(unchangedPermission.body.students?.find(s => s.userId === 'meeting-guest')?.canSpeak, true);
+  const revoked = await post('/rooms/stickyRoom1/classroom/action', {
+    ...teacherAuth, action: 'speak.revoke', userId: 'meeting-guest',
+  });
+  assert.equal(revoked.status, 200);
+  assert.equal(revoked.body.students?.find(s => s.userId === 'meeting-guest')?.canSpeak, false);
+  const asked = await post('/rooms/stickyRoom1/classroom/action', {
+    ...studentAuth, action: 'question.ask', text: 'How does RTC work?',
+  });
+  assert.equal(asked.status, 200);
+  assert.equal(asked.body.stats?.pendingQuestions, 1);
+  const questionId = asked.body.questions?.[0]?.id;
+  const answered = await post('/rooms/stickyRoom1/classroom/action', {
+    ...teacherAuth, action: 'question.answer', questionId, text: 'Real-time media',
+  });
+  assert.equal(answered.status, 200);
+  assert.equal(answered.body.questions?.[0]?.status, 'answered');
+  const resolved = await post('/rooms/stickyRoom1/classroom/action', {
+    ...teacherAuth, action: 'question.resolve', questionId,
+  });
+  assert.equal(resolved.status, 200);
+  assert.equal(resolved.body.questions?.[0]?.status, 'resolved');
+  const forgedTeacher = await post('/rooms/stickyRoom1/classroom/snapshot', {
+    ...studentAuth, roomOwnerCredential: 'incorrect-owner-proof',
+  });
+  assert.equal(forgedTeacher.status, 403);
 
   const forbiddenMeetingManagement = await post(
     '/rooms/stickyRoom1/participants',
@@ -256,6 +387,17 @@ test('switching the active provider does not change an existing room provider', 
     },
   );
   assert.equal(removeMeetingGuest.status, 200);
+
+  const rosterAfterRemoval = await post(
+    '/rooms/stickyRoom1/classroom/snapshot',
+    teacherAuth,
+  );
+  assert.equal(rosterAfterRemoval.status, 200);
+  assert.equal(rosterAfterRemoval.body.stats?.onlineCount, 1);
+  assert.equal(
+    rosterAfterRemoval.body.students?.find((s) => s.userId === 'meeting-guest')?.online,
+    false,
+  );
 
   const invalidMeetingOwner = await post('/rooms/stickyRoom1/join', {
     userId: 'fake-owner',
@@ -491,4 +633,205 @@ test('switching the active provider does not change an existing room provider', 
   assert.equal(joined.body.provider, 'livekit');
   assert.equal(joined.body.roomCode, 'stickyRoom1');
 
+});
+
+
+test('teacher plus two students and host plus two viewers share authenticated interaction state', async () => {
+  await post('/api/provider', { provider: 'livekit' });
+  const teacher = await post('/rooms', { roomCode: 'teachingE2E1', nickname: 'Teacher', userId: 'teacher-e2e', roomMode: 'meeting' });
+  const alice = await post('/rooms/teachingE2E1/join', { userId: 'alice-e2e', displayName: 'Alice' });
+  const bob = await post('/rooms/teachingE2E1/join', { userId: 'bob-e2e', displayName: 'Bob' });
+  assert.equal(teacher.status, 200); assert.equal(alice.status, 200); assert.equal(bob.status, 200);
+  const auth = (body: ApiBody) => ({ requesterParticipantId: body.participantId, participantCredential: body.participantCredential });
+  const teacherAuth = { ...auth(teacher.body), roomOwnerCredential: teacher.body.roomOwnerCredential };
+  const action = (credentials: object, name: string, payload: object) => post('/rooms/teachingE2E1/classroom/action', {
+    ...credentials, action: `tool.${name}`, payload: JSON.stringify(payload),
+  });
+  const forged = await action(auth(alice.body), 'notice.publish', { kind: 'announcement', text: 'Forged' });
+  assert.equal(forged.status, 403);
+  const notice = await action(teacherAuth, 'notice.publish', { kind: 'announcement', text: 'Welcome class' });
+  assert.equal(notice.status, 200);
+  const bobState = await post('/rooms/teachingE2E1/classroom/snapshot', auth(bob.body));
+  assert.equal((bobState.body.tools!.notices as Array<{text: string}>)[0]!.text, 'Welcome class');
+  const quiz = await action(teacherAuth, 'activity.publish', { kind: 'quiz', title: '2+2?', options: ['3', '4'], correctOption: 1 });
+  assert.equal(quiz.status, 200);
+  const id = (quiz.body.tools!.activities as Array<{id: string}>)[0]!.id;
+  const aliceState = await post('/rooms/teachingE2E1/classroom/snapshot', auth(alice.body));
+  assert.ok(!('correctOption' in (aliceState.body.tools!.activities as object[])[0]!));
+  assert.equal((await action(auth(alice.body), 'activity.answer', { activityId: id, option: 1 })).status, 200);
+  assert.equal((await action(auth(bob.body), 'activity.answer', { activityId: id, option: 0 })).status, 200);
+  const closed = await action(teacherAuth, 'activity.close', { activityId: id });
+  assert.deepEqual((closed.body.tools!.activities as Array<{counts: number[]}>)[0]!.counts, [1, 1]);
+  const source = await action(teacherAuth, 'annotation.source', { sourceKey: 'share-screen' });
+  const canvasId = (source.body.tools!.annotation as {canvasId: string}).canvasId;
+  const mark = await action(teacherAuth, 'annotation.begin', { canvasId, id: 'circle1', tool: 'circle', color: 0xffffaa00,
+    width: 3, points: [{x: .1, y: .2}, {x: .5, y: .6}] });
+  assert.equal(mark.status, 200);
+  const received = await post('/rooms/teachingE2E1/classroom/snapshot', auth(bob.body));
+  assert.equal((received.body.tools!.annotation as {shapes: object[]}).shapes.length, 1);
+  type Content = ReturnType<typeof classroomToolsSnapshot>['content'];
+  const contentOf = (body: ApiBody) => body.tools!.content as Content;
+  const initialContent = contentOf(received.body);
+  const boardMode = await action(teacherAuth, 'content.mode', { mode: 'whiteboard', expectedRevision: initialContent.revision });
+  assert.equal(boardMode.status, 200);
+  const board = contentOf(boardMode.body).whiteboard;
+  const boardMarkPayload = { expectedRevision: board.revision, pageId: board.activePageId, canvasId: board.canvas.canvasId,
+    id: 'board-arrow', tool: 'arrow', color: 0xffffaa00, width: 3, points: [{x:.2,y:.3},{x:.6,y:.7}] };
+  const boardRequest = { ...teacherAuth, action:'tool.whiteboard.begin', payload:JSON.stringify(boardMarkPayload), eventId:'http-whiteboard-001' };
+  const boardMark = await post('/rooms/teachingE2E1/classroom/action', boardRequest);
+  assert.equal(boardMark.status, 200);
+  assert.equal((await post('/rooms/teachingE2E1/classroom/action', boardRequest)).status, 200);
+  assert.equal((await action(auth(alice.body), 'whiteboard.clear', boardMarkPayload)).status,403);
+  for (const student of [alice.body, bob.body]) {
+    const state = contentOf((await post('/rooms/teachingE2E1/classroom/snapshot',auth(student))).body);
+    assert.equal(state.mode,'whiteboard'); assert.equal(state.canManage,false);
+    assert.equal(state.whiteboard.canEdit,false); assert.equal(state.whiteboard.canvas.shapes.length,1);
+  }
+  await post('/rooms/teachingE2E1/leave',{participantId:bob.body.participantId});
+  const rejoinedBob = await post('/rooms/teachingE2E1/join',{userId:'bob-e2e',displayName:'Bob'});
+  const restored = contentOf((await post('/rooms/teachingE2E1/classroom/snapshot',auth(rejoinedBob.body))).body);
+  assert.equal(restored.whiteboard.canvas.shapes[0]!.id,'board-arrow');
+  assert.equal(restored.whiteboard.activePageId,board.activePageId);
+  const addedPage = await action(teacherAuth,'whiteboard.page.add',{expectedRevision:restored.whiteboard.revision,title:'Exercise'});
+  assert.equal(addedPage.status,200);
+  const second = contentOf(addedPage.body).whiteboard;
+  assert.equal((await action(teacherAuth,'whiteboard.begin',{...boardMarkPayload,expectedRevision:second.revision,id:'late'})).status,409);
+  const selectedPage = await action(teacherAuth,'whiteboard.page.select',{expectedRevision:second.revision,pageId:board.activePageId});
+  assert.equal(contentOf(selectedPage.body).whiteboard.canvas.shapes.length,1);
+  const invalidCredential = await post('/rooms/teachingE2E1/classroom/snapshot', { ...auth(rejoinedBob.body), participantCredential: 'wrong' });
+  assert.equal(invalidCredential.status, 403);
+
+  const host = await post('/rooms', { roomCode: 'giftE2E1', nickname: 'Host', userId: 'gift-host', roomMode: 'broadcast' });
+  const viewer1 = await post('/rooms/giftE2E1/join', { userId: 'viewer-1' });
+  const viewer2 = await post('/rooms/giftE2E1/join', { userId: 'viewer-2' });
+  assert.equal(host.body.liveInteractions, true); assert.equal(viewer2.body.liveInteractions, true);
+  const giftBody = { ...auth(viewer1.body), giftId: 'star', quantity: 2, eventId: 'http-gift-001' };
+  assert.equal((await post('/rooms/giftE2E1/live/gift', giftBody)).status, 200);
+  assert.equal((await post('/rooms/giftE2E1/live/gift', giftBody)).status, 200);
+  for (const person of [host.body, viewer2.body]) {
+    const snapshot = await post('/rooms/giftE2E1/live/snapshot', auth(person));
+    assert.equal(snapshot.status, 200); assert.equal(snapshot.body.totals!.star, 2);
+  }
+  assert.equal((await post('/rooms/giftE2E1/live/gift', { ...giftBody, participantCredential: 'wrong' })).status, 403);
+  await post('/rooms/teachingE2E1/close', teacherAuth);
+  await post('/rooms/giftE2E1/close', auth(host.body));
+});
+
+function auth(body: ApiBody) {
+  return {requesterParticipantId: body.participantId, participantCredential: body.participantCredential};
+}
+async function lesson(code: string) {
+  await post('/api/provider', {provider: 'livekit'});
+  const teacher = await post('/rooms', {roomCode: code, userId: `${code}-teacher`, nickname: 'Teacher', roomMode: 'meeting'});
+  const student = await post(`/rooms/${code}/join`, {userId: `${code}-student`, displayName: 'Student'});
+  assert.equal(teacher.status, 200); assert.equal(student.status, 200);
+  const teacherAuth = {...auth(teacher.body), roomOwnerCredential: teacher.body.roomOwnerCredential};
+  const action = (name: string, eventId?: string) => post(`/rooms/${code}/classroom/action`, {
+    ...teacherAuth, action: name, userId: `${code}-student`, ...(eventId ? {eventId} : {}),
+  });
+  return {teacherAuth, student: student.body, action};
+}
+
+test('rejoining resets grants, revokes the old identity and preserves questions', async () => {
+  const code = 'resetGrant1';
+  const {teacherAuth, student, action} = await lesson(code);
+  await action('speak.grant','prior-grant-1');
+  await post(`/rooms/${code}/classroom/action`, {...auth(student), action:'question.ask', text:'Keep this question'});
+  const before = await post(`/rooms/${code}/classroom/snapshot`, auth(student));
+  assert.equal(before.body.students?.find(s => s.userId === `${code}-student`)?.canSpeak, true);
+  const rejoined = await post(`/rooms/${code}/join`, {userId:`${code}-student`,displayName:'Student'});
+  assert.equal(rejoined.status, 200);
+  assert.notEqual(rejoined.body.participantId, student.participantId);
+  assert.equal(liveKitUpdates.at(-1)?.identity, student.participantId);
+  assert.ok(!liveKitUpdates.at(-1)?.permission.canPublishSources.includes('MICROPHONE'));
+  const claims = JSON.parse(Buffer.from(rejoined.body.livekit!.token.split('.')[1]!, 'base64url').toString());
+  assert.ok(!claims.video.canPublishSources.includes('microphone'));
+  const state = await post(`/rooms/${code}/classroom/snapshot`, auth(rejoined.body));
+  assert.equal(state.body.students?.find(s => s.userId === `${code}-student`)?.canSpeak, false);
+  assert.equal(state.body.questions?.[0]?.text, 'Keep this question');
+  const updates=liveKitUpdates.length;
+  const replay=await action('speak.grant','prior-grant-1');
+  assert.equal(replay.body.students?.find(s=>s.userId===`${code}-student`)?.canSpeak,false);
+  assert.equal(liveKitUpdates.length,updates);
+
+  assert.equal((await post(`/rooms/${code}/classroom/snapshot`, auth(student))).status, 404);
+  await post(`/rooms/${code}/close`, teacherAuth);
+});
+
+test('a failed old-identity revocation rejects rejoin without replacing its credential', async () => {
+  const code='resetFail1'; const {teacherAuth, student, action}=await lesson(code);
+  await action('speak.grant');
+  failLiveKitUpdateParticipant=true;
+  try {
+    assert.equal((await post(`/rooms/${code}/join`,{userId:`${code}-student`,displayName:'Student'})).status,502);
+    const snapshot=await post(`/rooms/${code}/classroom/snapshot`,auth(student));
+    assert.equal(snapshot.status,200);
+    assert.equal(snapshot.body.students?.find(s=>s.userId===`${code}-student`)?.canSpeak,true);
+  } finally { failLiveKitUpdateParticipant=false; }
+  assert.equal((await post(`/rooms/${code}/join`,{userId:`${code}-student`,displayName:'Student'})).status,200);
+  await post(`/rooms/${code}/close`,teacherAuth);
+});
+
+test('concurrent grant then revoke wait for the provider and finish revoked; duplicate events stay idempotent', async () => {
+  const code='orderGr1'; const {teacherAuth, action}=await lesson(code);
+  const gate=holdNextUpdate();
+  const granted=action('speak.grant','ordered-grant-1');
+  await gate.entered;
+  let revokedSettled=false;
+  const revoked=action('speak.revoke','ordered-revoke-1').then(result=>{revokedSettled=true;return result;});
+  try { await new Promise(resolve=>setTimeout(resolve,50)); assert.equal(revokedSettled,false); }
+  finally { gate.release(); }
+  assert.equal((await granted).status,200); assert.equal((await revoked).status,200);
+  assert.ok(!liveKitUpdates.at(-1)?.permission.canPublishSources.includes('MICROPHONE'));
+  const count=liveKitUpdates.length;
+  assert.equal((await action('speak.revoke','ordered-revoke-1')).status,200);
+  assert.equal(liveKitUpdates.length,count);
+  const snapshot=await post(`/rooms/${code}/classroom/snapshot`,teacherAuth);
+  assert.equal(snapshot.body.students?.find(s=>s.userId===`${code}-student`)?.canSpeak,false);
+  await post(`/rooms/${code}/close`,teacherAuth);
+});
+
+test('join, leave, removal and close wait for an in-flight speaking update', async () => {
+  for (const mode of ['join','close','leave','remove']) {
+    const code=`ord${mode}1`; const {teacherAuth,student,action}=await lesson(code);
+    const gate=holdNextUpdate(); const granted=action('speak.grant'); await gate.entered;
+    let done=false;
+    const next=post(`/rooms/${code}/${mode==='remove'?'participants/remove':mode}`,
+      mode==='join'?{userId:`${code}-student`,displayName:'Student'}:
+      mode==='leave'?{participantId:student.participantId}:
+      mode==='remove'?{...teacherAuth,targetParticipantId:student.participantId}:teacherAuth)
+      .then(value=>{done=true;return value;});
+    try { await new Promise(resolve=>setTimeout(resolve,50)); assert.equal(done,false); }
+    finally { gate.release(); }
+    assert.equal((await granted).status,200); assert.equal((await next).status,200);
+    if (mode==='join') {
+      const snapshot=await post(`/rooms/${code}/classroom/snapshot`,teacherAuth);
+      assert.equal(snapshot.body.students?.find(s=>s.userId===`${code}-student`)?.canSpeak,false);
+      assert.ok(!liveKitUpdates.at(-1)?.permission.canPublishSources.includes('MICROPHONE'));
+      await post(`/rooms/${code}/close`,teacherAuth);
+    } else if (mode==='leave' || mode==='remove') {
+      const snapshot=await post(`/rooms/${code}/classroom/snapshot`,teacherAuth);
+      assert.equal(snapshot.body.students?.find(s=>s.userId===`${code}-student`)?.canSpeak,false);
+      assert.equal(snapshot.body.students?.find(s=>s.userId===`${code}-student`)?.online,false);
+      await post(`/rooms/${code}/close`,teacherAuth);
+    } else {
+      const failed=await action('speak.grant'); assert.equal(failed.status,404);
+    }
+  }
+});
+
+test('a failed in-flight grant releases queued revocation and leaves the student denied', async () => {
+  const code='failedOrder1'; const {teacherAuth,action}=await lesson(code);
+  const gate=holdNextUpdate(); failLiveKitUpdateParticipant=true;
+  const granted=action('speak.grant'); await gate.entered;
+  const revoked=action('speak.revoke');
+  try {
+    gate.release();
+    assert.equal((await granted).status,502);
+    assert.equal((await revoked).status,200);
+    const snapshot=await post(`/rooms/${code}/classroom/snapshot`,teacherAuth);
+    assert.equal(snapshot.body.students?.find(s=>s.userId===`${code}-student`)?.canSpeak,false);
+  } finally { failLiveKitUpdateParticipant=false; gate.release(); }
+  assert.equal((await action('speak.grant')).status,200);
+  await post(`/rooms/${code}/close`,teacherAuth);
 });

@@ -27,11 +27,13 @@ export function createLiveKitProvider({
     name,
     roomName,
     role,
+    classroomMicrophoneAllowed,
   }: {
     identity: string;
     name: string;
     roomName: string;
     role: MediaRole;
+    classroomMicrophoneAllowed?: boolean;
   }): string {
     if (!apiKey || !apiSecret) {
       throw new Error('LiveKit is not configured.');
@@ -50,6 +52,9 @@ export function createLiveKitProvider({
         canSubscribe: true,
         canPublish: role !== 'viewer',
         canPublishData: true,
+        ...(role !== 'viewer' && classroomMicrophoneAllowed === false
+          ? { canPublishSources: ['camera', 'screen_share', 'screen_share_audio'] }
+          : {}),
       },
     };
     const unsigned = `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(payload))}`;
@@ -161,6 +166,7 @@ export function createLiveKitProvider({
       if (!target) return false;
       const response = await fetch(roomServiceUrl('RemoveParticipant'), {
         method: 'POST',
+        signal: AbortSignal.timeout(10_000),
         headers: {
           Authorization: `Bearer ${signRoomAdminToken(room.providerRoomName)}`,
           'Content-Type': 'application/json',
@@ -180,7 +186,44 @@ export function createLiveKitProvider({
       );
       return true;
     },
-    async joinRoom({ entry, rawName, role }) {
+    async setClassroomMicrophonePermission(entry, participantId, allowed) {
+      const room = entry as NamedRoomEntry;
+      if (room.roomMode !== 'meeting') {
+        throw new Error('Classroom microphone permissions require meeting mode.');
+      }
+      const response = await fetch(roomServiceUrl('UpdateParticipant'), {
+        method: 'POST',
+        signal: AbortSignal.timeout(10_000),
+        headers: {
+          Authorization: `Bearer ${signRoomAdminToken(room.providerRoomName)}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          room: room.providerRoomName,
+          identity: participantId,
+          permission: {
+            canSubscribe: true,
+            canPublish: true,
+            canPublishData: true,
+            canPublishSources: allowed
+              ? ['CAMERA', 'MICROPHONE', 'SCREEN_SHARE', 'SCREEN_SHARE_AUDIO']
+              : ['CAMERA', 'SCREEN_SHARE', 'SCREEN_SHARE_AUDIO'],
+          },
+        }),
+      });
+      // A disconnected old participant is already unable to publish. Never
+      // suppress permission or service errors when it is still present.
+      if (!allowed && response.status === 404) {
+        const error = await response.json().catch(() => null) as {code?: string} | null;
+        if (error?.code === 'not_found') return;
+      }
+      if (!response.ok) {
+        throw new Error(
+          `LiveKit UpdateParticipant failed with HTTP ${response.status}.`,
+        );
+      }
+    },
+    async joinRoom({ entry, rawName, role, classroomMicrophoneAllowed }) {
       const room = entry as NamedRoomEntry;
       const identity = `p-${crypto.randomUUID()}`;
       const displayName = normalizeDisplayName(rawName) || identity;
@@ -193,13 +236,17 @@ export function createLiveKitProvider({
         roomCode: room.roomCode,
         participantId: identity,
         displayName,
-        livekit: { url, token: signToken({ identity, name: displayName, roomName: room.providerRoomName, role }), identity },
+        livekit: { url, token: signToken({
+          identity, name: displayName, roomName: room.providerRoomName,
+          role, classroomMicrophoneAllowed,
+        }), identity },
       };
     },
     async closeRoom({ entry }) {
       const room = entry as NamedRoomEntry;
       const response = await fetch(roomServiceUrl('DeleteRoom'), {
         method: 'POST',
+        signal: AbortSignal.timeout(10_000),
         headers: {
           Authorization: `Bearer ${signRoomCreateToken()}`,
           'Content-Type': 'application/json',

@@ -29,6 +29,10 @@ import {
 } from './providers/aws.ts';
 import { ChatProviderRegistry } from './chat/chat-provider-registry.ts';
 import { ChatRoomDirectory } from './chat/chat-room-directory.ts';
+import { LiveInteractionDirectory } from './live/live-interactions.ts';
+import { RoomOperationQueue } from './classroom/room-operation-queue.ts';
+import { ClassroomStateDirectory } from './classroom/classroom-state.ts';
+import { FileClassroomStore } from './classroom/classroom-store.ts';
 import {
   createIvsChatProvider,
   resolveIvsChatRegion,
@@ -82,6 +86,12 @@ const PARTICIPANT_STALE_AFTER_MS = Number(
   process.env.PARTICIPANT_STALE_AFTER_MS ?? Math.max(120_000, EMPTY_CLOSE_AFTER_MS),
 );
 const SWEEP_INTERVAL_MS = 30_000;
+const roomOperations = new RoomOperationQueue();
+const liveInteractionDirectory = new LiveInteractionDirectory();
+const classroomStateDir = process.env.CLASSROOM_STATE_DIR?.trim();
+const classroomDirectory = new ClassroomStateDirectory(
+  classroomStateDir ? new FileClassroomStore(classroomStateDir) : undefined,
+);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROVIDER_STATE_PATH = process.env.MEDIA_PROVIDER_STATE_PATH ?? path.join(__dirname, '.provider-state.json');
@@ -114,7 +124,9 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
 }
 
-function pruneStaleAttendees(entry: RoomEntry, now: number): void {
+function pruneStaleAttendees(entry: RoomEntry, now: number, insideOperation = false): void {
+  // Dashboard reads must not replace membership during an awaited RTC update.
+  if (!insideOperation && roomOperations.isBusy(entry)) return;
   entry.attendees = entry.attendees.filter((attendee) => {
     const lastSeen = attendee.lastHeartbeatMs;
     return lastSeen == null || now - lastSeen <= PARTICIPANT_STALE_AFTER_MS;
@@ -1258,7 +1270,27 @@ async function resolveChimeRoom(ref: unknown): Promise<RoomEntry | null> {
   return entry ? registerRoom(chimeProvider, entry) : null;
 }
 
+function withRoomOperation<T>(entry: RoomEntry, operation: () => Promise<T> | T): Promise<T> {
+  return roomOperations.run(entry, () => {
+    if (roomDirectory.get(entry.roomCode) !== entry) {
+      throw new ProviderOperationError(404, 'room-not-found', 'The requested room was not found.');
+    }
+    return operation();
+  });
+}
+
+function assertRoomOpen(entry: RoomEntry): void {
+  if (isRoomPartiallyClosed(entry)) {
+    throw new ProviderOperationError(409, 'room-closing', 'The room is closing.');
+  }
+}
+
 async function closeRoom(entry: RoomEntry, reason: string): Promise<void> {
+  await withRoomOperation(entry, () => closeRoomUnlocked(entry, reason));
+}
+
+// Caller owns the room operation queue; avoids recursively acquiring it.
+async function closeRoomUnlocked(entry: RoomEntry, reason: string): Promise<void> {
   const provider = providerRegistry.require(entry.provider);
   entry.closePending = true;
   let chatError: unknown;
@@ -1288,6 +1320,8 @@ async function closeRoom(entry: RoomEntry, reason: string): Promise<void> {
     throw chatError;
   }
   roomDirectory.remove(entry);
+  classroomDirectory.forget(entry);
+  liveInteractionDirectory.forget(entry);
   const suffix = entry.provider === 'chime' ? ' — billing for future joins stops' : '';
   logEvent('delete', `room ${entry.roomCode} closed (${reason})${suffix}`);
 }
@@ -1333,14 +1367,15 @@ function isRoomPartiallyClosed(entry: RoomEntry): boolean {
 
 if (!IS_VERCEL) {
   setInterval(() => {
-    const now = Date.now();
     for (const entry of roomDirectory.entries()) {
-      pruneStaleAttendees(entry, now);
-      if (now - (entry.lastHeartbeatMs ?? 0) <= EMPTY_CLOSE_AFTER_MS) continue;
-      const idleSec = Math.round((now - entry.lastHeartbeatMs) / 1000);
-      closeRoom(entry, `idle ${idleSec}s, no heartbeat`).catch((error) =>
-        console.error('auto-close failed', entry.roomCode, error),
-      );
+      void withRoomOperation(entry, async () => {
+        const now = Date.now();
+        pruneStaleAttendees(entry, now, true);
+        if (entry.roomMode === 'meeting') classroomDirectory.snapshot(entry, false);
+        if (now - (entry.lastHeartbeatMs ?? 0) <= EMPTY_CLOSE_AFTER_MS) return;
+        const idleSec = Math.round((now - entry.lastHeartbeatMs) / 1000);
+        await closeRoomUnlocked(entry, `idle ${idleSec}s, no heartbeat`);
+      }).catch((error) => console.error('auto-close failed', entry.roomCode, error));
     }
   }, SWEEP_INTERVAL_MS);
 }
@@ -1469,6 +1504,97 @@ app.get('/rooms/discover', (req, res) => {
   res.json({ contractVersion: CONTRACT_VERSION, rooms });
 });
 
+// Reference control plane for classroom interactions. The Flutter SDK consumes
+// these endpoints; the Demo UI never implements classroom business logic.
+// HTTP requests are authenticated per joined participant and privileged
+// actions additionally require the existing room owner credential.
+async function classroomRequest(req: Request, res: Response, mutate: boolean) {
+  try {
+    const entry = await resolveRoom(req.params.code);
+    if (!entry) {
+      return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+    }
+    return await withRoomOperation(entry, async () => {
+      assertRoomOpen(entry);
+      if (isRoomPartiallyClosed(entry)) return contractError(res, 409, 'room-closing', 'The room is closing.');
+      pruneStaleAttendees(entry, Date.now(), true);
+      const participantId = String(req.body?.requesterParticipantId ?? '').trim();
+      const attendee = requireParticipantCredential(
+        entry, participantId, req.body?.participantCredential,
+      );
+      const proof = String(req.body?.roomOwnerCredential ?? '').trim();
+      // Invalid owner proofs are never silently treated as student sessions.
+      if (proof && !matchesRoomOwnerCredential(entry, proof)) {
+        return contractError(res, 403, 'forbidden', 'Invalid room owner credential.');
+      }
+      const isTeacher = Boolean(proof);
+      if (mutate && ['speak.grant', 'speak.revoke'].includes(req.body?.action)) {
+        if (!isTeacher) {
+          return contractError(res, 403, 'forbidden', 'Teacher permission required.');
+        }
+        classroomDirectory.snapshot(entry, isTeacher, attendee.userId ?? attendee.externalUserId);
+        const shouldApply = classroomDirectory.requiresSpeakerProviderUpdate(
+          entry, attendee, isTeacher, req.body ?? {},
+        );
+        const targetUserId = String(req.body?.userId ?? '').trim();
+        const target = entry.attendees.find(
+          (person) => (person.userId ?? person.externalUserId) === targetUserId,
+        );
+        if (!target) {
+          return contractError(res, 404, 'participant-not-found', 'Target student is not online.');
+        }
+        if (targetUserId === entry.classroomTeacherUserId) {
+          return contractError(res, 403, 'forbidden', 'Teacher microphone cannot be changed here.');
+        }
+        const provider = providerRegistry.requireConfigured(entry.provider);
+        if (shouldApply && provider.setClassroomMicrophonePermission) {
+          await provider.setClassroomMicrophonePermission(
+            entry, target.attendeeId, req.body.action === 'speak.grant',
+          );
+        }
+      }
+      const payload = mutate
+        ? classroomDirectory.act(entry, attendee, isTeacher, req.body ?? {})
+        : classroomDirectory.snapshot(
+            entry, isTeacher, attendee.userId ?? attendee.externalUserId);
+      return res.json(payload);
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('classroom control request failed', error);
+    return contractError(res, 502, 'classroom-control-failed',
+      'Unable to apply the classroom action. Please retry.');
+  }
+}
+
+app.post('/rooms/:code/classroom/snapshot', (req, res) =>
+  classroomRequest(req, res, false));
+app.post('/rooms/:code/classroom/action', (req, res) =>
+  classroomRequest(req, res, true));
+
+// Independent from the selected Chat vendor. Client signals never apply gifts.
+async function liveInteractionRequest(req: Request, res: Response, send: boolean) {
+  try {
+    const entry = await resolveRoom(req.params.code);
+    if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
+    return await withRoomOperation(entry, async () => {
+      assertRoomOpen(entry);
+      if (isRoomPartiallyClosed(entry)) return contractError(res, 409, 'room-closing', 'The room is closing.');
+      pruneStaleAttendees(entry, Date.now(), true);
+      const attendee = requireParticipantCredential(entry,
+        String(req.body?.requesterParticipantId ?? '').trim(), req.body?.participantCredential);
+      res.json(send ? liveInteractionDirectory.send(entry, attendee, req.body ?? {})
+        : liveInteractionDirectory.snapshot(entry, attendee));
+    });
+  } catch (error) {
+    if (sendProviderError(res, error) !== false) return;
+    console.error('live interaction failed', error);
+    contractError(res, 502, 'live-interaction-failed', 'Unable to apply live interaction.');
+  }
+}
+app.post('/rooms/:code/live/snapshot', (req, res) => liveInteractionRequest(req, res, false));
+app.post('/rooms/:code/live/gift', (req, res) => liveInteractionRequest(req, res, true));
+
 app.post('/rooms', async (req, res) => {
   try {
     let roomCode = normalizeRoomCode(req.body?.roomCode);
@@ -1521,10 +1647,7 @@ app.post('/rooms', async (req, res) => {
     created.entry.engine = provider.id;
     created.response.vendor = publicProviderId(provider.id);
     created.response.engine = provider.id;
-    const selectedChatProvider =
-      activeProvider === AWS_VENDOR_ID && roomMode === 'broadcast'
-        ? 'ivs-chat'
-        : activeChatProvider;
+    const selectedChatProvider = activeChatProvider;
     if (selectedChatProvider) {
       try {
         const chat = await chatProviderRegistry
@@ -1543,7 +1666,12 @@ app.post('/rooms', async (req, res) => {
       }
     }
     created.entry.roomMode = roomMode;
+    if (roomMode === 'meeting') {
+      created.entry.classroomSpeakEnforcement =
+        provider.setClassroomMicrophonePermission ? 'provider' : 'advisory';
+    }
     created.response.roomMode = roomMode;
+    if (roomMode === 'broadcast') created.response.liveInteractions = true;
     created.response.management = mediaManagementCapabilities(provider);
     // Room ownership is a logical SDK/control-plane role and is independent
     // from the provider media role. This lets meeting providers such as Chime
@@ -1557,20 +1685,25 @@ app.post('/rooms', async (req, res) => {
     created.entry.lastHeartbeatMs = Date.now();
     logEvent('create', `room ${roomCode} created with ${provider.displayName}`);
 
-    if (!rawNickname) return res.json(exposeVendorResponse(created.response));
+    return await withRoomOperation(created.entry, async () => {
+      assertRoomOpen(created.entry);
+      if (!rawNickname) return res.json(exposeVendorResponse(created.response));
 
-    const userId = normalizeUserId(
-      req.body?.userId ?? deviceId ?? rawNickname,
-    );
-    const response = await provider.joinRoom({
-      entry: created.entry,
-      rawName: rawNickname,
-      role,
-      userId,
-      deviceId,
+      const userId = normalizeUserId(
+        req.body?.userId ?? deviceId ?? rawNickname,
+      );
+      if (roomMode === 'meeting') created.entry.classroomTeacherUserId = userId;
+      const response = await provider.joinRoom({
+        entry: created.entry,
+        rawName: rawNickname,
+        role,
+        userId,
+        deviceId,
+        classroomMicrophoneAllowed: true,
     });
     if (created.entry.chatProvider) response.chatProvider = created.entry.chatProvider;
     response.roomMode = roomMode;
+    if (roomMode === 'broadcast') response.liveInteractions = true;
     if (roomOwnerCredential) {
       response.roomOwnerCredential = roomOwnerCredential;
     }
@@ -1586,8 +1719,12 @@ app.post('/rooms', async (req, res) => {
       created.entry,
       response.participantId,
     );
+    if (roomMode === 'meeting') {
+      classroomDirectory.snapshot(created.entry, true, userId);
+    }
     logEvent('join', `${response.displayName} created+joined room ${roomCode} via ${provider.displayName}`);
     res.json(exposeVendorResponse(response));
+    });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     console.error('create room failed', error);
@@ -1604,48 +1741,76 @@ app.post('/rooms/:code/join', async (req, res) => {
       logEvent('error', `join ${req.params.code} failed: not found`);
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
-    if (isRoomPartiallyClosed(entry)) {
-      return contractError(
-        res,
-        409,
-        'room-closing',
-        'The room is partially closed and is waiting for cleanup retry.',
+    return await withRoomOperation(entry, async () => {
+      assertRoomOpen(entry);
+      if (isRoomPartiallyClosed(entry)) {
+        return contractError(
+          res,
+          409,
+          'room-closing',
+          'The room is partially closed and is waiting for cleanup retry.',
+        );
+      }
+      const provider = providerRegistry.requireConfigured(entry.provider);
+      const deviceId = normalizeDeviceId(req.body?.deviceId);
+      if (req.body?.deviceId != null && !deviceId) {
+        return contractError(
+          res,
+          400,
+          'invalid-argument',
+          'deviceId must be 8-128 letters, digits, dots, underscores, colons, or hyphens.',
+        );
+      }
+      const displayName = normalizeDisplayName(
+        req.body?.displayName ?? req.body?.nickname ?? req.body?.userId,
       );
-    }
-    const provider = providerRegistry.requireConfigured(entry.provider);
-    const deviceId = normalizeDeviceId(req.body?.deviceId);
-    if (req.body?.deviceId != null && !deviceId) {
-      return contractError(
-        res,
-        400,
-        'invalid-argument',
-        'deviceId must be 8-128 letters, digits, dots, underscores, colons, or hyphens.',
-      );
-    }
-    const displayName = normalizeDisplayName(
-      req.body?.displayName ?? req.body?.nickname ?? req.body?.userId,
-    );
-    if (!displayName) {
-      return contractError(res, 400, 'invalid-argument', 'displayName or userId is required.');
-    }
-    const userId = normalizeUserId(req.body?.userId ?? deviceId ?? displayName);
-    const requestedRole = req.body?.role == null ? null : parseRole(req.body.role);
-    if (req.body?.role != null && !requestedRole) {
-      return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
-    }
-    const role = entry.roomMode
-      ? joinRoleForRoom(entry, req.body?.roomOwnerCredential)
-      : requestedRole ?? 'participant';
-    assertRole(provider, role, entry);
-    const response = await provider.joinRoom({
-      entry,
-      rawName: displayName,
-      role,
-      userId,
-      deviceId,
+      if (!displayName) {
+        return contractError(res, 400, 'invalid-argument', 'displayName or userId is required.');
+      }
+      const userId = normalizeUserId(req.body?.userId ?? deviceId ?? displayName);
+      const requestedRole = req.body?.role == null ? null : parseRole(req.body.role);
+      if (req.body?.role != null && !requestedRole) {
+        return contractError(res, 400, 'invalid-argument', 'role must be participant, host, or viewer.');
+      }
+      const role = entry.roomMode
+        ? joinRoleForRoom(entry, req.body?.roomOwnerCredential)
+        : requestedRole ?? 'participant';
+      assertRole(provider, role, entry);
+      if (entry.roomMode === 'meeting') {
+        const previous = new Set(entry.attendees.filter(person =>
+          person.userId !== entry.classroomTeacherUserId && person.role !== 'host' &&
+          (person.userId === userId || (deviceId && person.deviceId === deviceId)))
+          .map(person => person.attendeeId));
+        // Losing the reference heartbeat is not proof the RTC stream stopped.
+        const remembered = classroomDirectory.previousParticipantId(entry, userId);
+        if (remembered && userId !== entry.classroomTeacherUserId) previous.add(remembered);
+        for (const participantId of previous) {
+          if (provider.setClassroomMicrophonePermission) {
+            try {
+              await provider.setClassroomMicrophonePermission(entry, participantId, false);
+            } catch {
+              throw new ProviderOperationError(502, 'classroom-control-failed',
+                'Unable to revoke the previous participant microphone. Please retry joining.');
+            }
+          }
+          classroomDirectory.resetParticipant(entry, participantId);
+        }
+      }
+      const response = await provider.joinRoom({
+        entry,
+        rawName: displayName,
+        role,
+        userId,
+        deviceId,
+        classroomMicrophoneAllowed: entry.roomMode !== 'meeting' ||
+          Boolean(
+            String(req.body?.roomOwnerCredential ?? '').trim() &&
+            matchesRoomOwnerCredential(entry, String(req.body.roomOwnerCredential).trim()),
+          ),
     });
     if (entry.chatProvider) response.chatProvider = entry.chatProvider;
     if (entry.roomMode) response.roomMode = entry.roomMode;
+    if (entry.roomMode === 'broadcast') response.liveInteractions = true;
     response.management = mediaManagementCapabilities(provider);
     const presentedOwnerCredential = String(
       req.body?.roomOwnerCredential ?? '',
@@ -1655,6 +1820,7 @@ app.post('/rooms/:code/join', async (req, res) => {
       matchesRoomOwnerCredential(entry, presentedOwnerCredential)
     ) {
       response.roomOwnerCredential = presentedOwnerCredential;
+      if (entry.roomMode === 'meeting') entry.classroomTeacherUserId = userId;
     }
     bindLogicalIdentity(
       entry,
@@ -1668,8 +1834,14 @@ app.post('/rooms/:code/join', async (req, res) => {
       entry,
       response.participantId,
     );
+    if (entry.roomMode === 'meeting') {
+      classroomDirectory.snapshot(
+        entry, Boolean(response.roomOwnerCredential), userId,
+      );
+    }
     logEvent('join', `${response.displayName} joined room ${entry.roomCode} via ${provider.displayName}`);
     res.json(exposeVendorResponse(response));
+    });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     console.error('room join failed', error);
@@ -1828,17 +2000,20 @@ app.post('/rooms/:code/leave', async (req, res) => {
   try {
     const entry = await resolveRoom(req.params.code);
     if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
-    const provider = providerRegistry.require(entry.provider);
-    const who = req.body?.participantId ?? req.body?.attendeeId ?? req.body?.userId ?? 'someone';
-    const result = typeof provider.removeAttendee === 'function'
-      ? provider.removeAttendee(entry, who)
-      : { removed: false, closeWhenEmpty: false };
-    if (result.closeWhenEmpty) {
-      await closeRoom(entry, 'last attendee left');
-      return res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode, closed: true });
-    }
-    logEvent('leave', `${who} left room ${entry.roomCode} (auto-close in ~90s if empty)`);
-    res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode });
+    return await withRoomOperation(entry, async () => {
+      const provider = providerRegistry.require(entry.provider);
+      const who = req.body?.participantId ?? req.body?.attendeeId ?? req.body?.userId ?? 'someone';
+      const result = typeof provider.removeAttendee === 'function'
+        ? provider.removeAttendee(entry, who)
+        : { removed: false, closeWhenEmpty: false };
+      if (result.closeWhenEmpty) {
+        await closeRoomUnlocked(entry, 'last attendee left');
+        return res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode, closed: true });
+      }
+      if (entry.roomMode === 'meeting') classroomDirectory.snapshot(entry, false);
+      logEvent('leave', `${who} left room ${entry.roomCode} (auto-close in ~90s if empty)`);
+      res.json({ contractVersion: CONTRACT_VERSION, ok: true, roomCode: entry.roomCode });
+    });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
     console.error('leave failed', error);
@@ -1909,41 +2084,45 @@ app.post('/rooms/:code/participants/remove', async (req, res) => {
     if (!entry) {
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
-    const host = requireRoomManager(
-      entry,
-      req.body?.requesterParticipantId,
-      req.body?.participantCredential,
-      req.body?.roomOwnerCredential,
-    );
-    if (!host) {
-      return contractError(res, 403, 'forbidden', 'Host permission is required.');
-    }
-    const targetParticipantId = String(req.body?.targetParticipantId ?? '').trim();
-    if (!targetParticipantId) {
-      return contractError(res, 400, 'invalid-argument', 'targetParticipantId is required.');
-    }
-    if (host.attendeeId === targetParticipantId) {
-      return contractError(res, 400, 'invalid-argument', 'Use leave or closeRoom for the host.');
-    }
-    const provider = providerRegistry.requireConfigured(entry.provider);
-    if (typeof provider.moderateRemoveParticipant !== 'function') {
-      return contractError(
-        res,
-        400,
-        'unsupported-feature',
-        'This provider does not support server-enforced participant removal.',
+    return await withRoomOperation(entry, async () => {
+      assertRoomOpen(entry);
+      const host = requireRoomManager(
+        entry,
+        req.body?.requesterParticipantId,
+        req.body?.participantCredential,
+        req.body?.roomOwnerCredential,
       );
-    }
-    const removed = await provider.moderateRemoveParticipant(entry, targetParticipantId);
-    if (!removed) {
-      return contractError(res, 404, 'participant-not-found', 'Participant was not found.');
-    }
-    logEvent('moderate', `${host.attendeeId} removed ${targetParticipantId} from room ${entry.roomCode}`);
-    res.json({
-      contractVersion: CONTRACT_VERSION,
-      ok: true,
-      roomCode: entry.roomCode,
-      participantId: targetParticipantId,
+      if (!host) {
+        return contractError(res, 403, 'forbidden', 'Host permission is required.');
+      }
+      const targetParticipantId = String(req.body?.targetParticipantId ?? '').trim();
+      if (!targetParticipantId) {
+        return contractError(res, 400, 'invalid-argument', 'targetParticipantId is required.');
+      }
+      if (host.attendeeId === targetParticipantId) {
+        return contractError(res, 400, 'invalid-argument', 'Use leave or closeRoom for the host.');
+      }
+      const provider = providerRegistry.requireConfigured(entry.provider);
+      if (typeof provider.moderateRemoveParticipant !== 'function') {
+        return contractError(
+          res,
+          400,
+          'unsupported-feature',
+          'This provider does not support server-enforced participant removal.',
+        );
+      }
+      const removed = await provider.moderateRemoveParticipant(entry, targetParticipantId);
+      if (!removed) {
+        return contractError(res, 404, 'participant-not-found', 'Participant was not found.');
+      }
+      if (entry.roomMode === 'meeting') classroomDirectory.snapshot(entry, false);
+      logEvent('moderate', `${host.attendeeId} removed ${targetParticipantId} from room ${entry.roomCode}`);
+      res.json({
+        contractVersion: CONTRACT_VERSION,
+        ok: true,
+        roomCode: entry.roomCode,
+        participantId: targetParticipantId,
+    });
     });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
@@ -1958,20 +2137,22 @@ app.post('/rooms/:code/close', async (req, res) => {
     if (!entry) {
       return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
     }
-    if (!requireRoomManager(
-      entry,
-      req.body?.requesterParticipantId,
-      req.body?.participantCredential,
-      req.body?.roomOwnerCredential,
-    )) {
-      return contractError(res, 403, 'forbidden', 'Host permission is required.');
-    }
-    await closeRoom(entry, 'host close');
-    res.json({
-      contractVersion: CONTRACT_VERSION,
-      ok: true,
-      closed: true,
-      roomCode: entry.roomCode,
+    return await withRoomOperation(entry, async () => {
+      if (!requireRoomManager(
+        entry,
+        req.body?.requesterParticipantId,
+        req.body?.participantCredential,
+        req.body?.roomOwnerCredential,
+      )) {
+        return contractError(res, 403, 'forbidden', 'Host permission is required.');
+      }
+      await closeRoomUnlocked(entry, 'host close');
+      res.json({
+        contractVersion: CONTRACT_VERSION,
+        ok: true,
+        closed: true,
+        roomCode: entry.roomCode,
+    });
     });
   } catch (error) {
     if (sendProviderError(res, error) !== false) return;
@@ -2063,12 +2244,18 @@ app.delete('/meetings/:id', requireSameOrigin, requireAdmin, async (req, res) =>
   try {
     const meetingId = req.params.id;
     if (!meetingId) return res.status(404).json({ error: 'meeting-not-found' });
-    await chimeProvider.deleteLegacyMeeting(meetingId);
     const entry = roomDirectory.get(meetingId);
-    if (entry?.provider === 'chime') {
-      roomDirectory.remove(entry);
-      logEvent('delete', `room ${entry.roomCode} force-closed`);
-    }
+    const remove = async () => {
+      await chimeProvider.deleteLegacyMeeting(meetingId);
+      if (entry?.provider === 'chime') {
+        roomDirectory.remove(entry);
+        classroomDirectory.forget(entry);
+        liveInteractionDirectory.forget(entry);
+        logEvent('delete', `room ${entry.roomCode} force-closed`);
+      }
+    };
+    if (entry) await withRoomOperation(entry, remove);
+    else await remove();
     res.json({ deleted: true });
   } catch (_) {
     res.status(404).json({ error: 'meeting-not-found' });

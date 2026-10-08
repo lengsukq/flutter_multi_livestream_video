@@ -37,6 +37,76 @@ test('LiveKit removes a participant from demo room state on leave', async () => 
   assert.equal(created.entry.attendees.length, 0);
 });
 
+test('LiveKit Meeting students cannot publish microphone before grant', async () => {
+  const provider = createLiveKitProvider({
+    env: {
+      LIVEKIT_URL: 'ws://localhost:7880',
+      LIVEKIT_API_KEY: 'devkey',
+      LIVEKIT_API_SECRET: 'secret',
+    },
+    contractVersion: 1,
+    normalizeDisplayName: normalizeName,
+  });
+  const { entry } = await provider.createRoom({
+    roomCode: 'lesson01', role: 'participant',
+  });
+  entry.roomMode = 'meeting';
+  const student = await provider.joinRoom({
+    entry, role: 'participant', rawName: 'Student',
+    classroomMicrophoneAllowed: false,
+  });
+  const teacher = await provider.joinRoom({
+    entry, role: 'participant', rawName: 'Teacher',
+    classroomMicrophoneAllowed: true,
+  });
+  const payload = (response: typeof student) => {
+    assert.ok(response.livekit);
+    const token = (response.livekit as { token: string }).token;
+    return JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString());
+  };
+  assert.deepEqual(payload(student).video.canPublishSources, [
+    'camera', 'screen_share', 'screen_share_audio',
+  ]);
+  assert.equal(payload(teacher).video.canPublishSources, undefined);
+  assert.equal(payload(student).video.canPublishData, true);
+
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{endpoint: string; body: Record<string, unknown>}> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({
+      endpoint: String(input),
+      body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+    });
+    return new Response('{}', { status: 200 });
+  };
+  try {
+    await provider.setClassroomMicrophonePermission?.(
+      entry, student.participantId, true,
+    );
+    await provider.setClassroomMicrophonePermission?.(
+      entry, student.participantId, false,
+    );
+    assert.equal(requests.length, 2);
+    assert.match(requests[0]!.endpoint, /UpdateParticipant$/);
+    assert.deepEqual((requests[0]!.body.permission as {canPublishSources: string[]}).canPublishSources, [
+      'CAMERA', 'MICROPHONE', 'SCREEN_SHARE', 'SCREEN_SHARE_AUDIO',
+    ]);
+    assert.deepEqual((requests[1]!.body.permission as {canPublishSources: string[]}).canPublishSources, [
+      'CAMERA', 'SCREEN_SHARE', 'SCREEN_SHARE_AUDIO',
+    ]);
+    globalThis.fetch = async () => new Response('{"code":"not_found"}', {status:404});
+    await provider.setClassroomMicrophonePermission!(entry, student.participantId, false);
+    await assert.rejects(provider.setClassroomMicrophonePermission!(entry, student.participantId, true), /HTTP 404/);
+    globalThis.fetch = async () => new Response('{}', { status: 403 });
+    await assert.rejects(
+      provider.setClassroomMicrophonePermission!(entry, student.participantId, true),
+      /UpdateParticipant failed with HTTP 403/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Chime removes locally tracked attendee state on leave', () => {
   const provider = createChimeProvider({
     env: {

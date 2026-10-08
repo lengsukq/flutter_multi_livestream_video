@@ -310,3 +310,35 @@ This server is a reference implementation for running the example and
 validating backend contract v1. It intentionally uses in-memory room state;
 restarting the process clears that directory. A public Vercel deployment must
 remain paused until shared room persistence and production monitoring are added.
+
+
+## Classroom and Live interaction reference APIs
+
+Meeting rooms expose authenticated classroom snapshots/actions for hand/Q&A,
+notices, homework, material links, timers, Quiz/Poll, attendance and screen
+annotation state. Broadcast rooms expose `/rooms/:code/live/snapshot` and
+`/rooms/:code/live/gift`. The reference server advertises `liveInteractions:
+true` in Broadcast join responses; the SDK attaches and disposes the optional
+session and UI. Gifts are demonstration events, not payments.
+
+`CHAT_DEFAULT_PROVIDER` and dashboard selection apply independently to all
+media vendors, including AWS Live. A selected Chat binding remains fixed for
+that room. No selection creates no product Chat.
+
+The new tool/gift state is room-lifecycle memory only. Material sharing accepts
+existing HTTP(S) links; uploading/storing files and recording courses are not
+implemented. The legacy optional classroom state store does not persist these
+new tools. See [Classroom SDK](../doc/CLASSROOM_SDK.md),
+[Live SDK](../doc/LIVE_INTERACTIONS_SDK.md) and
+[acceptance](../doc/INTERACTION_ACCEPTANCE.md).
+
+### Whiteboard control plane
+
+Teaching snapshots declare `tools.content` with a content revision/mode, teacher
+manage permission, screen canvas and a paged whiteboard. The existing authenticated
+classroom action endpoint accepts `tool.content.mode` and `tool.whiteboard.*`.
+Content transitions require the content revision; page/drawing actions require the
+board revision. Drawing also checks current page/canvas IDs, normalized points and
+limits. Teacher identity and duplicate event payloads are validated before mutation.
+Only current-page marks are transmitted; other pages remain in room-lifecycle memory.
+No new persistence/storage is added. See [Whiteboard SDK](../doc/WHITEBOARD_SDK.md).

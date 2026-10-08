@@ -117,6 +117,9 @@ export interface ChimeAttendee {
 }
 
 export interface RoomEntry extends Partial<ChatRoomEntry> {
+  classroomSpeakEnforcement?: 'provider' | 'advisory';
+  /** Stable classroom teacher identity, distinct from the RTC media role. */
+  classroomTeacherUserId?: string;
   provider: string;
   /** Public vendor identity. provider remains the concrete engine id. */
   vendor?: MediaVendorId;
@@ -173,6 +176,8 @@ export interface ChimeRoomEntry extends RoomEntry {
 }
 
 export interface ProviderBaseResponse {
+  /** Enables the optional provider-neutral Live interaction SDK. */
+  liveInteractions?: boolean;
   contractVersion: number;
   provider: string;
   vendor?: MediaVendorId;
@@ -236,6 +241,8 @@ export interface JoinRoomInput {
   role: MediaRole;
   userId?: string;
   deviceId?: string | null;
+  /** Provider-neutral classroom microphone permission at initial join. */
+  classroomMicrophoneAllowed?: boolean;
 }
 
 export interface CloseRoomInput {
@@ -277,6 +284,10 @@ export interface ProviderAdapter {
 
   removeAttendee?(entry: RoomEntry, who: unknown): RemoveAttendeeResult;
   moderateRemoveParticipant?(entry: RoomEntry, participantId: string): Promise<boolean>;
+  /** Optional server-enforced classroom microphone source publishing. */
+  setClassroomMicrophonePermission?(
+    entry: RoomEntry, participantId: string, allowed: boolean,
+  ): Promise<void>;
   refreshCredentials?(input: RefreshCredentialsInput): Promise<ProviderJoinResponse>;
   resolveExternalRoom?(
     ref: string,

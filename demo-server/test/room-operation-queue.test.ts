@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {RoomOperationQueue} from '../classroom/room-operation-queue.ts';
+import type {RoomEntry} from '../types.ts';
+test('room operations are ordered, failures release the queue and other rooms are independent',async()=>{
+  const queue=new RoomOperationQueue();
+  const room={provider:'livekit'} as RoomEntry, other={provider:'livekit'} as RoomEntry;
+  let release!:()=>void;
+  const held=new Promise<void>(resolve=>{release=resolve;});
+  const events:string[]=[];
+  const first=queue.run(room,async()=>{events.push('first');await held;throw new Error('failed');});
+  const failure=assert.rejects(first,/failed/);
+  const second=queue.run(room,()=>events.push('second'));
+  await queue.run(other,()=>events.push('other'));
+  assert.deepEqual(events,['first','other']);
+  release();await failure;await second;
+  assert.deepEqual(events,['first','other','second']);
+  await queue.run(room,()=>events.push('third'));
+  await Promise.resolve();
+  assert.equal(queue.isBusy(room),false);
+});
