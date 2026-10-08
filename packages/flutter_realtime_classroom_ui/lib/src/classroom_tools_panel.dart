@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'classroom_strings.dart';
 
@@ -80,6 +81,9 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, update) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+            ),
             title: Text(strings.t(kind)),
             content: SizedBox(
               width: 440,
@@ -189,6 +193,12 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                 child: Text(strings.t('cancel')),
               ),
               FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: RealtimeUiTokens.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+                  ),
+                ),
                 onPressed: publishing
                     ? null
                     : () async {
@@ -330,16 +340,30 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                   ('poll', Icons.poll_outlined),
                 ])
                   OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: RealtimeUiTokens.text,
+                      side: const BorderSide(color: RealtimeUiTokens.border),
+                      backgroundColor: RealtimeUiTokens.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+                      ),
+                    ),
                     onPressed: _busy || _dialogOpen
                         ? null
                         : () => _publish(item.$1),
-                    icon: Icon(item.$2),
+                    icon: Icon(item.$2, size: 18, color: RealtimeUiTokens.primary),
                     label: Text(s.t(item.$1)),
                   ),
               ],
             ),
           if (timer != null)
             Card(
+              elevation: 0,
+              color: RealtimeUiTokens.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+                side: const BorderSide(color: RealtimeUiTokens.border),
+              ),
               child: ListTile(
                 leading: const Icon(Icons.timer_outlined),
                 title: Text(timer.title),
@@ -361,6 +385,12 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
             ),
           for (final notice in tools.notices.reversed)
             Card(
+              elevation: 0,
+              color: RealtimeUiTokens.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+                side: const BorderSide(color: RealtimeUiTokens.border),
+              ),
               child: ListTile(
                 leading: Icon(
                   notice.isFocusReminder
@@ -377,6 +407,12 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
             _activity(state, activity, s),
           for (final homework in tools.homework.reversed)
             Card(
+              elevation: 0,
+              color: RealtimeUiTokens.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+                side: const BorderSide(color: RealtimeUiTokens.border),
+              ),
               child: ListTile(
                 leading: const Icon(Icons.assignment_outlined),
                 title: Text(homework.title),
@@ -389,6 +425,12 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
             Text(s.t('linkOnly'), style: Theme.of(context).textTheme.bodySmall),
           for (final material in tools.materials.reversed)
             Card(
+              elevation: 0,
+              color: RealtimeUiTokens.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+                side: const BorderSide(color: RealtimeUiTokens.border),
+              ),
               child: ListTile(
                 leading: const Icon(Icons.attach_file),
                 title: Text(material.title),
