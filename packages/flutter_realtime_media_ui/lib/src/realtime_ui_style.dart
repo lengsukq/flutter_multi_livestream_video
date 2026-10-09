@@ -11,7 +11,7 @@ import 'realtime_style.dart';
 /// Keep provider-specific UI out of this layer. Meeting, Live, Attached Chat,
 /// Standalone Chat, and Demo lobbies all consume the same tokens and surfaces.
 abstract final class RealtimeUiTokens {
-  static const background = Color(0xFFF4F7FB);
+  static const background = Color(0xFFF8FAFC);
   static const surface = Color(0xFFFFFFFF);
   static const surfaceSubtle = Color(0xFFF1F5F9);
   static const border = Color(0xFFE2E8F0);
@@ -34,15 +34,15 @@ abstract final class RealtimeUiTokens {
   static const dangerBorder = Color(0xFFFECDD3);
 
   /// Unified large border radius hierarchy across the entire SDK.
-  static const sheetRadius = 24.0;
-  static const dockRadius = 16.0;
-  static const cardRadius = 16.0;
-  static const controlRadius = 14.0;
+  static const sheetRadius = 30.0;
+  static const dockRadius = 20.0;
+  static const cardRadius = 24.0;
+  static const controlRadius = 16.0;
   static const compactRadius = 12.0;
   static const pillRadius = 999.0;
 
-  static const blur = 14.0;
-  static const subtleBlur = 8.0;
+  static const blur = 18.0;
+  static const subtleBlur = 10.0;
 
   static const pagePadding = 16.0;
   static const sectionGap = 16.0;
@@ -80,13 +80,13 @@ abstract final class RealtimeUiTokens {
 
   static List<BoxShadow> get cardShadow => [
     BoxShadow(
-      color: const Color(0xFF0F172A).withValues(alpha: .06),
-      blurRadius: 28,
+      color: const Color(0xFF0F172A).withValues(alpha: .05),
+      blurRadius: 30,
       offset: const Offset(0, 10),
     ),
     BoxShadow(
-      color: const Color(0xFF4F46E5).withValues(alpha: .03),
-      blurRadius: 12,
+      color: const Color(0xFF4F46E5).withValues(alpha: .025),
+      blurRadius: 14,
       offset: const Offset(0, 2),
     ),
   ];
@@ -103,8 +103,8 @@ abstract final class RealtimeUiTokens {
 
   static List<BoxShadow> get primaryGlowShadow => [
     BoxShadow(
-      color: primary.withValues(alpha: .26),
-      blurRadius: 18,
+      color: primary.withValues(alpha: .24),
+      blurRadius: 20,
       offset: const Offset(0, 6),
     ),
   ];
@@ -585,7 +585,7 @@ class RealtimeGlassSurface extends StatelessWidget {
     this.margin,
     this.radius = RealtimeUiTokens.cardRadius,
     this.opacity = .82,
-    this.blur = 0,
+    this.blur = RealtimeUiTokens.subtleBlur,
     this.shadow = true,
     this.borderColor = RealtimeUiTokens.border,
     this.fillColor,
@@ -657,6 +657,353 @@ class RealtimeGlassSurface extends StatelessWidget {
     }
 
     return surface;
+  }
+}
+
+/// Compact count or status badge pill.
+class RealtimeBadge extends StatelessWidget {
+  const RealtimeBadge({
+    super.key,
+    required this.text,
+    this.color,
+    this.backgroundColor,
+    this.fontSize = 10.0,
+    this.padding = const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+  });
+
+  final String text;
+  final Color? color;
+  final Color? backgroundColor;
+  final double fontSize;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    final fg = color ?? style.primary;
+    final bg = backgroundColor ?? style.primarySubtle;
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: fg,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+}
+
+/// Standardized large-radius frosted glass card.
+class RealtimeGlassCard extends StatelessWidget {
+  const RealtimeGlassCard({
+    super.key,
+    required this.child,
+    this.title,
+    this.subtitle,
+    this.icon,
+    this.iconColor,
+    this.trailing,
+    this.padding = const EdgeInsets.all(20),
+    this.margin,
+    this.radius = RealtimeUiTokens.cardRadius,
+    this.opacity = 0.88,
+    this.blur = RealtimeUiTokens.subtleBlur,
+    this.borderColor,
+    this.onTap,
+  });
+
+  final Widget child;
+  final String? title;
+  final String? subtitle;
+  final IconData? icon;
+  final Color? iconColor;
+  final Widget? trailing;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? margin;
+  final double radius;
+  final double opacity;
+  final double blur;
+  final Color? borderColor;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    final hasHeader = title != null || icon != null;
+
+    return RealtimeGlassSurface(
+      margin: margin,
+      padding: padding,
+      radius: radius,
+      opacity: opacity,
+      blur: blur,
+      borderColor: borderColor ?? RealtimeUiTokens.border,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasHeader) ...[
+            Row(
+              children: [
+                if (icon != null) ...[
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: (iconColor ?? style.primary).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(icon, size: 19, color: iconColor ?? style.primary),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (title != null)
+                        Text(
+                          title!,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                            color: style.text,
+                          ),
+                        ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: style.textMuted,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (trailing != null) trailing!,
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// Data item for [RealtimeSegmentedTabs].
+class RealtimeSegmentTab<T> {
+  const RealtimeSegmentTab({
+    required this.value,
+    required this.label,
+    this.icon,
+    this.badge,
+  });
+
+  final T value;
+  final String label;
+  final IconData? icon;
+  final int? badge;
+}
+
+/// Unified frosted glass segmented tab switcher.
+class RealtimeSegmentedTabs<T> extends StatelessWidget {
+  const RealtimeSegmentedTabs({
+    super.key,
+    required this.tabs,
+    required this.selectedValue,
+    required this.onChanged,
+    this.height = 46,
+    this.radius = RealtimeUiTokens.controlRadius,
+  });
+
+  final List<RealtimeSegmentTab<T>> tabs;
+  final T selectedValue;
+  final ValueChanged<T> onChanged;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    return Container(
+      height: height,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: style.surfaceSubtle,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: style.border),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final count = tabs.length;
+          final tabWidth = (constraints.maxWidth) / count;
+          final selectedIndex = tabs.indexWhere((t) => t.value == selectedValue);
+
+          return Stack(
+            children: [
+              if (selectedIndex >= 0)
+                AnimatedPositioned(
+                  duration: RealtimeUiTokens.animNormal,
+                  curve: Curves.easeOutCubic,
+                  left: selectedIndex * tabWidth,
+                  top: 0,
+                  bottom: 0,
+                  width: tabWidth,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: style.surface,
+                      borderRadius: BorderRadius.circular(radius - 3),
+                      border: Border.all(color: style.border),
+                      boxShadow: style.cardShadow,
+                    ),
+                  ),
+                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: tabs.map((tab) {
+                  final active = tab.value == selectedValue;
+                  return Expanded(
+                    child: RealtimeGlassPressable(
+                      borderRadius: radius - 3,
+                      onTap: () => onChanged(tab.value),
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (tab.icon != null) ...[
+                              Icon(
+                                tab.icon,
+                                size: 16,
+                                color: active ? style.primary : style.textMuted,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Flexible(
+                              child: Text(
+                                tab.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                                  color: active ? style.primary : style.textMuted,
+                                ),
+                              ),
+                            ),
+                            if (tab.badge != null && tab.badge! > 0) ...[
+                              const SizedBox(width: 6),
+                              RealtimeBadge(
+                                text: '${tab.badge}',
+                                color: active ? Colors.white : style.textMuted,
+                                backgroundColor: active ? style.primary : style.borderStrong,
+                                fontSize: 9.5,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Standard frosted glass list row / settings row.
+class RealtimeGlassTile extends StatelessWidget {
+  const RealtimeGlassTile({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.leading,
+    this.trailing,
+    this.onTap,
+    this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    this.margin = const EdgeInsets.only(bottom: 8),
+    this.radius = RealtimeUiTokens.controlRadius,
+  });
+
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? leading;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry margin;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    return RealtimeGlassSurface(
+      margin: margin,
+      padding: padding,
+      radius: radius,
+      opacity: 0.88,
+      onTap: onTap,
+      child: Row(
+        children: [
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DefaultTextStyle(
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: style.text,
+                  ),
+                  child: title,
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  DefaultTextStyle(
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: style.textMuted,
+                    ),
+                    child: subtitle!,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 10),
+            trailing!,
+          ],
+        ],
+      ),
+    );
   }
 }
 

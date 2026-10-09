@@ -80,8 +80,8 @@ class RealtimeStyle {
     danger: Color(0xFFDC2626),
     dangerSubtle: Color(0xFFFEF2F2),
     cardShadow: [
-      BoxShadow(color: Color(0x0F0F172A), blurRadius: 20, offset: Offset(0, 8)),
-      BoxShadow(color: Color(0x0A4F46E5), blurRadius: 10, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x0A0F172A), blurRadius: 28, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x064F46E5), blurRadius: 12, offset: Offset(0, 2)),
     ],
     glassGradient: LinearGradient(
       begin: Alignment.topLeft,
