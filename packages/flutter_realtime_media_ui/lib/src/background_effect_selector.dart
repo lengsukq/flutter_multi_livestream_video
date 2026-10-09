@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'realtime_strings.dart';
+import 'realtime_ui_style.dart';
 import 'media_background_image_preset.dart';
 
 /// Shared pre-join/in-room controls. Image import belongs to the host app.
@@ -105,7 +106,7 @@ class BackgroundEffectSelector extends StatelessWidget {
         if (effect.type == MediaBackgroundEffectType.replaceImage) ...[
           const SizedBox(height: 8),
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
             child: Image.memory(
               _decoderBytes(effect.imageBytes!),
               height: 100,
@@ -124,7 +125,7 @@ class BackgroundEffectSelector extends StatelessWidget {
               return ChoiceChip(
                 label: Text(preset.label),
                 avatar: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
                   child: Image.memory(
                     _decoderBytes(preset.imageBytes),
                     width: 32,

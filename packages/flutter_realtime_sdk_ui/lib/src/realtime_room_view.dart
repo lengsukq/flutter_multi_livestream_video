@@ -86,9 +86,10 @@ class _RealtimeRoomViewState extends State<RealtimeRoomView> {
       future: future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const ColoredBox(
-            color: Colors.black,
-            child: Center(child: CircularProgressIndicator()),
+          final style = RealtimeStyle.of(context);
+          return ColoredBox(
+            color: style.background,
+            child: const Center(child: CircularProgressIndicator()),
           );
         }
         if (snapshot.hasError) {

@@ -45,7 +45,7 @@ extension _RoomMembersRendering on _MediaRoomViewState {
         chatModeration != null && chatCapabilities.closeRoom.supported;
     final canCloseMedia = capabilities.closeRoom.supported;
     return RealtimeGlassSurface(
-      radius: RealtimeUiTokens.controlRadius,
+      radius: RealtimeUiTokens.cardRadius,
       opacity: .97,
       child: Column(
         children: [

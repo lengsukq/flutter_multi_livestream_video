@@ -317,7 +317,7 @@ class _LiveGiftControlButtonState extends State<LiveGiftControlButton> {
       button: true,
       child: InkWell(
         onTap: _open,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           child: Column(
@@ -328,7 +328,9 @@ class _LiveGiftControlButtonState extends State<LiveGiftControlButton> {
                 height: 40,
                 decoration: BoxDecoration(
                   color: _panelOpen ? style.primarySubtle : style.surfaceSubtle,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.controlRadius,
+                  ),
                   border: Border.all(
                     color: _panelOpen
                         ? style.primary

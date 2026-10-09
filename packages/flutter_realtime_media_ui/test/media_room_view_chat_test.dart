@@ -944,6 +944,20 @@ void main() {
       final layoutError = tester.takeException();
       expect(layoutError, isNull, reason: 'room size $size');
 
+      final leaveButton = find
+          .ancestor(
+            of: find.text('Leave meeting'),
+            matching: find.byType(InkWell),
+          )
+          .first;
+      final leaveRect = tester.getRect(leaveButton);
+      expect(
+        size.width - leaveRect.right,
+        lessThanOrEqualTo(40),
+        reason: 'leave button must remain at the top-right at $size',
+      );
+      expect(leaveRect.top, lessThan(90), reason: 'room size $size');
+
       await tester.tap(find.byTooltip('Participants').first);
       await tester.pump();
       expect(tester.takeException(), isNull, reason: 'member panel size $size');

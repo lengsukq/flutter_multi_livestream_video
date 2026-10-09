@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
@@ -545,49 +546,53 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
                 ),
                 if (_joining)
                   Positioned.fill(
-                    child: ColoredBox(
-                      color: const Color(0xCBEFF3F9),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 340),
-                            child: RealtimeGlassSurface(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 26,
-                                vertical: 30,
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const SizedBox(
-                                    width: 40,
-                                    height: 40,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 3,
-                                      color: RealtimeUiTokens.primary,
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      child: ColoredBox(
+                        color: Colors.white.withValues(alpha: 0.65),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 340),
+                              child: RealtimeGlassSurface(
+                                radius: RealtimeUiTokens.cardRadius,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 26,
+                                  vertical: 30,
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const SizedBox(
+                                      width: 40,
+                                      height: 40,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 3,
+                                        color: RealtimeUiTokens.primary,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 20),
-                                  Text(
-                                    strings.enteringRoom,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 18,
-                                      color: RealtimeUiTokens.text,
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      strings.enteringRoom,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 18,
+                                        color: RealtimeUiTokens.text,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    strings.enteringRoomDetail,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: RealtimeUiTokens.textMuted,
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      strings.enteringRoomDetail,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: RealtimeUiTokens.textMuted,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),

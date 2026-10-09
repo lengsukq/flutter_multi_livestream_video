@@ -140,7 +140,7 @@ class MediaParticipantTile extends StatelessWidget {
                     alpha: style.isDark ? 0.85 : 0.92,
                   ),
                   borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.compactRadius,
+                    RealtimeUiTokens.pillRadius,
                   ),
                   border: Border.all(color: style.border),
                   boxShadow: style.cardShadow,

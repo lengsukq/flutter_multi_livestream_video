@@ -125,26 +125,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
                     ),
                     if (messageCount > 0) ...[
                       const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: style.primarySubtle,
-                          borderRadius: BorderRadius.circular(
-                            RealtimeUiTokens.pillRadius,
-                          ),
-                        ),
-                        child: Text(
-                          '$messageCount',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            color: style.primary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
+                      RealtimeBadge(text: '$messageCount'),
                     ],
                   ],
                 ),

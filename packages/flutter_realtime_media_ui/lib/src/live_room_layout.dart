@@ -334,48 +334,16 @@ class _LiveTopBar extends StatelessWidget {
           const SizedBox(width: 8),
 
           // Viewers online count pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: style.isDark
-                  ? Colors.black.withValues(alpha: 0.55)
-                  : Colors.white.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
-              border: Border.all(
-                color: style.isDark
-                    ? Colors.white.withValues(alpha: 0.20)
-                    : style.border,
-                width: 1,
-              ),
-              boxShadow: style.isDark
-                  ? null
-                  : [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.visibility_rounded,
-                  size: 13,
-                  color: style.textMuted,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  strings.viewingCount(viewerCount),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: style.text,
-                  ),
-                ),
-              ],
-            ),
+          RealtimePill(
+            label: strings.viewingCount(viewerCount),
+            icon: Icons.visibility_rounded,
+            foreground: style.text,
+            background: style.isDark
+                ? Colors.black.withValues(alpha: 0.55)
+                : Colors.white.withValues(alpha: 0.92),
+            borderColor: style.isDark
+                ? Colors.white.withValues(alpha: 0.20)
+                : style.border,
           ),
 
           const Spacer(),
@@ -453,14 +421,14 @@ class _LiveFloatingDanmakuFeed extends StatelessWidget {
               return Container(
                 margin: const EdgeInsets.only(bottom: 6),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                  horizontal: 12,
+                  vertical: 7,
                 ),
                 decoration: BoxDecoration(
                   color: isDark
                       ? Colors.black.withValues(alpha: 0.55)
                       : Colors.white.withValues(alpha: 0.88),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
                   border: Border.all(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.12)

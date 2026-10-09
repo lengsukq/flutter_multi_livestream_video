@@ -193,78 +193,88 @@ class _MeetingTopBar extends StatelessWidget {
       child: Row(
         children: [
           // Room title & quick copy pill
-          Flexible(
-            child: InkWell(
-              onTap: host.copyCode,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!compact) ...[
-                      Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                          color: style.primarySubtle,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          Icons.videocam_rounded,
-                          size: 16,
-                          color: style.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (!compact)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    strings.meeting,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: style.text,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Icon(
-                                  host.copied
-                                      ? Icons.check_circle_rounded
-                                      : Icons.copy_rounded,
-                                  size: 13,
-                                  color: host.copied
-                                      ? style.success
-                                      : style.textMuted,
-                                ),
-                              ],
-                            ),
-                          Text(
-                            roomCode,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: style.textMuted,
-                              letterSpacing: 0.5,
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: InkWell(
+                onTap: host.copyCode,
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.controlRadius,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!compact) ...[
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: style.primarySubtle,
+                            borderRadius: BorderRadius.circular(
+                              RealtimeUiTokens.compactRadius,
                             ),
                           ),
-                        ],
+                          child: Icon(
+                            Icons.videocam_rounded,
+                            size: 16,
+                            color: style.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!compact)
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      strings.meeting,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: style.text,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Icon(
+                                    host.copied
+                                        ? Icons.check_circle_rounded
+                                        : Icons.copy_rounded,
+                                    size: 13,
+                                    color: host.copied
+                                        ? style.success
+                                        : style.textMuted,
+                                  ),
+                                ],
+                              ),
+                            Text(
+                              roomCode,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: style.textMuted,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -278,39 +288,14 @@ class _MeetingTopBar extends StatelessWidget {
             const SizedBox(width: 10),
             _MeetingDurationTimer(isDark: style.isDark),
             const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.lock_rounded,
-                    size: 11,
-                    color: Color(0xFF059669),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    strings.encryptedMeeting,
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF059669),
-                    ),
-                  ),
-                ],
-              ),
+            RealtimePill(
+              label: strings.encryptedMeeting,
+              icon: Icons.lock_rounded,
+              foreground: const Color(0xFF059669),
+              background: const Color(0xFF10B981).withValues(alpha: 0.15),
+              borderColor: const Color(0xFF10B981).withValues(alpha: 0.3),
             ),
           ],
-
-          const Spacer(),
 
           // Provider Badge if configured
           if (host.view.config.showProvider && !compact) ...[
@@ -324,7 +309,9 @@ class _MeetingTopBar extends StatelessWidget {
               tooltip: strings.layoutMode,
               color: style.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.controlRadius,
+                ),
                 side: BorderSide(color: style.border),
               ),
               icon: Icon(
@@ -399,12 +386,14 @@ class _MeetingTopBar extends StatelessWidget {
           // Professional Leave Button (Red Accent)
           InkWell(
             onTap: host.showMeetingLeaveConfirmation,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
                 color: const Color(0xFFDC2626),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.controlRadius,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFFDC2626).withValues(alpha: 0.30),
@@ -712,7 +701,7 @@ class _MeetingDockAction extends StatelessWidget {
         button: true,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             child: Column(
@@ -722,11 +711,13 @@ class _MeetingDockAction extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 40,
-                      height: 40,
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
                         color: effectiveBackground,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(
+                          RealtimeUiTokens.controlRadius,
+                        ),
                         border: Border.all(
                           color: isActive || isDanger
                               ? effectiveColor.withValues(alpha: 0.45)
@@ -749,7 +740,9 @@ class _MeetingDockAction extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFEF4444),
-                            borderRadius: BorderRadius.circular(9),
+                            borderRadius: BorderRadius.circular(
+                              RealtimeUiTokens.pillRadius,
+                            ),
                             border: Border.all(
                               color: style.surface,
                               width: 1.5,
