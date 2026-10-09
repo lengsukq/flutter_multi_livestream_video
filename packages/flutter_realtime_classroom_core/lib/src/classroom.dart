@@ -167,6 +167,25 @@ class ClassroomSession {
 
   Future<void> raiseHand() => _act(ClassroomCommand(ClassroomAction.handRaise));
   Future<void> lowerHand() => _act(ClassroomCommand(ClassroomAction.handLower));
+  Future<void> sendFeedback(ClassroomFeedbackKind kind) async {
+    if (_state == null) await start();
+    if (_state?.feedbackSupported != true) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message: 'Classroom feedback is not supported by this repository.',
+      );
+    }
+    if (_state!.isTeacher) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.forbidden,
+        message: 'Only students can send classroom feedback.',
+      );
+    }
+    await _act(
+      ClassroomCommand(ClassroomAction.feedbackSend, {'kind': kind.name}),
+    );
+  }
+
   Future<void> grantSpeak(String userId) =>
       _act(ClassroomCommand(ClassroomAction.speakGrant, {'userId': userId}));
   Future<void> revokeSpeak(String userId) =>

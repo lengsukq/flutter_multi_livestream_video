@@ -8,7 +8,8 @@ enum ClassroomAction {
   speakRevoke('speak.revoke'),
   questionAsk('question.ask'),
   questionAnswer('question.answer'),
-  questionResolve('question.resolve');
+  questionResolve('question.resolve'),
+  feedbackSend('feedback.send');
 
   const ClassroomAction(this.wireName);
   final String wireName;

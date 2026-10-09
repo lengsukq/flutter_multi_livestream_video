@@ -53,6 +53,30 @@ void deriveClassroomChanges(
     }
   }
   if (old != null && next.revision > old.revision) {
+    final priorFeedbackIds = old.feedback.map((item) => item.id).toSet();
+    final addedFeedback = next.feedback
+        .where((item) => !priorFeedbackIds.contains(item.id))
+        .toList(growable: false);
+    for (final item in addedFeedback) {
+      onEvent(
+        ClassroomStateEvent(
+          kind: ClassroomStateEventKind.feedbackSent,
+          roomCode: next.roomCode,
+          userId: item.userId,
+          revision: next.revision,
+          feedbackId: item.id,
+        ),
+      );
+    }
+    if (next.isTeacher && addedFeedback.isNotEmpty) {
+      onNotification(
+        ClassroomNotification(
+          ClassroomNotificationKind.feedbackReceived,
+          next.revision,
+          feedback: List.unmodifiable(addedFeedback),
+        ),
+      );
+    }
     void emit(
       ClassroomStateEventKind kind,
       String userId, [

@@ -5,6 +5,34 @@ enum ClassroomRole { teacher, student }
 
 enum ClassroomQuestionStatus { pending, answered, resolved }
 
+enum ClassroomFeedbackKind { understood, great, idea, question, clap }
+
+class ClassroomFeedback {
+  const ClassroomFeedback({
+    required this.id,
+    required this.userId,
+    required this.displayName,
+    required this.kind,
+    required this.createdAt,
+  });
+  final String id, userId, displayName;
+  final ClassroomFeedbackKind kind;
+  final DateTime createdAt;
+
+  factory ClassroomFeedback.fromJson(Map<String, dynamic> data) =>
+      JsonReader(data).decode(
+        () => ClassroomFeedback(
+          id: JsonReader(data).required<String>('id'),
+          userId: JsonReader(data).required<String>('userId'),
+          displayName: JsonReader(data).optional<String>('displayName') ?? '',
+          kind: JsonReader(
+            data,
+          ).enumValue('kind', ClassroomFeedbackKind.values),
+          createdAt: JsonReader(data).dateTime('createdAt'),
+        ),
+      );
+}
+
 enum ClassroomNotificationKind {
   handRaised,
   questionAsked,
@@ -15,6 +43,7 @@ enum ClassroomNotificationKind {
   homeworkPublished,
   materialShared,
   timerChanged,
+  feedbackReceived,
 }
 
 enum ClassroomStateEventKind {
@@ -27,6 +56,7 @@ enum ClassroomStateEventKind {
   questionResolved,
   studentJoined,
   studentLeft,
+  feedbackSent,
 }
 
 /// Derived from authenticated state snapshots, never from untrusted RTC data.
@@ -37,12 +67,14 @@ class ClassroomStateEvent {
     required this.userId,
     required this.revision,
     this.questionId,
+    this.feedbackId,
   });
   final ClassroomStateEventKind kind;
   final String roomCode;
   final String userId;
   final int revision;
   final String? questionId;
+  final String? feedbackId;
 }
 
 class ClassroomCapabilities {
@@ -55,10 +87,13 @@ class ClassroomCapabilities {
     this.enforcesMicrophone = false,
     this.canUseTools = false,
     this.canPublishTools = false,
+    this.canSendFeedback = false,
+    this.canViewFeedback = false,
   });
   final bool canRaiseHand, canAskQuestion, canManageQuestions, canGrantSpeak;
   final bool canViewRoster, enforcesMicrophone;
   final bool canUseTools, canPublishTools;
+  final bool canSendFeedback, canViewFeedback;
 }
 
 class ClassroomQuestion {
@@ -199,10 +234,13 @@ class ClassroomState {
     this.speakEnforcement = 'advisory',
     this.selfUserId = '',
     this.tools,
+    this.feedbackSupported = false,
+    List<ClassroomFeedback> feedback = const [],
     List<ClassroomAttendance> attendance = const [],
   }) : students = List.unmodifiable(students),
        questions = List.unmodifiable(questions),
-       attendance = List.unmodifiable(attendance);
+       attendance = List.unmodifiable(attendance),
+       feedback = List.unmodifiable(feedback);
   final String roomCode;
   final String selfUserId;
   final ClassroomRole role;
@@ -212,6 +250,10 @@ class ClassroomState {
   final ClassroomStats stats;
   final ClassroomToolsState? tools;
   final List<ClassroomAttendance> attendance;
+  final bool feedbackSupported;
+
+  /// Recent feedback, bounded by the repository. Students only see their own.
+  final List<ClassroomFeedback> feedback;
   // The provider's publish permission has NOT been changed by a grant.
   final String speakEnforcement;
   bool get isTeacher => role == ClassroomRole.teacher;
@@ -224,6 +266,8 @@ class ClassroomState {
     enforcesMicrophone: speakEnforcement == 'provider',
     canUseTools: tools != null,
     canPublishTools: isTeacher && tools != null,
+    canSendFeedback: feedbackSupported && !isTeacher,
+    canViewFeedback: feedbackSupported && isTeacher,
   );
   List<ClassroomStudent> get raisedHands =>
       students.where((s) => s.handRaised).toList(growable: false);
@@ -249,6 +293,8 @@ class ClassroomState {
     speakEnforcement: speakEnforcement,
     tools: tools,
     attendance: attendance,
+    feedbackSupported: feedbackSupported,
+    feedback: feedback,
   );
   ClassroomState withChatMessages(int count) => ClassroomState(
     roomCode: roomCode,
@@ -261,6 +307,8 @@ class ClassroomState {
     speakEnforcement: speakEnforcement,
     tools: tools,
     attendance: attendance,
+    feedbackSupported: feedbackSupported,
+    feedback: feedback,
   );
   factory ClassroomState.fromJson(Map<String, dynamic> data) =>
       JsonReader(data).decode(() => ClassroomState._fromJsonUnchecked(data));
@@ -292,6 +340,12 @@ class ClassroomState {
             : ClassroomToolsState.fromJson(
                 Map<String, dynamic>.from(data['tools'] as Map),
               ),
+        feedbackSupported:
+            JsonReader(data).optional<bool>('feedbackSupported') ?? false,
+        feedback: [
+          for (final item in data['feedback'] as List? ?? const [])
+            ClassroomFeedback.fromJson(Map<String, dynamic>.from(item as Map)),
+        ],
         attendance: List.unmodifiable(
           (data['attendance'] as List? ?? []).map(
             (a) => ClassroomAttendance.fromJson(
@@ -303,7 +357,12 @@ class ClassroomState {
 }
 
 class ClassroomNotification {
-  const ClassroomNotification(this.kind, this.revision);
+  const ClassroomNotification(
+    this.kind,
+    this.revision, {
+    this.feedback = const [],
+  });
   final ClassroomNotificationKind kind;
   final int revision;
+  final List<ClassroomFeedback> feedback;
 }
