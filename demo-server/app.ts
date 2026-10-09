@@ -55,6 +55,7 @@ import {
 } from './room-owner-credential.ts';
 import { ProviderOperationError, ProviderRegistry } from './providers/provider-registry.ts';
 import { RoomDirectory } from './providers/room-directory.ts';
+import { createRoomClosure } from './services/room-closure.ts';
 import { createTrtcProvider } from './providers/trtc.ts';
 import { localizeDemoMessage, resolveDemoLanguage } from './i18n.ts';
 import type {
@@ -683,41 +684,10 @@ async function closeRoom(entry: RoomEntry, reason: string): Promise<void> {
 }
 
 // Caller owns the room operation queue; avoids recursively acquiring it.
-async function closeRoomUnlocked(entry: RoomEntry, reason: string): Promise<void> {
-  const provider = providerRegistry.require(entry.provider);
-  entry.closePending = true;
-  let chatError: unknown;
-  if (entry.chatProvider && !entry.chatClosed) {
-    try {
-      await chatProviderRegistry.require(entry.chatProvider).closeRoom(entry);
-      entry.chatClosed = true;
-    } catch (error) {
-      chatError = error;
-    }
-  }
-  let mediaError: unknown;
-  if (!entry.mediaClosed) {
-    try {
-      await provider.closeRoom({ entry, reason });
-      entry.mediaClosed = true;
-    } catch (error) {
-      mediaError = error;
-    }
-  }
-  if (mediaError || chatError) {
-    logEvent(
-      'error',
-      `room ${entry.roomCode} close incomplete (${reason}); retry remains possible`,
-    );
-    if (mediaError) throw mediaError;
-    throw chatError;
-  }
-  roomDirectory.remove(entry);
-  classroomDirectory.forget(entry);
-  liveInteractionDirectory.forget(entry);
-  const suffix = entry.provider === 'chime' ? ' — billing for future joins stops' : '';
-  logEvent('delete', `room ${entry.roomCode} closed (${reason})${suffix}`);
-}
+const closeRoomUnlocked = createRoomClosure({
+  providerRegistry, chatProviderRegistry, roomDirectory,
+  classroomDirectory, liveInteractionDirectory, logEvent,
+});
 
 function summarizeRoom(entry: RoomEntry, req?: Request): RoomSummary {
   pruneStaleAttendees(entry, Date.now());
