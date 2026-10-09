@@ -141,8 +141,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
     await tester.pump();
     chat.sendGate!.completeError(
-      const ChatError(
-        code: ChatErrorCode.network,
+      const RealtimeException(
+        code: RealtimeErrorCode.network,
         message: 'Message delivery failed',
         providerId: 'fake-chat',
       ),
@@ -1444,8 +1444,8 @@ class _FakeMediaSession
   @override
   Future<void> setBackgroundEffect(MediaBackgroundEffect effect) async {
     if (!backgroundCapabilities.supports(effect)) {
-      throw const MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Background effect is not supported.',
         providerId: 'fake',
       );
@@ -1628,8 +1628,8 @@ class _ModeratedMediaSession extends _FakeMediaSession
     muteCalls.add(targetParticipantId);
     await muteGate?.future;
     if (failures.contains(targetParticipantId)) {
-      throw const MediaError(
-        code: MediaErrorCode.nativeError,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.providerError,
         message: 'Mute rejected',
       );
     }

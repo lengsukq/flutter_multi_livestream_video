@@ -1,3 +1,6 @@
+import 'room_members_controller.dart';
+import 'chat_timeline_controller.dart';
+import 'initial_media_settings_controller.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -114,7 +117,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   final _controlRevision = ValueNotifier<int>(0);
   final _likeRevision = ValueNotifier<int>(0);
   final _chatRevision = ValueNotifier<int>(0);
-  final Set<String> _seenChatIds = {};
+  final _timeline = ChatTimelineController();
+  final _members = RoomMembersController();
+  final _initialSettings = InitialMediaSettingsController();
   final Set<String> _visibleChatIds = {};
   bool _chatTimelineInitialized = false;
   bool _hasNewChatMessages = false;
@@ -216,15 +221,13 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         return;
       }
     }
-    final failures = <MediaParticipant, Object>{};
-    for (final participant in targets) {
-      try {
-        await targetRoom.muteParticipant(participant.id);
-      } on Object catch (error) {
-        failures[participant] = error;
-      }
-      if (!mounted || targetRoom != widget.room) return;
-    }
+    final result = await _members.mute(
+      targetRoom,
+      targets,
+      isCurrent: () => mounted && targetRoom == widget.room,
+    );
+    if (!result.completed) return;
+    final failures = result.failures;
     _updateMembers(() {
       _mutingAll = false;
       _muteFailures
@@ -283,14 +286,14 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   void _watchContent() {
-    _contentSub?.cancel();
+    observeDetached(_contentSub?.cancel());
     _contentSub = widget.contentStageUpdates?.listen((_) {
       if (mounted) setState(() => _cachedMediaStage = null);
     });
   }
 
   void _watchMicPermission() {
-    _micPermissionSub?.cancel();
+    observeDetached(_micPermissionSub?.cancel());
     _micPermissionSub = widget.microphonePermissionUpdates?.listen((_) {
       if (!mounted) return;
       _controlRevision.value++;
@@ -311,11 +314,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   void _watchUnreadChat() {
-    _chatUnreadSub?.cancel();
+    observeDetached(_chatUnreadSub?.cancel());
     final chat = widget.chatSession;
-    _seenChatIds
-      ..clear()
-      ..addAll(chat?.messages.map((m) => m.id) ?? const <String>[]);
+    _timeline.seed(chat?.messages ?? const []);
     _unreadChatCount = 0;
     _visibleChatIds.clear();
     _chatTimelineInitialized = false;
@@ -324,17 +325,10 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     if (chat == null) return;
     _chatUnreadSub = chat.messageSnapshots.listen((messages) {
       if (!mounted || chat != widget.chatSession) return;
-      final added = messages
-          .where((m) => !_seenChatIds.contains(m.id))
-          .toList();
-      // Retain only the current bounded window; evicted historical replay does
-      // not re-enter that window in the bundled adapters.
-      _seenChatIds
-        ..clear()
-        ..addAll(messages.map((m) => m.id));
-      final remoteCount = added
-          .where((m) => !_isOwnChatMessage(chat, m))
-          .length;
+      final remoteCount = _timeline.accept(
+        messages,
+        (m) => _isOwnChatMessage(chat, m),
+      );
       if (!_chatOpen && remoteCount > 0) {
         _unreadChatCount += remoteCount;
         _controlRevision.value++;
@@ -360,71 +354,18 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     final settings = widget.config.initialMediaSettings;
     if (settings == null) return;
     final targetRoom = widget.room;
-    final effects = _backgroundEffects;
-    final current = session;
-    if (current is MediaDeviceController) {
-      for (final device in [
-        settings.microphone,
-        settings.camera,
-        settings.audioOutput,
-      ]) {
-        if (device == null) continue;
-        try {
-          await current.selectMediaDevice(device);
-          if (!mounted || targetRoom != widget.room) return;
-        } catch (error) {
-          if (mounted && targetRoom == widget.room) {
-            setState(() => _error = error.toString());
-          }
-        }
-      }
-    }
-    var allowInitialVideoPublish = true;
-    if (settings.backgroundEffect.enabled) {
-      if (!effects.backgroundCapabilities.supports(settings.backgroundEffect)) {
-        allowInitialVideoPublish = false;
-        if (mounted && targetRoom == widget.room) {
-          setState(
-            () => _error =
-                'The current media provider cannot apply the selected '
-                'background effect. Camera publishing was kept off.',
-          );
-        }
-      } else {
-        try {
-          await effects.setBackgroundEffect(settings.backgroundEffect);
-        } catch (error) {
-          allowInitialVideoPublish = false;
-          if (mounted && targetRoom == widget.room) {
-            setState(() => _error = error.toString());
-          }
-        }
-      }
-    } else {
-      try {
-        await effects.setBackgroundEffect(settings.backgroundEffect);
-      } catch (error) {
+    await _initialSettings.apply(
+      session: session,
+      effects: _backgroundEffects,
+      settings: settings,
+      isCurrent: () => mounted && targetRoom == widget.room,
+      canEnableMicrophone: () => widget.canEnableMicrophone?.call() != false,
+      onError: (error) {
         if (mounted && targetRoom == widget.room) {
           setState(() => _error = error.toString());
         }
-      }
-    }
-    if (!mounted || targetRoom != widget.room) return;
-    if (current is InteractiveMediaSession) {
-      try {
-        await current.setMuted(
-          !settings.microphoneEnabled ||
-              widget.canEnableMicrophone?.call() == false,
-        );
-        await current.setVideoEnabled(
-          settings.cameraEnabled && allowInitialVideoPublish,
-        );
-      } catch (error) {
-        if (mounted && targetRoom == widget.room) {
-          setState(() => _error = error.toString());
-        }
-      }
-    }
+      },
+    );
   }
 
   void _openParticipants() {
@@ -506,9 +447,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   @override
   void dispose() {
-    _chatUnreadSub?.cancel();
-    _micPermissionSub?.cancel();
-    _contentSub?.cancel();
+    observeDetached(_chatUnreadSub?.cancel());
+    observeDetached(_micPermissionSub?.cancel());
+    observeDetached(_contentSub?.cancel());
     _copyTimer?.cancel();
     for (final timer in _heartTimers) {
       timer.cancel();
@@ -605,7 +546,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   void _copyCode() {
-    Clipboard.setData(ClipboardData(text: widget.room.roomCode));
+    observeDetached(
+      Clipboard.setData(ClipboardData(text: widget.room.roomCode)),
+    );
     setState(() => _copied = true);
     _copyTimer?.cancel();
     _copyTimer = Timer(const Duration(seconds: 2), () {
@@ -1692,14 +1635,16 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   void _sendRtcData() {
     final text = _rtcDataMessage.text.trim();
     if (text.isEmpty) return;
-    _run(
-      () => session.sendData(
-        text,
-        options: const MediaSendOptions(topic: 'debug'),
-      ),
-    ).then((_) {
-      if (mounted && _error == null) _rtcDataMessage.clear();
-    });
+    observeDetached(
+      _run(
+        () => session.sendData(
+          text,
+          options: const MediaSendOptions(topic: 'debug'),
+        ),
+      ).then((_) {
+        if (mounted && _error == null) _rtcDataMessage.clear();
+      }),
+    );
   }
 
   Future<void> _openBackgroundEffects() async {

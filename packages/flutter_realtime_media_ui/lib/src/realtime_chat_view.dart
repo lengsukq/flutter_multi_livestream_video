@@ -101,7 +101,7 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
   void _copyRoomCode() {
     final code = widget.roomCode;
     if (code == null || code.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: code));
+    observeDetached(Clipboard.setData(ClipboardData(text: code)));
     setState(() => _copiedCode = true);
     _copyTimer?.cancel();
     _copyTimer = Timer(const Duration(seconds: 2), () {
@@ -826,7 +826,9 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
               ),
               onTap: () {
                 Navigator.pop(sheetContext);
-                Clipboard.setData(ClipboardData(text: message.message));
+                observeDetached(
+                  Clipboard.setData(ClipboardData(text: message.message)),
+                );
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(strings.messageCopied),

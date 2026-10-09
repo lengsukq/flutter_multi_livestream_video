@@ -35,7 +35,7 @@ extension _RoomControlRendering on _MediaRoomViewState {
               );
               return;
             }
-            _run(interactive.toggleMute);
+            observeDetached(_run(interactive.toggleMute));
           },
           active: !value.localMuted,
           showLabel: showLabels,

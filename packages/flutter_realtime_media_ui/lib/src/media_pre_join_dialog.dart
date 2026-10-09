@@ -45,7 +45,7 @@ class _MediaPreJoinDialogState extends State<MediaPreJoinDialog> {
   @override
   void initState() {
     super.initState();
-    _run();
+    observeDetached(_run());
   }
 
   Future<void> _run() async {
@@ -589,7 +589,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   MediaLocalPreviewSession? _preview;
   Object? _error;
   Object? _previewError;
-  StreamSubscription<MediaError>? _previewFailures;
+  StreamSubscription<RealtimeException>? _previewFailures;
   Object? _deviceError;
   List<MediaDevice> _devices = const [];
   bool _loading = true;
@@ -605,7 +605,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _runChecks();
+    observeDetached(_runChecks());
   }
 
   @override
@@ -1448,7 +1448,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
             )
             .toList(growable: false),
         onChanged: (device) {
-          if (device != null) _selectDevice(device);
+          if (device != null) observeDetached(_selectDevice(device));
         },
       ),
     );
