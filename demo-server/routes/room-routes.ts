@@ -6,10 +6,10 @@ import type { ChatProviderRegistry } from '../chat/chat-provider-registry.ts';
 import type { ChatRoomDirectory } from '../chat/chat-room-directory.ts';
 import type { ClassroomStateDirectory } from '../classroom/classroom-state.ts';
 import { requireParticipantCredential, issueParticipantCredential } from '../participant-credential.ts';
-import { issueRoomOwnerCredential } from '../room-owner-credential.ts';
 import { matchesRoomOwnerCredential } from '../room-owner-credential.ts';
 import { ProviderOperationError } from '../providers/provider-registry.ts';
 import { requireRoomManager } from '../room-access.ts';
+import { createRoomProvisioner } from '../services/room-creation.ts';
 
 export interface RoomRouteDependencies {
   roomDirectory: RoomDirectory;
@@ -71,6 +71,14 @@ export function registerRoomRoutes(app: Express, dependencies: RoomRouteDependen
     mediaManagementCapabilities, chatManagementCapabilities, logEvent,
     requireSameOrigin, requireAdmin,
   } = dependencies;
+  const provisionRoom = createRoomProvisioner({
+    chatProviderRegistry,
+    publicProviderId,
+    mediaManagementCapabilities,
+    registerRoom,
+    logEvent,
+  });
+
 
 app.post('/rooms', async (req, res) => {
   try {
@@ -119,48 +127,10 @@ app.post('/rooms', async (req, res) => {
       assertRole(provider, 'viewer');
     }
     const rawNickname = req.body?.displayName?.trim() || req.body?.nickname?.trim() || null;
-    const created = await provider.createRoom({ roomCode, role });
-    created.entry.vendor = publicProviderId(provider.id);
-    created.entry.engine = provider.id;
-    created.response.vendor = publicProviderId(provider.id);
-    created.response.engine = provider.id;
-    const selectedChatProvider = currentChatProvider();
-    if (selectedChatProvider) {
-      try {
-        const chat = await chatProviderRegistry
-          .requireConfigured(selectedChatProvider)
-          .createRoom(roomCode);
-        created.entry.chatProvider = chat.chatProvider;
-        created.entry.chatRoomArn = chat.chatRoomArn;
-        created.response.chatProvider = chat.chatProvider;
-      } catch (error) {
-        try {
-          await provider.closeRoom({ entry: created.entry, reason: 'chat room create rollback' });
-        } catch (cleanupError) {
-          console.error('media rollback after chat create failure failed', cleanupError);
-        }
-        throw error;
-      }
-    }
-    created.entry.roomMode = roomMode;
-    if (roomMode === 'meeting') {
-      created.entry.classroomSpeakEnforcement =
-        provider.setClassroomMicrophonePermission ? 'provider' : 'advisory';
-    }
-    created.response.roomMode = roomMode;
-    if (roomMode === 'broadcast') created.response.liveInteractions = true;
-    created.response.management = mediaManagementCapabilities(provider);
-    // Room ownership is a logical SDK/control-plane role and is independent
-    // from the provider media role. This lets meeting providers such as Chime
-    // keep their native participant role while the creator can still manage
-    // the logical room.
-    const roomOwnerCredential = issueRoomOwnerCredential(created.entry);
-    if (roomOwnerCredential) {
-      created.response.roomOwnerCredential = roomOwnerCredential;
-    }
-    registerRoom(provider, created.entry);
-    created.entry.lastHeartbeatMs = Date.now();
-    logEvent('create', `room ${roomCode} created with ${provider.displayName}`);
+    const { created, roomOwnerCredential } = await provisionRoom({
+      roomCode, roomMode, role, provider,
+      selectedChatProvider: currentChatProvider(),
+    });
 
     return await withRoomOperation(created.entry, async () => {
       assertRoomOpen(created.entry);
