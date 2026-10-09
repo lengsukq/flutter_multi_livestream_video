@@ -1,21 +1,28 @@
+export 'media_participant_tile.dart' show MediaParticipantTile;
 import 'room_members_controller.dart';
-import 'chat_timeline_controller.dart';
+import 'room_chat_events_controller.dart';
 import 'initial_media_settings_controller.dart';
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, ValueListenable;
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'media_provider_label.dart';
 import 'live_likes_controller.dart';
+import 'live_reactions_controller.dart';
+import 'live_reaction_particle.dart';
+import 'media_participant_tile.dart';
+import 'media_room_layout_host.dart';
+import 'meeting_room_layout.dart';
+import 'live_room_layout.dart';
 import 'room_regions.dart';
 import 'background_effect_selector.dart';
 import 'media_background_image_preset.dart';
 import 'realtime_strings.dart';
+import 'realtime_style.dart';
 import 'realtime_ui_style.dart';
 
 part 'room_members_panel.dart';
@@ -41,6 +48,7 @@ class MediaRoomViewConfig {
     this.initialMediaSettings,
     this.backgroundImageBytes,
     this.backgroundImagePresets = const [],
+    this.roomMode,
   });
   final bool showProvider;
   final bool showChat;
@@ -49,6 +57,11 @@ class MediaRoomViewConfig {
   final MediaLocalPreviewSettings? initialMediaSettings;
   final Uint8List? backgroundImageBytes;
   final List<MediaBackgroundImagePreset> backgroundImagePresets;
+
+  /// Optional explicitly configured room mode.
+  /// When not provided, [MediaRoomView] deduces meeting vs live from the
+  /// participant role and attached interactions.
+  final MediaRoomMode? roomMode;
 }
 
 class MediaRoomView extends StatefulWidget {
@@ -71,6 +84,7 @@ class MediaRoomView extends StatefulWidget {
     this.contentStageUpdates,
     this.contentControlsBuilder,
     this.extraControlsBuilder,
+    this.liveGiftPanelOpener,
   });
   final MediaRoomSession room;
   final MediaTrackRenderer renderer;
@@ -105,39 +119,47 @@ class MediaRoomView extends StatefulWidget {
   /// Optional additional controls placed into the bottom dock controls,
   /// placed after content sharing controls and before room administration.
   final List<Widget> Function(BuildContext)? extraControlsBuilder;
+
+  /// Optional direct opener for the live gift panel.
+  /// When provided, the live bottom-bar gift button opens the gift panel
+  /// in one tap instead of routing through the extra-controls sheet.
+  /// Null keeps the legacy sheet fallback, so plain [MediaRoomView] users
+  /// without a gift-panel integration stay unaffected.
+  final Future<void> Function(BuildContext context)? liveGiftPanelOpener;
   @override
   State<MediaRoomView> createState() => _MediaRoomViewState();
 }
 
-class _MediaRoomViewState extends State<MediaRoomView> {
+class _MediaRoomViewState extends State<MediaRoomView>
+    implements MediaRoomLayoutHost {
   final _message = TextEditingController();
   final _rtcDataMessage = TextEditingController();
+  final _liveChatInput = TextEditingController();
+  final _liveChatInputFocus = FocusNode();
   final _chatScroll = ScrollController();
-  StreamSubscription<List<ChatMessage>>? _chatUnreadSub;
-  StreamSubscription<int>? _likesSub;
-  StreamSubscription<int>? _likeTotalsSub;
   StreamSubscription<Object?>? _micPermissionSub;
   StreamSubscription<Object?>? _contentSub;
   Widget? _cachedMediaStage;
   List<Object?> _mediaStageKey = [];
   final _memberRevision = ValueNotifier<int>(0);
   final _controlRevision = ValueNotifier<int>(0);
-  final _likeRevision = ValueNotifier<int>(0);
-  final _danmakuMessages = ValueNotifier<List<ChatMessage>>(const []);
+  final _liveReactions = LiveReactionsController();
+  ValueNotifier<int> get _likeRevision => _liveReactions.revision;
+  final _chatEvents = RoomChatEventsController();
   final _chatRevision = ValueNotifier<int>(0);
-  final _timeline = ChatTimelineController();
   final _members = RoomMembersController();
   final _initialSettings = InitialMediaSettingsController();
   final Set<String> _visibleChatIds = {};
   bool _chatTimelineInitialized = false;
   bool _hasNewChatMessages = false;
-  final Set<Timer> _heartTimers = {};
   Timer? _copyTimer;
-  int _unreadChatCount = 0;
+  int get _unreadChatCount => _chatEvents.unread;
   bool _chatOpen = false;
   bool _participantsOpen = false;
   bool _chatSending = false;
   bool _rtcDataOpen = false;
+  bool _liveChatInputOpen = false;
+  bool _liveChatSending = false;
   bool _copied = false;
   bool _initialSettingsApplied = false;
   String? _focusedParticipantId;
@@ -147,73 +169,25 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   bool _loadingRoomMembers = false;
   MediaRoomLayoutMode _layoutMode = MediaRoomLayoutMode.grid;
   bool _cleanScreen = false;
-  int _likeCount = 0;
-  final List<_FloatingHeartItem> _floatingHearts = [];
+  int get _likeCount => _liveReactions.totalLikes;
+  List<LiveReactionHeart> get _floatingHearts => _liveReactions.hearts;
   bool _mutingAll = false;
   final Map<MediaParticipant, Object> _muteFailures = {};
+  @override
   MediaSession get session => widget.room.session;
   MediaBackgroundEffectsController get _backgroundEffects =>
       widget.backgroundEffects ?? widget.room;
 
   void _sendLike() {
-    final likes = widget.liveLikes;
-    if (likes == null) return;
-    observeDetached(_run(likes.sendLike));
+    if (widget.liveLikes != null) {
+      observeDetached(_run(_liveReactions.sendLike));
+    }
   }
+
+  void _onLikeTotalChanged() => _controlRevision.value++;
 
   void _watchLikes() {
-    observeDetached(_likesSub?.cancel());
-    observeDetached(_likeTotalsSub?.cancel());
-    for (final timer in _heartTimers) {
-      timer.cancel();
-    }
-    _heartTimers.clear();
-    _floatingHearts.clear();
-    _likeRevision.value++;
-    final likes = widget.liveLikes;
-    _likeCount = likes?.totalLikes ?? 0;
-    _controlRevision.value++;
-    if (likes == null) return;
-    _likesSub = likes.receivedLikes.listen((count) {
-      if (!mounted || likes != widget.liveLikes) return;
-      for (var index = 0; index < count.clamp(0, 5); index++) {
-        _animateLike();
-      }
-    });
-    _likeTotalsSub = likes.totals.listen((count) {
-      if (!mounted || likes != widget.liveLikes) return;
-      _likeCount = count;
-      _controlRevision.value++;
-    });
-  }
-
-  void _animateLike() {
-    final random = math.Random();
-    const hues = [
-      Color(0xFFEF4444),
-      Color(0xFFF43F5E),
-      Color(0xFFEC4899),
-      Color(0xFFF59E0B),
-      Color(0xFF8B5CF6),
-    ];
-    final heart = _FloatingHeartItem(
-      id: '${DateTime.now().microsecondsSinceEpoch}-${random.nextInt(1000)}',
-      color: hues[random.nextInt(hues.length)],
-      startX: 0.65 + (random.nextDouble() * 0.25),
-    );
-    {
-      _floatingHearts.add(heart);
-    }
-    _likeRevision.value++;
-    late final Timer timer;
-    timer = Timer(const Duration(milliseconds: 1600), () {
-      _heartTimers.remove(timer);
-      if (mounted) {
-        _floatingHearts.removeWhere((h) => h.id == heart.id);
-        _likeRevision.value++;
-      }
-    });
-    _heartTimers.add(timer);
+    _liveReactions.bind(widget.liveLikes);
   }
 
   void _toggleCleanScreen() {
@@ -290,6 +264,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   @override
   void initState() {
     super.initState();
+    _liveReactions.totalsRevision.addListener(_onLikeTotalChanged);
     _watchUnreadChat();
     _watchMicPermission();
     _watchContent();
@@ -310,6 +285,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       _focusedParticipantId = null;
       _message.clear();
       _rtcDataMessage.clear();
+      _liveChatInput.clear();
+      _liveChatInputOpen = false;
+      _liveChatSending = false;
     }
     if (oldWidget.liveLikes != widget.liveLikes ||
         oldWidget.room != widget.room) {
@@ -357,29 +335,19 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   void _watchUnreadChat() {
-    observeDetached(_chatUnreadSub?.cancel());
-    final chat = widget.chatSession;
-    _danmakuMessages.value = List.unmodifiable(chat?.messages ?? const []);
-    _timeline.seed(chat?.messages ?? const []);
-    _unreadChatCount = 0;
+    _chatEvents.bind(
+      widget.chatSession,
+      isChatOpen: () => _chatOpen,
+      isOwn: _isOwnChatMessage,
+      onUnread: () {
+        _controlRevision.value++;
+        _chatRevision.value++;
+      },
+    );
     _visibleChatIds.clear();
     _chatTimelineInitialized = false;
     _hasNewChatMessages = false;
     _chatSending = false;
-    if (chat == null) return;
-    _chatUnreadSub = chat.messageSnapshots.listen((messages) {
-      if (!mounted || chat != widget.chatSession) return;
-      _danmakuMessages.value = List.unmodifiable(messages);
-      final remoteCount = _timeline.accept(
-        messages,
-        (m) => _isOwnChatMessage(chat, m),
-      );
-      if (!_chatOpen && remoteCount > 0) {
-        _unreadChatCount += remoteCount;
-        _controlRevision.value++;
-        _chatRevision.value++;
-      }
-    });
   }
 
   void _updateRoom(VoidCallback update) => setState(update);
@@ -492,22 +460,19 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   @override
   void dispose() {
-    observeDetached(_chatUnreadSub?.cancel());
-    observeDetached(_likesSub?.cancel());
-    observeDetached(_likeTotalsSub?.cancel());
+    _liveReactions.totalsRevision.removeListener(_onLikeTotalChanged);
     observeDetached(_micPermissionSub?.cancel());
     observeDetached(_contentSub?.cancel());
     _copyTimer?.cancel();
-    for (final timer in _heartTimers) {
-      timer.cancel();
-    }
     _memberRevision.dispose();
     _controlRevision.dispose();
-    _likeRevision.dispose();
-    _danmakuMessages.dispose();
+    _liveReactions.dispose();
+    _chatEvents.dispose();
     _chatRevision.dispose();
     _message.dispose();
     _rtcDataMessage.dispose();
+    _liveChatInput.dispose();
+    _liveChatInputFocus.dispose();
     _chatScroll.dispose();
     super.dispose();
   }
@@ -604,6 +569,407 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     });
   }
 
+  bool get isLive {
+    if (widget.config.roomMode != null) {
+      return widget.config.roomMode == MediaRoomMode.broadcast;
+    }
+    // A host can host an ordinary meeting. Only the viewer role implies
+    // broadcast when no explicit room mode has been supplied.
+    return widget.room.role == MediaRole.viewer;
+  }
+
+  @override
+  void setLayoutMode(MediaRoomLayoutMode mode) {
+    setState(() => _layoutMode = mode);
+  }
+
+  Future<void> _showMeetingLeaveConfirmation() async {
+    final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
+    final canCloseRoom =
+        widget.room.role == MediaRole.host &&
+        widget.room.managementCapabilities.closeRoom.supported;
+
+    if (!widget.config.confirmBeforeLeave) {
+      await _leave();
+      return;
+    }
+
+    if (canCloseRoom) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: style.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: style.border),
+          ),
+          title: Text(
+            strings.leaveMeeting,
+            style: TextStyle(
+              color: style.text,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            strings.endMeetingForAllDesc,
+            style: TextStyle(color: style.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                strings.cancel,
+                style: TextStyle(color: style.textMuted),
+              ),
+            ),
+            OutlinedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                unawaited(_leave());
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: style.text,
+                side: BorderSide(color: style.border),
+              ),
+              child: Text(strings.leaveMeetingOnly),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                unawaited(_closeRoomForEveryone());
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: style.danger,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(strings.endMeetingForAll),
+            ),
+          ],
+        ),
+      );
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: style.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: style.border),
+          ),
+          title: Text(
+            strings.leaveMeeting,
+            style: TextStyle(
+              color: style.text,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            strings.leaveRoomConfirmation,
+            style: TextStyle(color: style.textSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                strings.cancel,
+                style: TextStyle(color: style.textMuted),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: style.danger,
+                foregroundColor: Colors.white,
+              ),
+              child: Text(strings.leave),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await _leave();
+      }
+    }
+  }
+
+  Future<void> _showLiveHostLeaveConfirmation() async {
+    final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: style.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: style.border),
+        ),
+        title: Text(
+          strings.endBroadcast,
+          style: TextStyle(
+            color: style.text,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          strings.endBroadcastConfirmation,
+          style: TextStyle(color: style.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              strings.cancel,
+              style: TextStyle(color: style.textMuted),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: style.danger,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(strings.endBroadcast),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      if (widget.room.managementCapabilities.closeRoom.supported) {
+        await _closeRoomForEveryone();
+      } else {
+        await _leave();
+      }
+    }
+  }
+
+  /// Legacy entry: the live comment pill now expands the input inline in the
+  /// bottom dock instead of opening a second bottom sheet.
+  void _showLiveChatInputSheet() {
+    if (widget.chatSession == null) return;
+    setState(() => _liveChatInputOpen = true);
+    _controlRevision.value++;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _liveChatInputOpen) _liveChatInputFocus.requestFocus();
+    });
+  }
+
+  void _hideLiveChatInput() {
+    if (!_liveChatInputOpen) return;
+    setState(() => _liveChatInputOpen = false);
+    _controlRevision.value++;
+    _liveChatInputFocus.unfocus();
+  }
+
+  Future<void> _sendLiveChat() async {
+    final chat = widget.chatSession;
+    if (chat == null || _liveChatSending) return;
+    final trimmed = _liveChatInput.text.trim();
+    if (trimmed.isEmpty) return;
+    setState(() => _liveChatSending = true);
+    try {
+      await chat.sendMessage(trimmed);
+      if (!mounted || chat != widget.chatSession) return;
+      _liveChatInput.clear();
+      _hideLiveChatInput();
+    } on Object catch (error) {
+      if (mounted && chat == widget.chatSession) {
+        setState(() => _error = error.toString());
+      }
+    } finally {
+      if (mounted && chat == widget.chatSession) {
+        setState(() => _liveChatSending = false);
+      }
+    }
+  }
+
+  void _showLiveGiftSheet() {
+    final opener = widget.liveGiftPanelOpener;
+    if (opener != null) {
+      unawaited(opener(context));
+      return;
+    }
+    final extraControls = widget.extraControlsBuilder?.call(context);
+    final style = RealtimeStyle.of(context);
+    if (extraControls != null && extraControls.isNotEmpty) {
+      unawaited(
+        showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          builder: (ctx) => Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: style.surface.withValues(alpha: 0.96),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+              border: Border.all(color: style.border),
+            ),
+            child: SafeArea(
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 16,
+                runSpacing: 16,
+                children: extraControls,
+              ),
+            ),
+          ),
+        ),
+      );
+    } else {
+      final strings = RealtimeStrings.of(context);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${strings.sendGift}功能已开启')));
+    }
+  }
+
+  void _showMeetingMoreSheet(
+    MediaSnapshot snapshot,
+    InteractiveMediaSession? interactive,
+  ) {
+    final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
+    final caps = snapshot.capabilities;
+
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => Container(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+          decoration: BoxDecoration(
+            color: style.surface.withValues(alpha: 0.96),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(color: style.border),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: style.borderStrong,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  strings.more,
+                  style: TextStyle(
+                    color: style.text,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    if (interactive != null && caps.canSwitchCamera)
+                      _moreTile(
+                        icon: Icons.cameraswitch_rounded,
+                        label: strings.switchCamera,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          unawaited(
+                            _run(
+                              () => interactive.switchCamera(
+                                MediaCameraPosition.back,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    if (caps.canPublishVideo &&
+                        _backgroundEffects.backgroundCapabilities.isSupported)
+                      _moreTile(
+                        icon: Icons.blur_on_rounded,
+                        label: strings.virtualBackground,
+                        isActive: _backgroundEffects.backgroundEffect.enabled,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          unawaited(_openBackgroundEffects());
+                        },
+                      ),
+                    if (widget.config.showRtcDataMessages && caps.canSendData)
+                      _moreTile(
+                        icon: Icons.data_object_rounded,
+                        label: strings.rtcData,
+                        isActive: _rtcDataOpen,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _updateRoom(() => _rtcDataOpen = !_rtcDataOpen);
+                        },
+                      ),
+                    _moreTile(
+                      icon: Icons.copy_rounded,
+                      label: strings.copyMeetingCode,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _copyCode();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _moreTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isActive = false,
+  }) {
+    final style = RealtimeStyle.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 90,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isActive ? style.primarySubtle : style.surfaceSubtle,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive ? style.primaryBorder : style.border,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isActive ? style.primary : style.text,
+              size: 24,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isActive ? style.primary : style.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => StreamBuilder<MediaSnapshot>(
     key: ValueKey(widget.room),
@@ -618,166 +984,26 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           if (mounted) unawaited(_applyInitialSettings());
         });
       }
-      final strings = RealtimeStrings.of(context);
-      if (_cleanScreen && widget.room.role != MediaRole.participant) {
-        return Scaffold(
-          backgroundColor: Colors.black,
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              _mediaStage(value),
-              Positioned(
-                top: 16,
-                right: 16,
-                child: SafeArea(
-                  child: RealtimePill(
-                    label: strings.exitCleanScreen,
-                    icon: Icons.fullscreen_exit_rounded,
-                    foreground: Colors.white,
-                    background: Colors.black.withValues(alpha: 0.65),
-                    borderColor: Colors.white.withValues(alpha: 0.35),
-                    onTap: _toggleCleanScreen,
-                  ),
-                ),
-              ),
-            ],
+
+      if (isLive) {
+        return LayoutBuilder(
+          builder: (context, constraints) => LiveRoomViewLayout(
+            host: this,
+            snapshot: value,
+            constraints: constraints,
           ),
         );
       }
-      return Scaffold(
-        backgroundColor: Colors.transparent,
-        body: RealtimeAmbientBackground(
-          child: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 1200;
-                final medium = constraints.maxWidth >= 760;
-                final compact = constraints.maxWidth < 520;
-                return Column(
-                  children: [
-                    _topBar(value, compact: compact),
-                    if (widget.header != null) widget.header!,
-                    if (value.state == MediaSessionState.reconnecting ||
-                        value.state == MediaSessionState.failed ||
-                        value.state == MediaSessionState.ended)
-                      _connectionBanner(value.state),
-                    RoomRegion(
-                      revision: _chatRevision,
-                      builder: (_) => _error == null
-                          ? const SizedBox.shrink()
-                          : _errorView(),
-                    ),
-                    Expanded(
-                      child: wide
-                          ? _wideContent(value, constraints)
-                          : medium
-                          ? _mediumContent(value, constraints)
-                          : _compactContent(value, constraints),
-                    ),
-                    if (_rtcDataOpen) _rtcData(),
-                    _controls(value),
-                  ],
-                );
-              },
-            ),
-          ),
+
+      return LayoutBuilder(
+        builder: (context, constraints) => MeetingRoomViewLayout(
+          host: this,
+          snapshot: value,
+          constraints: constraints,
         ),
       );
     },
   );
-
-  Widget _wideContent(MediaSnapshot value, BoxConstraints constraints) {
-    final panelOpen = _chatOpen || _participantsOpen;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(child: _mediaStage(value)),
-        if (panelOpen)
-          SizedBox(
-            key: ValueKey(
-              _participantsOpen ? 'participants-panel-wide' : 'chat-panel-wide',
-            ),
-            width: 320,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: RealtimeUiTokens.animNormal,
-              curve: Curves.easeOutCubic,
-              builder: (context, progress, child) => Opacity(
-                opacity: progress,
-                child: Transform.translate(
-                  offset: Offset((1 - progress) * 16, 0),
-                  child: child,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(4, 8, 12, 8),
-                child: _sidePanel(value),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _mediumContent(MediaSnapshot value, BoxConstraints constraints) =>
-      Stack(
-        fit: StackFit.expand,
-        children: [
-          _mediaStage(value),
-          if (_chatOpen || _participantsOpen)
-            Align(
-              alignment: Alignment.centerRight,
-              child: SizedBox(
-                key: ValueKey(
-                  _participantsOpen
-                      ? 'participants-panel-medium'
-                      : 'chat-panel-medium',
-                ),
-                width: math.min(360, constraints.maxWidth * .56),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 8, 12, 8),
-                  child: _sidePanel(value),
-                ),
-              ),
-            ),
-        ],
-      );
-
-  Widget _compactContent(MediaSnapshot value, BoxConstraints constraints) {
-    final maxChatHeight = math.max(140.0, constraints.maxHeight - 150);
-    final desiredChatHeight = (constraints.maxHeight * .42).clamp(180.0, 380.0);
-    final chatHeight = math.min(desiredChatHeight, maxChatHeight);
-    return Column(
-      children: [
-        Expanded(child: _mediaStage(value)),
-        if (_chatOpen || _participantsOpen)
-          SizedBox(
-            key: ValueKey(
-              _participantsOpen
-                  ? 'participants-panel-compact'
-                  : 'chat-panel-compact',
-            ),
-            height: chatHeight,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.0, end: 1.0),
-              duration: RealtimeUiTokens.animNormal,
-              curve: Curves.easeOutCubic,
-              builder: (context, progress, child) => Opacity(
-                opacity: progress,
-                child: Transform.translate(
-                  offset: Offset(0, (1 - progress) * 14),
-                  child: child,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-                child: _sidePanel(value),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
 
   Widget _sidePanel(MediaSnapshot value) => RoomRegion(
     revision: _chatRevision,
@@ -887,76 +1113,28 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     required IconData icon,
     required VoidCallback? onPressed,
     bool danger = false,
-  }) => OutlinedButton.icon(
-    onPressed: onPressed,
-    style: OutlinedButton.styleFrom(
-      foregroundColor: danger
-          ? RealtimeUiTokens.danger
-          : RealtimeUiTokens.textMuted,
-      side: BorderSide(
-        color: danger ? RealtimeUiTokens.dangerBorder : RealtimeUiTokens.border,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      visualDensity: VisualDensity.compact,
-      minimumSize: const Size(0, 30),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    ),
-    icon: Icon(icon, size: 15),
-    label: Text(label, style: const TextStyle(fontSize: 11)),
-  );
-
-  Widget _danmakuOverlay(List<ChatMessage> messages) {
-    if (messages.isEmpty) return const SizedBox.shrink();
-    final recent = messages.reversed.take(4).toList().reversed.toList();
-    final identity = widget.chatSession is ChatSessionIdentity
-        ? widget.chatSession as ChatSessionIdentity
-        : null;
-    final myId = identity?.localUserId;
-    return Positioned(
-      left: 14,
-      bottom: 14,
-      width: 290,
-      child: IgnorePointer(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: recent.map((m) {
-            final own = m.userId == myId;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.52),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-              ),
-              child: RichText(
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                text: TextSpan(
-                  children: [
-                    TextSpan(
-                      text:
-                          '${m.displayName.isEmpty ? m.userId : m.displayName}: ',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: own
-                            ? const Color(0xFF67E8F9)
-                            : const Color(0xFFFDE047),
-                      ),
-                    ),
-                    TextSpan(
-                      text: m.message,
-                      style: const TextStyle(fontSize: 12, color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: danger
+            ? RealtimeUiTokens.danger
+            : (isDark ? Colors.white : RealtimeUiTokens.text),
+        side: BorderSide(
+          color: danger
+              ? RealtimeUiTokens.dangerBorder
+              : (isDark
+                    ? Colors.white.withValues(alpha: 0.20)
+                    : RealtimeUiTokens.border),
         ),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        visualDensity: VisualDensity.compact,
+        minimumSize: const Size(0, 30),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
+      icon: Icon(icon, size: 15),
+      label: Text(label, style: const TextStyle(fontSize: 11)),
     );
   }
 
@@ -966,7 +1144,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         children: _floatingHearts
             .map(
               (heart) =>
-                  _FloatingHeartParticle(key: ValueKey(heart.id), heart: heart),
+                  LiveReactionParticle(key: ValueKey(heart.id), heart: heart),
             )
             .toList(),
       ),
@@ -996,7 +1174,14 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   Widget _buildMediaStage(MediaSnapshot value) {
-    final isLive = widget.room.role != MediaRole.participant;
+    final style = RealtimeStyle.of(context);
+    final isLive = this.isLive;
+    if (isLive) {
+      return ColoredBox(
+        color: style.background,
+        child: _buildLiveStage(value),
+      );
+    }
     final customContent = widget.contentStageBuilder?.call(context, value);
     final stageContent = customContent != null
         ? Column(
@@ -1023,24 +1208,175 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           );
 
     return ColoredBox(
-      color: isLive ? Colors.black : RealtimeUiTokens.background,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          stageContent,
-          if (isLive && !_cleanScreen) ...[
-            ValueListenableBuilder<List<ChatMessage>>(
-              valueListenable: _danmakuMessages,
-              builder: (_, messages, _) => _danmakuOverlay(messages),
+      color: style.background,
+      child: stageContent,
+    );
+  }
+
+  Widget _buildLiveStage(MediaSnapshot value) {
+    final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
+    final isLocalHost = widget.room.role == MediaRole.host;
+
+    // In livestream / broadcast, resolve the single host participant.
+    final MediaParticipant? hostParticipant = isLocalHost
+        ? (value.participants.where((p) => p.isLocal).firstOrNull ??
+            (value.localParticipantId != null
+                ? value.participants
+                    .where((p) => p.id == value.localParticipantId)
+                    .firstOrNull
+                : null) ??
+            MediaParticipant(
+              id: widget.room.participantId,
+              displayName: widget.room.participantId,
+              isLocal: true,
+              isVideoEnabled: value.localVideoEnabled,
+            ))
+        : (value.participants
+                .where((p) => !p.isLocal && (p.isVideoEnabled || p.videoTrack != null))
+                .firstOrNull ??
+            value.participants.where((p) => !p.isLocal).firstOrNull ??
+            value.participants.firstOrNull);
+
+    // If custom participant builder provided, honor it.
+    if (widget.participantBuilder != null && hostParticipant != null) {
+      return widget.participantBuilder!(
+        context,
+        hostParticipant,
+        widget.renderer,
+      );
+    }
+
+    if (hostParticipant == null) {
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: RealtimeGlassSurface(
+            radius: RealtimeUiTokens.cardRadius,
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const RoomWaitingPulse(
+                  child: SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: Icon(
+                      Icons.sensors_rounded,
+                      size: 32,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  strings.waitingForHost,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: style.text,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.room.roomCode,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: style.textMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
-            Positioned.fill(
-              child: RoomRegion(
-                revision: _likeRevision,
-                builder: (_) => Stack(children: [_floatingHeartsOverlay()]),
+          ),
+        ),
+      );
+    }
+
+    final hasVideo = hostParticipant.videoTrack != null &&
+        (isLocalHost
+            ? value.localVideoEnabled
+            : hostParticipant.isVideoEnabled);
+
+    if (hasVideo) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final isPortrait = constraints.maxHeight > constraints.maxWidth;
+          return Center(
+            child: MediaTrackView(
+              renderer: widget.renderer,
+              track: hostParticipant.videoTrack,
+              fit: isPortrait ? BoxFit.cover : BoxFit.contain,
+              placeholder: _buildLiveHostOffCameraPlaceholder(
+                hostParticipant,
+                strings,
+                style,
               ),
             ),
-          ],
-        ],
+          );
+        },
+      );
+    }
+
+    return _buildLiveHostOffCameraPlaceholder(
+      hostParticipant,
+      strings,
+      style,
+    );
+  }
+
+  Widget _buildLiveHostOffCameraPlaceholder(
+    MediaParticipant host,
+    RealtimeStrings strings,
+    RealtimeStyle style,
+  ) {
+    final name = host.displayName.isEmpty ? host.id : host.displayName;
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: RealtimeGlassSurface(
+          radius: RealtimeUiTokens.sheetRadius,
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 44,
+                backgroundColor: style.primarySubtle,
+                child: Text(
+                  name.isNotEmpty ? name.characters.first.toUpperCase() : '?',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    color: style.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                name,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: style.text,
+                ),
+              ),
+              const SizedBox(height: 8),
+              RealtimePill(
+                label: strings.cameraOff,
+                icon: Icons.videocam_off_rounded,
+                foreground: style.danger,
+                background: style.dangerSubtle,
+                borderColor: style.isDark
+                    ? const Color(0xFF7F1D1D)
+                    : const Color(0xFFFECDD3),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1060,177 +1396,6 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     ),
   );
 
-  Widget _topBar(MediaSnapshot value, {required bool compact}) {
-    final strings = RealtimeStrings.of(context);
-    final isLive = widget.room.role != MediaRole.participant;
-    return RealtimeGlassSurface(
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      radius: RealtimeUiTokens.dockRadius,
-      opacity: .86,
-      child: Row(
-        children: [
-          RealtimeGlassIconButton(
-            tooltip: strings.leave,
-            icon: Icons.arrow_back_ios_new_rounded,
-            onPressed: _leave,
-            size: 44,
-            radius: RealtimeUiTokens.compactRadius,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isLive ? strings.live : strings.meeting,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: RealtimeUiTokens.text,
-                  ),
-                ),
-                InkWell(
-                  onTap: _copyCode,
-                  borderRadius: BorderRadius.circular(6),
-                  child: SizedBox(
-                    height: 44,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 5),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                strings.roomLabel(widget.room.roomCode),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: RealtimeUiTokens.textMuted,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Icon(
-                              _copied
-                                  ? Icons.check_rounded
-                                  : Icons.copy_rounded,
-                              size: 13,
-                              color: _copied
-                                  ? RealtimeUiTokens.success
-                                  : RealtimeUiTokens.textMuted,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (widget.config.showProvider && !compact) ...[
-            const SizedBox(width: 8),
-            _providerBadge(widget.room.providerId),
-          ],
-          if (widget.room.role == MediaRole.host && !compact) ...[
-            const SizedBox(width: 8),
-            RealtimePill(
-              label: strings.hostBadge,
-              icon: Icons.shield_outlined,
-              foreground: const Color(0xFFD97706),
-              background: const Color(0xFFFFFBEB),
-              borderColor: const Color(0xFFFDE68A),
-            ),
-          ],
-          if (!isLive && !compact) ...[
-            const SizedBox(width: 4),
-            PopupMenuButton<MediaRoomLayoutMode>(
-              tooltip: strings.layoutMode,
-              icon: Icon(
-                switch (_layoutMode) {
-                  MediaRoomLayoutMode.grid => Icons.grid_view_rounded,
-                  MediaRoomLayoutMode.speaker => Icons.person_pin_rounded,
-                  MediaRoomLayoutMode.presentation =>
-                    Icons.present_to_all_rounded,
-                },
-                size: 20,
-                color: RealtimeUiTokens.text,
-              ),
-              onSelected: (mode) => setState(() => _layoutMode = mode),
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: MediaRoomLayoutMode.grid,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.grid_view_rounded, size: 18),
-                      const SizedBox(width: 8),
-                      Text(strings.gridMode),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: MediaRoomLayoutMode.speaker,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.person_pin_rounded, size: 18),
-                      const SizedBox(width: 8),
-                      Text(strings.speakerMode),
-                    ],
-                  ),
-                ),
-                if (widget.contentControlsBuilder?.call(context) == null)
-                  PopupMenuItem(
-                    value: MediaRoomLayoutMode.presentation,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.present_to_all_rounded, size: 18),
-                        const SizedBox(width: 8),
-                        Text(strings.presentationMode),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ],
-          const SizedBox(width: 8),
-          RoomElapsedPill(key: ValueKey(widget.room)),
-          const SizedBox(width: 4),
-          Tooltip(
-            message: _stateLabel(strings, value.state),
-            child: Icon(
-              Icons.circle,
-              size: 9,
-              color: switch (value.state) {
-                MediaSessionState.connected => RealtimeUiTokens.success,
-                MediaSessionState.reconnecting => RealtimeUiTokens.warning,
-                MediaSessionState.failed ||
-                MediaSessionState.ended => RealtimeUiTokens.danger,
-                _ => RealtimeUiTokens.textMuted,
-              },
-            ),
-          ),
-          const SizedBox(width: 4),
-          RealtimeGlassIconButton(
-            tooltip: strings.participants,
-            icon: Icons.people_outline_rounded,
-            badgeCount: value.participants.length,
-            active: _participantsOpen,
-            size: 44,
-            radius: RealtimeUiTokens.compactRadius,
-            onPressed: _openParticipants,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _providerBadge(String id) {
     final presentation = mediaProviderPresentation(id);
     return RealtimePill(
@@ -1242,62 +1407,62 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     );
   }
 
-  String _stateLabel(RealtimeStrings strings, MediaSessionState state) =>
-      switch (state) {
-        MediaSessionState.connected => strings.connected,
-        MediaSessionState.reconnecting => strings.reconnecting,
-        MediaSessionState.ended || MediaSessionState.disposed => strings.ended,
-        _ => strings.connecting,
-      };
-
-  Widget _errorView() => RealtimeGlassSurface(
-    margin: const EdgeInsets.fromLTRB(12, 6, 12, 2),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    radius: RealtimeUiTokens.controlRadius,
-    fillColor: RealtimeUiTokens.dangerSubtle,
-    borderColor: RealtimeUiTokens.dangerBorder,
-    opacity: .92,
-    shadow: false,
-    child: Row(
-      children: [
-        const Icon(
-          Icons.error_outline_rounded,
-          size: 18,
-          color: RealtimeUiTokens.danger,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            _error!,
-            style: const TextStyle(
-              fontSize: 12.5,
-              color: Color(0xFFB91C1C),
-              fontWeight: FontWeight.w600,
+  Widget _errorView() {
+    final style = RealtimeStyle.of(context);
+    return RealtimeGlassSurface(
+      margin: const EdgeInsets.fromLTRB(12, 6, 12, 2),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      radius: RealtimeUiTokens.controlRadius,
+      fillColor: style.dangerSubtle,
+      borderColor: style.isDark
+          ? const Color(0xFF7F1D1D)
+          : const Color(0xFFFECDD3),
+      opacity: .92,
+      shadow: false,
+      child: Row(
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: style.danger,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _error!,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: style.isDark
+                    ? const Color(0xFFFCA5A5)
+                    : const Color(0xFFB91C1C),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-        ),
-        IconButton(
-          onPressed: () => setState(() => _error = null),
-          icon: const Icon(
-            Icons.close_rounded,
-            size: 16,
-            color: Color(0xFFB91C1C),
+          IconButton(
+            onPressed: () => setState(() => _error = null),
+            icon: Icon(
+              Icons.close_rounded,
+              size: 16,
+              color: style.isDark
+                  ? const Color(0xFFFCA5A5)
+                  : const Color(0xFFB91C1C),
+            ),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 
   Widget _connectionBanner(MediaSessionState state) {
     final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
     final reconnecting = state == MediaSessionState.reconnecting;
     final ended = state == MediaSessionState.ended;
-    final color = reconnecting
-        ? RealtimeUiTokens.warning
-        : RealtimeUiTokens.danger;
+    final color = reconnecting ? style.warning : style.danger;
     final text = reconnecting
         ? strings.reconnectingDetail
         : ended
@@ -1307,9 +1472,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       margin: const EdgeInsets.fromLTRB(12, 2, 12, 6),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       radius: RealtimeUiTokens.controlRadius,
-      fillColor: reconnecting
-          ? RealtimeUiTokens.warningSubtle
-          : RealtimeUiTokens.dangerSubtle,
+      fillColor: reconnecting ? style.warningSubtle : style.dangerSubtle,
       borderColor: color.withValues(alpha: .28),
       opacity: .96,
       shadow: false,
@@ -1328,7 +1491,10 @@ class _MediaRoomViewState extends State<MediaRoomView> {
             ),
           ),
           if (!reconnecting)
-            TextButton(onPressed: _leave, child: Text(strings.leave)),
+            TextButton(
+              onPressed: _leave,
+              child: Text(strings.leave, style: TextStyle(color: style.primary)),
+            ),
         ],
       ),
     );
@@ -1336,6 +1502,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
 
   Widget _waiting() {
     final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -1361,10 +1528,10 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               Text(
                 strings.onlyOneHere,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 19,
                   fontWeight: FontWeight.w800,
-                  color: RealtimeUiTokens.text,
+                  color: style.text,
                   letterSpacing: -0.2,
                 ),
               ),
@@ -1372,8 +1539,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
               Text(
                 strings.shareRoomCode,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: RealtimeUiTokens.textMuted,
+                style: TextStyle(
+                  color: style.textMuted,
                   fontSize: 13.5,
                 ),
               ),
@@ -1598,7 +1765,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       _chatOpen = !_chatOpen;
       _participantsOpen = false;
       if (_chatOpen) {
-        _unreadChatCount = 0;
+        _chatEvents.markRead();
         _hasNewChatMessages = false;
       }
     });
@@ -1751,252 +1918,86 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     );
   }
 
-  Widget _controls(MediaSnapshot value) =>
-      _RoomControls(host: this, snapshot: value);
-}
-
-class MediaParticipantTile extends StatelessWidget {
-  const MediaParticipantTile({
-    super.key,
-    required this.participant,
-    required this.renderer,
-    this.isFocused = false,
-    this.onTap,
-  });
-  final MediaParticipant participant;
-  final MediaTrackRenderer renderer;
-  final bool isFocused;
-  final VoidCallback? onTap;
-
+  // Presentation facade: no Meeting/Live component can access private State.
   @override
-  Widget build(BuildContext context) {
-    final strings = RealtimeStrings.of(context);
-    final name = participant.displayName.isEmpty
-        ? strings.participant
-        : participant.displayName;
-    final speaking = participant.isSpeaking;
-
-    Widget tile = AnimatedContainer(
-      duration: RealtimeUiTokens.animNormal,
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        gradient: RealtimeUiTokens.glassGradient(opacity: 0.90),
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-        border: Border.all(
-          color: speaking
-              ? const Color(0xFF10B981)
-              : isFocused
-              ? RealtimeUiTokens.primary
-              : RealtimeUiTokens.border,
-          width: speaking || isFocused ? 2.2 : 1.1,
-        ),
-        boxShadow: speaking
-            ? [
-                BoxShadow(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.22),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ]
-            : RealtimeUiTokens.cardShadow,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius - 2),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (participant.isVideoEnabled && participant.videoTrack != null)
-              MediaTrackView(renderer: renderer, track: participant.videoTrack)
-            else
-              Container(
-                color: RealtimeUiTokens.background,
-                alignment: Alignment.center,
-                child: AnimatedContainer(
-                  duration: RealtimeUiTokens.animNormal,
-                  padding: EdgeInsets.all(speaking ? 8 : 0),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: speaking
-                        ? Border.all(
-                            color: const Color(
-                              0xFF10B981,
-                            ).withValues(alpha: 0.45),
-                            width: 2.5,
-                          )
-                        : null,
-                  ),
-                  child: CircleAvatar(
-                    radius: 32,
-                    backgroundColor: RealtimeUiTokens.primarySubtle,
-                    child: Text(
-                      name.characters.first.toUpperCase(),
-                      style: const TextStyle(
-                        color: RealtimeUiTokens.primary,
-                        fontSize: 23,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            if (onTap != null)
-              Positioned(
-                top: 10,
-                right: 10,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.88),
-                    borderRadius: BorderRadius.circular(
-                      RealtimeUiTokens.pillRadius,
-                    ),
-                    border: Border.all(color: RealtimeUiTokens.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF0F172A).withValues(alpha: 0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    isFocused
-                        ? Icons.grid_view_rounded
-                        : Icons.open_in_full_rounded,
-                    size: 13,
-                    color: RealtimeUiTokens.textMuted,
-                  ),
-                ),
-              ),
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .90),
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.compactRadius,
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.90),
-                  ),
-                  boxShadow: RealtimeUiTokens.cardShadow,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '$name${participant.isLocal ? strings.youSuffix : ''}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: RealtimeUiTokens.text,
-                        ),
-                      ),
-                    ),
-                    Icon(
-                      participant.isMuted
-                          ? Icons.mic_off_rounded
-                          : Icons.mic_rounded,
-                      size: 15,
-                      color: participant.isMuted
-                          ? RealtimeUiTokens.danger
-                          : speaking
-                          ? const Color(0xFF10B981)
-                          : RealtimeUiTokens.textMuted,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (onTap != null) {
-      tile = RealtimeGlassPressable(
-        onTap: onTap,
-        pressedScale: 0.985,
-        borderRadius: RealtimeUiTokens.cardRadius,
-        child: tile,
-      );
-    }
-    return tile;
-  }
-}
-
-class _FloatingHeartItem {
-  _FloatingHeartItem({
-    required this.id,
-    required this.color,
-    required this.startX,
-  });
-  final String id;
-  final Color color;
-  final double startX;
-}
-
-class _FloatingHeartParticle extends StatefulWidget {
-  const _FloatingHeartParticle({super.key, required this.heart});
-  final _FloatingHeartItem heart;
-
+  MediaRoomView get view => widget;
   @override
-  State<_FloatingHeartParticle> createState() => _FloatingHeartParticleState();
-}
-
-class _FloatingHeartParticleState extends State<_FloatingHeartParticle>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _progress;
-
+  MediaBackgroundEffectsController get backgroundEffects => _backgroundEffects;
   @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..forward();
-    _progress = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-  }
-
+  bool get chatOpen => _chatOpen;
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
+  bool get participantsOpen => _participantsOpen;
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _progress,
-    builder: (context, child) {
-      final value = _progress.value;
-      final yOffset = -value * 220;
-      final xOffset = math.sin(value * math.pi * 2) * 16;
-      final opacity = (1.0 - value).clamp(0.0, 1.0);
-      return Align(
-        alignment: Alignment(widget.heart.startX * 2 - 1, 0.85),
-        child: Transform.translate(
-          offset: Offset(xOffset, yOffset),
-          child: Opacity(
-            opacity: opacity,
-            child: Icon(
-              Icons.favorite_rounded,
-              size: 26,
-              color: widget.heart.color,
-            ),
-          ),
-        ),
-      );
-    },
-  );
+  bool get rtcDataOpen => _rtcDataOpen;
+  @override
+  bool get copied => _copied;
+  @override
+  bool get cleanScreen => _cleanScreen;
+  @override
+  int get unreadChatCount => _unreadChatCount;
+  @override
+  int get likeCount => _likeCount;
+  @override
+  Object? get error => _error;
+  @override
+  MediaRoomLayoutMode get layoutMode => _layoutMode;
+  @override
+  ValueNotifier<int> get chatRevision => _chatRevision;
+  @override
+  ValueListenable<List<ChatMessage>> get chatMessages => _chatEvents.danmaku;
+  @override
+  ValueNotifier<int> get likeRevision => _likeRevision;
+  @override
+  ValueNotifier<int> get controlRevision => _controlRevision;
+  @override
+  bool get liveChatInputOpen => _liveChatInputOpen;
+  @override
+  Widget connectionBanner(MediaSessionState state) => _connectionBanner(state);
+  @override
+  Widget errorView() => _errorView();
+  @override
+  Widget rtcData() => _rtcData();
+  @override
+  Widget mediaStage(MediaSnapshot value) => _mediaStage(value);
+  @override
+  Widget sidePanel(MediaSnapshot value) => _sidePanel(value);
+  @override
+  Widget providerBadge(String id) => _providerBadge(id);
+  @override
+  Widget floatingHeartsOverlay() => _floatingHeartsOverlay();
+  @override
+  void copyCode() => _copyCode();
+  @override
+  void openParticipants() => _openParticipants();
+  @override
+  void toggleChat() => _toggleChat();
+  @override
+  void toggleCleanScreen() => _toggleCleanScreen();
+  @override
+  void sendLike() => _sendLike();
+  @override
+  void showLiveChatInputSheet() => _showLiveChatInputSheet();
+  @override
+  void hideLiveChatInput() => _hideLiveChatInput();
+  @override
+  Future<void> sendLiveChat() => _sendLiveChat();
+  @override
+  void showLiveGiftSheet() => _showLiveGiftSheet();
+  @override
+  void showMeetingMoreSheet(
+    MediaSnapshot value,
+    InteractiveMediaSession? interactive,
+  ) => _showMeetingMoreSheet(value, interactive);
+  @override
+  Future<void> showMeetingLeaveConfirmation() =>
+      _showMeetingLeaveConfirmation();
+  @override
+  Future<void> showLiveHostLeaveConfirmation() =>
+      _showLiveHostLeaveConfirmation();
+  @override
+  Future<void> leave() => _leave();
+  @override
+  Future<void> openBackgroundEffects() => _openBackgroundEffects();
+  @override
+  Future<void> runAction(Future<void> Function() action) => _run(action);
 }

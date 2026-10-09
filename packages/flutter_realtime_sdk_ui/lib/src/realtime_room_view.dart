@@ -214,6 +214,14 @@ class _RealtimeRoomViewState extends State<RealtimeRoomView> {
             }
             return extras;
           },
+          liveGiftPanelOpener:
+              widget.showLiveInteractions &&
+                  widget.room.liveInteractions != null
+              ? (context) => showLiveGiftsBottomSheet(
+                  context,
+                  session: widget.room.liveInteractions!,
+                )
+              : null,
           config: widget.config,
           header: widget.header,
           participantBuilder: widget.participantBuilder,
@@ -321,11 +329,13 @@ class _ContentControlsState extends State<_ContentControls> {
       final status = snapshot.data!;
       final teacher = status.content?.canManage == true;
       final zh = Localizations.localeOf(context).languageCode == 'zh';
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       return FutureBuilder<SystemAnnotationCapabilities>(
         future: _systemCapabilities,
         builder: (context, caps) => PopupMenuButton<String>(
           enabled: !status.busy && teacher,
           tooltip: zh ? '课堂内容' : 'Class content',
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
           onSelected: (value) {
             if (value == 'system') {
               unawaited(_system());
@@ -336,16 +346,31 @@ class _ContentControlsState extends State<_ContentControls> {
           itemBuilder: (_) => [
             PopupMenuItem(
               value: SharedContentMode.members.name,
-              child: Text(zh ? '成员画面 / 停止共享' : 'Members / stop sharing'),
+              child: Text(
+                zh ? '成员画面 / 停止共享' : 'Members / stop sharing',
+                style: TextStyle(
+                  color: isDark ? Colors.white : RealtimeUiTokens.text,
+                ),
+              ),
             ),
             PopupMenuItem(
               value: SharedContentMode.whiteboard.name,
-              child: Text(zh ? '白板' : 'Whiteboard'),
+              child: Text(
+                zh ? '白板' : 'Whiteboard',
+                style: TextStyle(
+                  color: isDark ? Colors.white : RealtimeUiTokens.text,
+                ),
+              ),
             ),
             PopupMenuItem(
               value: SharedContentMode.screen.name,
               enabled: controller.canShare,
-              child: Text(zh ? '屏幕共享' : 'Share screen'),
+              child: Text(
+                zh ? '屏幕共享' : 'Share screen',
+                style: TextStyle(
+                  color: isDark ? Colors.white : RealtimeUiTokens.text,
+                ),
+              ),
             ),
             PopupMenuItem(
               value: 'system',
@@ -359,28 +384,58 @@ class _ContentControlsState extends State<_ContentControls> {
                     : caps.data?.supported == false
                     ? (zh ? '跨应用标注（当前系统不可用）' : 'Draw across apps (unavailable)')
                     : (zh ? '跨应用标注' : 'Draw across apps'),
+                style: TextStyle(
+                  color: isDark ? Colors.white : RealtimeUiTokens.text,
+                ),
               ),
             ),
           ],
           child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (status.busy)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  Icon(
-                    status.content?.mode == SharedContentMode.whiteboard
-                        ? Icons.draw_outlined
-                        : Icons.present_to_all,
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.16)
+                          : Colors.transparent,
+                    ),
                   ),
-                const SizedBox(width: 4),
-                Text(zh ? '课堂内容' : 'Content'),
+                  child: Center(
+                    child: status.busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            status.content?.mode == SharedContentMode.whiteboard
+                                ? Icons.draw_outlined
+                                : Icons.present_to_all_rounded,
+                            size: 20,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF0F172A),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  zh ? '课堂内容' : 'Content',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  ),
+                ),
                 if (status.error != null)
                   IconButton(
                     tooltip: '${status.error}',
@@ -401,7 +456,13 @@ class _ContentControlsState extends State<_ContentControls> {
                   ),
                 if (status.captureActive &&
                     status.content?.mode != SharedContentMode.screen)
-                  Text(zh ? '共享仍在进行' : 'Capture active'),
+                  Text(
+                    zh ? '共享中' : 'Active',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isDark ? Colors.white70 : RealtimeUiTokens.primary,
+                    ),
+                  ),
               ],
             ),
           ),

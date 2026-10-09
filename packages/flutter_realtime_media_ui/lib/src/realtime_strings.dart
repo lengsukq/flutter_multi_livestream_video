@@ -117,6 +117,10 @@ class RealtimeStrings {
       : 'Device selection is not supported by this provider. You can continue.';
   String get joinMeeting => isZh ? '加入会议' : 'Join meeting';
   String get enterLiveRoom => isZh ? '进入直播间' : 'Enter live room';
+  String get enteringRoom => isZh ? '正在进入房间…' : 'Entering room…';
+  String get enteringRoomDetail => isZh
+      ? '正在建立连接，成功后会直接进入房间。'
+      : 'Connecting now. You will enter the room automatically.';
   String get connecting => isZh ? '连接中' : 'Connecting';
   String get reconnecting => isZh ? '正在重新连接' : 'Reconnecting';
   String get reconnectingDetail => isZh
@@ -329,6 +333,48 @@ class RealtimeStrings {
   String get leaveMeetingOnlyDesc => isZh
       ? '会议将继续进行，其他参会者不受影响。'
       : 'The meeting will continue running for other participants.';
+
+  // --- Meeting & Live & Chat Enhancements ---
+  String get meetingTimer => isZh ? '会议时长' : 'Duration';
+  String get encryptedMeeting => isZh ? '安全加密' : 'Encrypted';
+  String get copyMeetingCode => isZh ? '复制会议号' : 'Copy meeting ID';
+  String get meetingCodeCopied => isZh ? '会议号已复制' : 'Meeting ID copied';
+  String get leaveMeeting => isZh ? '离开会议' : 'Leave meeting';
+  String get unmute => isZh ? '解除静音' : 'Unmute';
+  String get startVideo => isZh ? '开启视频' : 'Start video';
+  String get stopVideo => isZh ? '停止视频' : 'Stop video';
+  String get more => isZh ? '更多' : 'More';
+  String get speaking => isZh ? '正在发言' : 'Speaking';
+  String get meTag => isZh ? '我' : 'Me';
+  String get searchMembers => isZh ? '搜索参会者' : 'Search participants';
+
+  String get liveRoom => isZh ? '直播间' : 'Live Room';
+  String get liveStatus => isZh ? '直播中' : 'LIVE';
+  String viewingCount(int n) => isZh ? '$n 在看' : '$n viewing';
+  String get sendComment => isZh ? '说点什么…' : 'Say something…';
+  String get sendGift => isZh ? '送礼物' : 'Gift';
+  String userJoined(String name) =>
+      isZh ? '欢迎 $name 进入直播间' : 'Welcome $name to the stream';
+  String get endBroadcast => isZh ? '结束直播' : 'End live';
+  String get endBroadcastConfirmation =>
+      isZh ? '确定要结束本场直播吗？' : 'Are you sure you want to end this live stream?';
+  String get anchorTag => isZh ? '主播' : 'Host';
+  String get waitingForHost => isZh ? '等待主播开播…' : 'Waiting for host to broadcast…';
+  String get cameraOff => isZh ? '摄像头已关闭' : 'Camera is off';
+  String get mute => isZh ? '静音' : 'Mute';
+
+  String get quoteReply => isZh ? '引用回复' : 'Reply';
+  String replyTo(String name) => isZh ? '回复 @$name' : 'Reply to @$name';
+  String get cancelReply => isZh ? '取消回复' : 'Cancel reply';
+  String get copyMessage => isZh ? '复制' : 'Copy';
+  String get searchMessages => isZh ? '搜索消息' : 'Search messages';
+  String get searchMessagesHint => isZh ? '输入关键词搜索聊天记录…' : 'Search messages…';
+  String get noMessagesFound => isZh ? '未找到相关消息' : 'No messages found';
+  String get quickReplies => isZh ? '快捷短语' : 'Quick replies';
+  String get exploreChatRooms => isZh ? '探索房间' : 'Explore';
+  String get quickCreateRoom => isZh ? '快捷建房' : 'Create';
+  String get joinByCode => isZh ? '号码加入' : 'Join by code';
+  String get delivered => isZh ? '已发送' : 'Sent';
 }
 
 class _RealtimeStringsDelegate extends LocalizationsDelegate<RealtimeStrings> {

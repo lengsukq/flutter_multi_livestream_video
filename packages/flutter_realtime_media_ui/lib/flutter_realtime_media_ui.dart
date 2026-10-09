@@ -6,6 +6,7 @@ export 'src/media_room_view.dart';
 export 'src/live_likes_controller.dart';
 export 'src/realtime_chat_view.dart';
 export 'src/realtime_strings.dart';
+export 'src/realtime_style.dart';
 export 'src/realtime_ui_style.dart';
 
 export 'src/media_background_image_preset.dart';

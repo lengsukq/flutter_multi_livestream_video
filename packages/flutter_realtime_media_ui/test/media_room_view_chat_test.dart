@@ -84,6 +84,9 @@ void main() {
             room: fixture.room,
             renderer: const _FakeRenderer(),
             chatSession: chat,
+            config: const MediaRoomViewConfig(
+              roomMode: MediaRoomMode.broadcast,
+            ),
             participantBuilder: (_, participant, _) {
               videoBuilds++;
               return Text('Track ${participant.id}');
@@ -237,25 +240,25 @@ void main() {
         ),
       );
       await tester.pump();
-      expect(find.text('Room likes 0'), findsOneWidget);
+      expect(find.byTooltip('Room likes 0'), findsOneWidget);
       likes.remoteLike();
       await tester.pump();
       await tester.pump();
-      expect(find.text('Room likes 1'), findsOneWidget);
+      expect(find.byTooltip('Room likes 1'), findsOneWidget);
       expect(
         find.byWidgetPredicate(
-          (widget) => widget.runtimeType.toString() == '_FloatingHeartParticle',
+          (widget) => widget.runtimeType.toString() == 'LiveReactionParticle',
         ),
         findsOneWidget,
       );
       await tester.tap(find.byTooltip('Room likes 1'));
       await tester.pump();
       expect(likes.sent, 1);
-      expect(find.text('Room likes 1'), findsOneWidget);
+      expect(find.byTooltip('Room likes 1'), findsOneWidget);
       likes.remoteLike();
       await tester.pump();
       await tester.pump();
-      expect(find.text('Room likes 2'), findsOneWidget);
+      expect(find.byTooltip('Room likes 2'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       expect(likes._received.hasListener, false);
       expect(likes._totals.hasListener, false);
@@ -531,6 +534,8 @@ void main() {
       await tester.pump();
     }
     expect(videoBuilds, initialBuilds);
+    // Message snapshots are delivered asynchronously by the Chat session.
+    await tester.pump();
     expect(find.text('3'), findsWidgets);
     chat.emitIncomingMessage(
       ChatMessage(
@@ -604,8 +609,7 @@ void main() {
     },
   );
 
-  testWidgets('standalone chat UI follows zh-CN host locale', (tester) async {
-    final chat = _FakeChatSession();
+  testWidgets('standalone chat UI follows zh-CN host locale', (tester) async {     final chat = _FakeChatSession();
 
     await tester.pumpWidget(
       MaterialApp(
@@ -766,9 +770,10 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.tap(find.byTooltip('Microphone').first);
+      await tester.tap(find.byTooltip('Unmute').first);
       await tester.pump();
-      expect(find.textContaining('等待教师允许发言'), findsOneWidget);
+      expect(find.textContaining('等待允许发言'), findsOneWidget);
+      expect(fixture.media.mutedCalls, isEmpty);
       await tester.pumpWidget(const SizedBox.shrink());
       await fixture.dispose();
     },
@@ -788,18 +793,18 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byIcon(Icons.screen_share_outlined), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.screen_share_outlined));
+    expect(find.byIcon(Icons.screen_share_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.screen_share_rounded));
     await tester.pump();
 
     expect(fixture.media.screenShareCalls, <bool>[true]);
-    expect(find.byIcon(Icons.stop_screen_share_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.stop_screen_share_rounded), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.stop_screen_share_outlined));
+    await tester.tap(find.byIcon(Icons.stop_screen_share_rounded));
     await tester.pump();
 
     expect(fixture.media.screenShareCalls, <bool>[true, false]);
-    expect(find.byIcon(Icons.screen_share_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.screen_share_rounded), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await fixture.dispose();
@@ -824,8 +829,12 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsNothing);
-    expect(find.byIcon(Icons.data_object_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.chat_bubble_rounded), findsNothing);
+    // RTC debug is a separate action under More in the new meeting dock.
+    expect(find.byTooltip('More'), findsOneWidget);
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('More'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await fixture.dispose();
@@ -851,8 +860,8 @@ void main() {
     expect(find.byTooltip('Microphone'), findsNothing);
     expect(find.byTooltip('Camera'), findsNothing);
     expect(find.byTooltip('Screen Share'), findsNothing);
-    expect(find.byTooltip('Participants'), findsWidgets);
-    expect(find.byTooltip('Chat'), findsOneWidget);
+    expect(find.byIcon(Icons.visibility_rounded), findsOneWidget);
+    expect(find.text('Say something…'), findsOneWidget);
     expect(find.byTooltip('Leave live room'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -886,7 +895,7 @@ void main() {
     await tester.tap(find.byTooltip('Participants').first);
     await tester.pump();
     expect(
-      find.byKey(const ValueKey('participants-panel-wide')),
+      find.byKey(const ValueKey('meeting-participants-wide')),
       findsOneWidget,
     );
     expect(find.text('Me'), findsOneWidget);
@@ -1041,17 +1050,17 @@ void main() {
     );
     await tester.pump();
     expect(find.byIcon(Icons.data_object_rounded), findsNothing);
-    await tester.tap(find.byIcon(Icons.chat_bubble_outline_rounded));
+    await tester.tap(find.byIcon(Icons.chat_bubble_rounded));
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('chat-panel-wide')), findsOneWidget);
-    expect(find.byKey(const ValueKey('chat-panel-compact')), findsNothing);
+    expect(find.byKey(const ValueKey('meeting-chat-wide')), findsOneWidget);
+    expect(find.byKey(const ValueKey('meeting-chat-compact')), findsNothing);
 
     tester.view.physicalSize = const Size(480, 800);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('chat-panel-wide')), findsNothing);
-    expect(find.byKey(const ValueKey('chat-panel-compact')), findsOneWidget);
+    expect(find.byKey(const ValueKey('meeting-chat-wide')), findsNothing);
+    expect(find.byKey(const ValueKey('meeting-chat-compact')), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await chat.dispose();
@@ -1096,10 +1105,10 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byIcon(Icons.chat_bubble_outline_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.data_object_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.chat_bubble_rounded), findsOneWidget);
+    expect(find.byTooltip('More'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.chat_bubble_outline_rounded));
+    await tester.tap(find.byIcon(Icons.chat_bubble_rounded));
     await tester.pump();
     expect(
       find.byWidgetPredicate((widget) => widget is ListView && widget.reverse),
@@ -1116,9 +1125,12 @@ void main() {
     expect(find.text('Alice'), findsOneWidget);
     expect(find.text('hello'), findsOneWidget);
     expect(find.text('hi Alice'), findsOneWidget);
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.data_object_rounded));
-    await tester.pump();
-    expect(find.text('RTC Data'), findsNWidgets(2));
+    await tester.pumpAndSettle();
+    expect(find.text('RTC Data'), findsOneWidget);
+    expect(find.text('hello'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await chat.dispose();
@@ -1171,7 +1183,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.screen_share_outlined));
+    await tester.tap(find.byIcon(Icons.screen_share_rounded));
     await tester.pump();
 
     expect(find.text('Screen Share'), findsNWidgets(2));
@@ -1219,7 +1231,7 @@ void main() {
 
       expect(find.text('1'), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.chat_bubble_outline_rounded));
+      await tester.tap(find.byIcon(Icons.chat_bubble_rounded));
       await tester.pump();
 
       expect(find.text('Unread ping'), findsOneWidget);
@@ -1270,6 +1282,72 @@ void main() {
       await fixture.dispose();
     },
   );
+
+  testWidgets('live gift button prefers the direct panel opener', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture(role: MediaRole.viewer);
+    var openerCalls = 0;
+    var sheetExtrasCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          config: const MediaRoomViewConfig(
+            roomMode: MediaRoomMode.broadcast,
+            confirmBeforeLeave: false,
+          ),
+          extraControlsBuilder: (_) {
+            sheetExtrasCalls++;
+            return const [Text('Legacy gift entry')];
+          },
+          liveGiftPanelOpener: (_) async {
+            openerCalls++;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Gift'));
+    await tester.pumpAndSettle();
+
+    expect(openerCalls, 1);
+    expect(sheetExtrasCalls, 0);
+    expect(find.text('Legacy gift entry'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await fixture.dispose();
+  });
+
+  testWidgets('live gift button keeps the legacy sheet without an opener', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture(role: MediaRole.viewer);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          config: const MediaRoomViewConfig(
+            roomMode: MediaRoomMode.broadcast,
+            confirmBeforeLeave: false,
+          ),
+          extraControlsBuilder: (_) => const [Text('Legacy gift entry')],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('Gift'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Legacy gift entry'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await fixture.dispose();
+  });
 }
 
 class _ManagedRoomFixture {

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 
 import 'realtime_strings.dart';
+import 'realtime_style.dart';
 import 'realtime_ui_style.dart';
 
 /// Reusable chat surface for standalone and media-attached chat.
@@ -35,7 +36,39 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
   bool _showScrollToBottom = false;
   String? _error;
 
+  bool _isSearching = false;
+  String _searchKeyword = '';
+  ChatMessage? _replyingTo;
+  bool _showEmojiDrawer = false;
+
   static const _quickEmojis = ['👍', '❤️', '👏', '🎉', '🔥', '🚀', '💯', '😂'];
+  static const _quickReplies = ['收到 👍', '好的，明白', '赞同 💯', '稍等一下', '感谢分享!'];
+  static const _drawerEmojis = [
+    '👍',
+    '❤️',
+    '👏',
+    '🎉',
+    '🔥',
+    '🚀',
+    '💯',
+    '😂',
+    '😊',
+    '😍',
+    '🤝',
+    '🙌',
+    '✨',
+    '🌟',
+    '💪',
+    '💡',
+    '☕️',
+    '🎈',
+    '👌',
+    '🙏',
+    '👀',
+    '🤔',
+    '👋',
+    '☀️',
+  ];
 
   @override
   void initState() {
@@ -57,6 +90,10 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
       _error = null;
       _newMessages = false;
       _message.clear();
+      _replyingTo = null;
+      _isSearching = false;
+      _searchKeyword = '';
+      _showEmojiDrawer = false;
     }
   }
 
@@ -144,6 +181,7 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
         builder: (context, messagesSnapshot) {
           final state = stateSnapshot.data ?? widget.session.state;
           final messages = messagesSnapshot.data ?? widget.session.messages;
+          final style = RealtimeStyle.of(context);
           _syncMessages(messages);
           return Column(
             children: [
@@ -199,8 +237,8 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                                   resolvedTitle,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: RealtimeUiTokens.text,
+                                  style: TextStyle(
+                                    color: RealtimeStyle.of(context).text,
                                     fontSize: 16.5,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: -0.2,
@@ -266,212 +304,273 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                         size: 40,
                         radius: RealtimeUiTokens.compactRadius,
                       ),
+                    const SizedBox(width: 4),
+                    RealtimeGlassIconButton(
+                      tooltip: strings.searchMessages,
+                      onPressed: () => setState(() {
+                        _isSearching = !_isSearching;
+                        if (!_isSearching) _searchKeyword = '';
+                      }),
+                      icon: _isSearching
+                          ? Icons.search_off_rounded
+                          : Icons.search_rounded,
+                      size: 40,
+                      radius: RealtimeUiTokens.compactRadius,
+                      active: _isSearching,
+                    ),
                   ],
                 ),
               ),
+              if (_isSearching)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+                  child: TextField(
+                    autofocus: true,
+                    onChanged: (val) => setState(() => _searchKeyword = val),
+                    decoration: InputDecoration(
+                      hintText: strings.searchMessagesHint,
+                      prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                      isDense: true,
+                      filled: true,
+                      fillColor: style.surfaceSubtle,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                          RealtimeUiTokens.compactRadius,
+                        ),
+                        borderSide: BorderSide(color: style.border),
+                      ),
+                    ),
+                  ),
+                ),
               Expanded(
                 child: Stack(
                   children: [
                     Positioned.fill(
                       child: AnimatedSwitcher(
                         duration: RealtimeUiTokens.animNormal,
-                        child: messages.isEmpty
-                            ? _emptyState(strings)
-                            : ListView.builder(
-                                key: const ValueKey('realtime-chat-list'),
-                                controller: _scrollController,
-                                reverse: true,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 12,
-                                ),
-                                itemCount: messages.length,
-                                itemBuilder: (context, index) {
-                                  final message =
-                                      messages[messages.length - 1 - index];
-                                  final identity =
-                                      widget.session is ChatSessionIdentity
-                                      ? widget.session as ChatSessionIdentity
-                                      : null;
-                                  final own =
-                                      message.userId == identity?.localUserId;
-                                  final canDelete = widget
-                                      .session
-                                      .capabilities
-                                      .canDeleteMessage;
-                                  final canRemoveUser =
-                                      widget
-                                          .session
-                                          .capabilities
-                                          .canDisconnectUser &&
-                                      !own;
-                                  final initialChar =
-                                      message.displayName.isNotEmpty
-                                      ? message.displayName.characters.first
-                                            .toUpperCase()
-                                      : (message.userId.isNotEmpty
-                                            ? message.userId.characters.first
-                                                  .toUpperCase()
-                                            : '?');
-                                  final avatarColor = _avatarColor(
-                                    message.displayName.isNotEmpty
-                                        ? message.displayName
-                                        : message.userId,
-                                  );
+                        child: () {
+                          final filteredMessages =
+                              _isSearching && _searchKeyword.trim().isNotEmpty
+                              ? messages
+                                    .where(
+                                      (m) =>
+                                          m.message.toLowerCase().contains(
+                                            _searchKeyword.trim().toLowerCase(),
+                                          ) ||
+                                          m.displayName.toLowerCase().contains(
+                                            _searchKeyword.trim().toLowerCase(),
+                                          ) ||
+                                          m.userId.toLowerCase().contains(
+                                            _searchKeyword.trim().toLowerCase(),
+                                          ),
+                                    )
+                                    .toList()
+                              : messages;
 
-                                  final bubble = RealtimeGlassPressable(
-                                    onLongPress: canDelete || canRemoveUser
-                                        ? () => _showMessageManagement(
-                                            message,
-                                            canDelete: canDelete,
-                                            canRemoveUser: canRemoveUser,
-                                          )
-                                        : null,
-                                    borderRadius:
-                                        RealtimeUiTokens.controlRadius,
-                                    child: Container(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 520,
-                                      ),
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 10,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        gradient: own
-                                            ? RealtimeUiTokens.primaryGradient
-                                            : null,
-                                        color: own
-                                            ? null
-                                            : Colors.white.withValues(
-                                                alpha: .92,
-                                              ),
-                                        borderRadius: BorderRadius.only(
-                                          topLeft: const Radius.circular(
-                                            RealtimeUiTokens.controlRadius,
-                                          ),
-                                          topRight: const Radius.circular(
-                                            RealtimeUiTokens.controlRadius,
-                                          ),
-                                          bottomLeft: Radius.circular(
-                                            own
-                                                ? RealtimeUiTokens.controlRadius
-                                                : 4,
-                                          ),
-                                          bottomRight: Radius.circular(
-                                            own
-                                                ? 4
-                                                : RealtimeUiTokens
-                                                      .controlRadius,
-                                          ),
-                                        ),
-                                        border: own
-                                            ? null
-                                            : Border.all(
-                                                color: RealtimeUiTokens.border,
-                                              ),
-                                        boxShadow: own
-                                            ? [
-                                                BoxShadow(
-                                                  color: RealtimeUiTokens
-                                                      .primary
-                                                      .withValues(alpha: 0.22),
-                                                  blurRadius: 14,
-                                                  offset: const Offset(0, 4),
-                                                ),
-                                              ]
-                                            : RealtimeUiTokens.cardShadow,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          if (!own)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 3,
-                                              ),
-                                              child: Text(
-                                                message.displayName.isEmpty
-                                                    ? message.userId
-                                                    : message.displayName,
-                                                style: TextStyle(
-                                                  fontSize: 11.5,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: avatarColor,
-                                                ),
-                                              ),
-                                            ),
-                                          Text(
-                                            message.message,
-                                            style: TextStyle(
-                                              color: own
-                                                  ? Colors.white
-                                                  : RealtimeUiTokens.text,
-                                              fontSize: 13.5,
-                                              height: 1.35,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 3),
-                                          Align(
-                                            alignment: Alignment.bottomRight,
-                                            child: Text(
-                                              _formatTime(message.timestamp),
-                                              style: TextStyle(
-                                                color: own
-                                                    ? Colors.white.withValues(
-                                                        alpha: .72,
-                                                      )
-                                                    : RealtimeUiTokens
-                                                          .textMuted,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                          if (filteredMessages.isEmpty) {
+                            return _isSearching
+                                ? Center(
+                                    child: Text(
+                                      strings.noMessagesFound,
+                                      style: const TextStyle(
+                                        color: RealtimeUiTokens.textMuted,
                                       ),
                                     ),
-                                  );
+                                  )
+                                : _emptyState(strings);
+                          }
 
-                                  if (own) {
-                                    return Align(
-                                      alignment: Alignment.centerRight,
-                                      child: bubble,
-                                    );
-                                  }
+                          return ListView.builder(
+                            key: const ValueKey('realtime-chat-list'),
+                            controller: _scrollController,
+                            reverse: true,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            itemCount: filteredMessages.length,
+                            itemBuilder: (context, index) {
+                              final style = RealtimeStyle.of(context);
+                              final message =
+                                  filteredMessages[filteredMessages.length -
+                                      1 -
+                                      index];
+                              final identity =
+                                  widget.session is ChatSessionIdentity
+                                  ? widget.session as ChatSessionIdentity
+                                  : null;
+                              final own =
+                                  message.userId == identity?.localUserId;
+                              final canDelete =
+                                  widget.session.capabilities.canDeleteMessage;
+                              final canRemoveUser =
+                                  widget
+                                      .session
+                                      .capabilities
+                                      .canDisconnectUser &&
+                                  !own;
+                              final initialChar = message.displayName.isNotEmpty
+                                  ? message.displayName.characters.first
+                                        .toUpperCase()
+                                  : (message.userId.isNotEmpty
+                                        ? message.userId.characters.first
+                                              .toUpperCase()
+                                        : '?');
+                              final avatarColor = _avatarColor(
+                                message.displayName.isNotEmpty
+                                    ? message.displayName
+                                    : message.userId,
+                              );
 
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 16,
-                                          backgroundColor: avatarColor
-                                              .withValues(alpha: 0.15),
+                              final bubble = RealtimeGlassPressable(
+                                onLongPress: () => _showMessageManagement(
+                                  message,
+                                  canDelete: canDelete,
+                                  canRemoveUser: canRemoveUser,
+                                ),
+                                borderRadius: RealtimeUiTokens.controlRadius,
+                                child: Container(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 520,
+                                  ),
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: own
+                                        ? RealtimeUiTokens.primaryGradient
+                                        : null,
+                                    color: own
+                                        ? null
+                                        : style.surface.withValues(alpha: .92),
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: const Radius.circular(
+                                        RealtimeUiTokens.controlRadius,
+                                      ),
+                                      topRight: const Radius.circular(
+                                        RealtimeUiTokens.controlRadius,
+                                      ),
+                                      bottomLeft: Radius.circular(
+                                        own
+                                            ? RealtimeUiTokens.controlRadius
+                                            : 4,
+                                      ),
+                                      bottomRight: Radius.circular(
+                                        own
+                                            ? 4
+                                            : RealtimeUiTokens.controlRadius,
+                                      ),
+                                    ),
+                                    border: own
+                                        ? null
+                                        : Border.all(color: style.border),
+                                    boxShadow: own
+                                        ? [
+                                            BoxShadow(
+                                              color: style.primary.withValues(
+                                                alpha: 0.22,
+                                              ),
+                                              blurRadius: 14,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ]
+                                        : style.cardShadow,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (!own)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 3,
+                                          ),
                                           child: Text(
-                                            initialChar,
+                                            message.displayName.isEmpty
+                                                ? message.userId
+                                                : message.displayName,
                                             style: TextStyle(
-                                              fontSize: 12,
+                                              fontSize: 11.5,
                                               fontWeight: FontWeight.w800,
                                               color: avatarColor,
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: bubble,
+                                      Text(
+                                        message.message,
+                                        style: TextStyle(
+                                          color: own
+                                              ? Colors.white
+                                              : style.text,
+                                          fontSize: 13.5,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Align(
+                                        alignment: Alignment.bottomRight,
+                                        child: Text(
+                                          _formatTime(message.timestamp),
+                                          style: TextStyle(
+                                            color: own
+                                                ? Colors.white.withValues(
+                                                    alpha: .72,
+                                                  )
+                                                : style.textMuted,
+                                            fontSize: 10,
                                           ),
                                         ),
-                                      ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+
+                              if (own) {
+                                return Align(
+                                  alignment: Alignment.centerRight,
+                                  child: bubble,
+                                );
+                              }
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: avatarColor.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                      child: Text(
+                                        initialChar,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: avatarColor,
+                                        ),
+                                      ),
                                     ),
-                                  );
-                                },
-                              ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: bubble,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        }(),
                       ),
                     ),
                     if (_showScrollToBottom)
@@ -630,45 +729,112 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Replying banner
+            if (_replyingTo != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: RealtimeUiTokens.primarySubtle,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: RealtimeUiTokens.primaryBorder),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.reply_rounded,
+                      size: 15,
+                      color: RealtimeUiTokens.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${strings.replyTo(_replyingTo!.displayName.isEmpty ? _replyingTo!.userId : _replyingTo!.displayName)}: ${_replyingTo!.message}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          color: RealtimeUiTokens.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() => _replyingTo = null),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 16,
+                        color: RealtimeUiTokens.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Quick Replies / Phrases Carousel
             SizedBox(
-              height: 30,
+              height: 28,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: _quickEmojis.length,
+                itemCount: _quickReplies.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 6),
                 itemBuilder: (context, index) {
-                  final emoji = _quickEmojis[index];
+                  final reply = _quickReplies[index];
                   return InkWell(
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(14),
                     onTap: enabled
                         ? () {
-                            final current = _message.text;
-                            _message.text = '$current$emoji';
-                            _message.selection = TextSelection.fromPosition(
-                              TextPosition(offset: _message.text.length),
-                            );
+                            _message.text = reply;
+                            unawaited(_send());
                           }
                         : null,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
+                        horizontal: 10,
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white.withValues(alpha: 0.75),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: RealtimeUiTokens.border),
                       ),
                       alignment: Alignment.center,
-                      child: Text(emoji, style: const TextStyle(fontSize: 15)),
+                      child: Text(
+                        reply,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: RealtimeUiTokens.text,
+                        ),
+                      ),
                     ),
                   );
                 },
               ),
             ),
             const SizedBox(height: 6),
+
+            // Main Input Row
             Row(
               children: <Widget>[
+                IconButton(
+                  tooltip: 'Emoji',
+                  icon: Icon(
+                    _showEmojiDrawer
+                        ? Icons.keyboard_rounded
+                        : Icons.sentiment_satisfied_alt_rounded,
+                    size: 22,
+                    color: _showEmojiDrawer
+                        ? RealtimeUiTokens.primary
+                        : RealtimeUiTokens.textMuted,
+                  ),
+                  onPressed: () => setState(() {
+                    _showEmojiDrawer = !_showEmojiDrawer;
+                  }),
+                ),
                 Expanded(
                   child: Focus(
                     onKeyEvent: (node, event) {
@@ -742,6 +908,46 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                 ),
               ],
             ),
+
+            // Emoji drawer
+            if (_showEmojiDrawer) ...[
+              const SizedBox(height: 8),
+              Container(
+                height: 110,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: RealtimeUiTokens.border),
+                ),
+                child: GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 8,
+                    mainAxisSpacing: 4,
+                    crossAxisSpacing: 4,
+                  ),
+                  itemCount: _drawerEmojis.length,
+                  itemBuilder: (context, index) {
+                    final em = _drawerEmojis[index];
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: enabled
+                          ? () {
+                              final text = _message.text;
+                              _message.text = '$text$em';
+                              _message.selection = TextSelection.fromPosition(
+                                TextPosition(offset: _message.text.length),
+                              );
+                            }
+                          : null,
+                      child: Center(
+                        child: Text(em, style: const TextStyle(fontSize: 18)),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -751,14 +957,24 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
   Future<void> _send() async {
     final text = _message.text.trim();
     if (text.isEmpty || _sending) return;
+    final strings = RealtimeStrings.of(context);
     setState(() {
       _sending = true;
       _error = null;
     });
     final session = widget.session;
     try {
-      await session.sendMessage(text);
-      if (mounted && session == widget.session) _message.clear();
+      final textToSend = _replyingTo != null
+          ? '「${strings.replyTo(_replyingTo!.displayName.isEmpty ? _replyingTo!.userId : _replyingTo!.displayName)}: ${_replyingTo!.message}」\n$text'
+          : text;
+      await session.sendMessage(textToSend);
+      if (mounted && session == widget.session) {
+        _message.clear();
+        setState(() {
+          _replyingTo = null;
+          _showEmojiDrawer = false;
+        });
+      }
     } catch (error) {
       if (mounted && session == widget.session) {
         setState(() => _error = error.toString());
@@ -809,6 +1025,60 @@ class _RealtimeChatViewState extends State<RealtimeChatView> {
                   color: RealtimeUiTokens.text,
                 ),
               ),
+            ),
+            // Quick Emoji reactions bar
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.8),
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.pillRadius,
+                ),
+                border: Border.all(color: RealtimeUiTokens.border),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: _quickEmojis
+                    .map(
+                      (emoji) => InkWell(
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          unawaited(widget.session.sendMessage(emoji));
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
+                          child: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 22),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.controlRadius,
+                ),
+              ),
+              leading: const Icon(
+                Icons.reply_rounded,
+                color: RealtimeUiTokens.primary,
+              ),
+              title: Text(
+                strings.quoteReply,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                setState(() => _replyingTo = message);
+              },
             ),
             ListTile(
               shape: RoundedRectangleBorder(

@@ -1,5 +1,6 @@
 part of 'media_room_view.dart';
 
+// ignore: unused_element
 class _RoomControls extends StatelessWidget {
   const _RoomControls({required this.host, required this.snapshot});
   final _MediaRoomViewState host;
@@ -219,7 +220,11 @@ extension _RoomControlRendering on _MediaRoomViewState {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: endCall ? RealtimeUiTokens.danger : RealtimeUiTokens.text,
+              color: endCall
+                  ? RealtimeUiTokens.danger
+                  : (Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : RealtimeUiTokens.text),
             ),
           ),
         ],
