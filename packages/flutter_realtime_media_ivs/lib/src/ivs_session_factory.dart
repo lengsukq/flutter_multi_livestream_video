@@ -32,8 +32,8 @@ class IvsSessionFactory implements MediaSessionFactory, MediaPreJoinProbe {
     if (joinInfo is! IvsJoinInfo ||
         joinInfo.providerId != providerId ||
         !supportedRoles.contains(joinInfo.role)) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS session cannot be created for this provider or role.',
         providerId: IvsJoinInfo.providerIdValue,
       );

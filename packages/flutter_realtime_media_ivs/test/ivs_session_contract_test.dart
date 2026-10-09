@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_realtime_media_ivs/flutter_realtime_media_ivs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeIvsEngine implements IvsEngine {
+  Future<void>? pendingJoin;
   IvsEngineEvents events = const IvsEngineEvents();
   final List<String> calls = [];
   IvsJoinInfo? joinedInfo;
@@ -16,6 +18,7 @@ class _FakeIvsEngine implements IvsEngine {
     joinedInfo = info;
     this.events = events;
     calls.add('join');
+    if (pendingJoin != null) await pendingJoin;
   }
 
   @override
@@ -72,6 +75,33 @@ Map<String, dynamic> _joinJson({
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('IVS late join cannot revive a room after leave', () async {
+    final pending = Completer<void>();
+    final engine = _FakeIvsEngine()..pendingJoin = pending.future;
+    final factory = IvsSessionFactory(engineFactory: () async => engine);
+    final info = factory.parseJoinInfo(_joinJson());
+    final session = factory.createSession(info);
+    final joining = session.join(info);
+    final cancelled = expectLater(
+      joining,
+      throwsA(
+        isA<RealtimeException>().having(
+          (error) => error.code,
+          'code',
+          RealtimeErrorCode.cancelled,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await session.leave().timeout(const Duration(seconds: 2));
+    expect(session.state, MediaSessionState.ended);
+    pending.complete();
+    await cancelled;
+    expect(session.state, MediaSessionState.ended);
+    await session.dispose();
+    expect(engine.calls, contains('dispose'));
+  });
+
   test(
     'processed source owns camera control and detaches before leave',
     () async {
@@ -171,10 +201,10 @@ void main() {
     expect(
       () => IvsJoinInfo.fromJson(json),
       throwsA(
-        isA<MediaError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          MediaErrorCode.invalidJoinInfo,
+          RealtimeErrorCode.invalidArgument,
         ),
       ),
     );
@@ -198,10 +228,10 @@ void main() {
       await expectLater(
         (session as BroadcastViewerSession).sendMessage('hello'),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );

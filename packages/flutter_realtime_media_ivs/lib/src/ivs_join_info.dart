@@ -39,8 +39,8 @@ class IvsJoinInfo extends MediaJoinInfo {
   factory IvsJoinInfo.fromJson(Map<String, dynamic> json) {
     final provider = json['provider']?.toString().trim().toLowerCase();
     if (provider != providerIdValue) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information does not identify Amazon IVS Real-Time.',
         providerId: providerIdValue,
       );
@@ -57,16 +57,16 @@ class IvsJoinInfo extends MediaJoinInfo {
     );
     final role = MediaRole.tryParse(json['role']);
     if (role == null) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS join information is missing a valid role.',
         providerId: providerIdValue,
       );
     }
     final block = json['ivs'];
     if (block is! Map) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information is missing the IVS credential block.',
         providerId: providerIdValue,
       );
@@ -95,16 +95,16 @@ class IvsJoinInfo extends MediaJoinInfo {
               .toList(growable: false)
         : const <String>[];
     if (!capabilities.contains('SUBSCRIBE')) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS participant token must allow SUBSCRIBE.',
         providerId: providerIdValue,
       );
     }
     final expectsPublish = role != MediaRole.viewer;
     if (expectsPublish != capabilities.contains('PUBLISH')) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: expectsPublish
             ? 'IVS publisher token must allow PUBLISH.'
             : 'IVS viewer token must not allow PUBLISH.',
@@ -116,8 +116,8 @@ class IvsJoinInfo extends MediaJoinInfo {
         ? expiryValue.toInt()
         : int.tryParse(expiryValue?.toString() ?? '') ?? 0;
     if (expiresAtMs <= 0) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS expiresAtMs must be a positive Unix timestamp.',
         providerId: providerIdValue,
       );

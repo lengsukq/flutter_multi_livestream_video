@@ -42,6 +42,10 @@ abstract class _IvsMediaSession
   MediaCameraPosition _cameraPosition = MediaCameraPosition.front;
   int _trackGeneration = 0;
   bool _disposed = false;
+  bool _joinCancelled = false;
+  Future<void>? _joinFuture;
+  Future<void>? _disposeFuture;
+  Duration cleanupTimeout = const Duration(seconds: 10);
 
   @override
   final MediaRole role;
@@ -85,8 +89,8 @@ abstract class _IvsMediaSession
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _requireActive();
     if (!supportsProcessedVideoSource(source)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         providerId: providerId,
         message:
             'Processed video input is unavailable for this role or platform.',
@@ -122,15 +126,15 @@ abstract class _IvsMediaSession
     _requireActive();
     if (device.kind != MediaDeviceKind.camera ||
         !capabilities.canSelectCamera) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         providerId: providerId,
         message: 'This media device cannot be selected.',
       );
     }
     if (_processedSink.source == null) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         providerId: providerId,
         message: 'Prepare the SDK video source before selecting a camera.',
       );
@@ -183,16 +187,34 @@ abstract class _IvsMediaSession
   }
 
   @override
-  Future<void> join(MediaJoinInfo joinInfo) async {
+  Future<void> join(MediaJoinInfo joinInfo) {
+    if (_joinFuture != null) {
+      return Future.error(
+        _error(
+          RealtimeErrorCode.invalidState,
+          'An IVS join is already in progress.',
+        ),
+      );
+    }
+    _joinCancelled = false;
+    late final Future<void> future;
+    future = _join(joinInfo).whenComplete(() {
+      if (identical(_joinFuture, future)) _joinFuture = null;
+    });
+    _joinFuture = future;
+    return future;
+  }
+
+  Future<void> _join(MediaJoinInfo joinInfo) async {
     if (_disposed || _state == MediaSessionState.disposed) {
       throw _error(
-        MediaErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'An IVS session cannot join after dispose.',
       );
     }
     if (_state == MediaSessionState.joining || _state.isActive) {
       throw _error(
-        MediaErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'This IVS session is already joining or active.',
       );
     }
@@ -200,13 +222,13 @@ abstract class _IvsMediaSession
         joinInfo.providerId != providerId ||
         joinInfo.role != role) {
       throw _error(
-        MediaErrorCode.invalidJoinInfo,
+        RealtimeErrorCode.invalidArgument,
         'IVS join information does not match this session.',
       );
     }
     if (_activeSession != null && !identical(_activeSession, this)) {
       throw _error(
-        MediaErrorCode.sessionAlreadyActive,
+        RealtimeErrorCode.invalidState,
         'The IVS Flutter bridge currently supports one active Stage per app process.',
       );
     }
@@ -215,10 +237,12 @@ abstract class _IvsMediaSession
     _setState(MediaSessionState.joining);
     try {
       _engine ??= await engineFactory();
+      _ensureJoinNotCancelled();
       _setState(MediaSessionState.connecting);
       await _engine!.join(joinInfo, _createEngineEvents());
+      _ensureJoinNotCancelled();
       await _probeProcessedVideoInput();
-      if (_disposed) return;
+      _ensureJoinNotCancelled();
       final local = MediaParticipant(
         id: joinInfo.participantId,
         displayName: joinInfo.displayName.isEmpty
@@ -241,16 +265,29 @@ abstract class _IvsMediaSession
       _scheduleCredentialRefresh();
       _startStatsPolling();
     } catch (error) {
-      final mapped = _mapError(error, 'Unable to join the Amazon IVS Stage.');
-      await _releaseEngine(leave: true);
-      _activeSession = null;
-      _setState(MediaSessionState.failed, error: mapped);
+      final cancelled = _disposed || _joinCancelled;
+      final mapped = cancelled
+          ? _error(RealtimeErrorCode.cancelled, 'The IVS join was cancelled.')
+          : _mapError(error, 'Unable to join the Amazon IVS Stage.');
+      await _releaseEngine(leave: !(_disposed || _joinCancelled));
+      if (identical(_activeSession, this)) _activeSession = null;
+      if (!cancelled) _setState(MediaSessionState.failed, error: mapped);
       throw mapped;
     }
   }
 
+  void _ensureJoinNotCancelled() {
+    if (_disposed || _joinCancelled) {
+      throw _error(RealtimeErrorCode.cancelled, 'The IVS join was cancelled.');
+    }
+  }
+
+  Future<void>? _leaveFuture;
   @override
-  Future<void> leave() async {
+  Future<void> leave() => _leaveFuture ??= _leave().whenComplete(() {
+    _leaveFuture = null;
+  });
+  Future<void> _leave() async {
     if (_disposed ||
         _state == MediaSessionState.idle ||
         _state == MediaSessionState.ended) {
@@ -258,8 +295,10 @@ abstract class _IvsMediaSession
     }
     _refreshTimer?.cancel();
     _statsTimer?.cancel();
+    _joinCancelled = _joinCancelled || _joinFuture != null;
     _setState(MediaSessionState.leaving);
     await _releaseEngine(leave: true);
+    if (_joinCancelled) await _releaseEngine(leave: false);
     _activeSession = null;
     _trackGeneration++;
     _setSnapshot(
@@ -276,20 +315,42 @@ abstract class _IvsMediaSession
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
-    await leave();
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
     _disposed = true;
-    _refreshTimer?.cancel();
-    _statsTimer?.cancel();
-    _refreshCallback = null;
-    await _releaseEngine(leave: false);
-    if (identical(_activeSession, this)) _activeSession = null;
-    _setState(MediaSessionState.disposed);
-    await _states.close();
-    await _snapshots.close();
-    await _events.close();
-    await _stats.close();
+    _joinCancelled = true;
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('refresh.timer', () async {
+      _refreshTimer?.cancel();
+      _refreshCallback = null;
+    });
+    if (_state.isActive || _state == MediaSessionState.connecting) {
+      await cleanup.run('engine.leave', () => _releaseEngine(leave: true));
+    }
+    await cleanup.run('engine.dispose', () => _releaseEngine(leave: false));
+    await cleanup.run('active.owner', () async {
+      if (identical(_activeSession, this)) _activeSession = null;
+    });
+    await cleanup.run('terminal', () async {
+      _setState(MediaSessionState.disposed);
+    });
+    await cleanup.run('states', () async {
+      await _states.close();
+    });
+    await cleanup.run('snapshots', () async {
+      await _snapshots.close();
+    });
+    await cleanup.run('events', () async {
+      await _events.close();
+    });
+    await cleanup.run('stats.timer', () async {
+      _statsTimer?.cancel();
+    });
+    await cleanup.run('stats', () async {
+      await _stats.close();
+    });
+    cleanup.finish(domain: providerId);
   }
 
   IvsEngineEvents _createEngineEvents() => IvsEngineEvents(
@@ -340,7 +401,7 @@ abstract class _IvsMediaSession
         participants: [..._snapshot.participants, participant],
       ),
     );
-    _events.add(MediaParticipantJoined(participant));
+    _emit(MediaParticipantJoined(participant));
   }
 
   void _participantLeft(String userId) {
@@ -353,7 +414,7 @@ abstract class _IvsMediaSession
             .toList(),
       ),
     );
-    _events.add(
+    _emit(
       MediaParticipantLeft(
         participantId: userId,
         displayName: existing.displayName,
@@ -381,13 +442,13 @@ abstract class _IvsMediaSession
     }).toList();
     _setSnapshot(_snapshot.copyWith(participants: participants));
     if (available) {
-      _events.add(
+      _emit(
         MediaTrackPublished(
           participants.firstWhere((item) => item.id == userId).videoTrack!,
         ),
       );
     } else {
-      _events.add(
+      _emit(
         MediaTrackUnpublished(
           trackId: 'ivs:$userId:camera:$_trackGeneration',
           participantId: userId,
@@ -409,7 +470,7 @@ abstract class _IvsMediaSession
             .toList(),
       ),
     );
-    _events.add(
+    _emit(
       MediaTrackMutedChanged(
         participantId: userId,
         muted: !available,
@@ -433,19 +494,19 @@ abstract class _IvsMediaSession
       jitterMs: _asInt(raw['jitterMs']),
     );
     _connectionStats = stats;
-    _stats.add(stats);
-    _events.add(MediaNetworkStatsUpdated(stats));
+    if (!_disposed && !_stats.isClosed) _stats.add(stats);
+    _emit(MediaNetworkStatsUpdated(stats));
   }
 
   void _onNativeError(int code, String message) {
-    final error = MediaError(
-      code: MediaErrorCode.nativeError,
+    final error = RealtimeException(
+      code: RealtimeErrorCode.providerError,
       message: 'Amazon IVS reported an error: $message',
       details: {'code': code, 'message': message},
       providerId: providerId,
     );
     _setSnapshot(_snapshot.copyWith(lastError: error));
-    _events.add(MediaFailureEvent(error));
+    _emit(MediaFailureEvent(error));
   }
 
   Future<void> _refreshCredentials() {
@@ -477,7 +538,7 @@ abstract class _IvsMediaSession
     } catch (error) {
       final mapped = _mapError(error, 'Unable to refresh IVS credentials.');
       _setSnapshot(_snapshot.copyWith(lastError: mapped));
-      _events.add(MediaFailureEvent(mapped));
+      _emit(MediaFailureEvent(mapped));
     }
   }
 
@@ -492,7 +553,7 @@ abstract class _IvsMediaSession
         refreshed.stageArn != current.stageArn ||
         refreshed.role != current.role) {
       throw _error(
-        MediaErrorCode.invalidJoinInfo,
+        RealtimeErrorCode.invalidArgument,
         'IVS refreshed credentials changed the active stage or identity.',
       );
     }
@@ -530,7 +591,7 @@ abstract class _IvsMediaSession
     _requireCapability(capabilities.canPublishAudio, 'publishing audio');
     await _engine!.setMuted(muted);
     _setSnapshot(_snapshot.copyWith(localMuted: muted));
-    _events.add(MediaLocalMediaChanged(muted: muted));
+    _emit(MediaLocalMediaChanged(muted: muted));
   }
 
   Future<void> _setVideoEnabled(bool enabled) async {
@@ -563,16 +624,16 @@ abstract class _IvsMediaSession
       ),
     );
     if (enabled) {
-      _events.add(MediaTrackPublished(track!));
+      _emit(MediaTrackPublished(track!));
     } else {
-      _events.add(
+      _emit(
         MediaTrackUnpublished(
           trackId: 'ivs:${info.participantId}:camera:$_trackGeneration',
           participantId: info.participantId,
         ),
       );
     }
-    _events.add(MediaLocalMediaChanged(videoEnabled: enabled));
+    _emit(MediaLocalMediaChanged(videoEnabled: enabled));
   }
 
   Future<void> _switchCamera(MediaCameraPosition position) async {
@@ -606,18 +667,25 @@ abstract class _IvsMediaSession
               .toList(),
         ),
       );
-      _events.add(MediaTrackPublished(track));
+      _emit(MediaTrackPublished(track));
     }
   }
 
   Future<void> _unsupported(String feature) async {
     throw _error(
-      MediaErrorCode.unsupportedFeature,
+      RealtimeErrorCode.unsupportedFeature,
       'Amazon IVS Real-Time does not expose $feature through the media adapter.',
     );
   }
 
-  void _setState(MediaSessionState next, {MediaError? error}) {
+  void _setState(MediaSessionState next, {RealtimeException? error}) {
+    if (_disposed) {
+      if (next == MediaSessionState.disposed) {
+        _state = next;
+        _snapshot = _snapshot.copyWith(state: next);
+      }
+      return;
+    }
     final previous = _state;
     if (previous == next && error == null) return;
     _state = next;
@@ -628,11 +696,16 @@ abstract class _IvsMediaSession
     );
     _states.add(next);
     _snapshots.add(_snapshot);
-    _events.add(MediaConnectionStateChanged(previous: previous, current: next));
-    if (error != null) _events.add(MediaFailureEvent(error));
+    _emit(MediaConnectionStateChanged(previous: previous, current: next));
+    if (error != null) _emit(MediaFailureEvent(error));
+  }
+
+  void _emit(MediaEvent event) {
+    if (!_disposed && !_events.isClosed) _events.add(event);
   }
 
   void _setSnapshot(MediaSnapshot next) {
+    if (_disposed) return;
     _snapshot = next;
     _snapshots.add(next);
   }
@@ -645,36 +718,24 @@ abstract class _IvsMediaSession
   }
 
   Future<void> _releaseEngine({required bool leave}) async {
-    try {
-      await _processedSink.detach();
-    } catch (error) {
-      if (!_events.isClosed) {
-        _events.add(
-          MediaFailureEvent(
-            _mapError(error, 'Unable to detach the processed video input.'),
-          ),
-        );
-      }
-    }
     final engine = _engine;
-    if (engine == null) return;
-    if (leave) {
-      try {
-        await engine.leave();
-      } catch (_) {}
-    } else {
-      try {
-        await engine.dispose();
-      } finally {
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('processed.input', _processedSink.detach);
+    if (engine != null) {
+      if (leave) {
+        await cleanup.run('engine.leave', engine.leave);
+      } else {
         _engine = null;
+        await cleanup.run('engine.dispose', engine.dispose);
       }
     }
+    cleanup.finish(domain: providerId);
   }
 
   void _requireActive() {
     if (!_state.isActive || _engine == null) {
       throw _error(
-        MediaErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'IVS media controls require an active session.',
       );
     }
@@ -683,23 +744,23 @@ abstract class _IvsMediaSession
   void _requireCapability(bool allowed, String feature) {
     if (!allowed) {
       throw _error(
-        MediaErrorCode.unsupportedFeature,
+        RealtimeErrorCode.unsupportedFeature,
         'IVS ${role.name} sessions do not support $feature.',
       );
     }
   }
 
-  MediaError _mapError(Object error, String fallback) {
-    if (error is MediaError) return error.withProvider(providerId);
-    return MediaError(
-      code: MediaErrorCode.unknown,
+  RealtimeException _mapError(Object error, String fallback) {
+    if (error is RealtimeException) return error.withProvider(providerId);
+    return RealtimeException(
+      code: RealtimeErrorCode.unknown,
       message: error.toString().isEmpty ? fallback : error.toString(),
       providerId: providerId,
     );
   }
 
-  MediaError _error(MediaErrorCode code, String message) =>
-      MediaError(code: code, message: message, providerId: providerId);
+  RealtimeException _error(RealtimeErrorCode code, String message) =>
+      RealtimeException(code: code, message: message, providerId: providerId);
 
   int? _asInt(Object? value) =>
       value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
