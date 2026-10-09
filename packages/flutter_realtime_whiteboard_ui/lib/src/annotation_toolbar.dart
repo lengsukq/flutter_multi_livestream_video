@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'whiteboard_strings.dart';
@@ -44,13 +45,22 @@ class AnnotationToolbar extends StatelessWidget {
     final s = WhiteboardStrings.of(context);
     final theme = Theme.of(context);
 
-    return Material(
-      color: theme.colorScheme.surface.withValues(alpha: .94),
-      elevation: 4,
-      shadowColor: Colors.black26,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Material(
+          color: theme.colorScheme.surface.withValues(alpha: .88),
+          elevation: 2,
+          shadowColor: Colors.black12,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: theme.colorScheme.outlineVariant.withValues(alpha: .5),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         child: Wrap(
           spacing: 2,
           runSpacing: 2,
@@ -110,6 +120,8 @@ class AnnotationToolbar extends StatelessWidget {
           ],
         ),
       ),
+    ),
+    ),
     );
   }
 }

@@ -7,64 +7,46 @@ extension _ClassroomQuestions on _ClassroomPanelState {
     int count,
   ) {
     final selected = _questionFilter == value;
-    return Material(
-      color: selected
-          ? RealtimeUiTokens.primarySubtle
-          : RealtimeUiTokens.surfaceSubtle,
-      borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
-        onTap: () => _update(() => _questionFilter = value),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
-            border: Border.all(
-              color: selected
-                  ? RealtimeUiTokens.primary
-                  : RealtimeUiTokens.border,
-            ),
+    return RealtimeGlassPressable(
+      borderRadius: RealtimeUiTokens.pillRadius,
+      onTap: () => _update(() => _questionFilter = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? RealtimeUiTokens.primarySubtle
+              : RealtimeUiTokens.surfaceSubtle,
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+          border: Border.all(
+            color: selected
+                ? RealtimeUiTokens.primary
+                : RealtimeUiTokens.border,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: selected
-                      ? RealtimeUiTokens.primary
-                      : RealtimeUiTokens.textMuted,
-                ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: selected
+                    ? RealtimeUiTokens.primary
+                    : RealtimeUiTokens.textMuted,
               ),
-              if (count > 0) ...[
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? RealtimeUiTokens.primary
-                        : RealtimeUiTokens.borderStrong,
-                    borderRadius: BorderRadius.circular(
-                      RealtimeUiTokens.pillRadius,
-                    ),
-                  ),
-                  child: Text(
-                    '$count',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+            ),
+            if (count > 0) ...[
+              const SizedBox(width: 5),
+              RealtimeBadge(
+                text: '$count',
+                color: Colors.white,
+                backgroundColor: selected
+                    ? RealtimeUiTokens.primary
+                    : RealtimeUiTokens.borderStrong,
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -118,7 +100,7 @@ extension _ClassroomQuestions on _ClassroomPanelState {
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(
-                      RealtimeUiTokens.compactRadius,
+                      RealtimeUiTokens.controlRadius,
                     ),
                     borderSide: const BorderSide(
                       color: RealtimeUiTokens.border,
@@ -126,7 +108,7 @@ extension _ClassroomQuestions on _ClassroomPanelState {
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(
-                      RealtimeUiTokens.compactRadius,
+                      RealtimeUiTokens.controlRadius,
                     ),
                     borderSide: const BorderSide(
                       color: RealtimeUiTokens.border,

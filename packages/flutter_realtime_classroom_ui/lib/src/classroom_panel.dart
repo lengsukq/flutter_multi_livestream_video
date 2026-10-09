@@ -91,10 +91,8 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
     try {
       route = DialogRoute<String>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-          ),
+        builder: (ctx) => RealtimeGlassDialog(
+          icon: Icons.question_answer_rounded,
           title: Text(strings.t('answer')),
           content: TextField(
             controller: ctrl,
@@ -106,13 +104,13 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
               fillColor: RealtimeUiTokens.surfaceSubtle,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.compactRadius,
+                  RealtimeUiTokens.controlRadius,
                 ),
                 borderSide: const BorderSide(color: RealtimeUiTokens.border),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.compactRadius,
+                  RealtimeUiTokens.controlRadius,
                 ),
                 borderSide: const BorderSide(color: RealtimeUiTokens.border),
               ),
@@ -128,7 +126,7 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                 backgroundColor: RealtimeUiTokens.primary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.compactRadius,
+                    RealtimeUiTokens.controlRadius,
                   ),
                 ),
               ),
@@ -222,13 +220,13 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                   Container(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 4,
+                      vertical: 6,
                     ),
-                    padding: const EdgeInsets.all(3),
+                    padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
                       color: RealtimeUiTokens.surfaceSubtle,
                       borderRadius: BorderRadius.circular(
-                        RealtimeUiTokens.compactRadius,
+                        RealtimeUiTokens.dockRadius,
                       ),
                       border: Border.all(color: RealtimeUiTokens.border),
                     ),
@@ -240,13 +238,13 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                       indicator: BoxDecoration(
                         color: RealtimeUiTokens.surface,
                         borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.compactRadius - 3,
+                          RealtimeUiTokens.controlRadius,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 4,
-                            offset: const Offset(0, 1.5),
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
@@ -279,26 +277,11 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                                     : strings.t('interact'),
                               ),
                               if (s.isTeacher && s.stats.handsRaised > 0) ...[
-                                const SizedBox(width: 5),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 5,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: RealtimeUiTokens.warning,
-                                    borderRadius: BorderRadius.circular(
-                                      RealtimeUiTokens.pillRadius,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    '${s.stats.handsRaised}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                const SizedBox(width: 6),
+                                RealtimeBadge(
+                                  text: '${s.stats.handsRaised}',
+                                  backgroundColor: RealtimeUiTokens.warning,
+                                  color: Colors.white,
                                 ),
                               ],
                             ],
@@ -316,26 +299,11 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                               const SizedBox(width: 5),
                               Text(strings.t('qa')),
                               if (s.stats.pendingQuestions > 0) ...[
-                                const SizedBox(width: 5),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 5,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: RealtimeUiTokens.primary,
-                                    borderRadius: BorderRadius.circular(
-                                      RealtimeUiTokens.pillRadius,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    '${s.stats.pendingQuestions}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                const SizedBox(width: 6),
+                                RealtimeBadge(
+                                  text: '${s.stats.pendingQuestions}',
+                                  backgroundColor: RealtimeUiTokens.primary,
+                                  color: Colors.white,
                                 ),
                               ],
                             ],
@@ -368,8 +336,12 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                                 const SizedBox(width: 5),
                                 Text(strings.t('feedbackTab')),
                                 if (s.feedback.isNotEmpty) ...[
-                                  const SizedBox(width: 5),
-                                  Text('${s.feedback.length}'),
+                                  const SizedBox(width: 6),
+                                  RealtimeBadge(
+                                    text: '${s.feedback.length}',
+                                    backgroundColor: RealtimeUiTokens.primary,
+                                    color: Colors.white,
+                                  ),
                                 ],
                               ],
                             ),

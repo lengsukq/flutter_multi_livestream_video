@@ -61,74 +61,29 @@ extension _ClassroomHeader on _ClassroomPanelState {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: s.isTeacher
-                            ? RealtimeUiTokens.primarySubtle
-                            : RealtimeUiTokens.surfaceSubtle,
-                        borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.pillRadius,
-                        ),
-                        border: Border.all(
-                          color: s.isTeacher
-                              ? RealtimeUiTokens.primaryBorder
-                              : RealtimeUiTokens.border,
-                        ),
-                      ),
-                      child: Text(
-                        strings.t(s.isTeacher ? 'teacherRole' : 'studentRole'),
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          color: s.isTeacher
-                              ? RealtimeUiTokens.primary
-                              : RealtimeUiTokens.textMuted,
-                        ),
-                      ),
+                    RealtimePill(
+                      label: strings.t(s.isTeacher ? 'teacherRole' : 'studentRole'),
+                      foreground: s.isTeacher
+                          ? RealtimeUiTokens.primary
+                          : RealtimeUiTokens.textMuted,
+                      background: s.isTeacher
+                          ? RealtimeUiTokens.primarySubtle
+                          : RealtimeUiTokens.surfaceSubtle,
+                      borderColor: s.isTeacher
+                          ? RealtimeUiTokens.primaryBorder
+                          : RealtimeUiTokens.border,
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 6),
               // Compact Online count pill: green dot + count
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 7,
-                  vertical: 3.5,
-                ),
-                decoration: BoxDecoration(
-                  color: RealtimeUiTokens.successSubtle,
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.pillRadius,
-                  ),
-                  border: Border.all(color: RealtimeUiTokens.successBorder),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: RealtimeUiTokens.success,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${s.stats.onlineCount}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: RealtimeUiTokens.success,
-                      ),
-                    ),
-                  ],
-                ),
+              RealtimePill(
+                label: '${s.stats.onlineCount}',
+                leadingDotColor: RealtimeUiTokens.success,
+                foreground: RealtimeUiTokens.success,
+                background: RealtimeUiTokens.successSubtle,
+                borderColor: RealtimeUiTokens.successBorder,
               ),
               if (canClose) ...[
                 const SizedBox(width: 4),

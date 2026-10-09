@@ -81,8 +81,11 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
         context: context,
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, update) => AlertDialog(
+            backgroundColor: RealtimeUiTokens.surface,
+            surfaceTintColor: Colors.transparent,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+              borderRadius: BorderRadius.circular(RealtimeUiTokens.sheetRadius),
+              side: const BorderSide(color: RealtimeUiTokens.border),
             ),
             title: Text(strings.t(kind)),
             content: SizedBox(
@@ -197,7 +200,7 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                   backgroundColor: RealtimeUiTokens.primary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(
-                      RealtimeUiTokens.compactRadius,
+                      RealtimeUiTokens.controlRadius,
                     ),
                   ),
                 ),
@@ -348,7 +351,7 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                       backgroundColor: RealtimeUiTokens.surface,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.compactRadius,
+                          RealtimeUiTokens.controlRadius,
                         ),
                       ),
                     ),
