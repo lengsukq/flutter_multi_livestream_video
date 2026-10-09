@@ -80,14 +80,16 @@ server.ts                             entry/re-exports only
                `-- live/                      live interaction state
 ```
 
-`server.ts` simply exposes the app and related exports. `app.ts` currently
-assembles `ProviderRegistry`, `RoomDirectory`, Chat dependencies, shared
-auth/room lifecycle helpers and the typed routers. The dashboard router receives
-the current media/chat provider selection through an injected mutable state
-object. **Do not equate the extracted routers with fully extracted services:**
-some shared business rules still live in `app.ts` and are a subsequent P1
-task. Existing HTTP paths, response shapes, credentials, error codes and
-room-to-provider binding must remain unchanged.
+`server.ts` simply exposes the app and related exports. `app.ts` assembles
+registries, shared middleware and typed routers. Cross-cutting room identity
+and role rules, registry/lookup, room operation locks and summaries, partial
+close recovery, administrator authentication and persisted provider selection
+now live under `services/`: `room-input.ts`, `room-registry-service.ts`,
+`room-operations.ts`, `room-closure.ts`, `admin-auth.ts` and
+`provider-selection.ts`. The dashboard router receives the selected provider
+through injected state. `app.ts` retains composition and periodic sweeping;
+it is not a production stateless service. Existing HTTP paths, response shapes,
+credentials, error codes and room-to-provider binding remain unchanged.
 
 Provider adapters still own SDK calls, credential signing, role policy, join
 payloads, cleanup and provider-specific summaries. The demo backend is a
