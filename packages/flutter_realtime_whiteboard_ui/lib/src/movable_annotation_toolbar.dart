@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 /// Floats above the current route so tools can be moved off the drawing canvas.
 /// Dragging moves the toolbar; a normal tap still reaches child buttons.
 class MovableAnnotationToolbar extends StatefulWidget {
-  const MovableAnnotationToolbar({super.key, required this.child,
-    this.constrainToCanvas = false});
+  const MovableAnnotationToolbar({
+    super.key,
+    required this.child,
+    this.constrainToCanvas = false,
+  });
   final Widget child;
   final bool constrainToCanvas;
   @override
@@ -24,23 +27,31 @@ class _MovableAnnotationToolbarState extends State<MovableAnnotationToolbar> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.constrainToCanvas || Overlay.maybeOf(context) == null
+  Widget build(BuildContext context) =>
+      widget.constrainToCanvas || Overlay.maybeOf(context) == null
       ? _movable()
       : OverlayPortal(
           controller: _portal,
           overlayChildBuilder: (context) {
+            final view = View.of(context);
+            final safe = EdgeInsets.fromViewPadding(
+              view.viewPadding,
+              view.devicePixelRatio,
+            );
+            final keyboard = view.viewInsets.bottom / view.devicePixelRatio;
             Offset toOverlay(Offset global) {
               final box = Overlay.of(context).context.findRenderObject();
               return box is RenderBox ? box.globalToLocal(global) : global;
             }
+
             return CustomSingleChildLayout(
               delegate: _FloatingToolbarLayout(
                 position: _overlayPosition,
-                padding: MediaQuery.viewPaddingOf(context).copyWith(
-                  bottom: MediaQuery.viewInsetsOf(context).bottom > MediaQuery.viewPaddingOf(context).bottom
-                      ? MediaQuery.viewInsetsOf(context).bottom
-                      : MediaQuery.viewPaddingOf(context).bottom,
-                ) + const EdgeInsets.all(8),
+                padding:
+                    safe.copyWith(
+                      bottom: keyboard > safe.bottom ? keyboard : safe.bottom,
+                    ) +
+                    const EdgeInsets.all(8),
               ),
               child: MouseRegion(
                 cursor: SystemMouseCursors.move,
@@ -48,10 +59,15 @@ class _MovableAnnotationToolbarState extends State<MovableAnnotationToolbar> {
                   key: _toolbar,
                   behavior: HitTestBehavior.opaque,
                   onPanUpdate: (event) {
-                    final box = _toolbar.currentContext?.findRenderObject() as RenderBox?;
+                    final box =
+                        _toolbar.currentContext?.findRenderObject()
+                            as RenderBox?;
                     if (box == null || !box.hasSize) return;
-                    setState(() => _overlayPosition = toOverlay(
-                      box.localToGlobal(Offset.zero)) + event.delta);
+                    setState(
+                      () => _overlayPosition =
+                          toOverlay(box.localToGlobal(Offset.zero)) +
+                          event.delta,
+                    );
                   },
                   child: widget.child,
                 ),
@@ -114,18 +130,35 @@ class _FloatingToolbarLayout extends SingleChildLayoutDelegate {
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      BoxConstraints.loose(Size(
-        (constraints.maxWidth - padding.horizontal).clamp(0, constraints.maxWidth),
-        (constraints.maxHeight - padding.vertical).clamp(0, constraints.maxHeight),
-      ));
+      BoxConstraints.loose(
+        Size(
+          (constraints.maxWidth - padding.horizontal).clamp(
+            0,
+            constraints.maxWidth,
+          ),
+          (constraints.maxHeight - padding.vertical).clamp(
+            0,
+            constraints.maxHeight,
+          ),
+        ),
+      );
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final maxX = (size.width - padding.right - childSize.width).clamp(padding.left, size.width);
-    final maxY = (size.height - padding.bottom - childSize.height).clamp(padding.top, size.height);
+    final maxX = (size.width - padding.right - childSize.width).clamp(
+      padding.left,
+      size.width,
+    );
+    final maxY = (size.height - padding.bottom - childSize.height).clamp(
+      padding.top,
+      size.height,
+    );
     // Start above the meeting dock, away from phone status bars and cutouts.
     final desired = position ?? Offset(maxX, maxY - 96);
-    return Offset(desired.dx.clamp(padding.left, maxX), desired.dy.clamp(padding.top, maxY));
+    return Offset(
+      desired.dx.clamp(padding.left, maxX),
+      desired.dy.clamp(padding.top, maxY),
+    );
   }
 
   @override
