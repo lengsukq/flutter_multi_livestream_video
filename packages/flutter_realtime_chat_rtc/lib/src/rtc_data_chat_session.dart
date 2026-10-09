@@ -51,8 +51,8 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
        role = _mapRole(session.role),
        _state = _mapState(session.state) {
     if (!canAttach(session)) {
-      throw ChatError(
-        code: ChatErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'RTC chat fallback requires both send and receive data support.',
         providerId: 'rtc-data:${session.providerId}',
@@ -113,6 +113,8 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
   StreamSubscription<MediaMessage>? _messageSubscription;
   ChatConnectionState _state;
   bool _disposed = false;
+  Future<void>? _disposeFuture;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   int _messageSequence = 0;
   int _lastTimelineTimestampMs = 0;
 
@@ -162,7 +164,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
         joinInfo.participantId != _participantId ||
         joinInfo.role != role) {
       throw _error(
-        ChatErrorCode.invalidJoinInfo,
+        RealtimeErrorCode.invalidArgument,
         'RTC chat join information does not match the attached media room.',
       );
     }
@@ -176,7 +178,10 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
     _ensureConnected();
     final value = message.trim();
     if (value.isEmpty) {
-      throw _error(ChatErrorCode.invalidArgument, 'Message must not be empty.');
+      throw _error(
+        RealtimeErrorCode.invalidArgument,
+        'Message must not be empty.',
+      );
     }
 
     final now = _nextTimelineTimestamp();
@@ -199,7 +204,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
         jsonEncode(envelope),
         options: MediaSendOptions(topic: topic),
       );
-    } on MediaError catch (error) {
+    } on RealtimeException catch (error) {
       final mapped = _fromMediaError(error);
       _events.add(ChatFailureEvent(mapped));
       throw mapped;
@@ -230,7 +235,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
   @override
   Future<void> deleteMessage(String messageId) async {
     throw _error(
-      ChatErrorCode.unsupportedFeature,
+      RealtimeErrorCode.unsupportedFeature,
       'RTC chat fallback does not support deleting messages.',
     );
   }
@@ -238,7 +243,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
   @override
   Future<void> disconnectUser(String userId) async {
     throw _error(
-      ChatErrorCode.unsupportedFeature,
+      RealtimeErrorCode.unsupportedFeature,
       'RTC chat fallback does not support disconnecting users.',
     );
   }
@@ -251,14 +256,27 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
     _disposed = true;
-    await _detach();
-    _setState(ChatConnectionState.disposed);
-    await _states.close();
-    await _messageSnapshots.close();
-    await _events.close();
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('subscriptions', () async {
+      await _detach();
+    });
+    await cleanup.run('terminal', () async {
+      _setState(ChatConnectionState.disposed);
+    });
+    await cleanup.run('states', () async {
+      await _states.close();
+    });
+    await cleanup.run('messages', () async {
+      await _messageSnapshots.close();
+    });
+    await cleanup.run('events', () async {
+      await _events.close();
+    });
+    cleanup.finish(domain: providerId);
   }
 
   void _attach() {
@@ -272,7 +290,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
       onError: (Object error, StackTrace stackTrace) {
         if (_disposed) return;
         final mapped = _error(
-          ChatErrorCode.unknown,
+          RealtimeErrorCode.unknown,
           'RTC media state stream failed: $error',
         );
         _events.add(ChatFailureEvent(mapped));
@@ -285,7 +303,10 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
         if (_disposed) return;
         _events.add(
           ChatFailureEvent(
-            _error(ChatErrorCode.nativeError, 'RTC data stream failed: $error'),
+            _error(
+              RealtimeErrorCode.providerError,
+              'RTC data stream failed: $error',
+            ),
           ),
         );
       },
@@ -406,7 +427,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
 
   void _ensureNotDisposed() {
     if (_disposed || _state == ChatConnectionState.disposed) {
-      throw _error(ChatErrorCode.invalidState, 'Chat session is disposed.');
+      throw _error(RealtimeErrorCode.invalidState, 'Chat session is disposed.');
     }
   }
 
@@ -414,30 +435,17 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
     _ensureNotDisposed();
     if (_state != ChatConnectionState.connected) {
       throw _error(
-        ChatErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'Chat operation requires a connected media session.',
       );
     }
   }
 
-  ChatError _fromMediaError(MediaError error) => ChatError(
-    code: switch (error.code) {
-      MediaErrorCode.invalidArgument => ChatErrorCode.invalidArgument,
-      MediaErrorCode.invalidState ||
-      MediaErrorCode.sessionNotFound => ChatErrorCode.invalidState,
-      MediaErrorCode.permissionDenied => ChatErrorCode.forbidden,
-      MediaErrorCode.unsupportedPlatform => ChatErrorCode.unsupportedPlatform,
-      MediaErrorCode.unsupportedFeature => ChatErrorCode.unsupportedFeature,
-      MediaErrorCode.nativeError => ChatErrorCode.nativeError,
-      _ => ChatErrorCode.unknown,
-    },
-    message: error.message,
-    providerId: providerId,
-    details: error,
-  );
+  RealtimeException _fromMediaError(RealtimeException error) =>
+      error.withProvider(providerId);
 
-  ChatError _error(ChatErrorCode code, String message) =>
-      ChatError(code: code, message: message, providerId: providerId);
+  RealtimeException _error(RealtimeErrorCode code, String message) =>
+      RealtimeException(code: code, message: message, providerId: providerId);
 
   static ChatRole _mapRole(MediaRole role) => switch (role) {
     MediaRole.participant => ChatRole.participant,

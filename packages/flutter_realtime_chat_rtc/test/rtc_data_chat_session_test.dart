@@ -248,10 +248,10 @@ void main() {
           participantId: 'viewer-1',
         ),
         throwsA(
-          isA<ChatError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            ChatErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -358,10 +358,10 @@ void main() {
         expect(
           () => chat.sendMessage('nope'),
           throwsA(
-            isA<ChatError>().having(
+            isA<RealtimeException>().having(
               (error) => error.code,
               'code',
-              ChatErrorCode.invalidState,
+              RealtimeErrorCode.invalidState,
             ),
           ),
         );
@@ -580,8 +580,8 @@ class _FakeMediaSession implements MediaSession, MediaDataMessenger {
   @override
   Future<void> sendMessage(String message, {String topic = 'chat'}) async {
     if (_disposed || !canSendData) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Data sending is disabled.',
         providerId: providerId,
       );
