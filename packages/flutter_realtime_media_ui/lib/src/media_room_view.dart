@@ -123,6 +123,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   final _memberRevision = ValueNotifier<int>(0);
   final _controlRevision = ValueNotifier<int>(0);
   final _likeRevision = ValueNotifier<int>(0);
+  final _danmakuMessages = ValueNotifier<List<ChatMessage>>(const []);
   final _chatRevision = ValueNotifier<int>(0);
   final _timeline = ChatTimelineController();
   final _members = RoomMembersController();
@@ -358,6 +359,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   void _watchUnreadChat() {
     observeDetached(_chatUnreadSub?.cancel());
     final chat = widget.chatSession;
+    _danmakuMessages.value = List.unmodifiable(chat?.messages ?? const []);
     _timeline.seed(chat?.messages ?? const []);
     _unreadChatCount = 0;
     _visibleChatIds.clear();
@@ -367,6 +369,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     if (chat == null) return;
     _chatUnreadSub = chat.messageSnapshots.listen((messages) {
       if (!mounted || chat != widget.chatSession) return;
+      _danmakuMessages.value = List.unmodifiable(messages);
       final remoteCount = _timeline.accept(
         messages,
         (m) => _isOwnChatMessage(chat, m),
@@ -501,6 +504,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     _memberRevision.dispose();
     _controlRevision.dispose();
     _likeRevision.dispose();
+    _danmakuMessages.dispose();
     _chatRevision.dispose();
     _message.dispose();
     _rtcDataMessage.dispose();
@@ -901,10 +905,9 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     label: Text(label, style: const TextStyle(fontSize: 11)),
   );
 
-  Widget _danmakuOverlay() {
-    final chat = widget.chatSession;
-    if (chat == null || chat.messages.isEmpty) return const SizedBox.shrink();
-    final recent = chat.messages.reversed.take(4).toList().reversed.toList();
+  Widget _danmakuOverlay(List<ChatMessage> messages) {
+    if (messages.isEmpty) return const SizedBox.shrink();
+    final recent = messages.reversed.take(4).toList().reversed.toList();
     final identity = widget.chatSession is ChatSessionIdentity
         ? widget.chatSession as ChatSessionIdentity
         : null;
@@ -1026,7 +1029,10 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         children: [
           stageContent,
           if (isLive && !_cleanScreen) ...[
-            _danmakuOverlay(),
+            ValueListenableBuilder<List<ChatMessage>>(
+              valueListenable: _danmakuMessages,
+              builder: (_, messages, _) => _danmakuOverlay(messages),
+            ),
             Positioned.fill(
               child: RoomRegion(
                 revision: _likeRevision,

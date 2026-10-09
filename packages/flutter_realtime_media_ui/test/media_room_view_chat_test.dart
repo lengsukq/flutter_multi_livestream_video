@@ -68,6 +68,70 @@ void main() {
   );
 
   testWidgets(
+    'livestream danmaku follows remote chat snapshots without rebuilding video',
+    (tester) async {
+      final fixture = _RoomFixture(
+        role: MediaRole.host,
+        participants: const [
+          MediaParticipant(id: 'remote', displayName: 'Remote'),
+        ],
+      );
+      final chat = _FakeChatSession();
+      var videoBuilds = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+            chatSession: chat,
+            participantBuilder: (_, participant, _) {
+              videoBuilds++;
+              return Text('Track ${participant.id}');
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      final before = videoBuilds;
+      Finder danmaku(String text) => find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText && widget.text.toPlainText().contains(text),
+      );
+      expect(danmaku('First danmaku'), findsNothing);
+      chat.emitIncomingMessage(
+        ChatMessage(
+          id: 'remote-live-1',
+          userId: 'remote',
+          displayName: 'Alice',
+          message: 'First danmaku',
+          timestamp: DateTime(2026),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(danmaku('First danmaku'), findsOneWidget);
+      expect(videoBuilds, before);
+      chat.emitIncomingMessage(
+        ChatMessage(
+          id: 'remote-live-2',
+          userId: 'remote',
+          displayName: 'Alice',
+          message: 'Second danmaku',
+          timestamp: DateTime(2026),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(danmaku('Second danmaku'), findsOneWidget);
+      expect(videoBuilds, before);
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(chat._snapshots.hasListener, false);
+      await chat.dispose();
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets(
     'RTC message snapshots reuse video while participant changes rebuild it',
     (tester) async {
       final fixture = _RoomFixture(
