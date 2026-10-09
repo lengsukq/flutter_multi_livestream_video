@@ -10,6 +10,32 @@ register adapters or branch on the current platform. The
 short-lived join information; the SDK routes that provider to its built-in
 driver and reports unsupported capabilities explicitly.
 
+## Demo module map (P1)
+
+`lib/main.dart` now only initializes theme/locale and mounts
+`JoinScreen` from `lib/demo_join_screen.dart`. The responsive homepage
+is split into `demo_home_hero.dart` and `demo_available_rooms.dart`.
+`DemoIdentityStore` owns install-scoped identity and nickname preferences;
+`DemoBackendDiagnostics` owns the backend status; `DemoRoomDirectory`
+owns discovery refresh; and `DemoRoomFlow` builds create/join requests
+and saves logical owner credentials for rejoin. None of these modules
+imports an individual vendor media implementation.
+
+The room lifecycle is create/join/discover → `Realtime.preJoin` →
+`MediaPreJoinPage.show` → `Realtime.open(RealtimeRequest)` → room
+route → `RealtimeConnection.dispose()`. A failed entry remains in Pre-Join
+for retry; a connected room that cannot be handed to a route must be
+disposed. The `initialMediaSettings` returned by preparation must be
+carried into the room UI so camera, microphone and video background choices
+apply before publish.
+
+Below 600px, the homepage uses a compact top header instead of the large
+desktop hero. Meeting/Live room layout comes from SDK UI, not a Demo-specific
+widget tree. `MediaRole.host` is not a reliable substitute for an explicit
+meeting/live mode: passing `MediaRoomMode.broadcast` is important for
+livestream hosts. See the [Chinese P1 architecture and integration guide](../doc/P1_ARCHITECTURE_AND_INTEGRATION.zh-CN.md)
+for the module graph and tested versus pending features.
+
 ## Run the example
 
 1. Start the backend by following [`../demo-server/README.md`](../demo-server/README.md).

@@ -61,25 +61,38 @@ codes stay bound to the provider that originally created them.
 
 ## Provider adapter architecture
 
-The demo server now follows the same plugin-style boundary as the Flutter SDK:
+The server keeps **one** public entry (`npm start`), but HTTP responsibilities
+are no longer all located in `server.ts`:
 
 ```text
-server.ts
-   |
-   +--> ProviderRegistry
-   |       +--> providers/chime.ts
-   |       +--> providers/livekit.ts
-   |       +--> providers/agora.ts
-   |       +--> providers/trtc.ts
-   |       `--> providers/artc.ts
-   |
-   `--> RoomDirectory
+server.ts                             entry/re-exports only
+    |
+    `-- app.ts                         Express, registry, middleware, wiring
+          |-- routes/dashboard-routes.ts     Admin / Health / provider selection
+          |-- routes/room-routes.ts          room lifecycle and discovery
+          |-- routes/chat-routes.ts          standalone/attached Chat
+          |-- routes/interaction-routes.ts   Classroom / Live interactions
+          `-- routes/legacy-chime-routes.ts  legacy Chime contract
+               |
+               +-- providers/                 RTC token/SDK adapters
+               +-- chat/                      product Chat providers
+               +-- classroom/                 classroom state and operation queue
+               `-- live/                      live interaction state
 ```
 
-`server.ts` owns HTTP contract handling, authentication hooks, provider
-selection, room lifecycle orchestration, logging, and the dashboard. Provider
-modules own SDK calls, credential signing, role rules, join payloads, cleanup,
-and provider-specific room summaries.
+`server.ts` simply exposes the app and related exports. `app.ts` currently
+assembles `ProviderRegistry`, `RoomDirectory`, Chat dependencies, shared
+auth/room lifecycle helpers and the typed routers. The dashboard router receives
+the current media/chat provider selection through an injected mutable state
+object. **Do not equate the extracted routers with fully extracted services:**
+some shared business rules still live in `app.ts` and are a subsequent P1
+task. Existing HTTP paths, response shapes, credentials, error codes and
+room-to-provider binding must remain unchanged.
+
+Provider adapters still own SDK calls, credential signing, role policy, join
+payloads, cleanup and provider-specific summaries. The demo backend is a
+trusted **control plane**, not a media relay or production-ready identity/
+storage service. Server-side secrets must never be returned to the Flutter app.
 
 Shared contracts live in `types.ts`. `ProviderRegistry` accepts only objects
 that satisfy `ProviderAdapter`, so missing create/join/close/summary behavior
@@ -91,8 +104,8 @@ register its native meeting id as an alias for the legacy endpoints.
 
 ### Add another RTC provider
 
-To add a fifth provider, create one module under `providers/` implementing the
-adapter contract and register it once in `server.ts`:
+To add another provider, create one module under `providers/` implementing the
+adapter contract and register it during `app.ts` composition:
 
 ```ts
 const provider: ProviderAdapter = {
@@ -113,16 +126,24 @@ routes do not require provider-specific `if`/`switch` branches. The dashboard
 renders provider buttons and room labels from `/api/overview.providerList`, so
 new adapters do not need a dedicated dashboard button.
 
+The `/health`, `/api/provider`, `/api/chat-provider`,
+`/api/overview`, and `/rooms` endpoints are public contract surfaces,
+not implementation details of a particular router. Route extraction must not
+weaken owner authorization, short-lived credential rules or same-origin admin
+protection. See [P1 architecture and integration](../doc/P1_ARCHITECTURE_AND_INTEGRATION.zh-CN.md)
+for the updated SDK/Demo/Backend ownership diagram and pending E2E gates.
+
 ## Room flow used by the example app
 
-The current `example/` app consumes the provider-neutral `MediaClient` API and
-uses the language-neutral contract documented in
+The current `example/` app consumes `Realtime.standard()` and
+`Realtime.open(RealtimeRequest)` through the public SDK facade, backed by
+the provider-neutral room contract documented in
 [`../MEDIA_BACKEND_CONTRACT.md`](../MEDIA_BACKEND_CONTRACT.md):
 
 1. App: `POST /rooms {"nickname":"host","roomCode":"482913","role":"participant"}` — no provider field.
 2. Server selects the current dashboard provider and returns `provider` plus provider-specific short-lived join data.
 3. Guest: `POST /rooms/482913/join {"userId":"guest","role":"participant"}` — room code resolves the original provider.
-4. Core resolves the matching adapter and starts the media session.
+4. Runtime resolves the matching provider bundle and starts the media session.
 5. SDK sends heartbeat/leave through the same room contract.
 
 Legacy `/meetings` and `/join` endpoints remain in the demo server for

@@ -19,6 +19,22 @@ import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 final realtime = Realtime.standard(backendUrl: 'http://localhost:3000');
 ```
 
+Create and join use a provider-neutral request on every platform:
+
+```dart
+final connection = await realtime.open(
+  RealtimeRequest.create(
+    type: RealtimeExperience.meeting,
+    user: const RealtimeUser(id: 'user-1', name: 'Alice'),
+  ),
+);
+// Keep connection.mediaRoom! alive while its RealtimeRoomView is visible.
+// Dispose the connection when the owning room route exits, not immediately.
+await connection.dispose();
+```
+
+Use `RealtimeRequest.join(type: ..., roomCode: ..., user: ...)` for an existing room, `RealtimeExperience.live` for broadcasts, and `RealtimeExperience.chat` for standalone IM. Call `MediaPreJoinPage.show` with `Realtime.preJoin` and `createLocalPreview` before opening a media room if you need device checks and preview.
+
 For explicit composition, import the runtime and selected bundle:
 
 ```dart
@@ -60,6 +76,8 @@ python3 scripts/build_flutter_macos.py --release --no-pub
 ```
 
 See [SDK architecture and error handling](doc/SDK_CODE_QUALITY.md), [provider integration](doc/PROVIDER_ADAPTER_GUIDE.md), [lightweight composition](doc/LIGHTWEIGHT_SDK.md), [capability matrix](SDK_CAPABILITY_MATRIX.zh-CN.md) and [acceptance boundaries](doc/INTERACTION_ACCEPTANCE.md).
+
+**P1 中文接入与架构文档：** [SDK Quick Start、Meeting/Live、Pre-Join、Demo/Server 模块与验收边界](doc/P1_ARCHITECTURE_AND_INTEGRATION.zh-CN.md)。同时参考 [变更前测试基线](doc/P1_CLEAN_CODE_BASELINE.md)、[内置 Media UI](packages/flutter_realtime_media_ui/README.md)、[Demo](example/README.md) 和 [Demo Server](demo-server/README.md)。
 
 ## Acceptance
 
