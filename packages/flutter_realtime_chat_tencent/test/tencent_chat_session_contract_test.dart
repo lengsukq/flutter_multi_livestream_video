@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_tencent/flutter_realtime_chat_tencent.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeEngine implements TencentChatEngine {
+  Future<void>? pendingConnect;
   TencentChatEngineEvents events = const TencentChatEngineEvents();
   TencentChatTokenProvider? tokenProvider;
   final List<String> calls = [];
@@ -16,6 +18,7 @@ class _FakeEngine implements TencentChatEngine {
     this.events = events;
     this.tokenProvider = tokenProvider;
     calls.add('connect:${info.userSig}');
+    if (pendingConnect != null) await pendingConnect;
     events.onConnected?.call();
   }
 
@@ -130,6 +133,35 @@ const hint =
     '{"v":1,"type":"classroom.state.changed","roomCode":"123456","revision":3,"eventId":"hint-3","timestampMs":1000}';
 
 void main() {
+  test('Tencent Chat late connect is cancelled by disconnect', () async {
+    final pending = Completer<void>();
+    final engine = _FakeEngine()..pendingConnect = pending.future;
+    final factory = TencentChatSessionFactory(
+      engineFactory: () async => engine,
+    );
+    final info = factory.parseJoinInfo(_joinJson());
+    final session = factory.createSession(info);
+    final connecting = session.connect(info);
+    final cancelled = expectLater(
+      connecting,
+      throwsA(
+        isA<RealtimeException>().having(
+          (error) => error.code,
+          'code',
+          RealtimeErrorCode.cancelled,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await session.disconnect();
+    pending.complete();
+    await cancelled;
+    expect(session.state, ChatConnectionState.disconnected);
+    engine.events.onConnected?.call();
+    expect(session.state, ChatConnectionState.disconnected);
+    await session.dispose();
+  });
+
   test('Tencent system hints stay separate from visible chat', () async {
     final engine = _FakeEngine();
     final factory = TencentChatSessionFactory(
@@ -229,10 +261,10 @@ void main() {
     await expectLater(
       session.deleteMessage('message-1'),
       throwsA(
-        isA<ChatError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          ChatErrorCode.unsupportedFeature,
+          RealtimeErrorCode.unsupportedFeature,
         ),
       ),
     );

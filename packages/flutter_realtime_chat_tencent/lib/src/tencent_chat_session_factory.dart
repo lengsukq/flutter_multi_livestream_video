@@ -24,8 +24,8 @@ class TencentChatSessionFactory implements ChatSessionFactory {
   @override
   ChatSession createSession(ChatJoinInfo joinInfo) {
     if (joinInfo is! TencentChatJoinInfo || joinInfo.providerId != providerId) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Tencent Chat session cannot use these credentials.',
         providerId: TencentChatJoinInfo.providerIdValue,
       );

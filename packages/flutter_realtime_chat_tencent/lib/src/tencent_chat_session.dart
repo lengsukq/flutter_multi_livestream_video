@@ -36,6 +36,10 @@ class TencentChatSession
   ChatCredentialProvider? _credentialProvider;
   ChatConnectionState _state = ChatConnectionState.disconnected;
   bool _disposed = false;
+  bool _disconnectRequested = false;
+  Future<void>? _connectFuture;
+  Future<void>? _disposeFuture;
+  Duration cleanupTimeout = const Duration(seconds: 10);
 
   @override
   String get providerId => TencentChatJoinInfo.providerIdValue;
@@ -53,11 +57,23 @@ class TencentChatSession
     return ChatCapabilities(canSendMessage: info.canSendMessage);
   }
 
+  void _ensureConnecting() {
+    if (_disconnectRequested || _disposed) {
+      throw _error(
+        RealtimeErrorCode.cancelled,
+        'The Tencent Chat connection was cancelled.',
+      );
+    }
+  }
+
   @override
   Future<void> sendSystemMessage(String payload) async {
     _requireConnected();
     if (!capabilities.canSendMessage) {
-      throw _error(ChatErrorCode.forbidden, 'Chat cannot send system hints.');
+      throw _error(
+        RealtimeErrorCode.forbidden,
+        'Chat cannot send system hints.',
+      );
     }
     await _engine!.sendMessage(ChatSystemMessageCodec.encode(payload));
   }
@@ -77,14 +93,36 @@ class TencentChatSession
   Future<void> connect(
     ChatJoinInfo joinInfo, {
     ChatCredentialProvider? credentialProvider,
+  }) {
+    if (_connectFuture != null) {
+      return Future.error(
+        _error(
+          RealtimeErrorCode.invalidState,
+          'A Tencent Chat connect is already pending.',
+        ),
+      );
+    }
+    _disconnectRequested = false;
+    late final Future<void> future;
+    future = _connect(joinInfo, credentialProvider: credentialProvider)
+        .whenComplete(() {
+          if (identical(_connectFuture, future)) _connectFuture = null;
+        });
+    _connectFuture = future;
+    return future;
+  }
+
+  Future<void> _connect(
+    ChatJoinInfo joinInfo, {
+    ChatCredentialProvider? credentialProvider,
   }) async {
     if (_disposed) {
-      throw _error(ChatErrorCode.invalidState, 'Chat session is disposed.');
+      throw _error(RealtimeErrorCode.invalidState, 'Chat session is disposed.');
     }
     if (_state != ChatConnectionState.disconnected &&
         _state != ChatConnectionState.failed) {
       throw _error(
-        ChatErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'Chat session is already active.',
       );
     }
@@ -92,7 +130,7 @@ class TencentChatSession
         joinInfo.providerId != providerId ||
         joinInfo.role != role) {
       throw _error(
-        ChatErrorCode.invalidJoinInfo,
+        RealtimeErrorCode.invalidArgument,
         'Tencent Chat credentials do not match this session.',
       );
     }
@@ -101,6 +139,7 @@ class TencentChatSession
     _setState(ChatConnectionState.connecting);
     try {
       _engine ??= await engineFactory();
+      _ensureConnecting();
       await _engine!.connect(
         joinInfo,
         _engineEvents(),
@@ -108,7 +147,20 @@ class TencentChatSession
             ? null
             : () => _refreshCredentials(joinInfo),
       );
+      _ensureConnecting();
     } catch (error) {
+      if (_disconnectRequested || _disposed) {
+        if (_disposed) {
+          await _engine?.dispose();
+          _engine = null;
+        } else {
+          await _engine?.disconnect();
+        }
+        throw _error(
+          RealtimeErrorCode.cancelled,
+          'The Tencent Chat connection was cancelled.',
+        );
+      }
       final mapped = _mapError(
         error,
         'Unable to connect to Tencent Cloud Chat.',
@@ -125,7 +177,7 @@ class TencentChatSession
     final callback = _credentialProvider;
     if (callback == null) {
       throw _error(
-        ChatErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'No chat credential refresh callback is configured.',
       );
     }
@@ -139,7 +191,7 @@ class TencentChatSession
         refreshed.groupId != current.groupId ||
         refreshed.providerUserId != current.providerUserId) {
       throw _error(
-        ChatErrorCode.invalidJoinInfo,
+        RealtimeErrorCode.invalidArgument,
         'Refreshed Tencent Chat credentials changed the room or identity.',
       );
     }
@@ -164,24 +216,33 @@ class TencentChatSession
     },
     onMessage: _onMessage,
     onMessageDeleted: _onMessageDeleted,
-    onUserDisconnected: (userId) => _events.add(ChatUserDisconnected(userId)),
-    onError: (code, message) => _events.add(
-      ChatFailureEvent(
-        ChatError(
-          code: switch (code) {
-            401 => ChatErrorCode.unauthorized,
-            403 => ChatErrorCode.forbidden,
-            _ => ChatErrorCode.nativeError,
-          },
-          message: message,
-          providerId: providerId,
-          details: {'nativeCode': code},
+    onUserDisconnected: (userId) {
+      if (_acceptNativeEvent) _events.add(ChatUserDisconnected(userId));
+    },
+    onError: (code, message) {
+      if (!_acceptNativeEvent) return;
+      _events.add(
+        ChatFailureEvent(
+          RealtimeException(
+            code: switch (code) {
+              401 => RealtimeErrorCode.unauthorized,
+              403 => RealtimeErrorCode.forbidden,
+              _ => RealtimeErrorCode.providerError,
+            },
+            message: message,
+            providerId: providerId,
+            details: {'nativeCode': code},
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 
+  bool get _acceptNativeEvent =>
+      !_disposed && !_disconnectRequested && !_events.isClosed;
+
   void _onMessage(Map<String, Object?> raw) {
+    if (!_acceptNativeEvent) return;
     final system = ChatSystemMessageCodec.decode(
       raw['message']?.toString() ?? '',
     );
@@ -220,6 +281,7 @@ class TencentChatSession
   }
 
   void _onMessageDeleted(String messageId) {
+    if (!_acceptNativeEvent) return;
     _buffer.remove(messageId);
     _emitMessages();
     _events.add(ChatMessageDeleted(messageId));
@@ -229,50 +291,83 @@ class TencentChatSession
   Future<void> sendMessage(String message) async {
     _requireConnected();
     if (!capabilities.canSendMessage) {
-      throw _error(ChatErrorCode.forbidden, 'Chat token cannot send messages.');
+      throw _error(
+        RealtimeErrorCode.forbidden,
+        'Chat token cannot send messages.',
+      );
     }
     final value = message.trim();
     if (value.isEmpty) {
-      throw _error(ChatErrorCode.invalidArgument, 'Message must not be empty.');
+      throw _error(
+        RealtimeErrorCode.invalidArgument,
+        'Message must not be empty.',
+      );
     }
     await _engine!.sendMessage(ChatSystemMessageCodec.encodeUserText(value));
   }
 
   @override
   Future<void> deleteMessage(String messageId) async => throw _error(
-    ChatErrorCode.unsupportedFeature,
+    RealtimeErrorCode.unsupportedFeature,
     'Tencent Chat moderator message deletion is not enabled by this adapter.',
   );
 
   @override
   Future<void> disconnectUser(String userId) async => throw _error(
-    ChatErrorCode.unsupportedFeature,
+    RealtimeErrorCode.unsupportedFeature,
     'Tencent Chat moderator user removal is not enabled by this adapter.',
   );
 
   @override
   Future<void> disconnect() async {
-    if (_disposed || _state == ChatConnectionState.disconnected) return;
+    if (_disposed) return;
+    _disconnectRequested = true;
+    if (_state == ChatConnectionState.disconnected) return;
     await _engine?.disconnect();
     _setState(ChatConnectionState.disconnected);
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
-    await disconnect();
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
     _disposed = true;
-    await _engine?.dispose();
-    _engine = null;
-    _credentialProvider = null;
-    _setState(ChatConnectionState.disposed);
-    await _states.close();
-    await _snapshots.close();
-    await _events.close();
-    await _systemMessages.close();
+    _disconnectRequested = true;
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('engine.disconnect', () async {
+      await _engine?.disconnect();
+    });
+    await cleanup.run('engine.dispose', () async {
+      await _engine?.dispose();
+    });
+    await cleanup.run('references', () async {
+      _engine = null;
+      _credentialProvider = null;
+    });
+    await cleanup.run('terminal', () async {
+      _setState(ChatConnectionState.disposed);
+    });
+    await cleanup.run('states', () async {
+      await _states.close();
+    });
+    await cleanup.run('snapshots', () async {
+      await _snapshots.close();
+    });
+    await cleanup.run('events', () async {
+      await _events.close();
+    });
+    await cleanup.run('systemMessages', () async {
+      await _systemMessages.close();
+    });
+    cleanup.finish(domain: providerId);
   }
 
   void _setState(ChatConnectionState next) {
+    if (_disconnectRequested &&
+        next != ChatConnectionState.disconnected &&
+        next != ChatConnectionState.disposed) {
+      return;
+    }
     if (_state == next) return;
     _state = next;
     if (!_states.isClosed) _states.add(next);
@@ -286,21 +381,21 @@ class TencentChatSession
   void _requireConnected() {
     if (_state != ChatConnectionState.connected || _engine == null) {
       throw _error(
-        ChatErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'Chat operation requires a connected session.',
       );
     }
   }
 
-  ChatError _mapError(Object error, String fallback) {
-    if (error is ChatError) return error.withProvider(providerId);
-    return ChatError(
-      code: ChatErrorCode.unknown,
+  RealtimeException _mapError(Object error, String fallback) {
+    if (error is RealtimeException) return error.withProvider(providerId);
+    return RealtimeException(
+      code: RealtimeErrorCode.unknown,
       message: error.toString().isEmpty ? fallback : error.toString(),
       providerId: providerId,
     );
   }
 
-  ChatError _error(ChatErrorCode code, String message) =>
-      ChatError(code: code, message: message, providerId: providerId);
+  RealtimeException _error(RealtimeErrorCode code, String message) =>
+      RealtimeException(code: code, message: message, providerId: providerId);
 }
