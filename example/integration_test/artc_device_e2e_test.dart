@@ -90,7 +90,7 @@ void main() {
         expect(session.capabilities.canSendData, isFalse);
         await expectLater(
           (session as BroadcastViewerSession).sendMessage('viewer-send-denied'),
-          throwsA(isA<MediaError>()),
+          throwsA(isA<RealtimeException>()),
         );
       } else {
         expect(session, isA<InteractiveMediaSession>());

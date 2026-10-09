@@ -1,9 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 import 'package:flutter_realtime_media_example/main.dart';
+import 'package:flutter_realtime_media_example/demo_strings.dart';
 
 void main() {
+  testWidgets('Demo renders SDK errors with recovery guidance', (
+    WidgetTester tester,
+  ) async {
+    const failure = RealtimeException(
+      code: RealtimeErrorCode.network,
+      message: 'Unable to reach the room.',
+      providerId: 'livekit',
+      suggestedAction: 'retry',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) =>
+              Text(DemoStrings.of(context).displayRealtimeError(failure)),
+        ),
+      ),
+    );
+    expect(find.textContaining('Unable to reach the room.'), findsOneWidget);
+    expect(find.textContaining('Provider: livekit'), findsOneWidget);
+    expect(find.textContaining('Please retry.'), findsOneWidget);
+  });
+
   testWidgets('Verify room actions and connection settings are discoverable', (
     WidgetTester tester,
   ) async {

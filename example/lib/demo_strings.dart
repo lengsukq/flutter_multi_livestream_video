@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 /// Localized strings used by the example app's own screens.
 ///
@@ -12,6 +13,35 @@ class DemoStrings {
   static DemoStrings of(BuildContext context) => DemoStrings._(
     Localizations.localeOf(context).languageCode.toLowerCase() == 'zh',
   );
+
+  /// Render the public SDK error contract instead of exposing internal
+  /// exception class names to users. All screens share the same guidance.
+  String displayRealtimeError(Object error) {
+    if (error is! RealtimeException) return error.toString();
+    final provider = error.providerId;
+    final action = switch (error.suggestedAction) {
+      'retry' => isZh ? '请重试。' : 'Please retry.',
+      'refresh-provider-credentials' =>
+        isZh ? '请重新获取连接凭证。' : 'Refresh the connection credentials.',
+      'request-permission' =>
+        isZh ? '请在系统设置中检查授权。' : 'Check permissions in system settings.',
+      'configure-backend' =>
+        isZh ? '请检查 Demo 服务地址。' : 'Check the demo backend URL.',
+      'check-capabilities' =>
+        isZh ? '请检查当前服务商的平台能力。' : 'Check provider and platform capabilities.',
+      'load-web-provider-sdk' || 'retry-driver-initialization' =>
+        isZh
+            ? '请检查服务商 SDK 是否初始化成功。'
+            : 'Check whether the provider SDK initialized.',
+      _ => null,
+    };
+    return [
+      error.message,
+      if (provider != null && provider.isNotEmpty)
+        isZh ? '服务商：$provider' : 'Provider: $provider',
+      if (action != null) action,
+    ].join('\n');
+  }
 
   String get appSubtitle =>
       isZh ? '多服务商直播与音视频 SDK' : 'Multi-Provider Livestream & Video SDK';

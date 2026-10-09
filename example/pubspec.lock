@@ -304,6 +304,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_foundation:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_foundation"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_live_core:
     dependency: transitive
     description:
@@ -458,10 +465,17 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
-  flutter_realtime_sdk_base:
+  flutter_realtime_sdk_runtime:
     dependency: transitive
     description:
-      path: "../packages/flutter_realtime_sdk_base"
+      path: "../packages/flutter_realtime_sdk_runtime"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_sdk_ui:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_sdk_ui"
       relative: true
     source: path
     version: "0.1.0"

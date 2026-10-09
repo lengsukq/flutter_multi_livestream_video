@@ -90,7 +90,12 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
         });
       }
     } catch (error) {
-      if (!silent && mounted) setState(() => _roomsError = error.toString());
+      if (!silent && mounted) {
+        setState(
+          () =>
+              _roomsError = DemoStrings.of(context).displayRealtimeError(error),
+        );
+      }
     } finally {
       _roomsRequestInFlight = false;
       if (!silent && mounted) setState(() => _roomsLoading = false);
@@ -150,7 +155,11 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
         await connection.dispose();
       }
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) {
+        setState(
+          () => _error = DemoStrings.of(context).displayRealtimeError(error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

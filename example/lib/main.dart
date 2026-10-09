@@ -153,7 +153,15 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           _availableRooms.length != rooms.length ||
           _roomListError != null ||
           !_availableRooms.every(
-            (r) => rooms.any((nr) => nr.roomCode == r.roomCode),
+            (r) => rooms.any(
+              (nr) =>
+                  nr.roomCode == r.roomCode &&
+                  nr.providerId == r.providerId &&
+                  nr.engineId == r.engineId &&
+                  nr.roomMode == r.roomMode &&
+                  nr.attendeeCount == r.attendeeCount &&
+                  nr.createdAt == r.createdAt,
+            ),
           );
       if (changed) {
         setState(() {
@@ -163,7 +171,11 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       }
     } catch (error) {
       if (!silent && mounted) {
-        setState(() => _roomListError = error.toString());
+        setState(
+          () => _roomListError = DemoStrings.of(
+            context,
+          ).displayRealtimeError(error),
+        );
       }
     } finally {
       _roomListRequestInFlight = false;
@@ -512,7 +524,11 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     try {
       await action();
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) {
+        setState(
+          () => _error = DemoStrings.of(context).displayRealtimeError(error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
