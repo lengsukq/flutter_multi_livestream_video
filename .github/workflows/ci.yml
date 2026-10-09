@@ -16,6 +16,15 @@ permissions:
   contents: read
 
 jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.packages.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: packages
+        run: echo "packages=$(python3 -c 'import json; print(json.dumps(json.load(open("scripts/sdk_packages.json"))))')" >> "$GITHUB_OUTPUT"
+
   quality-and-android:
     runs-on: ubuntu-latest
     defaults:
@@ -41,18 +50,13 @@ jobs:
         run: flutter pub get
 
       - name: Check formatting
-        run: >-
-          dart format --output=none --set-exit-if-changed
-          lib test packages examples example/lib example/test example/integration_test
+        run: python3 scripts/format_sdk.py --check
 
-      - name: Analyze root plugin
-        run: flutter analyze lib test
+      - name: Test build and quality helpers
+        run: python3 -m unittest discover -s scripts/tests
 
-      - name: Unit tests
-        run: flutter test
-
-      - name: Pub.dev dry run
-        run: flutter pub publish --dry-run
+      - name: Check SDK architecture
+        run: python3 scripts/check_sdk_architecture.py
 
       - name: Resolve example dependencies
         working-directory: flutter_aws_chime/example
@@ -76,46 +80,12 @@ jobs:
         run: ./gradlew :flutter_realtime_video_effects:testDebugUnitTest :flutter_realtime_video_effects:externalNativeBuildDebug
 
   package-tests:
+    needs: inventory
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        project:
-          - packages/flutter_realtime_chat_agora
-          - packages/flutter_realtime_live_core
-          - packages/flutter_realtime_live_ui
-          - packages/flutter_realtime_classroom_core
-          - packages/flutter_realtime_whiteboard_core
-          - packages/flutter_realtime_whiteboard_ui
-          - packages/flutter_realtime_classroom_ui
-          - packages/flutter_realtime_chat_core
-          - packages/flutter_realtime_chat_ivs
-          - packages/flutter_realtime_chat_rtc
-          - packages/flutter_realtime_chat_tencent
-          - packages/flutter_realtime_media_agora
-          - packages/flutter_realtime_media_artc
-          - packages/flutter_realtime_media_chime
-          - packages/flutter_realtime_media_core
-          - packages/flutter_realtime_media_ivs
-          - packages/flutter_realtime_media_livekit
-          - packages/flutter_realtime_media_trtc
-          - packages/flutter_realtime_media_ui
-          - packages/flutter_realtime_video_effects
-          - packages/flutter_realtime_media_aws_desktop
-          - packages/flutter_realtime_media_web
-          - packages/flutter_realtime_sdk
-          - packages/flutter_realtime_sdk_base
-          - packages/flutter_realtime_provider_agora
-          - packages/flutter_realtime_provider_agora_chat
-          - packages/flutter_realtime_provider_artc
-          - packages/flutter_realtime_provider_aws
-          - packages/flutter_realtime_provider_ivs_chat
-          - packages/flutter_realtime_provider_livekit
-          - packages/flutter_realtime_provider_tencent_chat
-          - packages/flutter_realtime_provider_trtc
-          - examples/lite_media
-          - examples/lite_media_chat
-          - example
+        project: ${{ fromJSON(needs.inventory.outputs.packages) }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -128,19 +98,16 @@ jobs:
           cache: true
 
       - name: Resolve project dependencies
-        working-directory: flutter_aws_chime/${{ matrix.project }}
+        working-directory: flutter_aws_chime/packages/${{ matrix.project }}
         run: flutter pub get
 
       - name: Analyze project
-        working-directory: flutter_aws_chime/${{ matrix.project }}
-        run: flutter analyze --no-pub
+        working-directory: flutter_aws_chime/packages/${{ matrix.project }}
+        run: python3 ../../scripts/check_sdk_quality.py --analyze --package ${{ matrix.project }}
 
       - name: Run project tests
-        working-directory: flutter_aws_chime/${{ matrix.project }}
-        run: |
-          if [ -d test ]; then
-            flutter test --no-pub
-          fi
+        working-directory: flutter_aws_chime/packages/${{ matrix.project }}
+        run: python3 ../../scripts/check_sdk_quality.py --test --package ${{ matrix.project }}
 
   web-build:
     runs-on: ubuntu-latest
@@ -217,7 +184,7 @@ jobs:
 
       - name: Validate CocoaPods podspec
         run: >-
-          pod lib lint ios/flutter_aws_chime.podspec
+          pod lib lint packages/flutter_aws_chime/ios/flutter_aws_chime.podspec
           --configuration=Debug
           --skip-tests
           --allow-warnings
