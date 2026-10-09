@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
@@ -68,10 +69,10 @@ void main() {
       expect(
         () => ChimeJoinInfo.fromBackendResponse(backendJson(role: 'viewer')),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -79,6 +80,50 @@ void main() {
   });
 
   group('ChimeMediaSession', () {
+    test('repeated leave and dispose release Chime exactly once', () async {
+      final provider = FakeChimeMeetingSession();
+      final adapter = ChimeMediaSession(session: provider);
+      final info = ChimeJoinInfo.fromBackendResponse(backendJson());
+      await adapter.join(info);
+      await adapter.leave();
+      await adapter.leave();
+      expect(
+        provider.actions.where((action) => action == 'leave'),
+        hasLength(1),
+      );
+      final first = adapter.dispose();
+      final second = adapter.dispose();
+      expect(identical(first, second), isTrue);
+      await first;
+      expect(
+        provider.actions.where((action) => action == 'dispose'),
+        hasLength(1),
+      );
+    });
+
+    test('late provider join cannot revive a room after leave', () async {
+      final pending = _PendingChimeSession();
+      final adapter = ChimeMediaSession(session: pending);
+      final info = ChimeJoinInfo.fromBackendResponse(backendJson());
+      final joining = adapter.join(info);
+      final failure = expectLater(
+        joining,
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.cancelled,
+          ),
+        ),
+      );
+      await adapter.leave();
+      expect(adapter.state, MediaSessionState.ended);
+      pending.finishJoin();
+      await failure;
+      expect(adapter.state, MediaSessionState.ended);
+      await adapter.dispose();
+    });
+
     late FakeChimeMeetingSession providerSession;
     late ChimeMediaSession session;
     late ChimeJoinInfo joinInfo;
@@ -248,10 +293,10 @@ void main() {
         await expectLater(
           session.setScreenShareEnabled(true),
           throwsA(
-            isA<MediaError>().having(
+            isA<RealtimeException>().having(
               (error) => error.code,
               'code',
-              MediaErrorCode.unsupportedFeature,
+              RealtimeErrorCode.unsupportedFeature,
             ),
           ),
         );
@@ -284,4 +329,16 @@ void main() {
     expect(factory.supportedRoles, {MediaRole.participant});
     expect(factory.createSession(info).chimeSession, same(fake));
   });
+}
+
+class _PendingChimeSession extends FakeChimeMeetingSession {
+  final Completer<void> _pending = Completer<void>();
+
+  @override
+  Future<void> join(chime.JoinInfo info) async {
+    await _pending.future;
+    await super.join(info);
+  }
+
+  void finishJoin() => _pending.complete();
 }

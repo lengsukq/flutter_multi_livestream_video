@@ -20,8 +20,8 @@ class ChimeJoinInfo extends MediaJoinInfo {
     if (provider != null &&
         provider.isNotEmpty &&
         provider != providerIdValue) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Expected Chime join information, got "$provider".',
         providerId: providerIdValue,
       );
@@ -34,8 +34,8 @@ class ChimeJoinInfo extends MediaJoinInfo {
     );
     final role = MediaRole.tryParse(json['role']) ?? MediaRole.participant;
     if (role != MediaRole.participant) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'The current Chime adapter implements symmetric meeting '
             'participants only.',
@@ -49,8 +49,8 @@ class ChimeJoinInfo extends MediaJoinInfo {
     if (commonParticipantId != null &&
         commonParticipantId.isNotEmpty &&
         commonParticipantId != attendeeId) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'participantId must match attendee.AttendeeId for Chime.',
         providerId: providerIdValue,
       );
@@ -75,8 +75,8 @@ class ChimeJoinInfo extends MediaJoinInfo {
       info.validate();
       return info;
     } on FormatException catch (error) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: error.message.toString(),
         details: error,
         providerId: providerIdValue,

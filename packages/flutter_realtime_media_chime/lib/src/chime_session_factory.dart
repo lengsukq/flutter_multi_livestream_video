@@ -26,8 +26,8 @@ class ChimeSessionFactory implements MediaSessionFactory {
   @override
   ChimeMediaSession createSession(MediaJoinInfo joinInfo) {
     if (joinInfo is! ChimeJoinInfo || joinInfo.role != MediaRole.participant) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'ChimeSessionFactory requires participant ChimeJoinInfo.',
         providerId: ChimeJoinInfo.providerIdValue,
       );

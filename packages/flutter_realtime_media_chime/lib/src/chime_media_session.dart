@@ -43,7 +43,9 @@ class ChimeMediaSession
     capabilities: _chimeCapabilities,
   );
   bool _disposed = false;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   Future<void>? _joinFuture;
+  bool _joinCancelled = false;
   Future<void>? _leaveFuture;
   Future<void>? _disposeFuture;
 
@@ -71,6 +73,16 @@ class ChimeMediaSession
     }
   }
 
+  void _ensureJoinNotCancelled() {
+    if (_joinCancelled || _disposed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.cancelled,
+        providerId: providerId,
+        message: 'The Chime join was cancelled.',
+      );
+    }
+  }
+
   final _processedSink = NativeProcessedVideoSink(
     providerId: 'chime',
     channelName: 'com.oneplusdream.aws.chime.methodChannel',
@@ -90,8 +102,8 @@ class ChimeMediaSession
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _ensureActive();
     if (!supportsProcessedVideoSource(source)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         providerId: providerId,
         message:
             'Processed video input is unavailable for this role or platform.',
@@ -137,6 +149,7 @@ class ChimeMediaSession
   Future<void> join(MediaJoinInfo joinInfo) {
     final current = _joinFuture;
     if (current != null) return current;
+    _joinCancelled = false;
     late final Future<void> future;
     future = _join(joinInfo).whenComplete(() {
       if (identical(_joinFuture, future)) _joinFuture = null;
@@ -148,8 +161,8 @@ class ChimeMediaSession
   Future<void> _join(MediaJoinInfo rawJoinInfo) async {
     _ensureNotDisposed();
     if (rawJoinInfo is! ChimeJoinInfo || rawJoinInfo.role != role) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information does not match this Chime session.',
         providerId: ChimeJoinInfo.providerIdValue,
       );
@@ -157,8 +170,8 @@ class ChimeMediaSession
     if (state != MediaSessionState.idle &&
         state != MediaSessionState.ended &&
         state != MediaSessionState.failed) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidState,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'This Chime session is already joining or active.',
         providerId: ChimeJoinInfo.providerIdValue,
       );
@@ -167,16 +180,27 @@ class ChimeMediaSession
     _attachProviderStreams();
     try {
       await _session.join(rawJoinInfo.chimeJoinInfo);
+      _ensureJoinNotCancelled();
       await _probeProcessedVideoInput();
+      _ensureJoinNotCancelled();
       _onProviderSnapshot(_session.snapshot, clearLastError: true);
-    } on chime.ChimeException catch (error) {
+    } on chime.RealtimeException catch (error) {
+      if (_joinCancelled || _disposed) rethrow;
       final mapped = _mapError(error);
       _replaceSnapshot(_snapshot.copyWith(lastError: mapped));
       _emit(MediaFailureEvent(mapped));
       throw mapped;
     } catch (error) {
-      final mapped = MediaError(
-        code: MediaErrorCode.unknown,
+      if (_joinCancelled || _disposed) {
+        throw RealtimeException(
+          code: RealtimeErrorCode.cancelled,
+          providerId: providerId,
+          message: 'The Chime join was cancelled.',
+          cause: error,
+        );
+      }
+      final mapped = RealtimeException(
+        code: RealtimeErrorCode.unknown,
         message: 'Unable to join the Chime meeting.',
         details: error,
         providerId: providerId,
@@ -223,8 +247,8 @@ class ChimeMediaSession
     _ensureActive();
     if (device.kind == MediaDeviceKind.camera && capabilities.canSelectCamera) {
       if (_processedSink.source == null) {
-        throw MediaError(
-          code: MediaErrorCode.invalidState,
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidState,
           providerId: providerId,
           message: 'Prepare the SDK video source before selecting a camera.',
         );
@@ -233,8 +257,8 @@ class ChimeMediaSession
       return;
     }
     if (device.kind != MediaDeviceKind.audioOutput) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Chime only exposes audio output device selection.',
         providerId: providerId,
       );
@@ -261,7 +285,13 @@ class ChimeMediaSession
   });
 
   Future<void> _leave() async {
-    if (_disposed || state == MediaSessionState.disposed) return;
+    if (_disposed ||
+        state == MediaSessionState.disposed ||
+        state == MediaSessionState.ended ||
+        (state == MediaSessionState.idle && _joinFuture == null)) {
+      return;
+    }
+    if (_joinFuture != null) _joinCancelled = true;
     try {
       try {
         await detachProcessedVideoSource();
@@ -269,7 +299,7 @@ class ChimeMediaSession
         await _session.leave();
       }
       _onProviderSnapshot(_session.snapshot);
-    } on chime.ChimeException catch (error) {
+    } on chime.RealtimeException catch (error) {
       throw _mapError(error);
     }
   }
@@ -278,29 +308,34 @@ class ChimeMediaSession
   Future<void> dispose() => _disposeFuture ??= _dispose();
 
   Future<void> _dispose() async {
-    if (_disposed) return;
-    try {
-      try {
-        await detachProcessedVideoSource();
-      } finally {
-        await _session.dispose();
-      }
-      _onProviderSnapshot(_session.snapshot);
-    } on chime.ChimeException catch (error) {
-      throw _mapError(error);
-    } finally {
-      _disposed = true;
+    _disposed = true;
+    _joinCancelled = true;
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('processedVideo', () async {
+      await detachProcessedVideoSource();
+    });
+    await cleanup.run('session', () async {
+      await _session.dispose();
+    });
+    await cleanup.run('snapshot.subscription', () async {
       await _snapshotSubscription?.cancel();
+    });
+    await cleanup.run('event.subscription', () async {
       await _eventSubscription?.cancel();
-      _snapshotSubscription = null;
-      _eventSubscription = null;
-      if (_snapshot.state != MediaSessionState.disposed) {
-        _transition(MediaSessionState.disposed);
-      }
+    });
+    await cleanup.run('terminal', () async {
+      _transition(MediaSessionState.disposed);
+    });
+    await cleanup.run('states', () async {
       await _stateController.close();
+    });
+    await cleanup.run('snapshots', () async {
       await _snapshotController.close();
+    });
+    await cleanup.run('events', () async {
       await _eventController.close();
-    }
+    });
+    cleanup.finish(domain: providerId);
   }
 
   @override
@@ -309,7 +344,7 @@ class ChimeMediaSession
     try {
       await _session.setMuted(muted);
       _onProviderSnapshot(_session.snapshot);
-    } on chime.ChimeException catch (error) {
+    } on chime.RealtimeException catch (error) {
       throw _mapError(error);
     }
   }
@@ -320,7 +355,7 @@ class ChimeMediaSession
     try {
       await _session.toggleMute();
       _onProviderSnapshot(_session.snapshot);
-    } on chime.ChimeException catch (error) {
+    } on chime.RealtimeException catch (error) {
       throw _mapError(error);
     }
   }
@@ -332,15 +367,15 @@ class ChimeMediaSession
       await _processedSink.setEnabled(enabled);
       await _session.setVideoEnabled(enabled);
       _onProviderSnapshot(_session.snapshot);
-    } on chime.ChimeException catch (error) {
+    } on chime.RealtimeException catch (error) {
       throw _mapError(error);
     }
   }
 
   @override
   Future<void> setScreenShareEnabled(bool enabled) async {
-    throw MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: 'Outgoing screen share is not implemented by flutter_aws_chime.',
       providerId: providerId,
     );
@@ -361,7 +396,7 @@ class ChimeMediaSession
             ? chime.CameraPosition.front
             : chime.CameraPosition.back,
       );
-    } on chime.ChimeException catch (error) {
+    } on chime.RealtimeException catch (error) {
       throw _mapError(error);
     }
   }
@@ -372,7 +407,7 @@ class ChimeMediaSession
     try {
       final devices = await _session.listAudioDevices();
       return devices.map(_mapAudioDevice).toList(growable: false);
-    } on chime.ChimeException catch (error) {
+    } on chime.RealtimeException catch (error) {
       throw _mapError(error);
     }
   }
@@ -384,7 +419,7 @@ class ChimeMediaSession
       await _session.selectAudioDevice(
         chime.ChimeAudioDevice.fromLabel(device.label),
       );
-    } on chime.ChimeException catch (error) {
+    } on chime.RealtimeException catch (error) {
       throw _mapError(error);
     }
   }
@@ -395,7 +430,7 @@ class ChimeMediaSession
     try {
       await _session.sendMessage(message, topic: topic);
       _onProviderSnapshot(_session.snapshot);
-    } on chime.ChimeException catch (error) {
+    } on chime.RealtimeException catch (error) {
       throw _mapError(error);
     }
   }
@@ -404,7 +439,12 @@ class ChimeMediaSession
     chime.MeetingSnapshot providerSnapshot, {
     bool clearLastError = false,
   }) {
-    if (_disposed && _snapshotController.isClosed) return;
+    if (_disposed ||
+        (_joinCancelled &&
+            providerSnapshot.state != chime.MeetingState.ended &&
+            providerSnapshot.state != chime.MeetingState.disposed)) {
+      return;
+    }
     final previous = _snapshot;
     final next = _mapSnapshot(providerSnapshot, clearLastError: clearLastError);
     _replaceSnapshot(next);
@@ -563,6 +603,7 @@ class ChimeMediaSession
   }
 
   void _onProviderEvent(chime.ChimeEvent event) {
+    if (_disposed) return;
     if (event is chime.AttendeeVolumeEvent) {
       final speaking = switch (event.volumeLevel) {
         chime.MeetingVolumeLevel.low ||
@@ -619,17 +660,19 @@ class ChimeMediaSession
 
   void _replaceSnapshot(MediaSnapshot snapshot) {
     _snapshot = snapshot;
-    if (!_snapshotController.isClosed) _snapshotController.add(snapshot);
+    if (!_disposed && !_snapshotController.isClosed) {
+      _snapshotController.add(snapshot);
+    }
   }
 
   void _emit(MediaEvent event) {
-    if (!_eventController.isClosed) _eventController.add(event);
+    if (!_disposed && !_eventController.isClosed) _eventController.add(event);
   }
 
   void _ensureNotDisposed() {
     if (_disposed || state == MediaSessionState.disposed) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'This Chime adapter session has been disposed.',
         providerId: providerId,
       );
@@ -639,8 +682,8 @@ class ChimeMediaSession
   void _ensureActive() {
     _ensureNotDisposed();
     if (!state.isActive) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The Chime session is not active.',
         providerId: providerId,
       );
@@ -673,23 +716,5 @@ MediaAudioDevice _mapAudioDevice(chime.ChimeAudioDevice device) =>
       },
     );
 
-MediaError _mapError(chime.ChimeException error) => MediaError(
-  code: switch (error.code) {
-    chime.ChimeErrorCode.invalidJoinInfo => MediaErrorCode.invalidJoinInfo,
-    chime.ChimeErrorCode.invalidArgument => MediaErrorCode.invalidArgument,
-    chime.ChimeErrorCode.invalidState => MediaErrorCode.invalidState,
-    chime.ChimeErrorCode.meetingAlreadyActive =>
-      MediaErrorCode.sessionAlreadyActive,
-    chime.ChimeErrorCode.permissionDenied => MediaErrorCode.permissionDenied,
-    chime.ChimeErrorCode.unsupportedPlatform =>
-      MediaErrorCode.unsupportedPlatform,
-    chime.ChimeErrorCode.sessionNotFound => MediaErrorCode.sessionNotFound,
-    chime.ChimeErrorCode.methodNotImplemented =>
-      MediaErrorCode.unsupportedFeature,
-    chime.ChimeErrorCode.nativeError => MediaErrorCode.nativeError,
-    chime.ChimeErrorCode.unknown => MediaErrorCode.unknown,
-  },
-  message: error.message,
-  details: error.details,
-  providerId: ChimeJoinInfo.providerIdValue,
-);
+RealtimeException _mapError(chime.RealtimeException error) =>
+    error.withProvider('chime');
