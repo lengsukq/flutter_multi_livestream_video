@@ -144,8 +144,12 @@ void main() {
     expect(find.textContaining('Feedback sent'), findsNothing);
     await tester.tap(find.text('Awesome'));
     expect(repo.commands, hasLength(1));
-    gate.completeError(const RealtimeException(
-      code: RealtimeErrorCode.network, message: 'Feedback delivery failed'));
+    gate.completeError(
+      const RealtimeException(
+        code: RealtimeErrorCode.network,
+        message: 'Feedback delivery failed',
+      ),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump();
@@ -161,7 +165,7 @@ void main() {
     expect(session.state!.feedback, hasLength(1));
     expect(find.textContaining('Feedback sent'), findsWidgets);
     await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await session.dispose();
       await store.signals.close();
@@ -242,12 +246,14 @@ void main() {
     await tester.tap(find.text('Understood'));
     expect(repo.commands, isEmpty);
     expect(
-      find.text('Quick feedback is unavailable in this classroom.'),
+      find.text(
+        'This classroom service does not support feedback. Please update the service.',
+      ),
       findsOneWidget,
     );
     expect(find.textContaining('Feedback sent'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await session.dispose();
       await store.signals.close();

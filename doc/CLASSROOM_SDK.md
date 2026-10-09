@@ -38,6 +38,9 @@ if (classroom != null) {
   // Students:
   await classroom.raiseHand();
   await classroom.askQuestion('Can you explain this?');
+  if (classroom.state!.capabilities.canSendFeedback) {
+    await classroom.sendFeedback(ClassroomFeedbackKind.question);
+  }
   // Teachers (verified by backend room owner credential):
   // await classroom.grantSpeak(studentId);
   // await classroom.answerQuestion(questionId, 'Sure.');
@@ -59,7 +62,7 @@ For a backend Meeting room with a participant credential, SDK attaches:
 Every request includes requesterParticipantId + participantCredential. Teacher
 privileges require a valid roomOwnerCredential. Action identifiers:
 hand.raise, hand.lower, speak.grant, speak.revoke, question.ask,
-question.answer, question.resolve. User or question ids and text are supplied
+question.answer, question.resolve, feedback.send. User or question ids and text are supplied
 as appropriate. The response is the full ClassroomState, with increasing
 revision, selfUserId, students (including offline users and logical roles),
 questions, and stats. Unknown actions and
@@ -72,6 +75,26 @@ instead of wall-clock milliseconds. Stats distinguish active hands and pending
 questions from cumulative raises, all submitted questions and speaking grants.
 The chatMessages field remains local to the connected ChatSession (not a
 server-wide, historic class chat count).
+
+Quick feedback uses `kind` (`understood`, `great`, `idea`, `question`, `clap`).
+The server supplies sender identity, display name, ID and timestamp from the
+authenticated participant. Teachers can read all recent feedback; student
+snapshots contain only their own responses. The room retains its latest 200
+responses and limits each student to five submissions per ten seconds.
+Feedback is available by default without a UI toggle or setup action.
+Missing `feedbackSupported` preserves that default, including older snapshot
+shapes. Repositories can explicitly return `feedbackSupported: false` when
+they cannot implement feedback; the UI then reports unsupported service rather
+than implying that someone needs to enable a setting. An older server still
+needs the `feedback.send` action implementation before it can accept responses.
+The optional classroom UI confirms sending only after backend acceptance,
+shows teachers a short-lived bubble and unread badge, and retains a Feedback
+tab with sender, type, time and counts for the retained window. Notifications
+are derived from trusted snapshots and do not replay history on initial join.
+Existing revision hints refresh the receiver promptly; polling remains the
+fallback when hints are unavailable. Update the reference backend alongside
+the client to enable this contract. Optional classroom persistence also stores
+feedback and its rate-limit state.
 
 By default the reference backend keeps its classroom state in memory.
 Set CLASSROOM_STATE_DIR to enable an optional single-host FileClassroomStore:

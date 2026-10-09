@@ -12,6 +12,13 @@ Foundation is pure Dart. Domain cores depend on foundation and other required do
 
 Sessions own connections and native resources. Room wrappers own subscriptions, shared-content coordination and the clients created for that room. UI owns input controllers, navigation and presentation subscriptions. Applications injecting HTTP clients retain ownership. A preview returned by `createLocalPreview()` must be disposed when cancelled or replaced.
 
+Pre-Join defaults to microphone and camera off. Local preview factories must
+defer camera capture until explicit enablement; device enumeration, background
+selection and cancellation must not implicitly open it. The selected state is
+preserved on room entry. In-app annotation tools float within the current
+route's visible safe area and can be dragged outside the drawing canvas;
+their overlay disappears with the owning surface.
+
 Every cleanup stage is attempted in dependency order even when earlier stages fail. `CleanupFailure` records the stage, original failure and stack trace. `RealtimeException(cleanupFailed)` exposes an immutable failure list; its printable message contains stage names rather than native/HTTP payloads. Concurrent/repeated disposal shares a single future. Room/session `cleanupTimeout` controls the default ten-second stage limit. A timeout proves that a release attempt exceeded its limit; it does not prove a broken native resource was released.
 
 Join failures retain the primary cause when rollback also fails. Closing owners reject new work and ignore late state callbacks. Internal serialization tails may consume errors already returned to the operation caller; detached UI callbacks require an explicit diagnostic owner.

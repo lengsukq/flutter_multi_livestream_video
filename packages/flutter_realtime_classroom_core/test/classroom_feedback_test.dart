@@ -162,7 +162,7 @@ void main() {
     }
   });
 
-  test('legacy snapshots disable feedback and typed records parse safely', () {
+  test('feedback is enabled by default; only explicit false disables it', () {
     final base = <String, dynamic>{
       'roomCode': 'lesson1',
       'role': 'student',
@@ -171,7 +171,30 @@ void main() {
       'questions': <Object>[],
       'stats': <String, Object>{},
     };
-    expect(ClassroomState.fromJson(base).capabilities.canSendFeedback, isFalse);
+    expect(ClassroomState.fromJson(base).capabilities.canSendFeedback, isTrue);
+    expect(
+      ClassroomState.fromJson({
+        ...base,
+        'role': 'teacher',
+      }).capabilities.canViewFeedback,
+      isTrue,
+    );
+    expect(
+      ClassroomState.fromJson({
+        ...base,
+        'feedbackSupported': false,
+      }).capabilities.canSendFeedback,
+      isFalse,
+    );
+    final defaultState = ClassroomState(
+      roomCode: 'lesson1',
+      role: ClassroomRole.student,
+      revision: 1,
+      students: const [],
+      questions: const [],
+      stats: const ClassroomStats(),
+    );
+    expect(defaultState.capabilities.canSendFeedback, isTrue);
     final parsed = ClassroomState.fromJson({
       ...base,
       'feedbackSupported': true,
@@ -189,4 +212,29 @@ void main() {
     expect(parsed.feedback.single.kind, ClassroomFeedbackKind.question);
     expect(() => parsed.feedback.clear(), throwsUnsupportedError);
   });
+
+  test(
+    'snapshot without a feedback flag permits submission without an enable step',
+    () async {
+      final repo = _Repository(
+        ClassroomState.fromJson({
+          'roomCode': 'lesson1',
+          'selfUserId': 'alice',
+          'role': 'student',
+          'revision': 1,
+          'students': <Object>[],
+          'questions': <Object>[],
+          'stats': <String, Object>{},
+        }),
+      );
+      final session = ClassroomSession(
+        repo,
+        pollInterval: const Duration(hours: 1),
+      );
+      await session.sendFeedback(ClassroomFeedbackKind.understood);
+      expect(repo.commands.single.wireName, 'feedback.send');
+      expect(repo.commands.single.arguments, {'kind': 'understood'});
+      await session.dispose();
+    },
+  );
 }

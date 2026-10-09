@@ -112,7 +112,8 @@ class ClassroomStrings {
     'feedbackEmpty': 'Student feedback will appear here with names and times.',
     'feedbackRetention': 'Showing the latest 200 responses in this classroom.',
     'feedbackToTeacher': 'Your feedback is sent to the teacher.',
-    'feedbackUnavailable': 'Quick feedback is unavailable in this classroom.',
+    'feedbackUnavailable':
+        'This classroom service does not support feedback. Please update the service.',
     'feedbackView': 'View feedback',
     'feedbackMore': 'more responses',
     'feedbackDid': 'sent feedback:',
@@ -227,7 +228,7 @@ class ClassroomStrings {
     'feedbackEmpty': '学生发送反馈后，会在这里显示姓名、反馈类型和时间。',
     'feedbackRetention': '保留本课堂最近 200 条反馈。',
     'feedbackToTeacher': '反馈将发送给老师。',
-    'feedbackUnavailable': '当前课堂未启用即时反馈。',
+    'feedbackUnavailable': '当前课堂服务不支持即时反馈，请更新课堂服务。',
     'feedbackView': '查看反馈',
     'feedbackMore': '条其他反馈',
     'feedbackDid': '反馈了：',

@@ -234,7 +234,7 @@ class ClassroomState {
     this.speakEnforcement = 'advisory',
     this.selfUserId = '',
     this.tools,
-    this.feedbackSupported = false,
+    this.feedbackSupported = true,
     List<ClassroomFeedback> feedback = const [],
     List<ClassroomAttendance> attendance = const [],
   }) : students = List.unmodifiable(students),
@@ -341,7 +341,7 @@ class ClassroomState {
                 Map<String, dynamic>.from(data['tools'] as Map),
               ),
         feedbackSupported:
-            JsonReader(data).optional<bool>('feedbackSupported') ?? false,
+            JsonReader(data).optional<bool>('feedbackSupported') ?? true,
         feedback: [
           for (final item in data['feedback'] as List? ?? const [])
             ClassroomFeedback.fromJson(Map<String, dynamic>.from(item as Map)),

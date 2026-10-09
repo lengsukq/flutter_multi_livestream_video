@@ -61,6 +61,11 @@ void main() {
     await tester.tap(find.text('举手'));
     await tester.pump();
     expect(repo.actions, contains('hand.raise'));
+    await tester.pumpAndSettle();
+    expect(find.text('反馈将发送给老师。'), findsOneWidget);
+    await tester.tap(find.text('听懂了'));
+    await tester.pump();
+    expect(repo.actions, contains('feedback.send'));
     await tester.pumpWidget(const SizedBox.shrink());
     await session.dispose();
   });
@@ -101,6 +106,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('Student'), findsOneWidget);
+    expect(find.text('反馈'), findsOneWidget);
     await tester.tap(find.text('允许发言'));
     await tester.pump();
     expect(repo.actions, contains('speak.grant'));

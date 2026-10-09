@@ -19,6 +19,9 @@ function room(): RoomEntry {
 test('feedback uses authenticated identity, teacher sees all, students see only their own', () => {
   const entry = room();
   const directory = new ClassroomStateDirectory();
+  // No room-level enable operation or configuration is required.
+  assert.equal(directory.snapshot(entry, false, 'alice').feedbackSupported, true);
+  assert.equal(directory.snapshot(entry, true, 'teacher').feedbackSupported, true);
   const first = directory.act(entry, entry.attendees[1]!, false, {
     action: 'feedback.send', kind: 'question', eventId: 'feedback-alice-1',
     userId: 'bob', displayName: 'Forged',
