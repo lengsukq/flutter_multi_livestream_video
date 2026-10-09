@@ -144,15 +144,10 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
             style: const TextStyle(fontSize: 11.5, color: Color(0xFFB91C1C)),
           )
         else if (rooms.isEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
-            decoration: BoxDecoration(
-              color: style.surfaceSubtle,
-              borderRadius: BorderRadius.circular(
-                RealtimeUiTokens.controlRadius,
-              ),
-              border: Border.all(color: style.border),
-            ),
+          RealtimeGlassSurface(
+            radius: RealtimeUiTokens.cardRadius,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            shadow: false,
             child: Text(
               _filter == MediaRoomMode.broadcast
                   ? strings.noActiveLiveStreams
@@ -161,7 +156,7 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
                         : strings.noActiveRooms),
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 12.5,
+                fontSize: 13,
                 color: style.textMuted,
                 fontWeight: FontWeight.w600,
               ),

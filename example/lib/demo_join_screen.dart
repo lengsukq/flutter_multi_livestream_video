@@ -651,52 +651,29 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildDemoTabsCard() {
-    final style = RealtimeStyle.of(context);
-    return RealtimeGlassSurface(
-      radius: RealtimeUiTokens.cardRadius,
-      padding: const EdgeInsets.all(8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: style.surfaceSubtle,
-          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-          border: Border.all(color: style.border),
+  Widget _buildDemoTabsCard() => AnimatedBuilder(
+    animation: _demoTabs,
+    builder: (context, _) => RealtimeSegmentedTabs<int>(
+      height: 48,
+      selectedValue: _demoTabs.index,
+      onChanged: (val) {
+        _demoTabs.animateTo(val);
+        setState(() {});
+      },
+      tabs: [
+        RealtimeSegmentTab(
+          value: 0,
+          icon: Icons.videocam_rounded,
+          label: DemoStrings.of(context).videoTab,
         ),
-        padding: const EdgeInsets.all(4),
-        child: TabBar(
-          controller: _demoTabs,
-          dividerColor: Colors.transparent,
-          indicatorSize: TabBarIndicatorSize.tab,
-          indicator: BoxDecoration(
-            color: style.surface,
-            borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
-            border: Border.all(color: style.border),
-            boxShadow: style.cardShadow,
-          ),
-          labelColor: style.text,
-          unselectedLabelColor: style.textMuted,
-          labelStyle: const TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w800,
-          ),
-          unselectedLabelStyle: const TextStyle(
-            fontSize: 13.5,
-            fontWeight: FontWeight.w600,
-          ),
-          tabs: [
-            Tab(
-              icon: const Icon(Icons.videocam_rounded, size: 18),
-              text: DemoStrings.of(context).videoTab,
-            ),
-            Tab(
-              icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-              text: DemoStrings.of(context).chatTab,
-            ),
-          ],
+        RealtimeSegmentTab(
+          value: 1,
+          icon: Icons.chat_bubble_outline_rounded,
+          label: DemoStrings.of(context).chatTab,
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  );
 
   Widget _homeHero({required bool compact}) => DemoHomeHero(
     compact: compact,
@@ -785,13 +762,10 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
 
   Widget _buildServerSettingsSection([StateSetter? setSheetState]) {
     final style = RealtimeStyle.of(context);
-    return Container(
+    return RealtimeGlassSurface(
+      radius: RealtimeUiTokens.cardRadius,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: style.surfaceSubtle,
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-        border: Border.all(color: style.border),
-      ),
+      shadow: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -917,13 +891,10 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
 
   Widget _buildIdentitySettingsSection([StateSetter? setSheetState]) {
     final style = RealtimeStyle.of(context);
-    return Container(
+    return RealtimeGlassSurface(
+      radius: RealtimeUiTokens.cardRadius,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: style.surfaceSubtle,
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-        border: Border.all(color: style.border),
-      ),
+      shadow: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1063,55 +1034,27 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: style.surfaceSubtle,
-              borderRadius: BorderRadius.circular(
-                RealtimeUiTokens.controlRadius,
-              ),
-              border: Border.all(color: style.border),
-            ),
-            padding: const EdgeInsets.all(4),
-            child: TabBar(
-              controller: _roomTabs,
-              dividerColor: Colors.transparent,
-              indicatorSize: TabBarIndicatorSize.tab,
-              indicator: BoxDecoration(
-                color: style.surface,
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.compactRadius + 2,
-                ),
-                border: Border.all(color: style.border),
-                boxShadow: style.cardShadow,
-              ),
-              labelColor: style.text,
-              unselectedLabelColor: style.textMuted,
-              labelStyle: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w800,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
+          AnimatedBuilder(
+            animation: _roomTabs,
+            builder: (context, _) => RealtimeSegmentedTabs<int>(
+              height: 44,
+              selectedValue: _roomTabs.index,
+              onChanged: (val) {
+                _roomTabs.animateTo(val);
+                setState(() {});
+              },
               tabs: [
-                Tab(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(DemoStrings.of(context).joinRoomTab),
-                  ),
+                RealtimeSegmentTab(
+                  value: 0,
+                  label: DemoStrings.of(context).joinRoomTab,
                 ),
-                Tab(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(DemoStrings.of(context).createMeeting),
-                  ),
+                RealtimeSegmentTab(
+                  value: 1,
+                  label: DemoStrings.of(context).createMeeting,
                 ),
-                Tab(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(DemoStrings.of(context).startLive),
-                  ),
+                RealtimeSegmentTab(
+                  value: 2,
+                  label: DemoStrings.of(context).startLive,
                 ),
               ],
             ),
@@ -1157,7 +1100,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                                   ).withValues(alpha: 0.8))
                           : style.primarySubtle,
                       borderRadius: BorderRadius.circular(
-                        RealtimeUiTokens.compactRadius,
+                        RealtimeUiTokens.controlRadius,
                       ),
                       border: Border.all(
                         color: live

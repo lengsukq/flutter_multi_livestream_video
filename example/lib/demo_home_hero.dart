@@ -49,7 +49,9 @@ class DemoHomeHero extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   color: style.primarySubtle,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.controlRadius,
+                  ),
                 ),
                 alignment: Alignment.center,
                 child: Icon(
@@ -123,6 +125,7 @@ class DemoHomeHero extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final style = RealtimeStyle.of(context);
     final strings = DemoStrings.of(context);
     final mediaName = testingServer
         ? strings.checking
@@ -134,182 +137,162 @@ class DemoHomeHero extends StatelessWidget {
         : chatProviderId == null
         ? strings.unconfigured
         : strings.chatProviderDisplayName(chatProviderId!);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF15254D), Color(0xFF284995), Color(0xFF3866AC)],
+
+    return RealtimeGlassSurface(
+      radius: RealtimeUiTokens.sheetRadius,
+      opacity: 0.90,
+      blur: RealtimeUiTokens.blur,
+      padding: const EdgeInsets.all(26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: style.primarySubtle,
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.pillRadius,
+                  ),
+                  border: Border.all(color: style.primaryBorder),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      color: style.primary,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      strings.workspaceEyebrow,
+                      style: TextStyle(
+                        color: style.primary,
+                        fontSize: 11,
+                        letterSpacing: 1.2,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ),
-        child: Stack(
-          children: [
-            const Positioned(
-              top: -85,
-              right: -100,
-              child: SizedBox(
-                width: 290,
-                height: 290,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0x184BDDE8),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
+          const SizedBox(height: 20),
+          Text(
+            'Realtime Media',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: style.primary,
+              fontSize: 14,
+              letterSpacing: 0.5,
             ),
-            const Positioned(
-              bottom: -100,
-              left: -100,
-              child: SizedBox(
-                width: 230,
-                height: 230,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0x15FFFFFF),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            strings.workspaceTitle,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.8,
+              height: 1.2,
+              color: style.text,
+              fontSize: 28,
             ),
-            Padding(
-              padding: const EdgeInsets.all(26),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.auto_awesome_rounded,
-                        color: Color(0xFF91E6F6),
-                        size: 17,
-                      ),
-                      const SizedBox(width: 9),
-                      Expanded(
-                        child: Text(
-                          strings.workspaceEyebrow,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFFC8E5FF),
-                            fontSize: 11,
-                            letterSpacing: 1.4,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 27),
-                  const Text(
-                    'Realtime Media',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFFC8E5FF),
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    strings.workspaceTitle,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -0.8,
-                      height: 1.17,
-                      color: Colors.white,
-                      fontSize: 31,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    strings.workspaceDescription,
-                    style: const TextStyle(
-                      color: Color(0xFFE2ECFE),
-                      fontSize: 14,
-                      height: 1.65,
-                    ),
-                  ),
-                  const SizedBox(height: 26),
-                  Wrap(
-                    spacing: 9,
-                    runSpacing: 9,
-                    children: [
-                      _heroFeature(
-                        Icons.groups_2_outlined,
-                        strings.workspaceMeetings,
-                      ),
-                      _heroFeature(
-                        Icons.sensors_rounded,
-                        strings.workspaceLive,
-                      ),
-                      _heroFeature(
-                        Icons.chat_bubble_outline_rounded,
-                        strings.workspaceChat,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 29),
-                  const Divider(color: Color(0x40FFFFFF)),
-                  const SizedBox(height: 10),
-                  Text(
-                    strings.appSubtitle,
-                    style: const TextStyle(
-                      color: Color(0xFFC8E5FF),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      RealtimePill(
-                        label: '${strings.videoProviderLabel} · $mediaName',
-                        icon: Icons.videocam_outlined,
-                        foreground: RealtimeUiTokens.primary,
-                        background: Colors.white,
-                      ),
-                      RealtimePill(
-                        label: '${strings.chatProviderLabel} · $chatName',
-                        icon: Icons.forum_outlined,
-                        foreground: RealtimeUiTokens.primary,
-                        background: Colors.white,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            strings.workspaceDescription,
+            style: TextStyle(
+              color: style.textMuted,
+              fontSize: 13.5,
+              height: 1.6,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 22),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _heroFeature(
+                context,
+                Icons.groups_2_outlined,
+                strings.workspaceMeetings,
+              ),
+              _heroFeature(
+                context,
+                Icons.sensors_rounded,
+                strings.workspaceLive,
+              ),
+              _heroFeature(
+                context,
+                Icons.chat_bubble_outline_rounded,
+                strings.workspaceChat,
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Divider(color: style.border),
+          const SizedBox(height: 10),
+          Text(
+            strings.appSubtitle,
+            style: TextStyle(
+              color: style.textMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              RealtimePill(
+                label: '${strings.videoProviderLabel} · $mediaName',
+                icon: Icons.videocam_outlined,
+                foreground: style.primary,
+                background: style.primarySubtle,
+                borderColor: style.primaryBorder,
+              ),
+              RealtimePill(
+                label: '${strings.chatProviderLabel} · $chatName',
+                icon: Icons.forum_outlined,
+                foreground: style.primary,
+                background: style.primarySubtle,
+                borderColor: style.primaryBorder,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _heroFeature(IconData icon, String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .12),
-      borderRadius: BorderRadius.circular(11),
-      border: Border.all(color: Colors.white.withValues(alpha: .2)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: Colors.white, size: 16),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
+  Widget _heroFeature(BuildContext context, IconData icon, String label) {
+    final style = RealtimeStyle.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: style.surfaceSubtle,
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+        border: Border.all(color: style.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: style.primary, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: style.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

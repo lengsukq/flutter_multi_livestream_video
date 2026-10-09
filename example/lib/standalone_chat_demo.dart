@@ -297,43 +297,27 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Segmented Tabs Header
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: RealtimeStyle.of(context).surfaceSubtle,
-                      borderRadius: BorderRadius.circular(
-                        RealtimeUiTokens.controlRadius,
+                  RealtimeSegmentedTabs<int>(
+                    selectedValue: _tabIndex,
+                    onChanged: (val) => setState(() => _tabIndex = val),
+                    tabs: [
+                      RealtimeSegmentTab(
+                        value: 0,
+                        label: strings.exploreChatRooms,
+                        icon: Icons.explore_outlined,
+                        badge: _availableRooms.length,
                       ),
-                      border: Border.all(
-                        color: RealtimeStyle.of(context).border,
+                      RealtimeSegmentTab(
+                        value: 1,
+                        label: strings.quickCreateRoom,
+                        icon: Icons.add_comment_outlined,
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _tabButton(
-                            index: 0,
-                            label: strings.exploreChatRooms,
-                            icon: Icons.explore_outlined,
-                            badge: _availableRooms.length,
-                          ),
-                        ),
-                        Expanded(
-                          child: _tabButton(
-                            index: 1,
-                            label: strings.quickCreateRoom,
-                            icon: Icons.add_comment_outlined,
-                          ),
-                        ),
-                        Expanded(
-                          child: _tabButton(
-                            index: 2,
-                            label: strings.joinByCode,
-                            icon: Icons.login_rounded,
-                          ),
-                        ),
-                      ],
-                    ),
+                      RealtimeSegmentTab(
+                        value: 2,
+                        label: strings.joinByCode,
+                        icon: Icons.login_rounded,
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 18),
@@ -435,66 +419,6 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
     );
   }
 
-  Widget _tabButton({
-    required int index,
-    required String label,
-    required IconData icon,
-    int badge = 0,
-  }) {
-    final style = RealtimeStyle.of(context);
-    final active = _tabIndex == index;
-    return InkWell(
-      onTap: () => setState(() => _tabIndex = index),
-      borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? style.surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
-          border: active ? Border.all(color: style.border) : null,
-          boxShadow: active ? style.cardShadow : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 15,
-              color: active ? style.primary : style.textMuted,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                color: active ? style.primary : style.textMuted,
-              ),
-            ),
-            if (badge > 0) ...[
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: active ? style.primary : style.borderStrong,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '$badge',
-                  style: const TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildAvailableRooms() {
     final style = RealtimeStyle.of(context);
     final strings = DemoStrings.of(context);
@@ -553,15 +477,10 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
             style: const TextStyle(fontSize: 11.5, color: Color(0xFFB91C1C)),
           )
         else if (rooms.isEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 14),
-            decoration: BoxDecoration(
-              color: style.surfaceSubtle,
-              borderRadius: BorderRadius.circular(
-                RealtimeUiTokens.controlRadius,
-              ),
-              border: Border.all(color: style.border),
-            ),
+          RealtimeGlassSurface(
+            radius: RealtimeUiTokens.cardRadius,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            shadow: false,
             child: Column(
               children: [
                 Icon(
