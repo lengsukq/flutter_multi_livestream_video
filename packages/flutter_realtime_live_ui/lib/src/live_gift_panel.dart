@@ -311,34 +311,53 @@ class _LiveGiftControlButtonState extends State<LiveGiftControlButton> {
   @override
   Widget build(BuildContext context) {
     final label = _text(context, '礼物', 'Gifts');
+    final style = RealtimeStyle.of(context);
     return Semantics(
       label: label,
       button: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          RealtimeGlassIconButton(
-            tooltip: label,
-            icon: Icons.card_giftcard,
-            onPressed: _open,
-            active: _panelOpen,
-            size: 46,
-            radius: RealtimeUiTokens.controlRadius,
-          ),
-          if (widget.showLabel) ...[
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: _panelOpen
-                    ? RealtimeUiTokens.primary
-                    : RealtimeUiTokens.text,
+      child: InkWell(
+        onTap: _open,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _panelOpen ? style.primarySubtle : style.surfaceSubtle,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _panelOpen
+                        ? style.primary
+                        : (style.isDark
+                              ? Colors.white.withValues(alpha: 0.16)
+                              : Colors.transparent),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(
+                  Icons.card_giftcard,
+                  size: 20,
+                  color: _panelOpen ? style.primary : style.text,
+                ),
               ),
-            ),
-          ],
-        ],
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _panelOpen ? style.primary : style.text,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
