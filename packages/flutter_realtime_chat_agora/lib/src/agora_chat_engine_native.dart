@@ -132,19 +132,22 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
         },
       ),
     );
-    _client.chatManager.addMessageEvent(_handlerId, ChatMessageEvent(
-      onSuccess: (localId, message) {
-        final pending = _pendingSends.remove(localId);
-        if (pending == null || pending.isCompleted) return;
-        _emitMessage(message);
-        pending.complete();
-      },
-      onError: (localId, _, error) {
-        final pending = _pendingSends.remove(localId);
-        if (pending == null || pending.isCompleted) return;
-        pending.completeError(error);
-      },
-    ));
+    _client.chatManager.addMessageEvent(
+      _handlerId,
+      ChatMessageEvent(
+        onSuccess: (localId, message) {
+          final pending = _pendingSends.remove(localId);
+          if (pending == null || pending.isCompleted) return;
+          _emitMessage(message);
+          pending.complete();
+        },
+        onError: (localId, _, error) {
+          final pending = _pendingSends.remove(localId);
+          if (pending == null || pending.isCompleted) return;
+          pending.completeError(error);
+        },
+      ),
+    );
     _client.chatRoomManager.addEventHandler(
       _handlerId,
       ChatRoomEventHandler(
@@ -208,16 +211,20 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
       // callback above carries the canonical server message ID.
       await Future.wait<void>([
         _client.chatManager.sendMessage(outgoing).then((_) {}),
-        pending.future.timeout(sendTimeout, onTimeout: () {
-          throw const RealtimeException(
-            code: RealtimeErrorCode.timeout,
-            providerId: AgoraChatJoinInfo.providerIdValue,
-            message: 'Agora Chat message delivery was not confirmed in time.',
-          );
-        }),
+        pending.future.timeout(
+          sendTimeout,
+          onTimeout: () {
+            throw const RealtimeException(
+              code: RealtimeErrorCode.timeout,
+              providerId: AgoraChatJoinInfo.providerIdValue,
+              message: 'Agora Chat message delivery was not confirmed in time.',
+            );
+          },
+        ),
       ], eagerError: true);
     } finally {
       _pendingSends.remove(localId);
+      if (!pending.isCompleted) pending.complete();
     }
   }
 
@@ -234,11 +241,13 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
     _disconnectRequested = true;
     for (final pending in _pendingSends.values) {
       if (!pending.isCompleted) {
-        pending.completeError(const RealtimeException(
-          code: RealtimeErrorCode.cancelled,
-          providerId: AgoraChatJoinInfo.providerIdValue,
-          message: 'Agora Chat message delivery was cancelled by disconnect.',
-        ));
+        pending.completeError(
+          const RealtimeException(
+            code: RealtimeErrorCode.cancelled,
+            providerId: AgoraChatJoinInfo.providerIdValue,
+            message: 'Agora Chat message delivery was cancelled by disconnect.',
+          ),
+        );
       }
     }
     _pendingSends.clear();

@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 
-import 'package:agora_chat_sdk/agora_chat_sdk.dart';
+import 'package:agora_chat_sdk/agora_chat_sdk.dart' as vendor;
 // The vendor platform interface is used only to simulate native SDK state.
 // ignore: depend_on_referenced_packages
 import 'package:agora_chat_sdk_interface/agora_chat_sdk_interface.dart'
@@ -17,6 +18,9 @@ class _NativeClient extends platform.Client {
   bool failLeave = false;
   bool failLogout = false;
   Completer<void>? pendingLogin;
+  Map<String, dynamic>? sent;
+  @override
+  platform.ChatManager get chatManager => _NativeChats(this);
 
   @override
   platform.ChatRoomManager get chatRoomManager => _NativeRooms(this);
@@ -32,15 +36,52 @@ class _NativeClient extends platform.Client {
       case 'login':
         if (pendingLogin != null) await pendingLogin!.future;
         if (user != null) {
-          throw ChatError(200, 'The user is already logged in');
+          throw vendor.ChatError(200, 'The user is already logged in');
         }
         user = params['userId'] as String;
       case 'logout':
-        if (failLogout) throw ChatError(2, 'Logout failed');
+        if (failLogout) throw vendor.ChatError(2, 'Logout failed');
         user = null;
     }
     return <String, dynamic>{};
   }
+}
+
+class _NativeChats extends platform.ChatManager {
+  _NativeChats(this.client);
+  final _NativeClient client;
+  @override
+  Future<dynamic> callNativeMethod(String method, [dynamic params]) async {
+    client.calls.add(method);
+    if (method == 'sendMessage') {
+      client.sent = Map<String, dynamic>.from(params as Map);
+      return {
+        method: {
+          ...client.sent!,
+          'msgId': 'server-send-1',
+          'from': client.user,
+          'serverTime': 123456,
+        },
+      };
+    }
+    return <String, dynamic>{};
+  }
+}
+
+Future<void> _nativeEvent(
+  String channel,
+  String method,
+  dynamic arguments,
+) async {
+  final reply = Completer<void>();
+  // Exercise the vendor's real Dart callback decoding, without a native device.
+  await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .handlePlatformMessage(
+        channel,
+        const JSONMethodCodec().encodeMethodCall(MethodCall(method, arguments)),
+        (_) => reply.complete(),
+      );
+  await reply.future;
 }
 
 class _NativeRooms extends platform.ChatRoomManager {
@@ -51,10 +92,10 @@ class _NativeRooms extends platform.ChatRoomManager {
   Future<dynamic> callNativeMethod(String method, [dynamic params]) async {
     client.calls.add(method);
     if (method == 'joinChatRoom' && client.failJoin) {
-      throw ChatError(403, 'Room join forbidden');
+      throw vendor.ChatError(403, 'Room join forbidden');
     }
     if (method == 'leaveChatRoom' && client.failLeave) {
-      throw ChatError(2, 'Room leave failed');
+      throw vendor.ChatError(2, 'Room leave failed');
     }
     return <String, dynamic>{};
   }
@@ -94,6 +135,124 @@ void main() {
     platform.Client.instance = originalClient;
   });
 
+  test(
+    'enqueue and native self echo do not duplicate the confirmed server message',
+    () async {
+      final messages = <Map<String, Object?>>[];
+      await engine.connect(
+        _info,
+        AgoraChatEngineEvents(onMessage: messages.add),
+      );
+      var completed = false;
+      final sending = engine.sendMessage('Hello').then((_) => completed = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(completed, isFalse);
+      expect(messages, isEmpty);
+      final localId = client.sent!['msgId'];
+      final confirmed = {
+        ...client.sent!,
+        'msgId': 'server-send-1',
+        'from': _info.providerUserId,
+        'serverTime': 123456,
+      };
+      await _nativeEvent('com.chat.im/chat_manager', 'onMessagesReceived', [
+        confirmed,
+      ]);
+      expect(messages, isEmpty);
+      await _nativeEvent('com.chat.im/chat_message', 'onMessageSuccess', {
+        'localId': localId,
+        'message': confirmed,
+      });
+      await sending;
+      expect(messages.single['id'], 'server-send-1');
+      expect(messages.single['message'], 'Hello');
+      await _nativeEvent('com.chat.im/chat_message', 'onMessageSuccess', {
+        'localId': localId,
+        'message': confirmed,
+      });
+      expect(messages, hasLength(1));
+    },
+  );
+
+  test(
+    'incoming native message updates participant snapshots without a local send',
+    () async {
+      final session = AgoraChatSession(
+        role: _info.role,
+        engineFactory: () async => engine,
+      );
+      final snapshots = <List<ChatMessage>>[];
+      final subscription = session.messageSnapshots.listen(snapshots.add);
+      await session.connect(_info);
+      final raw = vendor.ChatMessage.createTxtSendMessage(
+        targetId: _info.chatRoomId,
+        content: 'Teacher message',
+        chatType: vendor.ChatType.ChatRoom,
+      ).toJson();
+      await _nativeEvent('com.chat.im/chat_manager', 'onMessagesReceived', [
+        {
+          ...raw,
+          'msgId': 'remote-1',
+          'from': 'teacher-provider',
+          'serverTime': 123456,
+          'attributes': {'userId': 'teacher', 'displayName': 'Teacher'},
+        },
+      ]);
+      await Future<void>.delayed(Duration.zero);
+      expect(session.messages.single.message, 'Teacher message');
+      expect(snapshots.last.single.id, 'remote-1');
+      expect(client.calls, isNot(contains('sendMessage')));
+      await subscription.cancel();
+      await session.dispose();
+    },
+  );
+
+  test(
+    'native send failure is reported and never appears as a sent message',
+    () async {
+      final messages = <Map<String, Object?>>[];
+      await engine.connect(
+        _info,
+        AgoraChatEngineEvents(onMessage: messages.add),
+      );
+      final sending = engine.sendMessage('Failure');
+      final failure = expectLater(sending, throwsA(isA<vendor.ChatError>()));
+      await Future<void>.delayed(Duration.zero);
+      await _nativeEvent('com.chat.im/chat_message', 'onMessageError', {
+        'localId': client.sent!['msgId'],
+        'message': client.sent!,
+        'error': {'code': 403, 'description': 'Message rejected'},
+      });
+      await failure;
+      expect(messages, isEmpty);
+    },
+  );
+
+  test('unconfirmed native send times out without inserting a message', () async {
+    final messages = <Map<String, Object?>>[];
+    engine.sendTimeout = const Duration(milliseconds: 5);
+    await engine.connect(_info, AgoraChatEngineEvents(onMessage: messages.add));
+    await expectLater(engine.sendMessage('Unconfirmed'), throwsA(
+      isA<RealtimeException>().having((error) => error.code, 'code', RealtimeErrorCode.timeout)));
+    expect(messages, isEmpty);
+  });
+
+  test('disconnect cancels a pending send and ignores its late confirmation', () async {
+    final messages = <Map<String, Object?>>[];
+    await engine.connect(_info, AgoraChatEngineEvents(onMessage: messages.add));
+    final sending = engine.sendMessage('Cancelled');
+    final cancelled = expectLater(sending, throwsA(isA<RealtimeException>()
+      .having((error) => error.code, 'code', RealtimeErrorCode.cancelled)));
+    await Future<void>.delayed(Duration.zero);
+    await engine.disconnect();
+    await cancelled;
+    await _nativeEvent('com.chat.im/chat_message', 'onMessageSuccess', {
+      'localId': client.sent!['msgId'],
+      'message': {...client.sent!, 'msgId': 'late-server-message', 'from': _info.providerUserId},
+    });
+    expect(messages, isEmpty);
+  });
+
   for (final staleUser in ['provider-user-1', 'previous-user']) {
     test('clears stale login for $staleUser before reauthentication', () async {
       client.user = staleUser;
@@ -112,7 +271,9 @@ void main() {
     client.failLeave = true;
     await expectLater(
       engine.connect(_info, const AgoraChatEngineEvents()),
-      throwsA(isA<ChatError>().having((error) => error.code, 'code', 403)),
+      throwsA(
+        isA<vendor.ChatError>().having((error) => error.code, 'code', 403),
+      ),
     );
     expect(client.user, isNull);
     expect(
@@ -171,7 +332,7 @@ void main() {
     () async {
       await engine.connect(_info, const AgoraChatEngineEvents());
       client.failLogout = true;
-      await expectLater(engine.dispose(), throwsA(isA<ChatError>()));
+      await expectLater(engine.dispose(), throwsA(isA<vendor.ChatError>()));
       expect(client.user, _info.providerUserId);
       client.failLogout = false;
       engine = AgoraSdkChatEngine();
