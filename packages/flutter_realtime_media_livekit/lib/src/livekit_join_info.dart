@@ -31,8 +31,8 @@ class LiveKitJoinInfo extends MediaJoinInfo {
     if (provider != null &&
         provider.isNotEmpty &&
         provider != providerIdValue) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Expected LiveKit join information, got "$provider".',
         providerId: providerIdValue,
       );
@@ -46,8 +46,8 @@ class LiveKitJoinInfo extends MediaJoinInfo {
     final role = MediaRole.tryParse(json['role']) ?? MediaRole.participant;
     final livekitValue = json['livekit'];
     if (livekitValue is! Map) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information is missing the "livekit" provider block.',
         providerId: providerIdValue,
       );
@@ -70,8 +70,8 @@ class LiveKitJoinInfo extends MediaJoinInfo {
         ? commonParticipantId
         : nestedIdentity;
     if (participantId == null || participantId.isEmpty) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information is missing "participantId".',
         providerId: providerIdValue,
       );
@@ -80,8 +80,8 @@ class LiveKitJoinInfo extends MediaJoinInfo {
         ? participantId
         : nestedIdentity;
     if (identity != participantId) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'livekit.identity must match participantId.',
         providerId: providerIdValue,
       );

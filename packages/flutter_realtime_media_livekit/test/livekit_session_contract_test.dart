@@ -43,20 +43,20 @@ void main() {
       await expectLater(
         session.setMuted(false),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidState,
+            RealtimeErrorCode.invalidState,
           ),
         ),
       );
       await expectLater(
         session.setVideoEnabled(true),
-        throwsA(isA<MediaError>()),
+        throwsA(isA<RealtimeException>()),
       );
       await expectLater(
         session.sendMessage('hello'),
-        throwsA(isA<MediaError>()),
+        throwsA(isA<RealtimeException>()),
       );
       await session.dispose();
     });
@@ -71,7 +71,8 @@ void main() {
       await pumpEventQueue();
 
       expect(session.state, MediaSessionState.disposed);
-      expect(states, contains(MediaSessionState.disposed));
+      expect(states, isEmpty);
+      expect(session.state, MediaSessionState.disposed);
       await subscription.cancel();
     });
 

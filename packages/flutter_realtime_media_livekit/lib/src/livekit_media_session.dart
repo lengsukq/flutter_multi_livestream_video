@@ -1,3 +1,4 @@
+import 'livekit_device_controller.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -77,7 +78,9 @@ abstract class LiveKitMediaSessionBase
   LiveKitMediaSessionBase({
     required this.role,
     required MediaCapabilities capabilities,
-  }) : _capabilities = capabilities,
+    lk.Room Function()? roomFactory,
+  }) : _roomFactory = roomFactory ?? lk.Room.new,
+       _capabilities = capabilities,
        _snapshot = MediaSnapshot(role: role, capabilities: capabilities);
 
   @override
@@ -88,10 +91,13 @@ abstract class LiveKitMediaSessionBase
 
   MediaCapabilities _capabilities;
   MediaSnapshot _snapshot;
+  final lk.Room Function() _roomFactory;
   lk.Room? _room;
   lk.EventsListener<lk.RoomEvent>? _listener;
   LiveKitJoinInfo? _joinInfo;
   bool _disposed = false;
+  bool _leaveRequestedDuringJoin = false;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   Future<void>? _joinFuture;
   Future<void>? _leaveFuture;
   Future<void>? _disposeFuture;
@@ -137,7 +143,19 @@ abstract class LiveKitMediaSessionBase
   @override
   Future<void> join(MediaJoinInfo joinInfo) {
     final current = _joinFuture;
-    if (current != null) return current;
+    if (current != null) {
+      if (_leaveRequestedDuringJoin) {
+        return Future.error(
+          const RealtimeException(
+            code: RealtimeErrorCode.cancelled,
+            message: 'The previous LiveKit join is still being cancelled.',
+            providerId: LiveKitJoinInfo.providerIdValue,
+          ),
+        );
+      }
+      return current;
+    }
+    _leaveRequestedDuringJoin = false;
     late final Future<void> future;
     future = _join(joinInfo).whenComplete(() {
       if (identical(_joinFuture, future)) _joinFuture = null;
@@ -146,130 +164,25 @@ abstract class LiveKitMediaSessionBase
     return future;
   }
 
-  @override
-  Future<List<MediaDevice>> listMediaDevices({
-    Set<MediaDeviceKind>? kinds,
-  }) async {
-    _ensureActive();
-    final requested = kinds ?? MediaDeviceKind.values.toSet();
-    final devices = <MediaDevice>[];
-    try {
-      if (requested.contains(MediaDeviceKind.microphone) &&
-          capabilities.canEnumerateMicrophones) {
-        devices.addAll(
-          (await lk.Hardware.instance.audioInputs()).map(
-            (device) => MediaDevice(
-              id: device.deviceId,
-              label: device.label,
-              kind: MediaDeviceKind.microphone,
-              groupId: device.groupId,
-            ),
-          ),
-        );
-      }
-      if (requested.contains(MediaDeviceKind.camera) &&
-          capabilities.canEnumerateCameras) {
-        devices.addAll(
-          (await lk.Hardware.instance.videoInputs()).map(
-            (device) => MediaDevice(
-              id: device.deviceId,
-              label: device.label,
-              kind: MediaDeviceKind.camera,
-              groupId: device.groupId,
-            ),
-          ),
-        );
-      }
-      if (requested.contains(MediaDeviceKind.audioOutput) &&
-          capabilities.canEnumerateAudioDevices) {
-        devices.addAll(
-          (await lk.Hardware.instance.audioOutputs()).map(
-            (device) => MediaDevice(
-              id: device.deviceId,
-              label: device.label,
-              kind: MediaDeviceKind.audioOutput,
-              groupId: device.groupId,
-            ),
-          ),
-        );
-      }
-      return List.unmodifiable(devices);
-    } catch (error) {
-      throw _mapError(error, 'Unable to enumerate LiveKit media devices.');
-    }
-  }
-
-  @override
-  Future<void> selectMediaDevice(MediaDevice device) async {
-    _ensureActive();
-    try {
-      switch (device.kind) {
-        case MediaDeviceKind.microphone:
-          if (!capabilities.canSelectMicrophone) {
-            _unsupportedDevice('microphone device selection');
-          }
-          final selected = await _findLiveKitDevice(
-            device,
-            lk.Hardware.instance.audioInputs,
-          );
-          await _requireRoom().setAudioInputDevice(selected);
-        case MediaDeviceKind.camera:
-          if (!capabilities.canSelectCamera) {
-            _unsupportedDevice('camera device selection');
-          }
-          final selected = await _findLiveKitDevice(
-            device,
-            lk.Hardware.instance.videoInputs,
-          );
-          await _requireRoom().setVideoInputDevice(selected);
-        case MediaDeviceKind.audioOutput:
-          if (!capabilities.canSelectAudioOutput) {
-            _unsupportedDevice('audio output device selection');
-          }
-          final selected = await _findLiveKitDevice(
-            device,
-            lk.Hardware.instance.audioOutputs,
-          );
-          await _requireRoom().setAudioOutputDevice(selected);
-      }
-    } on MediaError {
-      rethrow;
-    } catch (error) {
-      throw _mapError(error, 'Unable to select the LiveKit media device.');
-    }
-  }
-
-  Future<lk.MediaDevice> _findLiveKitDevice(
-    MediaDevice device,
-    Future<List<lk.MediaDevice>> Function() loader,
-  ) async {
-    final values = await loader();
-    for (final value in values) {
-      if (value.deviceId == device.id ||
-          (device.id.isEmpty && value.label == device.label)) {
-        return value;
-      }
-    }
-    throw MediaError(
-      code: MediaErrorCode.invalidArgument,
-      message: 'The selected media device is no longer available.',
-      providerId: providerId,
-    );
-  }
-
-  Never _unsupportedDevice(String feature) => throw MediaError(
-    code: MediaErrorCode.unsupportedFeature,
-    message: 'LiveKit $feature is not supported for this session.',
-    providerId: providerId,
+  late final _devices = LiveKitDeviceController(
+    capabilities: () => capabilities,
+    requireRoom: _requireRoom,
+    ensureActive: _ensureActive,
   );
+  @override
+  Future<List<MediaDevice>> listMediaDevices({Set<MediaDeviceKind>? kinds}) =>
+      _devices.listMediaDevices(kinds: kinds);
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) =>
+      _devices.selectMediaDevice(device);
 
   Future<void> _join(MediaJoinInfo rawJoinInfo) async {
     _ensureNotDisposed();
     if (state != MediaSessionState.idle &&
         state != MediaSessionState.ended &&
         state != MediaSessionState.failed) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidState,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'This LiveKit session is already joining or active.',
         providerId: LiveKitJoinInfo.providerIdValue,
       );
@@ -277,8 +190,8 @@ abstract class LiveKitMediaSessionBase
     if (rawJoinInfo is! LiveKitJoinInfo ||
         rawJoinInfo.providerId != providerId ||
         rawJoinInfo.role != role) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information does not match this LiveKit session.',
         providerId: LiveKitJoinInfo.providerIdValue,
       );
@@ -286,7 +199,7 @@ abstract class LiveKitMediaSessionBase
 
     _joinInfo = rawJoinInfo;
     _setState(MediaSessionState.joining);
-    final room = lk.Room();
+    final room = _roomFactory();
     _room = room;
     _attachRoomEvents(room);
     _setState(MediaSessionState.connecting);
@@ -296,17 +209,23 @@ abstract class LiveKitMediaSessionBase
         rawJoinInfo.token,
         connectOptions: const lk.ConnectOptions(autoSubscribe: true),
       );
+      if (_disposed || _leaveRequestedDuringJoin) {
+        throw const RealtimeException(
+          code: RealtimeErrorCode.cancelled,
+          message: 'Session is closing.',
+        );
+      }
       final local = room.localParticipant;
       if (local == null) {
-        throw const MediaError(
-          code: MediaErrorCode.nativeError,
+        throw const RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message: 'LiveKit connected without a local participant.',
           providerId: LiveKitJoinInfo.providerIdValue,
         );
       }
       if (local.identity != rawJoinInfo.identity) {
-        throw MediaError(
-          code: MediaErrorCode.invalidJoinInfo,
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
           message:
               'LiveKit token identity "${local.identity}" does not match '
               'participantId "${rawJoinInfo.identity}".',
@@ -320,36 +239,37 @@ abstract class LiveKitMediaSessionBase
       );
       _refreshSnapshot(clearLastError: true);
       _setState(MediaSessionState.connected);
-    } on MediaError {
-      await _tearDownRoom();
-      _setState(MediaSessionState.failed);
-      rethrow;
-    } catch (error) {
-      final mapped = _mapError(error, 'Unable to connect to the LiveKit room.');
-      await _tearDownRoom();
-      _setState(MediaSessionState.failed, error: mapped);
-      throw mapped;
+    } on RealtimeException catch (error, stack) {
+      await _rollbackJoin(error, stack);
+    } catch (error, stack) {
+      final mapped = _mapError(
+        error,
+        'Unable to connect to the LiveKit room.',
+        operation: 'join',
+        stackTrace: stack,
+      );
+      await _rollbackJoin(mapped, stack);
     }
   }
 
   void _validatePermissions(lk.ParticipantPermissions permissions) {
     if (!permissions.canSubscribe) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'LiveKit credentials do not allow subscribing to media.',
         providerId: providerId,
       );
     }
     if (role == MediaRole.viewer && permissions.canPublish) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Viewer credentials must not grant media publish permission.',
         providerId: providerId,
       );
     }
     if (role.canPublishMedia && !permissions.canPublish) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Publisher credentials do not grant media publish permission.',
         providerId: providerId,
       );
@@ -365,8 +285,15 @@ abstract class LiveKitMediaSessionBase
     if (_disposed) return;
     if (state == MediaSessionState.joining ||
         state == MediaSessionState.connecting) {
-      await _joinFuture;
+      _leaveRequestedDuringJoin = true;
+      // Do not await the pending connect: some native SDK transports do not
+      // complete that future when the user leaves. Tear down the room now;
+      // a late connect result is rejected by _join's cancellation guard.
+      await _tearDownRoom();
+      if (!_disposed) _setState(MediaSessionState.ended);
+      return;
     }
+    if (_disposed) return;
     if (state == MediaSessionState.idle ||
         state == MediaSessionState.ended ||
         state == MediaSessionState.failed) {
@@ -392,19 +319,34 @@ abstract class LiveKitMediaSessionBase
   Future<void> dispose() => _disposeFuture ??= _dispose();
 
   Future<void> _dispose() async {
-    if (_disposed) return;
-    if (_joinFuture != null) await _joinFuture;
-    if (state.isActive || state == MediaSessionState.connecting) {
-      await leave();
-    } else {
-      await _tearDownRoom();
-    }
     _disposed = true;
-    _setState(MediaSessionState.disposed);
-    await _stateController.close();
-    await _snapshotController.close();
-    await _eventController.close();
-    await _statsController.close();
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('join.pending', () async {
+      try {
+        await _joinFuture;
+      } catch (_) {
+        /* The join caller receives its failure. */
+      }
+    });
+    await cleanup.run('engine', () async {
+      await _tearDownRoom();
+    });
+    await cleanup.run('terminal', () async {
+      _setState(MediaSessionState.disposed);
+    });
+    await cleanup.run('states', () async {
+      await _stateController.close();
+    });
+    await cleanup.run('snapshots', () async {
+      await _snapshotController.close();
+    });
+    await cleanup.run('events', () async {
+      await _eventController.close();
+    });
+    await cleanup.run('stats', () async {
+      await _statsController.close();
+    });
+    cleanup.finish(domain: providerId);
   }
 
   @override
@@ -418,22 +360,22 @@ abstract class LiveKitMediaSessionBase
   }) async {
     _ensureActive();
     if (!capabilities.canSendData) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'This LiveKit token does not allow sending data.',
         providerId: providerId,
       );
     }
     if (message.trim().isEmpty) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Message must not be empty.',
         providerId: providerId,
       );
     }
     if (options.topic.trim().isEmpty) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Message topic must not be empty.',
         providerId: providerId,
       );
@@ -455,8 +397,8 @@ abstract class LiveKitMediaSessionBase
   lk.LocalParticipant _requireLocalParticipant() {
     final local = _room?.localParticipant;
     if (local == null) {
-      throw MediaError(
-        code: MediaErrorCode.sessionNotFound,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The LiveKit local participant is unavailable.',
         providerId: providerId,
       );
@@ -467,8 +409,8 @@ abstract class LiveKitMediaSessionBase
   lk.Room _requireRoom() {
     final room = _room;
     if (room == null) {
-      throw MediaError(
-        code: MediaErrorCode.sessionNotFound,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The LiveKit room is unavailable.',
         providerId: providerId,
       );
@@ -479,8 +421,8 @@ abstract class LiveKitMediaSessionBase
   void _ensureActive() {
     _ensureNotDisposed();
     if (!state.isActive) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The LiveKit session is not active.',
         providerId: providerId,
       );
@@ -489,8 +431,8 @@ abstract class LiveKitMediaSessionBase
 
   void _ensureNotDisposed() {
     if (_disposed || state == MediaSessionState.disposed) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The LiveKit session has been disposed.',
         providerId: providerId,
       );
@@ -802,7 +744,17 @@ abstract class LiveKitMediaSessionBase
     );
   }
 
-  void _setState(MediaSessionState next, {MediaError? error, String? reason}) {
+  void _setState(
+    MediaSessionState next, {
+    RealtimeException? error,
+    String? reason,
+  }) {
+    if (_disposed) {
+      if (next == MediaSessionState.disposed) {
+        _snapshot = _snapshot.copyWith(state: next);
+      }
+      return;
+    }
     if (_snapshot.state == next && error == null) return;
     final previous = _snapshot.state;
     _replaceSnapshot(
@@ -821,34 +773,52 @@ abstract class LiveKitMediaSessionBase
     if (error != null) _emit(MediaFailureEvent(error));
   }
 
-  void _reportFailure(MediaError error) {
+  void _reportFailure(RealtimeException error) {
     _replaceSnapshot(_snapshot.copyWith(lastError: error));
     _emit(MediaFailureEvent(error));
   }
 
   void _replaceSnapshot(MediaSnapshot next) {
+    if (_disposed) return;
     _snapshot = next;
     if (!_snapshotController.isClosed) _snapshotController.add(next);
   }
 
   void _emit(MediaEvent event) {
-    if (!_eventController.isClosed) _eventController.add(event);
+    if (!_disposed && !_eventController.isClosed) _eventController.add(event);
   }
 
   Future<void> _detachProcessedVideoBeforeRoomTeardown() async {}
 
-  Future<void> _tearDownRoom() async {
-    try {
-      await _detachProcessedVideoBeforeRoomTeardown();
-    } finally {
-      await _stopAndroidScreenShareService();
-      final listener = _listener;
-      _listener = null;
-      if (listener != null) await listener.dispose();
-      final room = _room;
-      _room = null;
-      if (room != null && !room.isDisposed) await room.dispose();
+  Future<Never> _rollbackJoin(
+    RealtimeException primary,
+    StackTrace stack,
+  ) async {
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('join.rollback', _tearDownRoom);
+    if (!_leaveRequestedDuringJoin) {
+      _setState(MediaSessionState.failed, error: primary);
     }
+    cleanup.finish(domain: providerId, cause: primary);
+    Error.throwWithStackTrace(primary, stack);
+  }
+
+  Future<void> _tearDownRoom() async {
+    final room = _room;
+    final listener = _listener;
+    _listener = null;
+    _room = null;
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run(
+      'processed.input',
+      _detachProcessedVideoBeforeRoomTeardown,
+    );
+    await cleanup.run('screenShare.service', _stopAndroidScreenShareService);
+    if (listener != null) await cleanup.run('room.listener', listener.dispose);
+    if (room != null && !room.isDisposed) {
+      await cleanup.run('room.dispose', room.dispose);
+    }
+    cleanup.finish(domain: providerId);
   }
 
   Future<void> _prepareAndroidScreenShare() async {
@@ -860,8 +830,8 @@ abstract class LiveKitMediaSessionBase
       fullScreenOnly: true,
     );
     if (!permissionGranted) {
-      throw MediaError(
-        code: MediaErrorCode.permissionDenied,
+      throw RealtimeException(
+        code: RealtimeErrorCode.permissionDenied,
         message: 'Screen-capture permission was denied.',
         providerId: providerId,
       );
@@ -876,8 +846,8 @@ abstract class LiveKitMediaSessionBase
 
     final permissionGranted = await rtc.Helper.requestCapturePermission();
     if (!permissionGranted) {
-      throw MediaError(
-        code: MediaErrorCode.permissionDenied,
+      throw RealtimeException(
+        code: RealtimeErrorCode.permissionDenied,
         message:
             'LiveKit screen sharing needs macOS Screen Recording permission. '
             'Allow it in System Settings > Privacy & Security > Screen Recording, '
@@ -897,19 +867,56 @@ abstract class LiveKitMediaSessionBase
     await _androidScreenShareChannel.invokeMethod<void>('stop');
   }
 
-  MediaError _mapError(Object error, String fallbackMessage) {
-    if (error is MediaError) return error.withProvider(providerId);
-    final text = error.toString().toLowerCase();
-    final code = text.contains('permission') || text.contains('denied')
-        ? MediaErrorCode.permissionDenied
-        : text.contains('disposed') || text.contains('not connected')
-        ? MediaErrorCode.sessionNotFound
-        : MediaErrorCode.nativeError;
-    return MediaError(
-      code: code,
-      message: fallbackMessage,
-      details: error,
+  RealtimeException _mapError(
+    Object error,
+    String fallbackMessage, {
+    String? operation,
+    StackTrace? stackTrace,
+  }) {
+    if (error is RealtimeException) {
+      return normalizeRealtimeException(
+        error,
+        domain: 'media',
+        operation: operation,
+        providerId: providerId,
+        stackTrace: stackTrace,
+      );
+    }
+    final status = error is lk.ConnectException && error.statusCode != 0
+        ? error.statusCode
+        : null;
+    final code = switch (error) {
+      lk.ConnectException(statusCode: 401) =>
+        RealtimeErrorCode.invalidCredential,
+      lk.ConnectException(statusCode: 403) =>
+        RealtimeErrorCode.permissionDenied,
+      lk.ConnectException(reason: lk.ConnectionErrorReason.Timeout) ||
+      lk.TimeoutException() ||
+      TimeoutException() => RealtimeErrorCode.timeout,
+      lk.ConnectException() ||
+      lk.MediaConnectException() ||
+      lk.CertificatePinningException() => RealtimeErrorCode.network,
+      MissingPluginException() => RealtimeErrorCode.driverInitializationFailed,
+      lk.UnexpectedStateException() ||
+      StateError() => RealtimeErrorCode.invalidState,
+      _ => RealtimeErrorCode.providerError,
+    };
+    return normalizeRealtimeException(
+      RealtimeException(
+        code: code,
+        message: fallbackMessage,
+        cause: error,
+        details: {
+          'causeType': error.runtimeType.toString(),
+          if (error is lk.ConnectException)
+            'connectionReason': error.reason.name,
+        },
+        statusCode: status,
+      ),
+      domain: 'media',
+      operation: operation,
       providerId: providerId,
+      stackTrace: stackTrace,
     );
   }
 }
@@ -917,9 +924,11 @@ abstract class LiveKitMediaSessionBase
 /// LiveKit session for a symmetric meeting participant.
 class LiveKitInteractiveSession extends LiveKitMediaSessionBase
     implements InteractiveMediaSession, ProcessedVideoSink {
-  LiveKitInteractiveSession({super.role = MediaRole.participant})
-    : assert(role != MediaRole.viewer),
-      super(capabilities: _capabilitiesForRole(role));
+  LiveKitInteractiveSession({
+    super.role = MediaRole.participant,
+    super.roomFactory,
+  }) : assert(role != MediaRole.viewer),
+       super(capabilities: _capabilitiesForRole(role));
 
   ProcessedVideoSource? _processedSource;
   lk.LocalVideoTrack? _processedTrack;
@@ -1103,8 +1112,8 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
     );
     final track = publication?.track;
     if (track is! lk.LocalVideoTrack) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'Enable the local camera before switching it.',
         providerId: providerId,
       );
@@ -1157,8 +1166,8 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
       }
     }
     if (selected == null) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'The requested audio output is no longer available.',
         providerId: providerId,
       );
@@ -1170,8 +1179,8 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
     }
   }
 
-  Never _unsupported(String feature) => throw MediaError(
-    code: MediaErrorCode.unsupportedFeature,
+  Never _unsupported(String feature) => throw RealtimeException(
+    code: RealtimeErrorCode.unsupportedFeature,
     message: 'LiveKit $feature is not supported for this session.',
     providerId: providerId,
   );
@@ -1180,13 +1189,13 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
 /// LiveKit one-to-many broadcast host.
 class LiveKitHostSession extends LiveKitInteractiveSession
     implements BroadcastHostSession {
-  LiveKitHostSession() : super(role: MediaRole.host);
+  LiveKitHostSession({super.roomFactory}) : super(role: MediaRole.host);
 }
 
 /// LiveKit subscribe-only broadcast viewer.
 class LiveKitViewerSession extends LiveKitMediaSessionBase
     implements BroadcastViewerSession {
-  LiveKitViewerSession()
+  LiveKitViewerSession({super.roomFactory})
     : super(
         role: MediaRole.viewer,
         capabilities: _capabilitiesForRole(MediaRole.viewer),

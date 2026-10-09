@@ -15,9 +15,12 @@ class LiveKitSessionFactory
         MediaPreJoinProbe,
         MediaLocalPreviewFactory {
   const LiveKitSessionFactory({
+    this.roomFactory,
     @visibleForTesting this.audioInputCountLoader,
     @visibleForTesting this.videoInputCountLoader,
   });
+
+  final lk.Room Function()? roomFactory;
 
   @visibleForTesting
   final LiveKitDeviceCountLoader? audioInputCountLoader;
@@ -42,16 +45,18 @@ class LiveKitSessionFactory
   @override
   MediaSession createSession(MediaJoinInfo joinInfo) {
     if (joinInfo is! LiveKitJoinInfo) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'LiveKitSessionFactory requires LiveKitJoinInfo.',
         providerId: LiveKitJoinInfo.providerIdValue,
       );
     }
     return switch (joinInfo.role) {
-      MediaRole.participant => LiveKitInteractiveSession(),
-      MediaRole.host => LiveKitHostSession(),
-      MediaRole.viewer => LiveKitViewerSession(),
+      MediaRole.participant => LiveKitInteractiveSession(
+        roomFactory: roomFactory,
+      ),
+      MediaRole.host => LiveKitHostSession(roomFactory: roomFactory),
+      MediaRole.viewer => LiveKitViewerSession(roomFactory: roomFactory),
     };
   }
 

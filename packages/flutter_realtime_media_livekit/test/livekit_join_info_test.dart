@@ -55,10 +55,10 @@ void main() {
           },
         }),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidJoinInfo,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -70,7 +70,7 @@ void main() {
           'provider': 'chime',
           'roomCode': '482913',
         }),
-        throwsA(isA<MediaError>()),
+        throwsA(isA<RealtimeException>()),
       );
       expect(
         () => LiveKitJoinInfo.fromBackendResponse({
@@ -78,7 +78,7 @@ void main() {
           'roomCode': '482913',
           'participantId': 'host-a',
         }),
-        throwsA(isA<MediaError>()),
+        throwsA(isA<RealtimeException>()),
       );
     });
   });
@@ -120,10 +120,10 @@ void main() {
       expect(
         () => factory.createSession(generic),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidJoinInfo,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );

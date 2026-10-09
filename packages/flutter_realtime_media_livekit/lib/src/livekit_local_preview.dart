@@ -33,10 +33,10 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
       try {
         await camera?.stop();
       } catch (_) {}
-      throw MediaError(
+      throw RealtimeException(
         code: _isPermissionFailure(error)
-            ? MediaErrorCode.permissionDenied
-            : MediaErrorCode.nativeError,
+            ? RealtimeErrorCode.permissionDenied
+            : RealtimeErrorCode.providerError,
         message: 'Unable to start the LiveKit camera preview.',
         details: error,
         providerId: 'livekit',
@@ -90,6 +90,8 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
   MediaDevice? _selectedOutput;
   MediaLocalPreviewSettings _settings;
   bool _disposed = false;
+  Future<void>? _disposeFuture;
+  Duration cleanupTimeout = const Duration(seconds: 10);
 
   @override
   MediaVideoTrack? get cameraTrack {
@@ -176,14 +178,19 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
     if (enabled == _settings.microphoneEnabled) return;
     if (enabled) {
       try {
-        _microphoneTrack = await lk.LocalAudioTrack.create(
+        final track = await lk.LocalAudioTrack.create(
           lk.AudioCaptureOptions(deviceId: _selectedMicrophone?.id),
         );
+        if (_disposed) {
+          await track.stop();
+          _ensureActive();
+        }
+        _microphoneTrack = track;
       } catch (error) {
-        throw MediaError(
+        throw RealtimeException(
           code: _isPermissionFailure(error)
-              ? MediaErrorCode.permissionDenied
-              : MediaErrorCode.nativeError,
+              ? RealtimeErrorCode.permissionDenied
+              : RealtimeErrorCode.providerError,
           message: 'Unable to start the LiveKit microphone check.',
           details: error,
           providerId: providerId,
@@ -203,14 +210,19 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
     if (enabled == _settings.cameraEnabled) return;
     if (enabled) {
       try {
-        _cameraTrack = await lk.LocalVideoTrack.createCameraTrack(
+        final track = await lk.LocalVideoTrack.createCameraTrack(
           lk.CameraCaptureOptions(deviceId: _selectedCamera?.id),
         );
+        if (_disposed) {
+          await track.stop();
+          _ensureActive();
+        }
+        _cameraTrack = track;
       } catch (error) {
-        throw MediaError(
+        throw RealtimeException(
           code: _isPermissionFailure(error)
-              ? MediaErrorCode.permissionDenied
-              : MediaErrorCode.nativeError,
+              ? RealtimeErrorCode.permissionDenied
+              : RealtimeErrorCode.providerError,
           message: 'Unable to start the LiveKit camera preview.',
           details: error,
           providerId: providerId,
@@ -224,6 +236,7 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
   }
 
   void _refreshSettings({bool? microphoneEnabled, bool? cameraEnabled}) {
+    if (_disposed) return;
     _settings = MediaLocalPreviewSettings(
       microphoneEnabled: microphoneEnabled ?? _settings.microphoneEnabled,
       cameraEnabled: cameraEnabled ?? _settings.cameraEnabled,
@@ -234,32 +247,34 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+  Future<void> _dispose() async {
     _disposed = true;
-    final microphone = _microphoneTrack;
-    final camera = _cameraTrack;
+    final microphone = _microphoneTrack, camera = _cameraTrack;
     _microphoneTrack = null;
     _cameraTrack = null;
-    try {
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('preview.microphone', () async {
       await microphone?.stop();
-    } finally {
+    });
+    await cleanup.run('preview.camera', () async {
       await camera?.stop();
-    }
+    });
+    cleanup.finish(domain: 'media');
   }
 
   void _ensureActive() {
     if (_disposed) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The local preview session has been disposed.',
         providerId: providerId,
       );
     }
   }
 
-  MediaError _unsupported(String operation) => MediaError(
-    code: MediaErrorCode.unsupportedFeature,
+  RealtimeException _unsupported(String operation) => RealtimeException(
+    code: RealtimeErrorCode.unsupportedFeature,
     message: '$operation is not supported by the LiveKit preview.',
     providerId: providerId,
   );
