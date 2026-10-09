@@ -13,8 +13,8 @@ extension MediaSessionDeviceControl on MediaSession {
   Future<List<MediaDevice>> listMicrophones() {
     if (!capabilities.canEnumerateMicrophones) {
       return Future.error(
-        MediaError(
-          code: MediaErrorCode.unsupportedFeature,
+        RealtimeException(
+          code: RealtimeErrorCode.unsupportedFeature,
           message: 'Microphone enumeration is not supported for this session.',
           providerId: providerId,
         ),
@@ -26,8 +26,8 @@ extension MediaSessionDeviceControl on MediaSession {
   Future<List<MediaDevice>> listCameras() {
     if (!capabilities.canEnumerateCameras) {
       return Future.error(
-        MediaError(
-          code: MediaErrorCode.unsupportedFeature,
+        RealtimeException(
+          code: RealtimeErrorCode.unsupportedFeature,
           message: 'Camera enumeration is not supported for this session.',
           providerId: providerId,
         ),
@@ -39,8 +39,8 @@ extension MediaSessionDeviceControl on MediaSession {
   Future<List<MediaDevice>> listAudioOutputs() {
     if (!capabilities.canEnumerateAudioDevices) {
       return Future.error(
-        MediaError(
-          code: MediaErrorCode.unsupportedFeature,
+        RealtimeException(
+          code: RealtimeErrorCode.unsupportedFeature,
           message:
               'Audio output enumeration is not supported for this session.',
           providerId: providerId,
@@ -56,8 +56,8 @@ extension MediaSessionDeviceControl on MediaSession {
     if (current is MediaDeviceController) {
       return (current as MediaDeviceController).listMediaDevices(kinds: kinds);
     }
-    throw MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: 'Media device enumeration is not supported for this session.',
       providerId: providerId,
     );
@@ -72,8 +72,8 @@ extension MediaSessionDeviceControl on MediaSession {
     };
     if (!supported) {
       return Future.error(
-        MediaError(
-          code: MediaErrorCode.unsupportedFeature,
+        RealtimeException(
+          code: RealtimeErrorCode.unsupportedFeature,
           message:
               '${device.kind.name} device selection is not supported for this session.',
           providerId: providerId,
@@ -84,8 +84,8 @@ extension MediaSessionDeviceControl on MediaSession {
     if (current is MediaDeviceController) {
       return (current as MediaDeviceController).selectMediaDevice(device);
     }
-    throw MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: 'Media device selection is not supported for this session.',
       providerId: providerId,
     );
@@ -94,8 +94,8 @@ extension MediaSessionDeviceControl on MediaSession {
   Future<void> selectMicrophone(MediaDevice device) {
     if (device.kind != MediaDeviceKind.microphone) {
       return Future.error(
-        MediaError(
-          code: MediaErrorCode.invalidArgument,
+        RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
           message: 'selectMicrophone requires a microphone device.',
           providerId: providerId,
         ),
@@ -107,8 +107,8 @@ extension MediaSessionDeviceControl on MediaSession {
   Future<void> selectCamera(MediaDevice device) {
     if (device.kind != MediaDeviceKind.camera) {
       return Future.error(
-        MediaError(
-          code: MediaErrorCode.invalidArgument,
+        RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
           message: 'selectCamera requires a camera device.',
           providerId: providerId,
         ),
@@ -120,8 +120,8 @@ extension MediaSessionDeviceControl on MediaSession {
   Future<void> selectAudioOutput(MediaDevice device) {
     if (device.kind != MediaDeviceKind.audioOutput) {
       return Future.error(
-        MediaError(
-          code: MediaErrorCode.invalidArgument,
+        RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
           message: 'selectAudioOutput requires an audio output device.',
           providerId: providerId,
         ),

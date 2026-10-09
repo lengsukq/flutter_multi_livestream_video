@@ -37,7 +37,7 @@ class MediaJoinInfo {
 
   /// Reads a required non-empty string from [payload].
   ///
-  /// Throws [MediaError] with `invalidJoinInfo` so adapters do not need their
+  /// Throws [RealtimeException] with `invalidJoinInfo` so adapters do not need their
   /// own validation error plumbing.
   String requirePayloadString(String key) {
     return requireStringIn(payload, key, providerId: providerId);
@@ -59,8 +59,8 @@ class MediaJoinInfo {
   }) {
     final value = json[key]?.toString().trim();
     if (value == null || value.isEmpty) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information is missing "$key".',
         providerId: providerId,
       );

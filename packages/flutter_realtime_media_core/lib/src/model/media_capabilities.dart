@@ -4,7 +4,7 @@ import 'media_management_capability.dart';
 ///
 /// Adapters advertise what they actually implement instead of pretending every
 /// provider is identical. Calling an operation that is not declared here must
-/// fail with `MediaErrorCode.unsupportedFeature` rather than silently doing
+/// fail with `RealtimeErrorCode.unsupportedFeature` rather than silently doing
 /// nothing.
 class MediaCapabilities {
   const MediaCapabilities({

@@ -24,7 +24,7 @@ class FakeMediaSessionFactory implements MediaSessionFactory {
   final Set<MediaRole> supportedRoles;
 
   /// When set, `join` fails with this error instead of connecting.
-  final MediaError? joinError;
+  final RealtimeException? joinError;
 
   /// Sessions created through this factory, in creation order.
   final List<FakeMediaSession> createdSessions = [];
@@ -91,7 +91,7 @@ class FakeMediaSession
   final MediaRole role;
 
   /// Injected failure for [join].
-  final MediaError? joinError;
+  final RealtimeException? joinError;
 
   @override
   final MediaCapabilities capabilities;
@@ -147,7 +147,7 @@ class FakeMediaSession
   }
 
   /// Emits a failure event without changing the lifecycle state.
-  void emitError(MediaError error) {
+  void emitError(RealtimeException error) {
     _replace(_snapshot.copyWith(lastError: error));
     _eventController.add(MediaFailureEvent(error));
   }
@@ -156,8 +156,8 @@ class FakeMediaSession
   Future<void> join(MediaJoinInfo joinInfo) async {
     joinCount++;
     if (_snapshot.state.isActive) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'Already joined.',
         providerId: providerId,
       );
@@ -227,8 +227,8 @@ class FakeMediaSession
   @override
   Future<void> setScreenShareEnabled(bool enabled) async {
     if (!capabilities.canScreenShare) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Screen sharing is not supported.',
         providerId: providerId,
       );
@@ -239,8 +239,8 @@ class FakeMediaSession
   @override
   Future<void> switchCamera(MediaCameraPosition position) async {
     if (!capabilities.canSwitchCamera) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Camera switching is not supported.',
         providerId: providerId,
       );
@@ -251,8 +251,8 @@ class FakeMediaSession
   @override
   Future<List<MediaAudioDevice>> listAudioDevices() async {
     if (!capabilities.canEnumerateAudioDevices) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Audio device enumeration is not supported.',
         providerId: providerId,
       );
@@ -270,15 +270,15 @@ class FakeMediaSession
   @override
   Future<void> sendMessage(String message, {String topic = 'chat'}) async {
     if (!capabilities.canSendData) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Data messages are not supported.',
         providerId: providerId,
       );
     }
     if (message.trim().isEmpty) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Message must not be empty.',
         providerId: providerId,
       );
@@ -289,7 +289,11 @@ class FakeMediaSession
   void simulateState(MediaSessionState state, {String? reason}) =>
       _setState(state, reason: reason);
 
-  void _setState(MediaSessionState state, {MediaError? error, String? reason}) {
+  void _setState(
+    MediaSessionState state, {
+    RealtimeException? error,
+    String? reason,
+  }) {
     if (_snapshot.state == state) return;
     final previous = _snapshot.state;
     final next = error == null

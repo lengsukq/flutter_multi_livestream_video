@@ -86,10 +86,10 @@ void main() {
           targetParticipantId: 'viewer-1',
         ),
         throwsA(
-          isA<MediaBackendError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaBackendErrorCode.participantNotFound,
+            RealtimeErrorCode.participantNotFound,
           ),
         ),
       );
@@ -100,10 +100,10 @@ void main() {
       await expectLater(
         client.createRoom(role: MediaRole.participant, nickname: '   '),
         throwsA(
-          isA<MediaBackendError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaBackendErrorCode.invalidArgument,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -195,10 +195,10 @@ void main() {
           targetParticipantId: 'viewer-1',
         ),
         throwsA(
-          isA<MediaBackendError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaBackendErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -403,10 +403,10 @@ void main() {
       await expectLater(
         client.createRoom(role: MediaRole.participant, nickname: 'Leo'),
         throwsA(
-          isA<MediaBackendError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaBackendErrorCode.invalidResponse,
+            RealtimeErrorCode.invalidResponse,
           ),
         ),
       );
@@ -457,7 +457,7 @@ void main() {
   });
 
   group('error mapping', () {
-    Future<MediaBackendError> captureError(
+    Future<RealtimeException> captureError(
       Object? body, {
       int statusCode = 400,
     }) async {
@@ -469,8 +469,8 @@ void main() {
       );
       try {
         await client.heartbeat('482913');
-        fail('expected a MediaBackendError');
-      } on MediaBackendError catch (error) {
+        fail('expected a RealtimeException');
+      } on RealtimeException catch (error) {
         return error;
       }
     }
@@ -479,7 +479,7 @@ void main() {
       Future<void> expectCode(
         String contractCode,
         int status,
-        MediaBackendErrorCode expected,
+        RealtimeErrorCode expected,
       ) async {
         final error = await captureError({
           'contractVersion': 1,
@@ -487,44 +487,36 @@ void main() {
         }, statusCode: status);
         expect(error.code, expected, reason: contractCode);
         expect(error.statusCode, status);
-        expect(error.message, 'nope');
+        expect(error.message, 'Backend request failed (HTTP $status).');
       }
 
-      await expectCode('unauthorized', 401, MediaBackendErrorCode.unauthorized);
-      await expectCode('forbidden', 403, MediaBackendErrorCode.forbidden);
-      await expectCode(
-        'room-not-found',
-        404,
-        MediaBackendErrorCode.roomNotFound,
-      );
+      await expectCode('unauthorized', 401, RealtimeErrorCode.unauthorized);
+      await expectCode('forbidden', 403, RealtimeErrorCode.forbidden);
+      await expectCode('room-not-found', 404, RealtimeErrorCode.roomNotFound);
       await expectCode(
         'participant-not-found',
         404,
-        MediaBackendErrorCode.participantNotFound,
+        RealtimeErrorCode.participantNotFound,
       );
-      await expectCode('room-exists', 409, MediaBackendErrorCode.roomConflict);
-      await expectCode(
-        'bad-room-code',
-        400,
-        MediaBackendErrorCode.invalidRoomCode,
-      );
+      await expectCode('room-exists', 409, RealtimeErrorCode.roomConflict);
+      await expectCode('bad-room-code', 400, RealtimeErrorCode.invalidArgument);
       await expectCode(
         'unsupported-provider',
         400,
-        MediaBackendErrorCode.unsupportedProvider,
+        RealtimeErrorCode.providerNotRegistered,
       );
       await expectCode(
         'provider-not-configured',
         503,
-        MediaBackendErrorCode.providerNotConfigured,
+        RealtimeErrorCode.providerNotConfigured,
       );
     });
 
     test('falls back to status-code classification', () async {
       final unauthorized = await captureError({}, statusCode: 401);
-      expect(unauthorized.code, MediaBackendErrorCode.unauthorized);
+      expect(unauthorized.code, RealtimeErrorCode.unauthorized);
       final server = await captureError({}, statusCode: 500);
-      expect(server.code, MediaBackendErrorCode.serverError);
+      expect(server.code, RealtimeErrorCode.serverError);
     });
 
     test('maps transport failures to network', () async {
@@ -534,10 +526,10 @@ void main() {
       await expectLater(
         client.heartbeat('482913'),
         throwsA(
-          isA<MediaBackendError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaBackendErrorCode.network,
+            RealtimeErrorCode.network,
           ),
         ),
       );
@@ -551,10 +543,10 @@ void main() {
       await expectLater(
         client.heartbeat('482913'),
         throwsA(
-          isA<MediaBackendError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaBackendErrorCode.timeout,
+            RealtimeErrorCode.timeout,
           ),
         ),
       );
@@ -567,11 +559,11 @@ void main() {
       await expectLater(
         client.heartbeat('482913'),
         throwsA(
-          isA<MediaBackendError>()
+          isA<RealtimeException>()
               .having(
                 (error) => error.code,
                 'code',
-                MediaBackendErrorCode.invalidResponse,
+                RealtimeErrorCode.invalidResponse,
               )
               .having((error) => error.message, 'message', contains('99')),
         ),
@@ -588,10 +580,10 @@ void main() {
       await expectLater(
         invalid.heartbeat('482913'),
         throwsA(
-          isA<MediaBackendError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaBackendErrorCode.invalidResponse,
+            RealtimeErrorCode.invalidResponse,
           ),
         ),
       );
@@ -600,10 +592,10 @@ void main() {
       await expectLater(
         list.heartbeat('482913'),
         throwsA(
-          isA<MediaBackendError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaBackendErrorCode.invalidResponse,
+            RealtimeErrorCode.invalidResponse,
           ),
         ),
       );
@@ -619,11 +611,8 @@ void main() {
       final error = await client
           .heartbeat('482913')
           .then<Object?>((_) => null, onError: (Object error) => error);
-      expect(error, isA<MediaBackendError>());
-      expect(
-        (error! as MediaBackendError).code,
-        MediaBackendErrorCode.serverError,
-      );
+      expect(error, isA<RealtimeException>());
+      expect((error! as RealtimeException).code, RealtimeErrorCode.serverError);
     });
   });
 
@@ -641,10 +630,10 @@ void main() {
       await expectLater(
         client.heartbeat('482913'),
         throwsA(
-          isA<MediaBackendError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaBackendErrorCode.invalidArgument,
+            RealtimeErrorCode.invalidState,
           ),
         ),
       );

@@ -23,20 +23,20 @@ void main() {
           options: const MediaSendOptions(targetParticipantIds: ['remote']),
         ),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
       expect(
         () => session.sendData('hello'),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidArgument,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -54,10 +54,10 @@ void main() {
     expect(
       () => session.sendData('ok'),
       throwsA(
-        isA<MediaError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          MediaErrorCode.invalidArgument,
+          RealtimeErrorCode.invalidArgument,
         ),
       ),
     );
@@ -72,10 +72,10 @@ void main() {
       expect(
         () => session.listMediaDevices(),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );

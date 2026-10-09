@@ -90,8 +90,8 @@ class MediaClient {
   Future<MediaRoomSession> join(MediaJoinInfo joinInfo) async {
     final factory = registry.require(joinInfo.providerId);
     if (!factory.supportedRoles.contains(joinInfo.role)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'The ${joinInfo.providerId} adapter does not support the '
             '${joinInfo.role.wireName} role.',
@@ -109,9 +109,19 @@ class MediaClient {
         participantId: joinInfo.participantId,
         session: session,
       );
-    } catch (_) {
-      await session.dispose();
-      rethrow;
+    } catch (error, stack) {
+      final cleanup = Cleanup();
+      await cleanup.run('session.rollback', session.dispose);
+      cleanup.finish(domain: session.providerId, cause: error);
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          providerId: session.providerId,
+          operation: 'join',
+          stackTrace: stack,
+        ),
+        stack,
+      );
     }
   }
 
@@ -165,8 +175,8 @@ class MediaClient {
   Future<List<MediaRoomSummary>> listRooms() =>
       (discovery ?? backend)?.listRooms() ??
       Future<List<MediaRoomSummary>>.error(
-        const MediaError(
-          code: MediaErrorCode.unsupportedFeature,
+        const RealtimeException(
+          code: RealtimeErrorCode.unsupportedFeature,
           message: 'Room discovery requires a MediaRoomDiscovery extension.',
         ),
       );
@@ -263,8 +273,8 @@ class MediaClient {
   MediaBackendClient _requireBackend(String operation) {
     final value = backend;
     if (value != null) return value;
-    throw MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message:
           'Cannot $operation without a configured provisioning backend. '
           'Use MediaClient.join(MediaJoinInfo) for the frontend-only path.',
@@ -278,8 +288,8 @@ class MediaClient {
     final backend = this.backend;
     final factory = registry.require(response.providerId);
     if (!factory.supportedRoles.contains(response.role)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'The ${response.providerId} adapter does not support the '
             '${response.role.wireName} role.',
@@ -352,18 +362,25 @@ class MediaClient {
         heartbeatInterval:
             config?.heartbeatInterval ?? const Duration(seconds: 30),
       );
-    } catch (_) {
-      await session.dispose();
-      try {
+    } catch (error, stack) {
+      final cleanup = Cleanup();
+      await cleanup.run('session.rollback', session.dispose);
+      await cleanup.run('presence.rollback', () async {
         await backend?.leave(
           response.roomCode,
           participantId: joinInfo.participantId,
         );
-      } on MediaBackendError {
-        // The media-join failure is the primary error; backend cleanup is
-        // best effort and must not replace it.
-      }
-      rethrow;
+      });
+      cleanup.finish(domain: 'media', cause: error);
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          domain: 'media',
+          operation: 'join',
+          stackTrace: stack,
+        ),
+        stack,
+      );
     }
   }
 
@@ -391,8 +408,8 @@ class MediaClient {
             );
       final responseRole = response.json['role'];
       if (responseRole != null && MediaRole.tryParse(responseRole) == null) {
-        throw MediaError(
-          code: MediaErrorCode.invalidJoinInfo,
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
           message:
               'The backend returned an invalid role during credential refresh.',
           providerId: currentJoinInfo.providerId,
@@ -409,8 +426,8 @@ class MediaClient {
           refreshed.participantId != currentJoinInfo.participantId ||
           refreshed.providerId.trim().toLowerCase() !=
               currentJoinInfo.providerId) {
-        throw MediaError(
-          code: MediaErrorCode.invalidJoinInfo,
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
           message:
               'The backend changed the provider, room, participant, or role '
               'during credential refresh.',
@@ -418,18 +435,11 @@ class MediaClient {
         );
       }
       return refreshed;
-    } on MediaError {
+    } on RealtimeException {
       rethrow;
-    } on MediaBackendError catch (error) {
-      throw MediaError(
-        code: MediaErrorCode.nativeError,
-        message: 'Unable to refresh media credentials.',
-        details: error,
-        providerId: currentJoinInfo.providerId,
-      );
     } catch (error) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Unable to parse refreshed media credentials.',
         details: error,
         providerId: currentJoinInfo.providerId,
@@ -455,8 +465,8 @@ class MediaClient {
       if (joinInfo.providerId.trim().toLowerCase() != response.providerId ||
           joinInfo.role != response.role ||
           joinInfo.roomCode != response.roomCode) {
-        throw MediaError(
-          code: MediaErrorCode.invalidJoinInfo,
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
           message:
               'The provider adapter returned join information that does not '
               'match the backend response.',
@@ -464,11 +474,11 @@ class MediaClient {
         );
       }
       return joinInfo;
-    } on MediaError {
+    } on RealtimeException {
       rethrow;
     } catch (error) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: parseErrorMessage,
         details: error,
         providerId: response.providerId,

@@ -58,7 +58,7 @@ class MediaSnapshot {
   final MediaCapabilities capabilities;
 
   /// Most recent failure, cleared on a successful join.
-  final MediaError? lastError;
+  final RealtimeException? lastError;
 
   /// Whether a remote screen share is being received.
   bool get isReceivingScreenShare => contentShareTrack != null;
@@ -88,7 +88,7 @@ class MediaSnapshot {
     MediaVideoTrack? contentShareTrack,
     bool clearContentShareTrack = false,
     MediaCapabilities? capabilities,
-    MediaError? lastError,
+    RealtimeException? lastError,
     bool clearLastError = false,
   }) => MediaSnapshot(
     state: state ?? this.state,

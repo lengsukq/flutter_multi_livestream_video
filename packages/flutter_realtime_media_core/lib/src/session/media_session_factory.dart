@@ -16,13 +16,13 @@ abstract class MediaSessionFactory {
 
   /// Parses the backend join response into provider-neutral join information.
   ///
-  /// Throws `MediaError` with `invalidJoinInfo` when required fields are
+  /// Throws `RealtimeException` with `invalidJoinInfo` when required fields are
   /// missing.
   MediaJoinInfo parseJoinInfo(Map<String, dynamic> json);
 
   /// Creates the session matching `joinInfo.role`.
   ///
-  /// Throws `MediaError` with `unsupportedFeature` for a role that
+  /// Throws `RealtimeException` with `unsupportedFeature` for a role that
   /// [supportedRoles] does not contain.
   MediaSession createSession(MediaJoinInfo joinInfo);
 }
@@ -80,8 +80,8 @@ class MediaRegistry {
   MediaSessionFactory require(String providerId) {
     final factory = lookup(providerId);
     if (factory == null) {
-      throw MediaError(
-        code: MediaErrorCode.providerNotRegistered,
+      throw RealtimeException(
+        code: RealtimeErrorCode.providerNotRegistered,
         message:
             'No media adapter is registered for provider "$providerId". '
             'Registered providers: ${providerIds.join(', ')}.',

@@ -8,14 +8,14 @@ import 'media_session.dart';
 abstract class MediaDataMessenger {
   /// Sends a data message on [topic].
   ///
-  /// Throws `MediaError` with `invalidArgument` for empty input and
+  /// Throws `RealtimeException` with `invalidArgument` for empty input and
   /// `unsupportedFeature` when the session cannot send data.
   Future<void> sendMessage(String message, {String topic});
 }
 
 /// Interactive session: symmetric meeting participant or broadcast host.
 ///
-/// Camera and microphone operations must fail with `MediaError` (not a
+/// Camera and microphone operations must fail with `RealtimeException` (not a
 /// provider exception) and must leave the session usable after a failure.
 abstract class InteractiveMediaSession extends MediaSession
     implements MediaDataMessenger {

@@ -52,3 +52,5 @@ export 'src/session/media_room_extensions.dart';
 export 'src/session/media_session.dart';
 export 'src/session/media_session_factory.dart';
 export 'src/view/media_track_view.dart';
+
+export 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';

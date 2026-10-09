@@ -45,8 +45,8 @@ void main() {
     );
 
     test('a failed join reports failed and keeps the error', () async {
-      final error = MediaError(
-        code: MediaErrorCode.permissionDenied,
+      final error = RealtimeException(
+        code: RealtimeErrorCode.permissionDenied,
         message: 'Microphone denied.',
         providerId: 'fake',
       );
@@ -65,10 +65,10 @@ void main() {
       await expectLater(
         participant.setScreenShareEnabled(true),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -118,8 +118,8 @@ void main() {
 
       session.emitRemoteParticipant(id: 'guest-1', name: 'Guest');
       session.emitError(
-        const MediaError(
-          code: MediaErrorCode.nativeError,
+        const RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message: 'temporary',
           providerId: 'fake',
         ),

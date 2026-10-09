@@ -160,7 +160,7 @@ class MediaMessageReceived extends MediaEvent {
 class MediaFailureEvent extends MediaEvent {
   const MediaFailureEvent(this.error);
 
-  final MediaError error;
+  final RealtimeException error;
 
   @override
   String toString() => 'MediaFailureEvent(${error.code.name})';

@@ -58,8 +58,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     String operation,
   ) {
     if (!capability.supported) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'Cannot $operation because the active provider does not support it.',
         providerId: providerId,
@@ -76,8 +76,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     String operation,
   ) {
     if (!capability.supported) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'Cannot $operation because the active provider does not support it.',
         providerId: providerId,
@@ -127,8 +127,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   final MediaRoomPresence? _presence;
   final MediaRoomManagement? _management;
   final Duration _heartbeatInterval;
-  final StreamController<MediaBackendError> _backendErrorController =
-      StreamController<MediaBackendError>.broadcast();
+  final StreamController<RealtimeException> _backendErrorController =
+      StreamController<RealtimeException>.broadcast();
   final StreamController<MediaRecoveryStatus> _recoveryController =
       StreamController<MediaRecoveryStatus>.broadcast();
 
@@ -138,6 +138,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   StreamSubscription<MediaEvent>? _eventSubscription;
   bool _leaveNotified = false;
   bool _disposed = false;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   Future<void>? _heartbeatFuture;
   Future<void>? _leaveNotificationFuture;
   Future<void>? _disposeFuture;
@@ -234,8 +235,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     }
     if (!session.capabilities.canPublishVideo ||
         !backgroundCapabilities.supports(effect)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'The active provider does not support the requested background '
             'effect for this role or platform.',
@@ -248,8 +249,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
         ? active as MediaBackgroundEffectsController
         : null;
     if (controller == null) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'The active provider does not expose background effect controls.',
         providerId: providerId,
@@ -259,7 +260,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   }
 
   /// Backend presence failures (heartbeat, leave notification, ...).
-  Stream<MediaBackendError> get backendErrors => _backendErrorController.stream;
+  Stream<RealtimeException> get backendErrors => _backendErrorController.stream;
 
   /// Latest reconnect/recovery status for this logical room session.
   MediaRecoveryStatus? get recoveryStatus => _recoveryStatus;
@@ -374,7 +375,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     _leaveNotified = true;
     try {
       await session.leave();
-    } on MediaError {
+    } on RealtimeException {
       // The backend has already authoritatively closed the room. A local
       // adapter teardown failure must not turn a successful room close into a
       // misleading backend failure; dispose() will make one final cleanup pass.
@@ -393,23 +394,23 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   Future<void> dispose() => _disposeFuture ??= _dispose();
 
   Future<void> _dispose() async {
-    if (_disposed) return;
     _disposed = true;
     _stopHeartbeat();
-    await _heartbeatFuture;
-    await _stateSubscription?.cancel();
-    _stateSubscription = null;
-    await _eventSubscription?.cancel();
-    _eventSubscription = null;
-    try {
-      await session.dispose();
-    } on MediaError {
-      // Disposal must stay safe even when the adapter already tore down.
-    } finally {
-      await _notifyLeaveBestEffort();
-      await _backendErrorController.close();
-      await _recoveryController.close();
-    }
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('presence.heartbeat', () async {
+      await _heartbeatFuture;
+    });
+    await cleanup.run('session.states', () async {
+      await _stateSubscription?.cancel();
+    });
+    await cleanup.run('session.events', () async {
+      await _eventSubscription?.cancel();
+    });
+    await cleanup.run('session', session.dispose);
+    await cleanup.run('presence.leave', _notifyLeaveBestEffort);
+    await cleanup.run('backend.errors', _backendErrorController.close);
+    await cleanup.run('recovery', _recoveryController.close);
+    cleanup.finish(domain: 'media');
   }
 
   void _startHeartbeat() {
@@ -449,7 +450,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     if (presence == null) return;
     try {
       await presence.heartbeat(roomCode, participantId: participantId);
-    } on MediaBackendError catch (error) {
+    } on RealtimeException catch (error) {
       _reportBackendError(error);
     }
   }
@@ -553,12 +554,12 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     if (presence == null) return;
     try {
       await presence.leave(roomCode, participantId: participantId);
-    } on MediaBackendError catch (error) {
+    } on RealtimeException catch (error) {
       _reportBackendError(error);
     }
   }
 
-  void _reportBackendError(MediaBackendError error) {
+  void _reportBackendError(RealtimeException error) {
     if (!_backendErrorController.isClosed) {
       _backendErrorController.add(error);
     }
@@ -567,8 +568,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   MediaRoomManagement _requireManagement(String operation) {
     final management = _management;
     if (management != null) return management;
-    throw MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message:
           'Cannot $operation because this room was joined without a room '
           'management executor.',
@@ -579,8 +580,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   MediaRoomModeration _requireModeration(String operation) {
     final management = _management;
     if (management is MediaRoomModeration) return management;
-    throw MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message:
           'Cannot $operation because this room has no advanced moderation executor.',
       providerId: providerId,

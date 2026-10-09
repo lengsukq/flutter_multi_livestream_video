@@ -43,15 +43,15 @@ extension MediaSessionDataControl on MediaSession {
     MediaSendOptions options = const MediaSendOptions(),
   }) {
     if (!capabilities.canSendData) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Data messages are not supported for this session.',
         providerId: providerId,
       );
     }
     if (message.trim().isEmpty || options.topic.trim().isEmpty) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Message and topic must not be empty.',
         providerId: providerId,
       );
@@ -65,30 +65,30 @@ extension MediaSessionDataControl on MediaSession {
           )
         : utf8.encode(message).length;
     if (maxBytes != null && payloadBytes > maxBytes) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Data message exceeds the provider payload-size limit.',
         providerId: providerId,
       );
     }
     if (!options.isBroadcast && !capabilities.canTargetData) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Targeted data messages are not supported.',
         providerId: providerId,
       );
     }
     if (options.reliability == MediaDataReliability.unreliable &&
         !capabilities.canSendUnreliableData) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Unreliable data delivery is not supported.',
         providerId: providerId,
       );
     }
     if (!options.ordered && !capabilities.canSendUnorderedData) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Unordered data delivery is not supported.',
         providerId: providerId,
       );
@@ -108,8 +108,8 @@ extension MediaSessionDataControl on MediaSession {
         topic: options.topic,
       );
     }
-    throw MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: 'The requested data delivery mode is not implemented.',
       providerId: providerId,
     );

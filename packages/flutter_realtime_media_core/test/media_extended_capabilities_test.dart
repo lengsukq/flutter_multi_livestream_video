@@ -41,10 +41,10 @@ void main() {
       await expectLater(
         session.selectCamera(microphones.single),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidArgument,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -56,10 +56,10 @@ void main() {
       await expectLater(
         session.listMicrophones(),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -72,10 +72,10 @@ void main() {
           ),
         ),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );

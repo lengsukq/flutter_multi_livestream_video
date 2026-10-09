@@ -17,10 +17,10 @@ void main() {
       expect(
         () => registry.require('livekit'),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.providerNotRegistered,
+            RealtimeErrorCode.providerNotRegistered,
           ),
         ),
       );
@@ -64,11 +64,11 @@ void main() {
       expect(
         () => factory.parseJoinInfo({'roomCode': '482913'}),
         throwsA(
-          isA<MediaError>()
+          isA<RealtimeException>()
               .having(
                 (error) => error.code,
                 'code',
-                MediaErrorCode.invalidJoinInfo,
+                RealtimeErrorCode.invalidArgument,
               )
               .having((error) => error.providerId, 'providerId', 'fake'),
         ),

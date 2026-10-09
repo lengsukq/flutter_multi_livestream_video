@@ -26,10 +26,10 @@ void main() {
       expect(
         () => MediaBackgroundEffect.replaceImage(imageBytes: bytes),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (e) => e.code,
             'code',
-            MediaErrorCode.invalidArgument,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -42,10 +42,10 @@ void main() {
     expect(
       () => MediaBackgroundEffect.replaceImage(imageBytes: bytes),
       throwsA(
-        isA<MediaError>().having(
+        isA<RealtimeException>().having(
           (e) => e.code,
           'code',
-          MediaErrorCode.invalidArgument,
+          RealtimeErrorCode.invalidArgument,
         ),
       ),
     );

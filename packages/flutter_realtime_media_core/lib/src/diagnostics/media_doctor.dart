@@ -95,17 +95,17 @@ class MediaDoctor {
           activeChat.toLowerCase() != 'none') {
         activeChatProvider = activeChat.toLowerCase();
       }
-    } on MediaBackendError catch (error) {
+    } on RealtimeException catch (error) {
       final unreachable =
-          error.code == MediaBackendErrorCode.network ||
-          error.code == MediaBackendErrorCode.timeout ||
-          error.code == MediaBackendErrorCode.unsupportedPlatform;
+          error.code == RealtimeErrorCode.network ||
+          error.code == RealtimeErrorCode.timeout ||
+          error.code == RealtimeErrorCode.unsupportedPlatform;
       backendReachable = !unreachable;
       final optionalHealthUnavailable =
           error.statusCode == 404 ||
-          error.code == MediaBackendErrorCode.unsupportedFeature ||
-          error.code == MediaBackendErrorCode.invalidResponse ||
-          error.code == MediaBackendErrorCode.unknown;
+          error.code == RealtimeErrorCode.unsupportedFeature ||
+          error.code == RealtimeErrorCode.invalidResponse ||
+          error.code == RealtimeErrorCode.unknown;
       checks.add(
         MediaDoctorCheck(
           id: 'backend',

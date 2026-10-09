@@ -148,10 +148,10 @@ void main() {
             options: const MediaSendOptions(targetParticipantIds: ['host-1']),
           ),
           throwsA(
-            isA<MediaError>().having(
+            isA<RealtimeException>().having(
               (error) => error.code,
               'code',
-              MediaErrorCode.unsupportedFeature,
+              RealtimeErrorCode.unsupportedFeature,
             ),
           ),
         );
@@ -221,10 +221,10 @@ void main() {
       expect(
         () => session.switchCamera(MediaCameraPosition.back),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );

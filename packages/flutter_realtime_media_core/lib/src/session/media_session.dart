@@ -8,7 +8,7 @@ import 'media_join_info.dart';
 /// Connection and lifecycle surface shared by every provider adapter.
 ///
 /// Implementations own exactly one connection attempt at a time. `join`,
-/// `leave`, and `dispose` are idempotent or fail with a typed `MediaError`
+/// `leave`, and `dispose` are idempotent or fail with a typed `RealtimeException`
 /// (`invalidState`) — never with a provider-specific exception.
 abstract class MediaSession {
   /// Registered provider id, for example `livekit`.

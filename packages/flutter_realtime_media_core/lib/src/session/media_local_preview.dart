@@ -81,5 +81,5 @@ abstract interface class MediaLocalPreviewFactory {
 
 /// Optional asynchronous failures emitted after a preview has started.
 abstract interface class MediaLocalPreviewFailureEvents {
-  Stream<MediaError> get failures;
+  Stream<RealtimeException> get failures;
 }

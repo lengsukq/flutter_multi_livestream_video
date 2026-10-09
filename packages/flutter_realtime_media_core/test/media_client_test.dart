@@ -122,10 +122,10 @@ void main() {
         await expectLater(
           factory.createdSessions.single.refreshCredentials(current),
           throwsA(
-            isA<MediaError>().having(
+            isA<RealtimeException>().having(
               (error) => error.code,
               'code',
-              MediaErrorCode.invalidJoinInfo,
+              RealtimeErrorCode.invalidArgument,
             ),
           ),
         );
@@ -166,10 +166,10 @@ void main() {
           await expectLater(
             factory.createdSessions.last.refreshCredentials(current),
             throwsA(
-              isA<MediaError>().having(
+              isA<RealtimeException>().having(
                 (error) => error.code,
                 'code',
-                MediaErrorCode.invalidJoinInfo,
+                RealtimeErrorCode.invalidArgument,
               ),
             ),
             reason: 'refresh response changed its ${mismatch.$1}',
@@ -454,14 +454,14 @@ void main() {
       }, heartbeatInterval: const Duration(milliseconds: 20));
 
       final room = await client.createRoomAndJoin(nickname: 'Leo');
-      final errors = <MediaBackendError>[];
+      final errors = <RealtimeException>[];
       final subscription = room.backendErrors.listen(errors.add);
 
       failHeartbeat = true;
       await Future<void>.delayed(const Duration(milliseconds: 70));
 
       expect(errors, isNotEmpty);
-      expect(errors.first.code, MediaBackendErrorCode.serverError);
+      expect(errors.first.code, RealtimeErrorCode.serverError);
       expect(room.session.state, MediaSessionState.connected);
 
       await subscription.cancel();
@@ -478,10 +478,10 @@ void main() {
       await expectLater(
         client.createRoomAndJoin(nickname: 'Leo'),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.providerNotRegistered,
+            RealtimeErrorCode.providerNotRegistered,
           ),
         ),
       );
@@ -502,10 +502,10 @@ void main() {
       await expectLater(
         client.createRoomAndJoin(role: MediaRole.viewer, nickname: 'Viewer'),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -520,10 +520,10 @@ void main() {
       await expectLater(
         client.createRoomAndJoin(nickname: 'Leo'),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidJoinInfo,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -533,8 +533,8 @@ void main() {
     test(
       'a failed join disposes the session and notifies the backend',
       () async {
-        final joinError = MediaError(
-          code: MediaErrorCode.permissionDenied,
+        final joinError = RealtimeException(
+          code: RealtimeErrorCode.permissionDenied,
           message: 'Camera denied.',
           providerId: 'fake',
         );
@@ -548,7 +548,13 @@ void main() {
 
         await expectLater(
           client.createRoomAndJoin(nickname: 'Leo'),
-          throwsA(same(joinError)),
+          throwsA(
+            isA<RealtimeException>().having(
+              (e) => e.cause,
+              'original failure',
+              same(joinError),
+            ),
+          ),
         );
 
         expect(failing.createdSessions.single.disposeCount, greaterThan(0));

@@ -59,8 +59,8 @@ class MediaBackgroundEffect {
 
 Uint8List _checkedImage(Uint8List bytes) {
   if (bytes.length > 16 * 1024 * 1024) {
-    throw const MediaError(
-      code: MediaErrorCode.invalidArgument,
+    throw const RealtimeException(
+      code: RealtimeErrorCode.invalidArgument,
       message: 'The background image must be 16 MiB or smaller.',
     );
   }
@@ -74,8 +74,8 @@ Uint8List _checkedImage(Uint8List bytes) {
       bytes[1] == 0xd8 &&
       bytes[2] == 0xff;
   if (!isPng && !isJpeg) {
-    throw const MediaError(
-      code: MediaErrorCode.invalidArgument,
+    throw const RealtimeException(
+      code: RealtimeErrorCode.invalidArgument,
       message: 'The background must contain a PNG or JPEG image.',
     );
   }

@@ -1,6 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
-
 import '../model/media_role.dart';
 import '../model/media_room_mode.dart';
 import '../model/media_room_participant_summary.dart';
@@ -8,7 +5,6 @@ import '../model/media_room_summary.dart';
 import 'media_backend_config.dart';
 import 'media_backend_error.dart';
 import 'media_backend_transport.dart';
-import 'media_backend_transport_factory.dart';
 import '../session/media_room_extensions.dart';
 import 'media_room_services.dart';
 
@@ -57,11 +53,13 @@ class MediaRoomJoinResponse {
 class MediaBackendClient
     implements MediaRoomPresence, MediaRoomManagement, MediaRoomDiscovery {
   MediaBackendClient(this.config, {MediaBackendTransport? transport})
-    : _transport = transport ?? createDefaultMediaBackendTransport(),
+    : _transport = transport,
+      _executor = RealtimeHttpExecutor(),
       _ownsTransport = transport == null;
 
   final MediaBackendConfig config;
-  final MediaBackendTransport _transport;
+  final MediaBackendTransport? _transport;
+  final RealtimeHttpExecutor _executor;
   final bool _ownsTransport;
   bool _disposed = false;
 
@@ -78,13 +76,13 @@ class MediaBackendClient
     final rawRooms = data['rooms'];
     if (rawRooms == null) return const [];
     if (rawRooms is! List) {
-      throw const MediaBackendError(
-        code: MediaBackendErrorCode.invalidResponse,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
         message: 'Backend room discovery response has an invalid rooms field.',
       );
     }
     return rawRooms
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map(
           (room) => MediaRoomSummary.fromJson(Map<String, dynamic>.from(room)),
         )
@@ -156,13 +154,13 @@ class MediaBackendClient
         });
     final raw = data['participants'];
     if (raw is! List) {
-      throw const MediaBackendError(
-        code: MediaBackendErrorCode.invalidResponse,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
         message: 'Backend participant response is malformed.',
       );
     }
     return raw
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map(
           (item) => MediaRoomParticipantSummary.fromJson(
             Map<String, dynamic>.from(item),
@@ -348,7 +346,7 @@ class MediaBackendClient
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    if (_ownsTransport) _transport.close();
+    _executor.close();
   }
 
   Future<Map<String, dynamic>> _post(String path, Map<String, Object?> body) =>
@@ -360,77 +358,45 @@ class MediaBackendClient
     Map<String, Object?>? body,
   }) async {
     if (_disposed) {
-      throw const MediaBackendError(
-        code: MediaBackendErrorCode.invalidArgument,
-        message: 'The backend client has been disposed.',
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'The backend client is closed.',
       );
     }
-
-    try {
-      final response = await _sendTransportRequest(
-        method,
-        path,
-        body,
-      ).timeout(config.requestTimeout);
-      Object? decoded;
-      try {
-        decoded = _decode(response.body);
-      } on MediaBackendError {
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw _httpError(response.statusCode, response.body);
-        }
-        rethrow;
-      }
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw _httpError(response.statusCode, decoded);
-      }
-      if (decoded == null) return const {};
-      if (decoded is! Map) {
-        throw MediaBackendError(
-          code: MediaBackendErrorCode.invalidResponse,
-          message: 'Backend returned a non-object JSON response.',
-          statusCode: response.statusCode,
-          details: decoded,
-        );
-      }
-      final data = Map<String, dynamic>.from(decoded);
-      _validateContractVersion(data);
-      return data;
-    } on MediaBackendError {
-      rethrow;
-    } on TimeoutException catch (error) {
-      throw MediaBackendError(
-        code: MediaBackendErrorCode.timeout,
-        message: 'Backend request timed out.',
-        details: error,
-      );
-    } on MediaBackendTransportException catch (error) {
-      throw MediaBackendError(
-        code: error.unsupportedPlatform
-            ? MediaBackendErrorCode.unsupportedPlatform
-            : MediaBackendErrorCode.network,
-        message: error.message,
-        details: error.cause,
-      );
-    } catch (error) {
-      throw MediaBackendError(
-        code: MediaBackendErrorCode.unknown,
-        message: 'Unable to prepare or complete the backend request.',
-        details: error,
-      );
-    }
+    final transport = _transport;
+    final data = await _executor.request(
+      method: method,
+      uri: _uri(path),
+      timeout: config.requestTimeout,
+      domain: 'media',
+      headers: _headers,
+      body: body,
+      transport: transport == null
+          ? null
+          : (headers, body, abort) async {
+              try {
+                final response = await transport.send(
+                  method: method,
+                  uri: _uri(path),
+                  headers: headers,
+                  body: body,
+                );
+                return (response.statusCode, response.body);
+              } on MediaBackendTransportException catch (error) {
+                throw RealtimeException(
+                  code: error.unsupportedPlatform
+                      ? RealtimeErrorCode.unsupportedPlatform
+                      : RealtimeErrorCode.network,
+                  message: error.message,
+                  cause: error,
+                  domain: 'media',
+                );
+              }
+            },
+    );
+    _validateContractVersion(data);
+    return data;
   }
-
-  Future<MediaBackendTransportResponse> _sendTransportRequest(
-    String method,
-    String path,
-    Map<String, Object?>? body,
-  ) async => _transport.send(
-    method: method,
-    uri: _uri(path),
-    headers: await _headers(),
-    body: body == null ? null : jsonEncode(body),
-  );
 
   Future<Map<String, String>> _headers() async {
     final headers = <String, String>{};
@@ -451,19 +417,6 @@ class MediaBackendClient
     return Uri.parse('$base$path');
   }
 
-  Object? _decode(String body) {
-    if (body.trim().isEmpty) return null;
-    try {
-      return jsonDecode(body);
-    } on FormatException catch (error) {
-      throw MediaBackendError(
-        code: MediaBackendErrorCode.invalidResponse,
-        message: 'Backend returned invalid JSON.',
-        details: error,
-      );
-    }
-  }
-
   void _validateContractVersion(Map<String, dynamic> data) {
     final value = data['contractVersion'];
     if (value == null) return;
@@ -471,8 +424,8 @@ class MediaBackendClient
         ? value.toInt()
         : int.tryParse(value.toString());
     if (parsed != mediaBackendContractVersion) {
-      throw MediaBackendError(
-        code: MediaBackendErrorCode.invalidResponse,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
         message:
             'Backend response uses unsupported contract version '
             '${value.toString()}.',
@@ -491,8 +444,8 @@ class MediaBackendClient
         ? fallbackRoomCode?.trim()
         : roomCode;
     if (resolvedRoomCode == null || resolvedRoomCode.isEmpty) {
-      throw const MediaBackendError(
-        code: MediaBackendErrorCode.invalidResponse,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
         message: 'Backend response is missing roomCode.',
       );
     }
@@ -513,54 +466,11 @@ class MediaBackendClient
     );
   }
 
-  MediaBackendError _httpError(int statusCode, Object? body) {
-    String? backendCode;
-    String? message;
-    Object? details;
-    if (body is Map) {
-      final error = body['error'];
-      if (error is Map) {
-        backendCode = error['code']?.toString();
-        message = error['message']?.toString();
-        details = error['details'];
-      } else {
-        backendCode = error?.toString();
-        message = body['message']?.toString() ?? body['hint']?.toString();
-        details = body;
-      }
-    }
-    final code = switch (backendCode) {
-      'unauthorized' => MediaBackendErrorCode.unauthorized,
-      'forbidden' => MediaBackendErrorCode.forbidden,
-      'room-not-found' => MediaBackendErrorCode.roomNotFound,
-      'participant-not-found' => MediaBackendErrorCode.participantNotFound,
-      'room-exists' => MediaBackendErrorCode.roomConflict,
-      'bad-room-code' => MediaBackendErrorCode.invalidRoomCode,
-      'unsupported-provider' => MediaBackendErrorCode.unsupportedProvider,
-      'unsupported-feature' => MediaBackendErrorCode.unsupportedFeature,
-      'provider-not-configured' => MediaBackendErrorCode.providerNotConfigured,
-      _ when statusCode == 400 => MediaBackendErrorCode.invalidArgument,
-      _ when statusCode == 401 => MediaBackendErrorCode.unauthorized,
-      _ when statusCode == 403 => MediaBackendErrorCode.forbidden,
-      _ when statusCode == 404 => MediaBackendErrorCode.roomNotFound,
-      _ when statusCode == 409 => MediaBackendErrorCode.roomConflict,
-      _ when statusCode == 503 => MediaBackendErrorCode.providerNotConfigured,
-      _ when statusCode >= 500 => MediaBackendErrorCode.serverError,
-      _ => MediaBackendErrorCode.unknown,
-    };
-    return MediaBackendError(
-      code: code,
-      message: message ?? 'Backend request failed with HTTP $statusCode.',
-      statusCode: statusCode,
-      details: details ?? body,
-    );
-  }
-
   String _required(String value, String name) {
     final normalized = value.trim();
     if (normalized.isEmpty) {
-      throw MediaBackendError(
-        code: MediaBackendErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: '$name must not be empty.',
       );
     }
