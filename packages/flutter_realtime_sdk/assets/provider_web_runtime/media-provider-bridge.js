@@ -321,13 +321,13 @@
       if (sessions.has(previewId)) {
         throw new Error(`Duplicate local preview session ${previewId}.`);
       }
-      const pipeline = await createSdkProcessedVideo({
-        effect: args.backgroundEffect || {
+      let pipeline = null;
+      let creatingPipeline = null;
+      let effect = args.backgroundEffect || {
           type: 'none',
           blurStrength: 'medium',
-        },
-        deviceId: args.cameraId || null,
-      });
+        };
+      let cameraId = args.cameraId || null;
       const preview = {
         id: previewId,
         providerId,
@@ -335,7 +335,7 @@
         role: String(args.role || 'participant'),
         localParticipantId: `preview:${previewId}`,
         localMuted: !Boolean(args.microphoneEnabled),
-        localVideoEnabled: args.cameraEnabled !== false,
+        localVideoEnabled: args.cameraEnabled === true,
         joined: true,
         participants: new Map(),
         tracks: new Map(),
@@ -344,19 +344,34 @@
         screenTrack: null,
       };
       const trackId = `preview:video:${previewId}`;
-      pipeline.setEnabled(preview.localVideoEnabled);
       addParticipant(
         preview,
         preview.localParticipantId,
         'Local preview',
         true,
       );
-      addVideoTrack(preview, {
-        id: trackId,
-        participantId: preview.localParticipantId,
-        isLocal: true,
-        native: { mediaStreamTrack: pipeline.track },
-      });
+      async function ensurePipeline() {
+        if (pipeline) return pipeline;
+        if (creatingPipeline) return creatingPipeline;
+        creatingPipeline = (async () => {
+          const created = await createSdkProcessedVideo({ effect, deviceId: cameraId });
+          if (!preview.joined) {
+            await created.stop();
+            throw new Error('Local preview was disposed while enabling the camera.');
+          }
+          pipeline = created;
+          addVideoTrack(preview, {
+            id: trackId, participantId: preview.localParticipantId,
+            isLocal: true, native: { mediaStreamTrack: pipeline.track },
+          });
+          return pipeline;
+        })();
+        try { return await creatingPipeline; }
+        finally { creatingPipeline = null; }
+      }
+      if (preview.localVideoEnabled) {
+        await (await ensurePipeline()).setEnabled(true);
+      }
       preview.driver = {
         async command(name, commandArgs) {
           if (name === 'setMuted') {
@@ -364,22 +379,26 @@
             return;
           }
           if (name === 'setVideoEnabled') {
-            preview.localVideoEnabled = Boolean(commandArgs.enabled);
-            pipeline.setEnabled(preview.localVideoEnabled);
+            const enabled = Boolean(commandArgs.enabled);
+            const capture = enabled ? await ensurePipeline() : pipeline;
+            if (capture) await capture.setEnabled(enabled);
+            preview.localVideoEnabled = enabled;
             return;
           }
           if (name === 'setBackgroundEffect') {
-            await pipeline.setEffect({
+            effect = {
               type: String(commandArgs.type || 'none'),
               blurStrength: String(commandArgs.blurStrength || 'medium'),
               imageBytes: commandArgs.imageBytes || null,
-            });
+            };
+            if (pipeline) await pipeline.setEffect(effect);
             return;
           }
           if (name === 'selectDevice') {
             const selected = commandArgs.device || commandArgs;
             if (selected.kind === 'camera') {
-              await pipeline.setCameraDevice(selected.id);
+              cameraId = selected.id;
+              if (pipeline) await pipeline.setCameraDevice(cameraId);
             }
             return;
           }
@@ -394,7 +413,8 @@
           container.replaceChildren();
         },
         async leave() {
-          pipeline.stop();
+          preview.joined = false;
+          if (pipeline) await pipeline.stop();
         },
       };
       sessions.set(previewId, preview);
