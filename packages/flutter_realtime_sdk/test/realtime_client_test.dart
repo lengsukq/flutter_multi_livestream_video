@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
@@ -85,10 +86,10 @@ void main() {
       await expectLater(
         room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (e) => e.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -101,7 +102,7 @@ void main() {
       await room.prepareVideoEffects(const MediaLocalPreviewSettings());
       await expectLater(
         room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
-        throwsA(isA<MediaError>()),
+        throwsA(isA<RealtimeException>()),
       );
       expect(platform.createCalls, 0);
       await room.dispose();
@@ -116,7 +117,7 @@ void main() {
       expect(session.attachedSources, isEmpty);
       await expectLater(
         room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
-        throwsA(isA<MediaError>()),
+        throwsA(isA<RealtimeException>()),
       );
       expect(platform.disposedSources, hasLength(2));
       await room.dispose();
@@ -134,10 +135,10 @@ void main() {
         await expectLater(
           room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
           throwsA(
-            isA<MediaError>().having(
+            isA<RealtimeException>().having(
               (e) => e.code,
               'code',
-              MediaErrorCode.unsupportedFeature,
+              RealtimeErrorCode.unsupportedFeature,
             ),
           ),
         );
@@ -190,7 +191,7 @@ void main() {
         );
         final expectedFailure = expectLater(
           initial,
-          throwsA(isA<MediaError>()),
+          throwsA(isA<RealtimeException>()),
         );
         await Future<void>.delayed(Duration.zero);
         final disposal = room.dispose();
@@ -241,6 +242,10 @@ void main() {
           media: media,
           renderer: const _FakeRenderer(),
           disposeClients: () {},
+          effectsCapabilities: const MediaBackgroundCapabilities(
+            canBlur: true,
+            canReplaceImage: true,
+          ),
           videoEffectsBridge: bridge,
         );
 
@@ -302,10 +307,12 @@ void main() {
       originalEffectsPlatform = FlutterRealtimeVideoEffectsPlatform.instance;
       effectsPlatform = _FakeEffectsPlatform();
       FlutterRealtimeVideoEffectsPlatform.instance = effectsPlatform;
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     });
 
     tearDown(() {
       FlutterRealtimeVideoEffectsPlatform.instance = originalEffectsPlatform;
+      debugDefaultTargetPlatformOverride = null;
     });
 
     test('Mac Pre-Join gates effects on the provider input probe', () async {
@@ -423,7 +430,10 @@ void main() {
 
       expect(adapters.require('FAKE').renderer, same(renderer));
       expect(adapters.registry.require('fake'), same(factory));
-      expect(() => adapters.require('missing'), throwsStateError);
+      expect(
+        () => adapters.require('missing'),
+        throwsA(isA<RealtimeException>()),
+      );
     });
 
     test('rejects duplicate provider registrations', () {
@@ -788,10 +798,10 @@ void main() {
       expect(
         () => plugins.media.registry.require('fake').parseJoinInfo(const {}),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedPlatform,
+            RealtimeErrorCode.unsupportedPlatform,
           ),
         ),
       );
@@ -808,7 +818,7 @@ void main() {
             renderer: const _FakeRenderer(),
           ),
         ),
-        const RealtimeProviderDriver(
+        RealtimeProviderDriver(
           platforms: {RealtimeRuntimePlatform.web},
           plugin: RealtimeProviderPlugin(
             id: 'chat-only',
@@ -914,8 +924,8 @@ void main() {
 
   group('Realtime error mapping', () {
     test('preserves provider diagnostics and recovery hint', () {
-      const source = ChatError(
-        code: ChatErrorCode.timeout,
+      const source = RealtimeException(
+        code: RealtimeErrorCode.timeout,
         message: 'chat timed out',
         providerId: 'ivs',
         details: {'request': 'token'},
@@ -932,20 +942,20 @@ void main() {
     });
 
     test('maps structured driver and credential reasons', () {
-      const webSource = MediaError(
-        code: MediaErrorCode.unsupportedPlatform,
+      const webSource = RealtimeException(
+        code: RealtimeErrorCode.unsupportedPlatform,
         message: 'bridge missing',
         providerId: 'agora',
         details: {'reason': 'web-sdk-unavailable'},
       );
-      const credentialSource = ChatError(
-        code: ChatErrorCode.unauthorized,
+      const credentialSource = RealtimeException(
+        code: RealtimeErrorCode.unauthorized,
         message: 'expired',
         providerId: 'agora-chat',
         details: {'reason': 'credential-expired'},
       );
-      const chatWebSource = ChatError(
-        code: ChatErrorCode.unsupportedPlatform,
+      const chatWebSource = RealtimeException(
+        code: RealtimeErrorCode.unsupportedPlatform,
         message: 'chat bridge missing',
         providerId: 'agora-chat',
         details: {'reason': 'web-sdk-unavailable'},
@@ -1096,10 +1106,10 @@ void main() {
             identity: const MediaIdentity(userId: 'p1', displayName: 'P1'),
           ),
           throwsA(
-            isA<MediaError>().having(
+            isA<RealtimeException>().having(
               (error) => error.code,
               'code',
-              MediaErrorCode.unsupportedFeature,
+              RealtimeErrorCode.unsupportedFeature,
             ),
           ),
         );
@@ -1242,7 +1252,7 @@ void main() {
           client.createRoomAndJoinIdentity(
             identity: const MediaIdentity(userId: 'p1', displayName: 'P1'),
           ),
-          throwsStateError,
+          throwsA(isA<RealtimeException>()),
         );
 
         expect(joinedFactory.createdSessions.single.disposeCount, 1);
@@ -1250,8 +1260,8 @@ void main() {
     );
 
     test('cleans up media when provider join fails', () async {
-      final error = MediaError(
-        code: MediaErrorCode.nativeError,
+      final error = RealtimeException(
+        code: RealtimeErrorCode.providerError,
         message: 'join failed',
         providerId: 'fake',
       );
@@ -1280,7 +1290,13 @@ void main() {
         client.createRoomAndJoinIdentity(
           identity: const MediaIdentity(userId: 'p1', displayName: 'P1'),
         ),
-        throwsA(same(error)),
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.cause,
+            'original failure',
+            same(error),
+          ),
+        ),
       );
       expect(factory.createdSessions.single.disposeCount, 1);
     });
@@ -1315,10 +1331,10 @@ void main() {
           identity: const MediaIdentity(userId: 'p1', displayName: 'P1'),
         ),
         throwsA(
-          isA<ChatError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            ChatErrorCode.network,
+            RealtimeErrorCode.network,
           ),
         ),
       );
@@ -1509,7 +1525,7 @@ void main() {
     test('parses raw chat credentials independently from media provider', () {
       final sdk = RealtimeSdk.standard(
         platformResolver: () => RealtimeRuntimePlatform.web,
-        drivers: const [
+        drivers: [
           RealtimeProviderDriver(
             platforms: {RealtimeRuntimePlatform.web},
             plugin: RealtimeProviderPlugin(
@@ -1583,7 +1599,7 @@ void main() {
         expect(loads, hasLength(1));
         expect(loads.single.chat, isTrue);
         expect(loads.single.all, isFalse);
-        expect(loads.single.media, isEmpty);
+        expect(loads.single.media, {'agora-chat'});
         await room.dispose();
       },
     );
@@ -1664,8 +1680,8 @@ void main() {
     });
 
     test('maps low-level join errors to RealtimeException', () async {
-      final source = MediaError(
-        code: MediaErrorCode.nativeError,
+      final source = RealtimeException(
+        code: RealtimeErrorCode.providerError,
         message: 'provider failed',
         providerId: 'fake',
       );
@@ -2051,8 +2067,8 @@ class _FailingChatBackend extends ChatBackendClient {
     required String participantId,
     String? participantCredential,
     String? roomOwnerCredential,
-  }) => throw const ChatError(
-    code: ChatErrorCode.network,
+  }) => throw const RealtimeException(
+    code: RealtimeErrorCode.network,
     message: 'chat backend unavailable',
     providerId: 'ivs',
   );
@@ -2180,6 +2196,10 @@ RealtimeSdk _sdkWithProbeFactory(FakeMediaSessionFactory factory) =>
             metadata: const RealtimeProviderMetadata(displayName: 'Test'),
             mediaFactory: factory,
             renderer: const _FakeRenderer(),
+            effectsProbe: createDefaultRealtimeDrivers()
+                .firstWhere((d) => d.providerId == factory.providerId)
+                .plugin
+                .effectsProbe,
           ),
         ),
       ],
@@ -2217,5 +2237,9 @@ RealtimeRoom _effectsRoom(
   ),
   renderer: const _FakeRenderer(),
   disposeClients: () {},
+  effectsCapabilities: const MediaBackgroundCapabilities(
+    canBlur: true,
+    canReplaceImage: true,
+  ),
   videoEffectsBridge: VideoEffectsBridge(platform: platform),
 );

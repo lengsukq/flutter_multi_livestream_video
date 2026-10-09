@@ -1,15 +1,16 @@
-import 'package:flutter_realtime_sdk_base/flutter_realtime_sdk_base.dart'
+import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
     as base;
-import 'package:flutter_realtime_sdk_base/flutter_realtime_sdk_base.dart'
+import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
     hide RealtimeSdk, Realtime, ensureRealtimeProviderWebAssets;
 import 'default_driver_catalog.dart';
 import 'provider_web_assets.dart';
-export 'package:flutter_realtime_sdk_base/src/realtime_sdk.dart'
+export 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
     show RealtimeClientFactory;
 
 class RealtimeSdk extends base.RealtimeSdk {
   RealtimeSdk({
     super.backendUrl,
+    super.requestTimeout,
     required super.plugins,
     super.tokenProvider,
     super.clientFactory,
@@ -22,6 +23,7 @@ class RealtimeSdk extends base.RealtimeSdk {
 
   factory RealtimeSdk.standard({
     String? backendUrl,
+    Duration? requestTimeout,
     RealtimeTokenProvider? tokenProvider,
     RealtimeClientFactory? clientFactory,
     RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
@@ -35,6 +37,7 @@ class RealtimeSdk extends base.RealtimeSdk {
     );
     return RealtimeSdk(
       backendUrl: backendUrl,
+      requestTimeout: requestTimeout,
       plugins: registry.resolvePlugins(additionalPlugins: additionalPlugins),
       tokenProvider: tokenProvider,
       clientFactory: clientFactory,

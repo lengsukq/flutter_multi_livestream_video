@@ -1,8 +1,7 @@
+import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
 import 'dart:async';
 
 import 'package:web/web.dart' as web;
-
-import 'realtime_error.dart';
 
 const _mediaScriptsByProvider = <String, String>{
   'artc': 'vendors/aliyun-rtc-sdk.js',
@@ -68,7 +67,7 @@ const _runtimePackages = {
   'vendors/tencent-chat-provider.js': 'flutter_realtime_provider_tencent_chat',
 };
 Future<void> _loadProviderRuntimeScript(String scriptPath) async {
-  final package = _runtimePackages[scriptPath] ?? 'flutter_realtime_sdk_base';
+  final package = _runtimePackages[scriptPath] ?? 'flutter_realtime_media_web';
   final file = scriptPath.split('/').last;
   if (file == 'trtc.js') {
     await _loadBundledScript(
@@ -94,7 +93,7 @@ Future<void> _loadBundledScript({
   final load = _loadScript(assetPath, displayName: displayName);
   _loadedScripts[key] = load;
   return load.catchError((Object error) {
-    _loadedScripts.remove(key);
+    _loadedScripts.removeWhere((candidate, _) => candidate == key);
     throw error;
   });
 }
@@ -106,21 +105,25 @@ Future<void> _loadScript(String assetPath, {required String displayName}) {
   final script = web.HTMLScriptElement()
     ..src = source
     ..async = false;
-  script.onLoad.first.then((_) {
-    if (!completer.isCompleted) completer.complete();
-  });
-  script.onError.first.then((_) {
-    if (!completer.isCompleted) {
-      completer.completeError(
-        RealtimeException(
-          code: RealtimeErrorCode.webSdkUnavailable,
-          message: 'Unable to load the bundled runtime: $displayName.',
-          suggestedAction: 'check-web-assets',
-          details: {'asset': assetPath, 'url': source},
-        ),
-      );
-    }
-  });
+  observeDetached(
+    script.onLoad.first.then((_) {
+      if (!completer.isCompleted) completer.complete();
+    }),
+  );
+  observeDetached(
+    script.onError.first.then((_) {
+      if (!completer.isCompleted) {
+        completer.completeError(
+          RealtimeException(
+            code: RealtimeErrorCode.webSdkUnavailable,
+            message: 'Unable to load the bundled runtime: $displayName.',
+            suggestedAction: 'check-web-assets',
+            details: {'asset': assetPath, 'url': source},
+          ),
+        );
+      }
+    }),
+  );
   web.document.head!.append(script);
   return completer.future.timeout(
     const Duration(seconds: 30),

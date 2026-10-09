@@ -12,7 +12,9 @@ const trtcAssets = resolve(root, '../../../flutter_realtime_provider_trtc/assets
 await writeFile(resolve(trtcAssets, 'asset-path.js'), `globalThis.__realtimeTrtcAssetsPath = new URL('trtc-assets/', document.currentScript.src).toString();\n`);
 
 const sdkAssets = resolve(root, '../../assets/provider_web_runtime');
-await cp(resolve(sdkAssets, 'media-provider-bridge.js'), resolve(root, '../../../flutter_realtime_sdk_base/assets/media-provider-bridge.js'));
+const bridgeAssets = resolve(root, '../../../flutter_realtime_media_web/assets');
+await mkdir(bridgeAssets, {recursive: true});
+await cp(resolve(sdkAssets, 'media-provider-bridge.js'), resolve(bridgeAssets, 'media-provider-bridge.js'));
 for (const [slug, files] of [['agora', ['agora-rtc-sdk.js']], ['trtc', ['trtc.js', 'trtc-assets']], ['artc', ['aliyun-rtc-sdk.js']], ['aws', ['chime-sdk.js', 'amazon-ivs-web-broadcast.js']]]) {
   const destination = resolve(root, `../../../flutter_realtime_provider_${slug}/assets`);
   await mkdir(destination, { recursive: true });
