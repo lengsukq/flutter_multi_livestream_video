@@ -54,33 +54,38 @@ test('dashboard provider switcher is metadata-driven and its script parses', asy
 });
 
 test('dashboard cloud chat management routes require admin authentication', async () => {
-  const server = await readFile(
-    path.resolve(import.meta.dirname, '..', 'server.ts'),
+  const chatRoutes = await readFile(
+    path.resolve(import.meta.dirname, '..', 'routes', 'chat-routes.ts'),
     'utf8',
   );
   assert.match(
-    server,
+    chatRoutes,
     /app\.get\('\/api\/chat\/cloud-rooms', requireAdmin/,
   );
   assert.match(
-    server,
+    chatRoutes,
     /'\/api\/chat\/cloud-rooms\/:provider\/:roomId'/,
   );
-  assert.match(server, /provider\.deleteCloudRoom\(providerRoomId\)/);
+  assert.match(chatRoutes, /provider\.deleteCloudRoom\(providerRoomId\)/);
 });
 
 test('chat-token route is protected by the shared room middleware', async () => {
   const server = await readFile(
-    path.resolve(import.meta.dirname, '..', 'server.ts'),
+    path.resolve(import.meta.dirname, '..', 'app.ts'),
     'utf8',
   );
   const middlewareIndex = server.indexOf("app.use('/rooms'");
-  const chatTokenIndex = server.indexOf("app.post('/rooms/:code/chat/token'");
+  const registerIndex = server.indexOf('registerRoomRoutes(app');
+  const roomRoutes = await readFile(
+    path.resolve(import.meta.dirname, '..', 'routes', 'room-routes.ts'),
+    'utf8',
+  );
 
   assert.notEqual(middlewareIndex, -1, 'room middleware was not found');
-  assert.notEqual(chatTokenIndex, -1, 'chat-token route was not found');
+  assert.notEqual(registerIndex, -1, 'room routes were not registered');
+  assert.match(roomRoutes, /app\.post\('\/rooms\/:code\/chat\/token'/);
   assert.ok(
-    middlewareIndex < chatTokenIndex,
+    middlewareIndex < registerIndex,
     'chat-token route must be registered after the shared /rooms middleware',
   );
 });
