@@ -298,7 +298,7 @@ class RealtimeStrings {
   String get liveSummary => isZh ? '直播小结' : 'Livestream Summary';
   String get liveDuration => isZh ? '直播时长' : 'Live duration';
   String get peakViewers => isZh ? '最高在线' : 'Peak viewers';
-  String get totalLikes => myLikes;
+  String get totalLikes => isZh ? '直播间点赞' : 'Room likes';
   String get myLikes => isZh ? '我的点赞次数' : 'My likes';
   String get noMuteTargets => isZh ? '暂无可静音成员' : 'No participants to mute';
   String get retryFailed => isZh ? '重试失败成员' : 'Retry failed participants';

@@ -27,6 +27,8 @@ function holdNextUpdate() {
 
 interface ApiBody {
   liveInteractions?: boolean;
+  totalLikes?: number;
+  likeEvents?: Array<{ id: string; userId: string; sequence: number }>;
   tools?: Record<string, unknown>;
   totals?: Record<string, number>;
   activeProvider?: string;
@@ -708,10 +710,16 @@ test('teacher plus two students and host plus two viewers share authenticated in
   const giftBody = { ...auth(viewer1.body), giftId: 'star', quantity: 2, eventId: 'http-gift-001' };
   assert.equal((await post('/rooms/giftE2E1/live/gift', giftBody)).status, 200);
   assert.equal((await post('/rooms/giftE2E1/live/gift', giftBody)).status, 200);
+  const likeBody = { ...auth(viewer1.body), eventId: 'http-like-001' };
+  assert.equal((await post('/rooms/giftE2E1/live/like', likeBody)).status, 200);
+  assert.equal((await post('/rooms/giftE2E1/live/like', likeBody)).status, 200);
   for (const person of [host.body, viewer2.body]) {
     const snapshot = await post('/rooms/giftE2E1/live/snapshot', auth(person));
     assert.equal(snapshot.status, 200); assert.equal(snapshot.body.totals!.star, 2);
+    assert.equal(snapshot.body.totalLikes, 1);
+    assert.equal(snapshot.body.likeEvents?.length, 1);
   }
+  assert.equal((await post('/rooms/giftE2E1/live/like', { ...likeBody, participantCredential: 'wrong' })).status, 403);
   assert.equal((await post('/rooms/giftE2E1/live/gift', { ...giftBody, participantCredential: 'wrong' })).status, 403);
   await post('/rooms/teachingE2E1/close', teacherAuth);
   await post('/rooms/giftE2E1/close', auth(host.body));

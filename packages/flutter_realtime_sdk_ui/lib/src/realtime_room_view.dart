@@ -40,6 +40,19 @@ class RealtimeRoomView extends StatefulWidget {
 
 class _RealtimeRoomViewState extends State<RealtimeRoomView> {
   Future<void>? _prepareFuture;
+  LiveInteractionSession? _likesSession;
+  LiveLikesController? _likesAdapter;
+
+  LiveLikesController? get _liveLikes {
+    final session = widget.showLiveInteractions
+        ? widget.room.liveInteractions
+        : null;
+    if (!identical(session, _likesSession)) {
+      _likesSession = session;
+      _likesAdapter = session == null ? null : _LiveLikesAdapter(session);
+    }
+    return _likesAdapter;
+  }
 
   @override
   void initState() {
@@ -136,6 +149,7 @@ class _RealtimeRoomViewState extends State<RealtimeRoomView> {
           backgroundEffects: widget.room,
           chatSession: widget.room.chat,
           chatModeration: widget.room.chatModeration,
+          liveLikes: _liveLikes,
           canEnableMicrophone: widget.room.classroom == null
               ? null
               : () {
@@ -219,6 +233,21 @@ class _RealtimeRoomViewState extends State<RealtimeRoomView> {
         ),
     ],
   );
+}
+
+/// Connects the shared live-interaction state to the reusable lower-level UI.
+class _LiveLikesAdapter implements LiveLikesController {
+  const _LiveLikesAdapter(this.session);
+  final LiveInteractionSession session;
+
+  @override
+  int get totalLikes => session.state?.totalLikes ?? 0;
+  @override
+  Stream<int> get totals => session.states.map((state) => state.totalLikes);
+  @override
+  Stream<int> get receivedLikes => session.likes.map((event) => event.quantity);
+  @override
+  Future<void> sendLike() => session.sendLike();
 }
 
 class _ContentControls extends StatefulWidget {

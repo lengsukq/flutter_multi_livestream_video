@@ -11,6 +11,7 @@ import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'media_provider_label.dart';
+import 'live_likes_controller.dart';
 import 'room_regions.dart';
 import 'background_effect_selector.dart';
 import 'media_background_image_preset.dart';
@@ -57,6 +58,7 @@ class MediaRoomView extends StatefulWidget {
     required this.renderer,
     this.chatSession,
     this.chatModeration,
+    this.liveLikes,
     this.config = const MediaRoomViewConfig(),
     this.header,
     this.participantBuilder,
@@ -74,6 +76,9 @@ class MediaRoomView extends StatefulWidget {
   final MediaTrackRenderer renderer;
   final ChatSession? chatSession;
   final ChatModeration? chatModeration;
+
+  /// Optional synchronized live likes supplied by the SDK composition layer.
+  final LiveLikesController? liveLikes;
   final MediaRoomViewConfig config;
   final Widget? header;
   final MediaParticipantBuilder? participantBuilder;
@@ -109,6 +114,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   final _rtcDataMessage = TextEditingController();
   final _chatScroll = ScrollController();
   StreamSubscription<List<ChatMessage>>? _chatUnreadSub;
+  StreamSubscription<int>? _likesSub;
+  StreamSubscription<int>? _likeTotalsSub;
   StreamSubscription<Object?>? _micPermissionSub;
   StreamSubscription<Object?>? _contentSub;
   Widget? _cachedMediaStage;
@@ -148,6 +155,38 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       widget.backgroundEffects ?? widget.room;
 
   void _sendLike() {
+    final likes = widget.liveLikes;
+    if (likes == null) return;
+    observeDetached(_run(likes.sendLike));
+  }
+
+  void _watchLikes() {
+    observeDetached(_likesSub?.cancel());
+    observeDetached(_likeTotalsSub?.cancel());
+    for (final timer in _heartTimers) {
+      timer.cancel();
+    }
+    _heartTimers.clear();
+    _floatingHearts.clear();
+    _likeRevision.value++;
+    final likes = widget.liveLikes;
+    _likeCount = likes?.totalLikes ?? 0;
+    _controlRevision.value++;
+    if (likes == null) return;
+    _likesSub = likes.receivedLikes.listen((count) {
+      if (!mounted || likes != widget.liveLikes) return;
+      for (var index = 0; index < count.clamp(0, 5); index++) {
+        _animateLike();
+      }
+    });
+    _likeTotalsSub = likes.totals.listen((count) {
+      if (!mounted || likes != widget.liveLikes) return;
+      _likeCount = count;
+      _controlRevision.value++;
+    });
+  }
+
+  void _animateLike() {
     final random = math.Random();
     const hues = [
       Color(0xFFEF4444),
@@ -161,8 +200,6 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       color: hues[random.nextInt(hues.length)],
       startX: 0.65 + (random.nextDouble() * 0.25),
     );
-    _likeCount++;
-    _controlRevision.value++;
     {
       _floatingHearts.add(heart);
     }
@@ -255,6 +292,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     _watchUnreadChat();
     _watchMicPermission();
     _watchContent();
+    _watchLikes();
   }
 
   @override
@@ -271,6 +309,10 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       _focusedParticipantId = null;
       _message.clear();
       _rtcDataMessage.clear();
+    }
+    if (oldWidget.liveLikes != widget.liveLikes ||
+        oldWidget.room != widget.room) {
+      _watchLikes();
     }
     if (oldWidget.room != widget.room ||
         oldWidget.chatSession != widget.chatSession) {
@@ -448,6 +490,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   @override
   void dispose() {
     observeDetached(_chatUnreadSub?.cancel());
+    observeDetached(_likesSub?.cancel());
+    observeDetached(_likeTotalsSub?.cancel());
     observeDetached(_micPermissionSub?.cancel());
     observeDetached(_contentSub?.cancel());
     _copyTimer?.cancel();

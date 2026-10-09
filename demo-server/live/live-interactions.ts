@@ -9,8 +9,10 @@ export const demoGiftCatalog = Object.freeze([
 ]);
 type GiftEvent = { id: string; sequence: number; userId: string; displayName: string;
   recipientId: string; giftId: string; quantity: number; timestamp: string };
+type LikeEvent = { id: string; sequence: number; userId: string; quantity: number; timestamp: string };
 type State = { revision: number; events: GiftEvent[]; totals: Map<string, number>;
-  handled: Map<string, string>; recent: Map<string, number[]> };
+  likeEvents: LikeEvent[]; totalLikes: number; handled: Map<string, string>;
+  recent: Map<string, number[]>; recentLikes: Map<string, number[]> };
 const fail = (message: string, code = 'invalid-argument', status = 400): never => {
   throw new ProviderOperationError(status, code, message);
 };
@@ -21,7 +23,8 @@ export class LiveInteractionDirectory {
   private get(entry: RoomEntry): State {
     if (entry.roomMode !== 'broadcast') fail('Live interactions require a broadcast room', 'unsupported-feature');
     let state = this.rooms.get(entry);
-    if (!state) { state = { revision: 0, events: [], totals: new Map(), handled: new Map(), recent: new Map() }; this.rooms.set(entry, state); }
+    if (!state) { state = { revision: 0, events: [], totals: new Map(), likeEvents: [], totalLikes: 0,
+      handled: new Map(), recent: new Map(), recentLikes: new Map() }; this.rooms.set(entry, state); }
     return state;
   }
   snapshot(entry: RoomEntry, requester: RoomAttendee) {
@@ -32,6 +35,7 @@ export class LiveInteractionDirectory {
       recipientId: host?.userId ?? host?.externalUserId ?? '', canSendGift: Boolean(host),
       catalog: demoGiftCatalog.map(item => ({ ...item })),
       events: state.events.map(event => ({ ...event })), totals: Object.fromEntries(state.totals),
+      likeEvents: state.likeEvents.map(event => ({ ...event })), totalLikes: state.totalLikes,
     };
   }
   send(entry: RoomEntry, requester: RoomAttendee, raw: Record<string, unknown>) {
@@ -43,7 +47,7 @@ export class LiveInteractionDirectory {
     if (!/^[a-zA-Z0-9_-]{8,128}$/.test(eventId)) fail('eventId is required');
     if (!demoGiftCatalog.some(gift => gift.id === giftId)) fail('Unknown gift');
     if (!Number.isSafeInteger(quantity) || (quantity as number) < 1 || (quantity as number) > 99) fail('Gift quantity must be 1-99');
-    const fingerprint = JSON.stringify([userId, giftId, quantity]);
+    const fingerprint = JSON.stringify(['gift', userId, giftId, quantity]);
     const previous = state.handled.get(eventId);
     if (previous && previous !== fingerprint) fail('Reused eventId with different payload', 'idempotency-conflict', 409);
     if (previous) return this.snapshot(entry, requester);
@@ -59,6 +63,31 @@ export class LiveInteractionDirectory {
       recipientId: host!.userId ?? host!.externalUserId, giftId, quantity: quantity as number, timestamp: new Date(now).toISOString() });
     if (state.events.length > 100) state.events.shift();
     state.totals.set(giftId, (state.totals.get(giftId) ?? 0) + (quantity as number));
+    state.handled.set(eventId, fingerprint);
+    if (state.handled.size > 1000) state.handled.delete(state.handled.keys().next().value!);
+    return this.snapshot(entry, requester);
+  }
+  sendLike(entry: RoomEntry, requester: RoomAttendee, raw: Record<string, unknown>) {
+    const state = this.get(entry);
+    const userId = requester.userId ?? requester.externalUserId;
+    const eventId = String(raw.eventId ?? '');
+    if (!/^[a-zA-Z0-9_-]{8,128}$/.test(eventId)) fail('eventId is required');
+    const fingerprint = JSON.stringify(['like', userId]);
+    const previous = state.handled.get(eventId);
+    if (previous && previous !== fingerprint) fail('Reused eventId with different payload', 'idempotency-conflict', 409);
+    if (previous) return this.snapshot(entry, requester);
+    const host = entry.attendees.find(person => person.role === 'host');
+    if (!host) fail('The host is offline', 'invalid-state', 409);
+    const now = Date.now();
+    const recent = (state.recentLikes.get(userId) ?? []).filter(time => now - time < 10000);
+    if (recent.length >= 30) fail('Please wait before sending more likes', 'rate-limited', 429);
+    recent.push(now);
+    state.recentLikes.set(userId, recent);
+    state.revision++;
+    state.totalLikes++;
+    state.likeEvents.push({ id: crypto.randomUUID(), sequence: state.revision,
+      userId, quantity: 1, timestamp: new Date(now).toISOString() });
+    if (state.likeEvents.length > 100) state.likeEvents.shift();
     state.handled.set(eventId, fingerprint);
     if (state.handled.size > 1000) state.handled.delete(state.handled.keys().next().value!);
     return this.snapshot(entry, requester);

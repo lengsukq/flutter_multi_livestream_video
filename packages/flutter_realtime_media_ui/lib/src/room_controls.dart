@@ -136,15 +136,17 @@ extension _RoomControlRendering on _MediaRoomViewState {
       );
     }
     final isLive = widget.room.role != MediaRole.participant;
-    if (isLive) {
+    if (isLive && widget.liveLikes != null) {
       controls.add(
         _control(
           Icons.favorite_rounded,
-          '${strings.myLikes} $_likeCount',
+          '${strings.totalLikes} $_likeCount',
           _sendLike,
           showLabel: showLabels,
         ),
       );
+    }
+    if (isLive) {
       controls.add(
         _control(
           _cleanScreen

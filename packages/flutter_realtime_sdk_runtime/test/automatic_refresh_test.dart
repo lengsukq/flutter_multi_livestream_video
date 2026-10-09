@@ -26,6 +26,9 @@ class _ClassRepository implements ClassroomRepository {
 }
 
 class _LiveRepository implements LiveInteractionRepository {
+  @override
+  Future<LiveInteractionState> sendLike({required String eventId}) async =>
+      value;
   int reads = 0;
   Completer<LiveInteractionState>? held;
   final value = LiveInteractionState(

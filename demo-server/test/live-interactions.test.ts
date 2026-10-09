@@ -26,6 +26,28 @@ test('gifts work independently of chat, with authority, replay protection and sh
   assert.equal(joined.events.length, 2);
   assert.equal(first.events.length, 1);
 });
+test('likes are room-wide, credential-scoped, idempotent and share gift revision sequence', () => {
+  const { entry, directory } = fixture();
+  const alice = entry.attendees[1]!, bob = entry.attendees[2]!;
+  const first = directory.sendLike(entry, alice, { eventId: 'like-event-001' });
+  assert.equal(first.totalLikes, 1);
+  assert.equal(directory.sendLike(entry, alice, { eventId: 'like-event-001' }).revision, first.revision);
+  assert.equal(directory.snapshot(entry, bob).totalLikes, 1);
+  assert.equal(directory.snapshot(entry, bob).likeEvents[0]?.userId, 'alice');
+  const gift = directory.send(entry, bob, { giftId: 'star', quantity: 1, eventId: 'gift-event-001' });
+  assert.equal(gift.revision, 2);
+  const second = directory.sendLike(entry, bob, { eventId: 'like-event-002' });
+  assert.equal(second.totalLikes, 2);
+  assert.equal(second.revision, 3);
+  assert.deepEqual(second.likeEvents.map(like => like.sequence), [1, 3]);
+  assert.throws(() => directory.sendLike(entry, bob, { eventId: 'like-event-001' }), /Reused eventId/);
+  assert.throws(() => directory.sendLike(entry, bob, { eventId: 'bad' }), /eventId/);
+  for (let index = 0; index < 29; index++) {
+    directory.sendLike(entry, bob, { eventId: `rate-like-${index.toString().padStart(4, '0')}` });
+  }
+  assert.throws(() => directory.sendLike(entry, bob, { eventId: 'rate-like-overflow' }), /wait/);
+  assert.equal(directory.snapshot(entry, alice).totalLikes, 31);
+});
 test('invalid, excessive and offline-host gifts fail without incrementing totals', () => {
   const { entry, directory } = fixture();
   const alice = entry.attendees[1]!;

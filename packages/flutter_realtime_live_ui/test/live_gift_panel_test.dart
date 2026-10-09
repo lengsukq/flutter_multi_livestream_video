@@ -4,6 +4,9 @@ import 'package:flutter_realtime_live_ui/flutter_realtime_live_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class Repository implements LiveInteractionRepository {
+  @override
+  Future<LiveInteractionState> sendLike({required String eventId}) =>
+      snapshot();
   final ids = <String>[];
   bool fail = true;
   @override

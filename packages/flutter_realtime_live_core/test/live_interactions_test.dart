@@ -30,6 +30,13 @@ class Repository implements LiveInteractionRepository {
   final ids = <String>[];
   bool closed = false, fail = false;
   @override
+  Future<LiveInteractionState> sendLike({required String eventId}) async {
+    ids.add(eventId);
+    if (fail) throw StateError('Connection failed');
+    return next;
+  }
+
+  @override
   Future<LiveInteractionState> snapshot() async => next;
   @override
   Future<LiveInteractionState> sendGift(
@@ -158,6 +165,7 @@ void main() {
       );
       await repository.snapshot();
       await repository.sendGift('star', 1, eventId: 'retry-gift-001');
+      await repository.sendLike(eventId: 'retry-like-001');
       expect(requests[0].url.path, '/api/rooms/live1/live/snapshot');
       expect(requests[0].headers['Authorization'], 'Bearer bearer');
       expect(
@@ -168,8 +176,59 @@ void main() {
         jsonDecode(requests[1].body),
         containsPair('eventId', 'retry-gift-001'),
       );
+      expect(requests[2].url.path, '/api/rooms/live1/live/like');
+      expect(
+        jsonDecode(requests[2].body),
+        containsPair('eventId', 'retry-like-001'),
+      );
       repository.close();
       client.close();
+    },
+  );
+  test(
+    'likes reach all subscribers once; initial history and repeat snapshots do not replay',
+    () async {
+      final repository = Repository();
+      final session = LiveInteractionSession(
+        repository,
+        pollInterval: const Duration(hours: 1),
+      );
+      final received = <LiveLikeEvent>[];
+      final sub = session.likes.listen(received.add);
+      await session.start();
+      expect(received, isEmpty);
+      final like = LiveLikeEvent(
+        id: 'like-1',
+        sequence: 2,
+        userId: 'bob',
+        quantity: 1,
+        timestamp: DateTime.utc(2026),
+      );
+      repository.next = LiveInteractionState(
+        roomCode: 'live1',
+        revision: 2,
+        selfUserId: 'alice',
+        recipientId: 'host',
+        canSendGift: true,
+        totalLikes: 1,
+        likeEvents: [like],
+      );
+      await session.refresh();
+      await session.refresh();
+      expect(received.map((e) => e.id), ['like-1']);
+      expect(session.state!.totalLikes, 1);
+      repository.fail = true;
+      await expectLater(
+        session.sendLike(eventId: 'retry-like-001'),
+        throwsA(isA<Exception>()),
+      );
+      expect(session.state!.totalLikes, 1);
+      repository.fail = false;
+      await session.sendLike(eventId: 'retry-like-001');
+      expect(repository.ids, ['retry-like-001', 'retry-like-001']);
+      expect(received.length, 1);
+      await sub.cancel();
+      await session.dispose();
     },
   );
 }

@@ -159,6 +159,48 @@ void main() {
   });
 
   testWidgets(
+    'remote likes update the shared total, and tapping uses the SDK controller',
+    (tester) async {
+      final fixture = _RoomFixture(role: MediaRole.viewer);
+      final likes = _FakeLikesController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+            liveLikes: likes,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Room likes 0'), findsOneWidget);
+      likes.remoteLike();
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Room likes 1'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget.runtimeType.toString() == '_FloatingHeartParticle',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byTooltip('Room likes 1'));
+      await tester.pump();
+      expect(likes.sent, 1);
+      expect(find.text('Room likes 1'), findsOneWidget);
+      likes.remoteLike();
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Room likes 2'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(likes._received.hasListener, false);
+      expect(likes._totals.hasListener, false);
+      await likes.dispose();
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets(
     'deleting latest does not announce new messages; out-of-order arrival does',
     (tester) async {
       final chat = _FakeChatSession(
@@ -305,7 +347,7 @@ void main() {
       expect(find.text('Apply co-host'), findsNothing);
       expect(find.byIcon(Icons.pan_tool_outlined), findsNothing);
       if (role == MediaRole.viewer) {
-        expect(find.text('My likes 0'), findsOneWidget);
+        expect(find.byIcon(Icons.favorite_rounded), findsNothing);
       }
       await tester.pumpWidget(const SizedBox.shrink());
       await fixture.dispose();
@@ -1295,6 +1337,36 @@ class _FakeScreenShareTrack implements MediaVideoTrack {
 
   @override
   double get aspectRatio => width / height;
+}
+
+class _FakeLikesController implements LiveLikesController {
+  final _received = StreamController<int>.broadcast();
+  final _totals = StreamController<int>.broadcast();
+  int _count = 0;
+  int sent = 0;
+
+  @override
+  int get totalLikes => _count;
+  @override
+  Stream<int> get totals => _totals.stream;
+  @override
+  Stream<int> get receivedLikes => _received.stream;
+
+  void remoteLike() {
+    _count++;
+    _totals.add(_count);
+    _received.add(1);
+  }
+
+  @override
+  Future<void> sendLike() async {
+    sent++;
+  }
+
+  Future<void> dispose() async {
+    await _received.close();
+    await _totals.close();
+  }
 }
 
 class _RoomFixture {

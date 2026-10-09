@@ -44,6 +44,31 @@ class LiveGiftEvent {
       );
 }
 
+/// A confirmed room-wide like, keyed by the shared interaction revision.
+class LiveLikeEvent {
+  const LiveLikeEvent({
+    required this.id,
+    required this.sequence,
+    required this.userId,
+    required this.quantity,
+    required this.timestamp,
+  });
+  final String id, userId;
+  final int sequence, quantity;
+  final DateTime timestamp;
+
+  factory LiveLikeEvent.fromJson(Map<String, dynamic> value) =>
+      JsonReader(value).decode(
+        () => LiveLikeEvent(
+          id: JsonReader(value).required<String>('id'),
+          sequence: JsonReader(value).required<int>('sequence'),
+          userId: JsonReader(value).required<String>('userId'),
+          quantity: JsonReader(value).required<int>('quantity'),
+          timestamp: JsonReader(value).dateTime('timestamp'),
+        ),
+      );
+}
+
 class LiveInteractionState {
   LiveInteractionState({
     required this.roomCode,
@@ -53,15 +78,20 @@ class LiveInteractionState {
     required this.canSendGift,
     List<LiveGift> catalog = const [],
     List<LiveGiftEvent> events = const [],
+    List<LiveLikeEvent> likeEvents = const [],
+    this.totalLikes = 0,
     Map<String, int> totals = const {},
   }) : catalog = List.unmodifiable(catalog),
        events = List.unmodifiable(events),
+       likeEvents = List.unmodifiable(likeEvents),
        totals = Map.unmodifiable(totals);
   final String roomCode, selfUserId, recipientId;
   final int revision;
   final bool canSendGift;
   final List<LiveGift> catalog;
   final List<LiveGiftEvent> events;
+  final List<LiveLikeEvent> likeEvents;
+  final int totalLikes;
   final Map<String, int> totals;
   factory LiveInteractionState.fromJson(Map<String, dynamic> value) =>
       JsonReader(
@@ -80,6 +110,10 @@ class LiveInteractionState {
         events: JsonReader(
           value,
         ).objects('events', LiveGiftEvent.fromJson, optional: false),
+        likeEvents: JsonReader(
+          value,
+        ).objects('likeEvents', LiveLikeEvent.fromJson, optional: true),
+        totalLikes: (value['totalLikes'] as int?) ?? 0,
         totals: Map.unmodifiable((value['totals'] as Map).cast<String, int>()),
       );
 }
@@ -99,6 +133,7 @@ abstract interface class LiveInteractionRepository {
     int quantity, {
     required String eventId,
   });
+  Future<LiveInteractionState> sendLike({required String eventId});
   void close();
 }
 
@@ -160,6 +195,9 @@ class HttpLiveInteractionRepository implements LiveInteractionRepository {
     'eventId': eventId,
   });
   @override
+  Future<LiveInteractionState> sendLike({required String eventId}) =>
+      _post('like', {'eventId': eventId});
+  @override
   void close() {
     _executor.close();
   }
@@ -177,6 +215,7 @@ class LiveInteractionSession {
   final LiveRevisionTransport? revisionTransport;
   final _states = StreamController<LiveInteractionState>.broadcast();
   final _events = StreamController<LiveGiftEvent>.broadcast();
+  final _likes = StreamController<LiveLikeEvent>.broadcast();
   final _errors = StreamController<Object>.broadcast();
   static final _random = Random.secure();
   LiveInteractionState? _state;
@@ -191,6 +230,7 @@ class LiveInteractionSession {
   LiveInteractionState? get state => _state;
   Stream<LiveInteractionState> get states => _states.stream;
   Stream<LiveGiftEvent> get events => _events.stream;
+  Stream<LiveLikeEvent> get likes => _likes.stream;
   Stream<Object> get errors => _errors.stream;
   String newEventId() =>
       '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}';
@@ -282,6 +322,9 @@ class LiveInteractionSession {
       for (final event in next.events) {
         if (event.sequence > previous.revision) _events.add(event);
       }
+      for (final event in next.likeEvents) {
+        if (event.sequence > previous.revision) _likes.add(event);
+      }
     }
     _states.add(next);
   }
@@ -339,6 +382,36 @@ class LiveInteractionSession {
     }
   }
 
+  /// Send one authenticated like. Retrying with the same event ID is safe.
+  Future<void> sendLike({String? eventId}) async {
+    if (_disposed) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Live interactions disposed',
+      );
+    }
+    if (_state == null) await start();
+    try {
+      _setState(await repository.sendLike(eventId: eventId ?? newEventId()));
+    } catch (error, stack) {
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          domain: 'live',
+          operation: 'sendLike',
+          stackTrace: stack,
+        ),
+        stack,
+      );
+    }
+    if (_disposed) return;
+    try {
+      await revisionTransport?.publish(_state!.revision);
+    } catch (error) {
+      if (!_disposed) _errors.add(error);
+    }
+  }
+
   Future<void> dispose() => _disposeFuture ??= _dispose();
 
   Future<void> _dispose() async {
@@ -372,6 +445,9 @@ class LiveInteractionSession {
     });
     await cleanup.run('events', () async {
       await _events.close();
+    });
+    await cleanup.run('likes', () async {
+      await _likes.close();
     });
     await cleanup.run('errors', () async {
       await _errors.close();

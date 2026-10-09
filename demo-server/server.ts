@@ -1573,7 +1573,7 @@ app.post('/rooms/:code/classroom/action', (req, res) =>
   classroomRequest(req, res, true));
 
 // Independent from the selected Chat vendor. Client signals never apply gifts.
-async function liveInteractionRequest(req: Request, res: Response, send: boolean) {
+async function liveInteractionRequest(req: Request, res: Response, operation: 'snapshot' | 'gift' | 'like') {
   try {
     const entry = await resolveRoom(req.params.code);
     if (!entry) return contractError(res, 404, 'room-not-found', 'The requested room was not found.');
@@ -1583,7 +1583,8 @@ async function liveInteractionRequest(req: Request, res: Response, send: boolean
       pruneStaleAttendees(entry, Date.now(), true);
       const attendee = requireParticipantCredential(entry,
         String(req.body?.requesterParticipantId ?? '').trim(), req.body?.participantCredential);
-      res.json(send ? liveInteractionDirectory.send(entry, attendee, req.body ?? {})
+      res.json(operation === 'gift' ? liveInteractionDirectory.send(entry, attendee, req.body ?? {})
+        : operation === 'like' ? liveInteractionDirectory.sendLike(entry, attendee, req.body ?? {})
         : liveInteractionDirectory.snapshot(entry, attendee));
     });
   } catch (error) {
@@ -1592,8 +1593,9 @@ async function liveInteractionRequest(req: Request, res: Response, send: boolean
     contractError(res, 502, 'live-interaction-failed', 'Unable to apply live interaction.');
   }
 }
-app.post('/rooms/:code/live/snapshot', (req, res) => liveInteractionRequest(req, res, false));
-app.post('/rooms/:code/live/gift', (req, res) => liveInteractionRequest(req, res, true));
+app.post('/rooms/:code/live/snapshot', (req, res) => liveInteractionRequest(req, res, 'snapshot'));
+app.post('/rooms/:code/live/gift', (req, res) => liveInteractionRequest(req, res, 'gift'));
+app.post('/rooms/:code/live/like', (req, res) => liveInteractionRequest(req, res, 'like'));
 
 app.post('/rooms', async (req, res) => {
   try {
