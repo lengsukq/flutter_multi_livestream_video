@@ -8,6 +8,7 @@ part 'classroom_student_panel.dart';
 part 'classroom_questions.dart';
 part 'classroom_roster.dart';
 part 'classroom_header.dart';
+part 'classroom_feedback.dart';
 
 Color _avatarColor(String name) {
   if (name.isEmpty) return RealtimeUiTokens.primary;
@@ -29,10 +30,12 @@ class ClassroomPanel extends StatefulWidget {
     super.key,
     required this.classroom,
     this.showCloseButton,
+    this.initialTab = 0,
   });
 
   final ClassroomSession classroom;
   final bool? showCloseButton;
+  final int initialTab;
 
   @override
   State<ClassroomPanel> createState() => _ClassroomPanelState();
@@ -200,8 +203,20 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
             ),
           Expanded(
             child: DefaultTabController(
-              key: ValueKey('${s.isTeacher}-${s.tools != null}'),
-              length: (s.isTeacher ? 3 : 2) + (s.tools != null ? 1 : 0),
+              key: ValueKey(
+                '${s.isTeacher}-${s.tools != null}-${s.feedbackSupported}',
+              ),
+              length:
+                  (s.isTeacher ? 3 : 2) +
+                  (s.tools != null ? 1 : 0) +
+                  (s.capabilities.canViewFeedback ? 1 : 0),
+              initialIndex: widget.initialTab.clamp(
+                0,
+                (s.isTeacher ? 3 : 2) +
+                    (s.tools != null ? 1 : 0) +
+                    (s.capabilities.canViewFeedback ? 1 : 0) -
+                    1,
+              ),
               child: Column(
                 children: [
                   Container(
@@ -341,6 +356,24 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                               ],
                             ),
                           ),
+                        if (s.capabilities.canViewFeedback)
+                          Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.thumb_up_alt_outlined,
+                                  size: 15,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(strings.t('feedbackTab')),
+                                if (s.feedback.isNotEmpty) ...[
+                                  const SizedBox(width: 5),
+                                  Text('${s.feedback.length}'),
+                                ],
+                              ],
+                            ),
+                          ),
                         if (s.tools != null)
                           Tab(
                             child: Row(
@@ -362,6 +395,7 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                         s.isTeacher ? _hands(s) : _student(s),
                         _questions(s),
                         if (s.isTeacher) _students(s),
+                        if (s.capabilities.canViewFeedback) _feedback(s),
                         if (s.tools != null)
                           ClassroomToolsPanel(classroom: widget.classroom),
                       ],
@@ -614,6 +648,7 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
 Future<void> showClassroomBottomSheet(
   BuildContext context, {
   required ClassroomSession classroom,
+  int initialTab = 0,
 }) => showModalBottomSheet<void>(
   context: context,
   useSafeArea: true,
@@ -639,7 +674,11 @@ Future<void> showClassroomBottomSheet(
           ],
         ),
         clipBehavior: Clip.antiAlias,
-        child: ClassroomPanel(classroom: classroom, showCloseButton: true),
+        child: ClassroomPanel(
+          classroom: classroom,
+          showCloseButton: true,
+          initialTab: initialTab,
+        ),
       ),
     ),
   ),
@@ -664,6 +703,7 @@ class _ClassroomControlButtonState extends State<ClassroomControlButton> {
   StreamSubscription<ClassroomNotification>? _subscription;
   int _unread = 0;
   bool _panelOpen = false;
+  final _feedbackBubble = _ClassroomFeedbackBubble();
 
   @override
   void initState() {
@@ -672,6 +712,11 @@ class _ClassroomControlButtonState extends State<ClassroomControlButton> {
       if (!mounted) return;
       if (!_panelOpen) setState(() => _unread++);
       final state = widget.classroom.state;
+      _feedbackBubble.show(
+        context,
+        notification,
+        onView: _panelOpen ? null : () => _openPanel(showFeedback: true),
+      );
       if (notification.kind == ClassroomNotificationKind.noticePublished &&
           state?.isTeacher == false &&
           state!.tools!.notices.isNotEmpty) {
@@ -686,17 +731,22 @@ class _ClassroomControlButtonState extends State<ClassroomControlButton> {
 
   @override
   void dispose() {
+    _feedbackBubble.dismiss();
     observeDetached(_subscription?.cancel());
     super.dispose();
   }
 
-  Future<void> _openPanel() async {
+  Future<void> _openPanel({bool showFeedback = false}) async {
     setState(() {
       _unread = 0;
       _panelOpen = true;
     });
     try {
-      await showClassroomBottomSheet(context, classroom: widget.classroom);
+      await showClassroomBottomSheet(
+        context,
+        classroom: widget.classroom,
+        initialTab: showFeedback ? 3 : 0,
+      );
     } finally {
       if (mounted) setState(() => _panelOpen = false);
     }
@@ -706,35 +756,86 @@ class _ClassroomControlButtonState extends State<ClassroomControlButton> {
   Widget build(BuildContext context) {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
     final label = zh ? '课堂互动' : 'Classroom';
+    final style = RealtimeStyle.of(context);
     return Semantics(
       label: label,
       button: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          RealtimeGlassIconButton(
-            tooltip: label,
-            icon: Icons.school_outlined,
-            onPressed: _openPanel,
-            active: _panelOpen,
-            badgeCount: _unread,
-            size: 46,
-            radius: RealtimeUiTokens.controlRadius,
-          ),
-          if (widget.showLabel) ...[
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: _panelOpen
-                    ? RealtimeUiTokens.primary
-                    : RealtimeUiTokens.text,
+      child: InkWell(
+        onTap: _openPanel,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _panelOpen
+                          ? style.primarySubtle
+                          : style.surfaceSubtle,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: _panelOpen
+                            ? style.primary
+                            : (style.isDark
+                                  ? Colors.white.withValues(alpha: 0.16)
+                                  : Colors.transparent),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.school_outlined,
+                      size: 20,
+                      color: _panelOpen ? style.primary : style.text,
+                    ),
+                  ),
+                  if (_unread > 0)
+                    Positioned(
+                      top: -4,
+                      right: -4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: style.danger,
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(color: style.surface, width: 1.5),
+                        ),
+                        constraints: const BoxConstraints(minWidth: 16),
+                        child: Text(
+                          '$_unread',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ),
-          ],
-        ],
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: _panelOpen ? style.primary : style.text,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -752,6 +853,7 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
   StreamSubscription<ClassroomNotification>? _subscription;
   int _unread = 0;
   bool _panelOpen = false;
+  final _feedbackBubble = _ClassroomFeedbackBubble();
 
   @override
   void initState() {
@@ -760,6 +862,11 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
       if (!mounted) return;
       if (!_panelOpen) setState(() => _unread++);
       final state = widget.classroom.state;
+      _feedbackBubble.show(
+        context,
+        notification,
+        onView: _panelOpen ? null : () => _openPanel(showFeedback: true),
+      );
       if (notification.kind == ClassroomNotificationKind.noticePublished &&
           state?.isTeacher == false &&
           state!.tools!.notices.isNotEmpty) {
@@ -774,17 +881,22 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
 
   @override
   void dispose() {
+    _feedbackBubble.dismiss();
     observeDetached(_subscription?.cancel());
     super.dispose();
   }
 
-  Future<void> _openPanel() async {
+  Future<void> _openPanel({bool showFeedback = false}) async {
     setState(() {
       _unread = 0;
       _panelOpen = true;
     });
     try {
-      await showClassroomBottomSheet(context, classroom: widget.classroom);
+      await showClassroomBottomSheet(
+        context,
+        classroom: widget.classroom,
+        initialTab: showFeedback ? 3 : 0,
+      );
     } finally {
       if (mounted) setState(() => _panelOpen = false);
     }
@@ -793,6 +905,7 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
   @override
   Widget build(BuildContext context) {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final text = _unread == 0
         ? (zh ? '课堂互动' : 'Classroom')
         : '${zh ? '课堂互动' : 'Classroom'} ($_unread)';
@@ -800,25 +913,31 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
       borderRadius: RealtimeUiTokens.pillRadius,
       child: RealtimeGlassSurface(
         radius: RealtimeUiTokens.pillRadius,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        borderColor: RealtimeUiTokens.primaryBorder,
-        fillColor: RealtimeUiTokens.surface.withValues(alpha: 0.94),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        borderColor: isDark
+            ? Colors.white.withValues(alpha: 0.16)
+            : RealtimeUiTokens.primaryBorder,
+        fillColor: isDark
+            ? Colors.white.withValues(alpha: 0.12)
+            : RealtimeUiTokens.surface.withValues(alpha: 0.94),
         onTap: _openPanel,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.school_outlined,
               size: 20,
-              color: RealtimeUiTokens.primary,
+              color: isDark
+                  ? const Color(0xFF818CF8)
+                  : RealtimeUiTokens.primary,
             ),
             const SizedBox(width: 8),
             Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: RealtimeUiTokens.text,
+                color: isDark ? Colors.white : RealtimeUiTokens.text,
               ),
             ),
             if (_unread > 0) ...[

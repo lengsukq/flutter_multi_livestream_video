@@ -18,7 +18,7 @@ extension _ClassroomStudentPanel on _ClassroomPanelState {
       children: [
         _buildStudentHeroCard(state, self, raised, canSpeak, strings),
         const SizedBox(height: 16),
-        _buildQuickReactionsCard(strings),
+        _buildQuickReactionsCard(state, strings),
         const SizedBox(height: 16),
         _buildActiveNoticeOrTipsCard(state, strings),
       ],
@@ -214,14 +214,11 @@ extension _ClassroomStudentPanel on _ClassroomPanelState {
     );
   }
 
-  Widget _buildQuickReactionsCard(ClassroomStrings strings) {
-    final reactions = [
-      ('👍', strings.t('quickUnderstood')),
-      ('👏', strings.t('quickGreat')),
-      ('💡', strings.t('quickIdea')),
-      ('❓', strings.t('quickQuestion')),
-      ('🎉', strings.t('quickClap')),
-    ];
+  Widget _buildQuickReactionsCard(
+    ClassroomState state,
+    ClassroomStrings strings,
+  ) {
+    final reactions = ClassroomFeedbackKind.values;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -265,23 +262,19 @@ extension _ClassroomStudentPanel on _ClassroomPanelState {
                   borderRadius: BorderRadius.circular(
                     RealtimeUiTokens.pillRadius,
                   ),
-                  onTap: () {
-                    ScaffoldMessenger.maybeOf(context)?.clearSnackBars();
-                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                      SnackBar(
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            RealtimeUiTokens.compactRadius,
-                          ),
-                        ),
-                        duration: const Duration(milliseconds: 1200),
-                        content: Text(
-                          '${strings.t('quickSent')}: ${r.$1} ${r.$2}',
-                        ),
-                      ),
-                    );
-                  },
+                  onTap: _busy || !state.capabilities.canSendFeedback
+                      ? null
+                      : () => _run(() async {
+                          await widget.classroom.sendFeedback(r);
+                          if (!mounted) return;
+                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '${strings.t('quickSent')}: ${r.emoji} ${r.label(strings)}',
+                              ),
+                            ),
+                          );
+                        }),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 11,
@@ -296,10 +289,10 @@ extension _ClassroomStudentPanel on _ClassroomPanelState {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(r.$1, style: const TextStyle(fontSize: 15)),
+                        Text(r.emoji, style: const TextStyle(fontSize: 15)),
                         const SizedBox(width: 5),
                         Text(
-                          r.$2,
+                          r.label(strings),
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -312,6 +305,18 @@ extension _ClassroomStudentPanel on _ClassroomPanelState {
                 ),
               );
             }).toList(),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            !state.feedbackSupported
+                ? strings.t('feedbackUnavailable')
+                : state.feedback.isEmpty
+                ? strings.t('feedbackToTeacher')
+                : '${strings.t('quickSent')}: ${state.feedback.last.kind.emoji} ${state.feedback.last.kind.label(strings)}',
+            style: const TextStyle(
+              fontSize: 12,
+              color: RealtimeUiTokens.textMuted,
+            ),
           ),
         ],
       ),
