@@ -24,7 +24,7 @@ class _MovableAnnotationToolbarState extends State<MovableAnnotationToolbar> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.constrainToCanvas
+  Widget build(BuildContext context) => widget.constrainToCanvas || Overlay.maybeOf(context) == null
       ? _movable()
       : OverlayPortal(
           controller: _portal,
@@ -36,7 +36,11 @@ class _MovableAnnotationToolbarState extends State<MovableAnnotationToolbar> {
             return CustomSingleChildLayout(
               delegate: _FloatingToolbarLayout(
                 position: _overlayPosition,
-                padding: MediaQuery.paddingOf(context) + const EdgeInsets.all(8),
+                padding: MediaQuery.viewPaddingOf(context).copyWith(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom > MediaQuery.viewPaddingOf(context).bottom
+                      ? MediaQuery.viewInsetsOf(context).bottom
+                      : MediaQuery.viewPaddingOf(context).bottom,
+                ) + const EdgeInsets.all(8),
               ),
               child: MouseRegion(
                 cursor: SystemMouseCursors.move,
@@ -117,14 +121,10 @@ class _FloatingToolbarLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    // During this layout callback a sibling RenderBox.size must not be read.
-    // Anchor initially to the overlay's own safe area instead.
-    // Leave the standard room/page header unobstructed at startup.
-    final desired = position ??
-        Offset(size.width - padding.right - childSize.width,
-            padding.top < 72 ? 72 : padding.top);
     final maxX = (size.width - padding.right - childSize.width).clamp(padding.left, size.width);
     final maxY = (size.height - padding.bottom - childSize.height).clamp(padding.top, size.height);
+    // Start above the meeting dock, away from phone status bars and cutouts.
+    final desired = position ?? Offset(maxX, maxY - 96);
     return Offset(desired.dx.clamp(padding.left, maxX), desired.dy.clamp(padding.top, maxY));
   }
 
