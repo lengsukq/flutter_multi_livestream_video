@@ -35,7 +35,7 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
   @override
   void dispose() {
     _clock?.cancel();
-    _errors?.cancel();
+    observeDetached(_errors?.cancel());
     super.dispose();
   }
 
@@ -196,7 +196,9 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                 style: FilledButton.styleFrom(
                   backgroundColor: RealtimeUiTokens.primary,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+                    borderRadius: BorderRadius.circular(
+                      RealtimeUiTokens.compactRadius,
+                    ),
                   ),
                 ),
                 onPressed: publishing
@@ -345,13 +347,19 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                       side: const BorderSide(color: RealtimeUiTokens.border),
                       backgroundColor: RealtimeUiTokens.surface,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+                        borderRadius: BorderRadius.circular(
+                          RealtimeUiTokens.compactRadius,
+                        ),
                       ),
                     ),
                     onPressed: _busy || _dialogOpen
                         ? null
                         : () => _publish(item.$1),
-                    icon: Icon(item.$2, size: 18, color: RealtimeUiTokens.primary),
+                    icon: Icon(
+                      item.$2,
+                      size: 18,
+                      color: RealtimeUiTokens.primary,
+                    ),
                     label: Text(s.t(item.$1)),
                   ),
               ],
@@ -361,7 +369,9 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
               elevation: 0,
               color: RealtimeUiTokens.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.cardRadius,
+                ),
                 side: const BorderSide(color: RealtimeUiTokens.border),
               ),
               child: ListTile(
@@ -388,7 +398,9 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
               elevation: 0,
               color: RealtimeUiTokens.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.cardRadius,
+                ),
                 side: const BorderSide(color: RealtimeUiTokens.border),
               ),
               child: ListTile(
@@ -410,7 +422,9 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
               elevation: 0,
               color: RealtimeUiTokens.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.cardRadius,
+                ),
                 side: const BorderSide(color: RealtimeUiTokens.border),
               ),
               child: ListTile(
@@ -428,7 +442,9 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
               elevation: 0,
               color: RealtimeUiTokens.surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.cardRadius,
+                ),
                 side: const BorderSide(color: RealtimeUiTokens.border),
               ),
               child: ListTile(

@@ -19,7 +19,7 @@ class Repository implements ClassroomRepository {
     questions: const [],
     stats: const ClassroomStats(),
     tools: ClassroomToolsState(
-      annotation: const AnnotationCanvas(
+      annotation: AnnotationCanvas(
         canvasId: 'c1',
         sourceKey: 'share1',
         participantId: 'teacher1',
@@ -36,15 +36,19 @@ class Repository implements ClassroomRepository {
     ),
   );
   @override
-  Future<ClassroomState> action(
-    String type, {
-    Map<String, String> data = const {},
-  }) {
+  Future<ClassroomState> action(ClassroomCommand command) {
+    final type = command.wireName;
+    final data = command.toWireData();
     calls.add((
       type,
       Map<String, dynamic>.from(jsonDecode(data['payload'] ?? '{}') as Map),
     ));
-    if (fail) throw StateError('Publish failed');
+    if (fail) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.serverError,
+        message: 'Publish failed',
+      );
+    }
     return snapshot();
   }
 

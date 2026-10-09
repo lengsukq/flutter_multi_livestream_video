@@ -94,9 +94,12 @@ class ClassroomStrings {
     'speakingGranted': 'Speaking · Teacher approved',
     'handRaisedWaiting': 'Hand raised · Waiting for teacher',
     'listeningMode': 'Listening Mode',
-    'speakingDescGranted': 'Your microphone is ready. You can speak to the class.',
-    'speakingDescWaiting': 'Hand raise request sent. Please wait for teacher...',
-    'speakingDescListening': 'Have something to say? Tap below to request speaking.',
+    'speakingDescGranted':
+        'Your microphone is ready. You can speak to the class.',
+    'speakingDescWaiting':
+        'Hand raise request sent. Please wait for teacher...',
+    'speakingDescListening':
+        'Have something to say? Tap below to request speaking.',
     'quickReactions': 'Quick Feedback',
     'quickUnderstood': 'Understood',
     'quickGreat': 'Awesome',
@@ -106,10 +109,12 @@ class ClassroomStrings {
     'quickSent': 'Feedback sent',
     'noticeTitle': 'Class Notice',
     'tipsTitle': 'Classroom Tips',
-    'tipsContent': '1. Check your mic and stay in a quiet environment.\n2. You can also post questions in the Q&A tab.',
+    'tipsContent':
+        '1. Check your mic and stay in a quiet environment.\n2. You can also post questions in the Q&A tab.',
     'goToQa': 'Go to Q&A',
     'activeSpeakers': 'Active Speakers',
-    'emptyHandsDesc': 'Student hand-raising requests will show up here in real time.',
+    'emptyHandsDesc':
+        'Student hand-raising requests will show up here in real time.',
   };
   static const _zh = <String, String>{
     'onlineStudents': '在线学生',

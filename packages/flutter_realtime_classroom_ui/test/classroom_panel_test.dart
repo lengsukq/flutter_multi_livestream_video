@@ -11,10 +11,8 @@ class FakeClassroom implements ClassroomRepository {
   @override
   Future<ClassroomState> snapshot() async => value;
   @override
-  Future<ClassroomState> action(
-    String type, {
-    Map<String, String> data = const {},
-  }) async {
+  Future<ClassroomState> action(ClassroomCommand command) async {
+    final type = command.wireName;
     actions.add(type);
     return value;
   }
@@ -26,7 +24,7 @@ class FakeClassroom implements ClassroomRepository {
 void main() {
   testWidgets('student controls are provided by the SDK UI', (tester) async {
     final repo = FakeClassroom(
-      const ClassroomState(
+      ClassroomState(
         roomCode: 'class123',
         selfUserId: 'student',
         role: ClassroomRole.student,
@@ -69,7 +67,7 @@ void main() {
 
   testWidgets('teacher sees hands and can grant speaking', (tester) async {
     final repo = FakeClassroom(
-      const ClassroomState(
+      ClassroomState(
         roomCode: 'class123',
         selfUserId: 'teacher',
         role: ClassroomRole.teacher,
@@ -112,7 +110,7 @@ void main() {
 
   testWidgets('English classroom roster can search students', (tester) async {
     final repo = FakeClassroom(
-      const ClassroomState(
+      ClassroomState(
         roomCode: 'english1',
         selfUserId: 'teacher',
         role: ClassroomRole.teacher,
