@@ -10,7 +10,10 @@ Neither package imports a media or Chat vendor SDK.
 The common SDK attaches `room.liveInteractions` only when the provisioned room
 advertises `liveInteractions: true`. The reference server advertises this for
 Broadcast rooms. `RealtimeRoomView` renders the gift entry and incoming-event
-animation on both hosts and viewers. `showLiveInteractions: false` suppresses
+animation on both hosts and viewers. In the live bottom bar the gift button
+opens the gift panel in one tap via `MediaRoomView.liveGiftPanelOpener`
+(`showLiveGiftsBottomSheet`); the extra-controls sheet remains only as a
+fallback when no opener is injected (e.g. plain `MediaRoomView` users). `showLiveInteractions: false` suppresses
 this optional UI. Session lifecycle and errors remain accessible to custom UI.
 Applications can construct a session with their own repository and pass it to
 `RealtimeRoom`; direct credentials do not silently create a reference backend.
