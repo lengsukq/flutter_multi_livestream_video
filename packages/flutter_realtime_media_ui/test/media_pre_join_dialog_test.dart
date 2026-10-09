@@ -1,9 +1,208 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
+import 'package:flutter_realtime_media_ui/src/pre_join_media_setup_controller.dart';
+import 'package:flutter_realtime_media_ui/src/pre_join_permission_coordinator.dart';
+import 'package:flutter_realtime_media_ui/src/pre_join_preview_owner.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'preview owner releases camera exactly once across duplicate exits',
+    () async {
+      final preview = _FakeLocalPreview();
+      final owner = PreJoinPreviewOwner();
+      owner.bind(preview, onFailure: (_) {});
+      await Future.wait([owner.release(), owner.release()]);
+      expect(preview.disposeCalls, 1);
+      expect(owner.session, isNull);
+      owner.dispose();
+    },
+  );
+
+  test(
+    'device setup ignores superseded device query and preserves background',
+    () async {
+      final setup = PreJoinMediaSetupController();
+      final pending = Completer<List<MediaDevice>>();
+      final slow = _DelayedLocalPreview(pending.future);
+      final outdated = setup.loadDevices(slow);
+      setup.resetDevices();
+      pending.complete(const [
+        MediaDevice(
+          id: 'stale',
+          label: 'Old microphone',
+          kind: MediaDeviceKind.microphone,
+        ),
+      ]);
+      await outdated;
+      expect(setup.devices, isEmpty);
+
+      final preview = _FakeLocalPreview();
+      await setup.loadDevices(preview);
+      expect(setup.devices, hasLength(4));
+      final selected = await setup.selectDevice(preview, setup.devices.first);
+      expect(selected, isTrue);
+      expect(preview.settings.microphone?.id, 'mic-1');
+      await setup.applyBackground(preview, const MediaBackgroundEffect.blur());
+      expect(setup.backgroundEffect, const MediaBackgroundEffect.blur());
+      expect(preview.backgroundCalls, hasLength(1));
+      setup.applyCapabilities(const MediaBackgroundCapabilities());
+      expect(setup.backgroundEffect.enabled, isFalse);
+      setup.dispose();
+    },
+  );
+
+  test(
+    'permission coordinator fails safely when permission query is unavailable',
+    () async {
+      final coordinator = PreJoinPermissionCoordinator(
+        const _TestPermissionRequester(),
+      );
+      final states = await coordinator.readStatuses();
+      expect(states[MediaPermissionKind.camera], MediaPermissionState.granted);
+      expect(
+        await coordinator.request(MediaPermissionKind.microphone),
+        MediaPermissionState.granted,
+      );
+    },
+  );
+
+  testWidgets('room entry stays on Pre-Join until the room is connected', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+    final preview = _FakeLocalPreview();
+    final connectionReady = Completer<void>();
+    var joinCalls = 0;
+    MediaLocalPreviewSettings? joiningSettings;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () => MediaPreJoinPage.show(
+                  context,
+                  runCheck: _readyResult,
+                  openPreview: (_, _) async => preview,
+                  permissionRequester: const _TestPermissionRequester(),
+                  onEnter: (preJoinContext, settings) async {
+                    joinCalls++;
+                    joiningSettings = settings;
+                    await connectionReady.future;
+                    if (!preJoinContext.mounted) return;
+                    await Navigator.of(
+                      preJoinContext,
+                    ).pushReplacement<void, MediaLocalPreviewSettings>(
+                      MaterialPageRoute(
+                        builder: (_) => Scaffold(
+                          appBar: AppBar(title: const Text('Connected room')),
+                          body: const Text('Live media room'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                child: const Text('Open preparation'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open preparation'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Join meeting'));
+    await tester.pump();
+    expect(joinCalls, 1);
+    expect(find.text('Entering room…'), findsOneWidget);
+    expect(find.byType(MediaPreJoinPage), findsOneWidget);
+    expect(find.text('Connected room'), findsNothing);
+    expect(joiningSettings, isNotNull);
+    expect(preview.disposeCalls, 1);
+    for (final size in <Size>[
+      const Size(320, 640),
+      const Size(390, 844),
+      const Size(1024, 768),
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pump();
+      expect(find.text('Entering room…'), findsOneWidget);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'Joining overlay overflow at $size',
+      );
+    }
+
+    connectionReady.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Connected room'), findsOneWidget);
+    expect(find.text('Entering room…'), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Open preparation'), findsOneWidget);
+    expect(preview.disposeCalls, 1);
+  });
+
+  testWidgets('failed room entry displays error on Pre-Join and allows retry', (
+    tester,
+  ) async {
+    final previews = <_FakeLocalPreview>[];
+    var joinCalls = 0;
+    final submittedSettings = <MediaLocalPreviewSettings>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () => MediaPreJoinPage.show(
+                  context,
+                  runCheck: _readyResult,
+                  openPreview: (_, _) async {
+                    final preview = _FakeLocalPreview();
+                    previews.add(preview);
+                    return preview;
+                  },
+                  permissionRequester: const _TestPermissionRequester(),
+                  onEnter: (_, settings) async {
+                    submittedSettings.add(settings);
+                    joinCalls++;
+                    if (joinCalls == 1) throw StateError('Token expired');
+                  },
+                ),
+                child: const Text('Open preparation'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open preparation'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Join meeting'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Token expired'), findsOneWidget);
+    expect(find.text('Join meeting'), findsOneWidget);
+    expect(find.text('Open preparation'), findsNothing);
+    expect(previews.first.disposeCalls, 1);
+    expect(previews.length, 2, reason: 'Restore local preview after failure');
+
+    await tester.tap(find.text('Join meeting'));
+    await tester.pumpAndSettle();
+    expect(joinCalls, 2);
+    expect(submittedSettings, hasLength(2));
+    expect(find.text('Open preparation'), findsOneWidget);
+    expect(previews.last.disposeCalls, 1);
+  });
+
   test('provider display names keep known brands readable', () {
     expect(mediaProviderDisplayName('livekit'), 'LiveKit');
     expect(mediaProviderDisplayName('trtc'), 'Tencent TRTC');
@@ -13,10 +212,69 @@ void main() {
     expect(mediaProviderDisplayName('custom'), 'CUSTOM');
   });
 
+  testWidgets(
+    'pre-join scales across compact phones, tablet and desktop windows',
+    (tester) async {
+      final preview = _FakeLocalPreview();
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: FilledButton(
+                  onPressed: () => MediaPreJoinPage.show(
+                    context,
+                    runCheck: _readyResult,
+                    openPreview: (_, _) async => preview,
+                    permissionRequester: const _TestPermissionRequester(),
+                    backendProviderId: 'tencent_rtc',
+                    roomLabel: 'room-demo',
+                  ),
+                  child: const Text('Open preparation'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open preparation'));
+      await tester.pumpAndSettle();
+      for (final size in <Size>[
+        const Size(320, 640),
+        const Size(390, 844),
+        const Size(820, 620),
+        const Size(1024, 768),
+        const Size(1366, 820),
+      ]) {
+        tester.view.physicalSize = size;
+        await tester.pump();
+        expect(find.text('Join meeting'), findsOneWidget);
+        expect(find.byType(MediaTrackView), findsOneWidget);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'Pre-join layout overflow at $size',
+        );
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(preview.disposeCalls, 1);
+    },
+  );
+
   testWidgets('ready result exposes continue action', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1366, 900);
     await tester.pumpWidget(
       MaterialApp(
-        home: MediaPreJoinDialog(
+        home: MediaPreJoinPage(
+          openPreview: (_, _) async => null,
+          permissionRequester: const _TestPermissionRequester(),
           runCheck: () async => const MediaPreJoinResult(
             role: MediaRole.participant,
             providerId: 'fake',
@@ -36,15 +294,21 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ready to continue'), findsOneWidget);
-    expect(find.text('FAKE'), findsOneWidget);
-    expect(find.text('Continue'), findsOneWidget);
+    expect(find.text('FAKE'), findsWidgets);
+    expect(find.text('Join meeting'), findsOneWidget);
     expect(find.text('Run again'), findsOneWidget);
   });
 
   testWidgets('blocking result hides continue action', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1366, 900);
     await tester.pumpWidget(
       MaterialApp(
-        home: MediaPreJoinDialog(
+        home: MediaPreJoinPage(
+          openPreview: (_, _) async => null,
+          permissionRequester: const _TestPermissionRequester(),
           runCheck: () async => const MediaPreJoinResult(
             role: MediaRole.participant,
             checks: [
@@ -63,17 +327,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Resolve blocking issues before joining'), findsOneWidget);
-    expect(find.text('Continue'), findsNothing);
-    expect(find.text('Close'), findsOneWidget);
+    expect(find.text('Join meeting'), findsOneWidget);
+    expect(
+      tester
+          .widgetList<RealtimeGlassButton>(find.byType(RealtimeGlassButton))
+          .last
+          .onPressed,
+      isNull,
+    );
   });
 
   testWidgets('pre-join UI follows zh-CN host locale', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1366, 900);
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('zh', 'CN'),
         supportedLocales: RealtimeStrings.supportedLocales,
         localizationsDelegates: RealtimeStrings.localizationsDelegates,
-        home: MediaPreJoinDialog(
+        home: MediaPreJoinPage(
+          openPreview: (_, _) async => null,
+          permissionRequester: const _TestPermissionRequester(),
           runCheck: () async => const MediaPreJoinResult(
             role: MediaRole.participant,
             checks: [
@@ -91,11 +367,11 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('加入前检查'), findsOneWidget);
+    expect(find.text('加入前检查'), findsWidgets);
     expect(find.text('可以继续'), findsOneWidget);
     expect(find.text('后端'), findsOneWidget);
     expect(find.text('通过'), findsOneWidget);
-    expect(find.text('继续'), findsOneWidget);
+    expect(find.text('加入会议'), findsOneWidget);
     expect(find.text('重新检查'), findsOneWidget);
   });
 
@@ -298,6 +574,15 @@ void main() {
       expect(chosen!.cameraEnabled, isFalse);
     },
   );
+}
+
+class _DelayedLocalPreview extends _FakeLocalPreview {
+  _DelayedLocalPreview(this.pending);
+  final Future<List<MediaDevice>> pending;
+
+  @override
+  Future<List<MediaDevice>> listMediaDevices({Set<MediaDeviceKind>? kinds}) =>
+      pending;
 }
 
 Future<MediaPreJoinResult> _readyResult() async => const MediaPreJoinResult(

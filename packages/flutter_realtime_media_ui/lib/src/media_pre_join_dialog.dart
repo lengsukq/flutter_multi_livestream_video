@@ -5,528 +5,42 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'media_provider_label.dart';
+import 'media_pre_join_check_widgets.dart';
+import 'pre_join_preview_owner.dart';
+import 'pre_join_permission_coordinator.dart';
+import 'pre_join_media_setup_controller.dart';
 import 'background_effect_selector.dart';
 import 'media_background_image_preset.dart';
 import 'realtime_strings.dart';
 import 'realtime_ui_style.dart';
 
 typedef MediaPreJoinCheckRunner = Future<MediaPreJoinResult> Function();
-typedef _PermissionActionCallback =
-    Future<void> Function(MediaPermissionKind kind);
-
-class MediaPreJoinDialog extends StatefulWidget {
-  const MediaPreJoinDialog({super.key, required this.runCheck, this.title});
-
-  final MediaPreJoinCheckRunner runCheck;
-  final String? title;
-
-  static Future<bool> show(
-    BuildContext context, {
-    required MediaPreJoinCheckRunner runCheck,
-    String? title,
-  }) async =>
-      await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        barrierColor: const Color(0xFF0F172A).withValues(alpha: 0.34),
-        builder: (_) => MediaPreJoinDialog(runCheck: runCheck, title: title),
-      ) ??
-      false;
-
-  @override
-  State<MediaPreJoinDialog> createState() => _MediaPreJoinDialogState();
-}
-
-class _MediaPreJoinDialogState extends State<MediaPreJoinDialog> {
-  MediaPreJoinResult? _result;
-  Object? _error;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    observeDetached(_run());
-  }
-
-  Future<void> _run() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final result = await widget.runCheck();
-      if (!mounted) return;
-      setState(() {
-        _result = result;
-        _loading = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error;
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final result = _result;
-    final strings = RealtimeStrings.of(context);
-    return RealtimeGlassDialog(
-      icon: Icons.fact_check_outlined,
-      title: Text(widget.title ?? strings.preJoinCheck),
-      content: SizedBox(
-        width: 480,
-        child: AnimatedSwitcher(
-          duration: RealtimeUiTokens.animNormal,
-          switchInCurve: Curves.easeOutCubic,
-          child: _loading
-              ? _LoadingView(
-                  key: const ValueKey('prejoin-loading'),
-                  label: strings.runningPreJoinChecks,
-                )
-              : _error != null
-              ? _ErrorView(key: const ValueKey('prejoin-error'), error: _error!)
-              : _ResultView(
-                  key: const ValueKey('prejoin-result'),
-                  result: result!,
-                ),
-        ),
-      ),
-      actions: [
-        if (!_loading)
-          TextButton.icon(
-            onPressed: _run,
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: Text(strings.runAgain),
-          ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: Text(result?.isReady == true ? strings.cancel : strings.close),
-        ),
-        if (!_loading && _error == null && result?.isReady == true)
-          RealtimeGlassPressable(
-            borderRadius: RealtimeUiTokens.controlRadius,
-            child: FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: FilledButton.styleFrom(
-                backgroundColor: RealtimeUiTokens.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.controlRadius,
-                  ),
-                ),
-              ),
-              child: Text(strings.continueLabel),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _LoadingView extends StatelessWidget {
-  const _LoadingView({super.key, required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 28),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: RealtimeUiTokens.primarySubtle,
-            borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-            border: Border.all(color: RealtimeUiTokens.primaryBorder),
-          ),
-          alignment: Alignment.center,
-          child: const SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.5,
-              color: RealtimeUiTokens.primary,
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: RealtimeUiTokens.textMuted,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({super.key, required this.error});
-
-  final Object error;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = RealtimeStrings.of(context);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: RealtimeUiTokens.dangerSubtle.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-        border: Border.all(color: RealtimeUiTokens.dangerBorder),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.84),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.error_outline_rounded,
-              size: 28,
-              color: RealtimeUiTokens.danger,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            strings.unableToRunPreJoin,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              color: RealtimeUiTokens.text,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            error.toString(),
-            textAlign: TextAlign.center,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: RealtimeUiTokens.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ResultView extends StatelessWidget {
-  const _ResultView({
-    super.key,
-    required this.result,
-    this.permissionStates = const {},
-    this.requestingPermission,
-    this.canOpenAppSettings = false,
-    this.onPermissionAction,
-  });
-
-  final MediaPreJoinResult result;
-  final Map<MediaPermissionKind, MediaPermissionState> permissionStates;
-  final MediaPermissionKind? requestingPermission;
-  final bool canOpenAppSettings;
-  final _PermissionActionCallback? onPermissionAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = RealtimeStrings.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: result.isReady
-                ? RealtimeUiTokens.successSubtle.withValues(alpha: 0.90)
-                : RealtimeUiTokens.dangerSubtle.withValues(alpha: 0.90),
-            borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-            border: Border.all(
-              color: result.isReady
-                  ? RealtimeUiTokens.successBorder
-                  : RealtimeUiTokens.dangerBorder,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  result.isReady
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.error_outline_rounded,
-                  size: 20,
-                  color: result.isReady
-                      ? RealtimeUiTokens.success
-                      : RealtimeUiTokens.danger,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  result.isReady
-                      ? strings.readyToContinue
-                      : strings.resolveBlockingIssues,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    color: RealtimeUiTokens.text,
-                  ),
-                ),
-              ),
-              if (result.providerId case final provider?)
-                RealtimePill(
-                  label: mediaProviderDisplayName(provider),
-                  foreground: RealtimeUiTokens.primary,
-                  background: Colors.white,
-                  borderColor: RealtimeUiTokens.primaryBorder,
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 360),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                for (var i = 0; i < result.checks.length; i++)
-                  _CheckRow(
-                    check: result.checks[i],
-                    index: i,
-                    permissionStates: permissionStates,
-                    requestingPermission: requestingPermission,
-                    canOpenAppSettings: canOpenAppSettings,
-                    onPermissionAction: onPermissionAction,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CheckRow extends StatelessWidget {
-  const _CheckRow({
-    required this.check,
-    required this.index,
-    required this.permissionStates,
-    required this.requestingPermission,
-    required this.canOpenAppSettings,
-    required this.onPermissionAction,
-  });
-
-  final MediaPreJoinCheck check;
-  final int index;
-  final Map<MediaPermissionKind, MediaPermissionState> permissionStates;
-  final MediaPermissionKind? requestingPermission;
-  final bool canOpenAppSettings;
-  final _PermissionActionCallback? onPermissionAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = _visualFor(check.status);
-    final strings = RealtimeStrings.of(context);
-    final permissionKind = _permissionKindFor(check.type);
-    final permissionState = permissionKind == null
-        ? null
-        : permissionStates[permissionKind];
-    final canAct =
-        onPermissionAction != null &&
-        permissionKind != null &&
-        permissionState != null &&
-        permissionState != MediaPermissionState.granted &&
-        permissionState != MediaPermissionState.unsupported &&
-        permissionState != MediaPermissionState.restricted;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 180 + (index * 35).clamp(0, 160)),
-      curve: Curves.easeOutCubic,
-      builder: (context, progress, child) => Opacity(
-        opacity: progress,
-        child: Transform.translate(
-          offset: Offset(0, (1 - progress) * 8),
-          child: child,
-        ),
-      ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .76),
-          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-          border: Border.all(color: RealtimeUiTokens.border),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: visual.background,
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.compactRadius,
-                ),
-              ),
-              child: Icon(visual.icon, size: 18, color: visual.color),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _labelFor(strings, check.type),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13.5,
-                      color: RealtimeUiTokens.text,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    check.message,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: RealtimeUiTokens.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                RealtimePill(
-                  label: strings.preJoinStatus(check.status.name),
-                  foreground: visual.color,
-                  background: visual.background,
-                  borderColor: visual.color.withValues(alpha: 0.24),
-                ),
-                if (canAct) ...[
-                  const SizedBox(height: 2),
-                  TextButton(
-                    onPressed: requestingPermission == permissionKind
-                        ? null
-                        : () => onPermissionAction!(permissionKind),
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      minimumSize: const Size(0, 28),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: requestingPermission == permissionKind
-                        ? const SizedBox(
-                            width: 15,
-                            height: 15,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            permissionState ==
-                                    MediaPermissionState.permanentlyDenied
-                                ? canOpenAppSettings
-                                      ? strings.openAppSettings
-                                      : strings.browserPermissionSettings
-                                : strings.requestPermission,
-                            textAlign: TextAlign.right,
-                          ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  _CheckVisual _visualFor(MediaPreJoinStatus status) => switch (status) {
-    MediaPreJoinStatus.passed => const _CheckVisual(
-      Icons.check_circle_outline_rounded,
-      RealtimeUiTokens.success,
-      RealtimeUiTokens.successSubtle,
-    ),
-    MediaPreJoinStatus.failed => const _CheckVisual(
-      Icons.cancel_outlined,
-      RealtimeUiTokens.danger,
-      RealtimeUiTokens.dangerSubtle,
-    ),
-    MediaPreJoinStatus.unsupported => const _CheckVisual(
-      Icons.remove_circle_outline_rounded,
-      RealtimeUiTokens.textMuted,
-      RealtimeUiTokens.surfaceSubtle,
-    ),
-    MediaPreJoinStatus.unknown => const _CheckVisual(
-      Icons.help_outline_rounded,
-      RealtimeUiTokens.warning,
-      RealtimeUiTokens.warningSubtle,
-    ),
-  };
-
-  String _labelFor(RealtimeStrings strings, MediaPreJoinCheckType type) =>
-      switch (type) {
-        MediaPreJoinCheckType.backend => strings.backend,
-        MediaPreJoinCheckType.provider => strings.provider,
-        MediaPreJoinCheckType.microphonePermission =>
-          strings.microphonePermission,
-        MediaPreJoinCheckType.cameraPermission => strings.cameraPermission,
-        MediaPreJoinCheckType.microphoneDevice => strings.microphoneDevice,
-        MediaPreJoinCheckType.cameraDevice => strings.cameraDevice,
-        MediaPreJoinCheckType.network => strings.network,
-        MediaPreJoinCheckType.providerNetwork => strings.providerNetwork,
-      };
-}
-
-class _CheckVisual {
-  const _CheckVisual(this.icon, this.color, this.background);
-
-  final IconData icon;
-  final Color color;
-  final Color background;
-}
-
-MediaPermissionKind? _permissionKindFor(MediaPreJoinCheckType type) =>
-    switch (type) {
-      MediaPreJoinCheckType.microphonePermission =>
-        MediaPermissionKind.microphone,
-      MediaPreJoinCheckType.cameraPermission => MediaPermissionKind.camera,
-      _ => null,
-    };
-
 typedef MediaLocalPreviewOpener =
     Future<MediaLocalPreviewSession?> Function(
       String providerId,
       MediaRole role,
     );
 
+/// Lets a host app perform the actual room entry without closing Pre-Join.
+///
+/// The preview has already been released before this is called. The host can
+/// open its room and replace the Pre-Join route using [context]. Failures are
+/// caught and displayed on Pre-Join so that users can retry from here.
+typedef MediaPreJoinEnter =
+    Future<void> Function(
+      BuildContext context,
+      MediaLocalPreviewSettings settings,
+    );
+
 /// Responsive device setup page used before joining a meeting or live room.
 ///
-/// [MediaPreJoinDialog.show] remains available for existing integrations.
+/// The public Pre-Join entrypoint also supports asynchronous room entry.
 class MediaPreJoinPage extends StatefulWidget {
   const MediaPreJoinPage({
     super.key,
     required this.runCheck,
     required this.openPreview,
+    this.onEnter,
     this.permissionRequester = const DefaultMediaPermissionProbe(),
     this.displayName = '',
     this.roomLabel,
@@ -538,6 +52,7 @@ class MediaPreJoinPage extends StatefulWidget {
 
   final MediaPreJoinCheckRunner runCheck;
   final MediaLocalPreviewOpener openPreview;
+  final MediaPreJoinEnter? onEnter;
   final MediaPermissionRequester permissionRequester;
   final String displayName;
   final String? roomLabel;
@@ -555,6 +70,7 @@ class MediaPreJoinPage extends StatefulWidget {
     BuildContext context, {
     required MediaPreJoinCheckRunner runCheck,
     required MediaLocalPreviewOpener openPreview,
+    MediaPreJoinEnter? onEnter,
     MediaPermissionRequester permissionRequester =
         const DefaultMediaPermissionProbe(),
     String displayName = '',
@@ -568,6 +84,7 @@ class MediaPreJoinPage extends StatefulWidget {
       builder: (_) => MediaPreJoinPage(
         runCheck: runCheck,
         openPreview: openPreview,
+        onEnter: onEnter,
         permissionRequester: permissionRequester,
         displayName: displayName,
         roomLabel: roomLabel,
@@ -586,17 +103,24 @@ class MediaPreJoinPage extends StatefulWidget {
 class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     with WidgetsBindingObserver {
   MediaPreJoinResult? _result;
-  MediaLocalPreviewSession? _preview;
+  final _previewOwner = PreJoinPreviewOwner();
+  late final _permissions = PreJoinPermissionCoordinator(
+    widget.permissionRequester,
+  );
+  MediaLocalPreviewSession? get _preview => _previewOwner.session;
   Object? _error;
   Object? _previewError;
-  StreamSubscription<RealtimeException>? _previewFailures;
-  Object? _deviceError;
-  List<MediaDevice> _devices = const [];
+  final _mediaSetup = PreJoinMediaSetupController();
+  Object? get _deviceError => _mediaSetup.deviceError;
+  List<MediaDevice> get _devices => _mediaSetup.devices;
   bool _loading = true;
   bool _saving = false;
-  bool _updatingBackground = false;
+  bool _joining = false;
+  Object? _joinError;
+  MediaLocalPreviewSettings? _lastJoinSettings;
+  bool get _updatingBackground => _mediaSetup.updatingBackground;
   bool _allowPop = false;
-  MediaBackgroundEffect _backgroundEffect = const MediaBackgroundEffect.none();
+  MediaBackgroundEffect get _backgroundEffect => _mediaSetup.backgroundEffect;
   Map<MediaPermissionKind, MediaPermissionState> _permissionStates = const {};
   MediaPermissionKind? _requestingPermission;
   bool _refreshPermissionsOnResume = false;
@@ -620,20 +144,19 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     setState(() {
       _loading = true;
       _error = null;
+      _joinError = null;
+      _lastJoinSettings = null;
       _previewError = null;
-      _deviceError = null;
-      _devices = const [];
+      _mediaSetup.resetDevices();
       _permissionStates = const {};
     });
     await _disposePreview();
     try {
       final result = await widget.runCheck();
-      final permissionStates = await _readPermissionStates();
+      final permissionStates = await _permissions.readStatuses();
       if (!mounted) return;
       _result = result;
-      if (!result.backgroundCapabilities.supports(_backgroundEffect)) {
-        _backgroundEffect = const MediaBackgroundEffect.none();
-      }
+      _mediaSetup.applyCapabilities(result.backgroundCapabilities);
       setState(() {
         _permissionStates = permissionStates;
         _loading = false;
@@ -649,13 +172,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
             return;
           }
           _bindPreview(preview);
-          if (preview != null) {
-            try {
-              _devices = await preview.listMediaDevices();
-            } catch (error) {
-              _deviceError = error;
-            }
-          }
+          await _mediaSetup.loadDevices(preview);
           setState(() {});
         } catch (error) {
           if (mounted) setState(() => _previewError = error);
@@ -671,36 +188,49 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   }
 
   void _bindPreview(MediaLocalPreviewSession? preview) {
-    _preview = preview;
-    if (preview is MediaLocalPreviewFailureEvents) {
-      _previewFailures = (preview as MediaLocalPreviewFailureEvents).failures
-          .listen((error) {
-            if (mounted && identical(_preview, preview)) {
-              setState(() => _previewError = error);
-            }
-          });
-    }
+    _previewOwner.bind(
+      preview,
+      onFailure: (error) {
+        if (mounted) setState(() => _previewError = error);
+      },
+    );
   }
 
-  Future<void> _disposePreview() async {
-    await _previewFailures?.cancel();
-    _previewFailures = null;
-    final preview = _preview;
-    _preview = null;
-    if (preview != null) await preview.dispose();
-  }
+  Future<void> _disposePreview() => _previewOwner.release();
 
   Future<void> _enter() async {
     final result = _result;
     if (_loading || _saving || result == null || !result.isReady) return;
-    setState(() => _saving = true);
+    final retrySettings = _joinError == null ? null : _lastJoinSettings;
+    setState(() {
+      _saving = true;
+      _joining = widget.onEnter != null;
+      _joinError = null;
+    });
     final settings =
-        (_preview?.settings ?? MediaLocalPreviewSettings(cameraEnabled: false))
+        (retrySettings ??
+                _preview?.settings ??
+                MediaLocalPreviewSettings(cameraEnabled: false))
             .copyWith(backgroundEffect: _backgroundEffect);
-    await _disposePreview();
-    if (mounted) {
-      setState(() => _allowPop = true);
-      Navigator.of(context).pop(settings);
+    _lastJoinSettings = settings;
+    try {
+      await _disposePreview();
+      if (!mounted) return;
+      if (widget.onEnter case final onEnter?) {
+        await onEnter(context, settings);
+      }
+      if (mounted) {
+        setState(() => _allowPop = true);
+        Navigator.of(context).pop(settings);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _joining = false;
+        _joinError = error;
+      });
+      await _retryLocalPreview();
     }
   }
 
@@ -719,6 +249,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     if (preview == null) return;
     try {
       await preview.setMicrophoneEnabled(enabled);
+      _lastJoinSettings = null;
       if (mounted) setState(() => _previewError = null);
     } catch (error) {
       if (mounted) setState(() => _previewError = error);
@@ -727,26 +258,15 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
 
   Future<void> _setBackgroundEffect(MediaBackgroundEffect effect) async {
     if (_updatingBackground) return;
-    final preview = _preview;
-    final MediaBackgroundEffectsController? controller =
-        preview is MediaBackgroundEffectsController
-        ? preview as MediaBackgroundEffectsController
-        : null;
-    setState(() => _updatingBackground = true);
+    final update = _mediaSetup.applyBackground(_preview, effect);
+    if (mounted) setState(() {});
     try {
-      if (controller != null) {
-        await controller.setBackgroundEffect(effect);
-      }
-      if (!mounted) return;
-      setState(() {
-        _backgroundEffect = effect;
-        _previewError = null;
-      });
+      await update;
+      if (mounted) setState(() => _previewError = null);
     } catch (error) {
-      if (!mounted) return;
-      setState(() => _previewError = error);
+      if (mounted) setState(() => _previewError = error);
     } finally {
-      if (mounted) setState(() => _updatingBackground = false);
+      if (mounted) setState(() {});
     }
   }
 
@@ -755,6 +275,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     if (preview == null) return;
     try {
       await preview.setCameraEnabled(enabled);
+      _lastJoinSettings = null;
       if (mounted) setState(() => _previewError = null);
     } catch (error) {
       if (mounted) setState(() => _previewError = error);
@@ -764,32 +285,13 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   Future<void> _selectDevice(MediaDevice device) async {
     final preview = _preview;
     if (preview == null) return;
-    try {
-      await preview.selectMediaDevice(device);
-      if (mounted) setState(() => _deviceError = null);
-    } catch (error) {
-      if (mounted) setState(() => _deviceError = error);
-    }
-  }
-
-  Future<Map<MediaPermissionKind, MediaPermissionState>>
-  _readPermissionStates() async => {
-    for (final kind in MediaPermissionKind.values)
-      kind: await _safePermissionStatus(kind),
-  };
-
-  Future<MediaPermissionState> _safePermissionStatus(
-    MediaPermissionKind kind,
-  ) async {
-    try {
-      return await widget.permissionRequester.status(kind);
-    } catch (_) {
-      return MediaPermissionState.unknown;
-    }
+    final selected = await _mediaSetup.selectDevice(preview, device);
+    if (selected) _lastJoinSettings = null;
+    if (mounted) setState(() {});
   }
 
   Future<void> _refreshPermissionStates({required bool updateChecks}) async {
-    final states = await _readPermissionStates();
+    final states = await _permissions.readStatuses();
     if (!mounted) return;
     setState(() {
       _permissionStates = states;
@@ -814,12 +316,12 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   Future<void> _onPermissionAction(MediaPermissionKind kind) async {
     final current = _permissionStates[kind] ?? MediaPermissionState.unknown;
     if (current == MediaPermissionState.permanentlyDenied) {
-      if (widget.permissionRequester.canOpenAppSettings) {
+      if (_permissions.canOpenAppSettings) {
         setState(() => _requestingPermission = kind);
         _refreshPermissionsOnResume = true;
         var opened = false;
         try {
-          opened = await widget.permissionRequester.openAppSettings();
+          opened = await _permissions.openAppSettings();
         } catch (_) {
           opened = false;
         }
@@ -842,7 +344,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     MediaPermissionState next;
     var requestFailed = false;
     try {
-      next = await widget.permissionRequester.request(kind);
+      next = await _permissions.request(kind);
     } catch (_) {
       next = MediaPermissionState.unknown;
       requestFailed = true;
@@ -869,55 +371,12 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     MediaPreJoinResult result,
     MediaPermissionKind kind,
     MediaPermissionState state,
-  ) {
-    final type = kind == MediaPermissionKind.microphone
-        ? MediaPreJoinCheckType.microphonePermission
-        : MediaPreJoinCheckType.cameraPermission;
-    final original = result.check(type);
-    if (original == null) return result;
-    final status = switch (state) {
-      MediaPermissionState.granted => MediaPreJoinStatus.passed,
-      MediaPermissionState.denied ||
-      MediaPermissionState.permanentlyDenied ||
-      MediaPermissionState.restricted => MediaPreJoinStatus.failed,
-      MediaPermissionState.unsupported => MediaPreJoinStatus.unsupported,
-      MediaPermissionState.limited ||
-      MediaPermissionState.provisional ||
-      MediaPermissionState.unknown => MediaPreJoinStatus.unknown,
-    };
-    final label = kind == MediaPermissionKind.microphone
-        ? RealtimeStrings.of(context).microphone
-        : RealtimeStrings.of(context).camera;
-    final strings = RealtimeStrings.of(context);
-    final message = switch (state) {
-      MediaPermissionState.granted => strings.permissionGranted(label),
-      MediaPermissionState.denied => strings.permissionDenied(label),
-      MediaPermissionState.permanentlyDenied =>
-        widget.permissionRequester.canOpenAppSettings
-            ? strings.permissionPermanentlyDenied(label)
-            : strings.permissionBrowserHelp(label),
-      MediaPermissionState.restricted => strings.permissionRestricted(label),
-      MediaPermissionState.unsupported => original.message,
-      MediaPermissionState.limited ||
-      MediaPermissionState.provisional => original.message,
-      MediaPermissionState.unknown => strings.permissionDenied(label),
-    };
-    final updated = MediaPreJoinCheck(
-      type: original.type,
-      status: status,
-      severity: original.severity,
-      message: message,
-      details: original.details,
-    );
-    return MediaPreJoinResult(
-      role: result.role,
-      providerId: result.providerId,
-      backgroundCapabilities: result.backgroundCapabilities,
-      checks: [
-        for (final check in result.checks) check.type == type ? updated : check,
-      ],
-    );
-  }
+  ) => _permissions.projectCheck(
+    result: result,
+    kind: kind,
+    state: state,
+    strings: RealtimeStrings.of(context),
+  );
 
   Future<void> _showBrowserPermissionHelp(MediaPermissionKind kind) async {
     final strings = RealtimeStrings.of(context);
@@ -956,8 +415,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
     if (!mounted) return;
     setState(() {
       _previewError = null;
-      _deviceError = null;
-      _devices = const [];
+      _mediaSetup.resetDevices();
     });
     try {
       final preview = await widget.openPreview(result.providerId!, result.role);
@@ -966,13 +424,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
         return;
       }
       _bindPreview(preview);
-      if (preview != null) {
-        try {
-          _devices = await preview.listMediaDevices();
-        } catch (error) {
-          _deviceError = error;
-        }
-      }
+      await _mediaSetup.loadDevices(preview);
       setState(() {});
     } catch (error) {
       if (mounted) setState(() => _previewError = error);
@@ -982,11 +434,8 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(_previewFailures?.cancel());
-    _previewFailures = null;
-    final preview = _preview;
-    _preview = null;
-    if (preview != null) unawaited(preview.dispose());
+    _previewOwner.dispose();
+    _mediaSetup.dispose();
     super.dispose();
   }
 
@@ -1004,60 +453,136 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
         backgroundColor: Colors.transparent,
         body: RealtimeAmbientBackground(
           child: SafeArea(
-            child: Column(
+            child: Stack(
               children: [
-                _pageHeader(context, strings),
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final wide =
-                          constraints.maxWidth >= 960 &&
-                          constraints.maxHeight >= 500;
-                      final preview = _previewPanel(strings, isViewer);
-                      final setup = _setupPanel(strings, result, isViewer);
-                      return Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1320),
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                              wide ? 20 : 14,
-                              2,
-                              wide ? 20 : 14,
-                              14,
-                            ),
-                            child: wide
-                                ? Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Expanded(flex: 6, child: preview),
-                                      const SizedBox(width: 18),
-                                      Expanded(
-                                        flex: 5,
-                                        child: SingleChildScrollView(
-                                          padding: const EdgeInsets.only(
-                                            bottom: 8,
+                Column(
+                  children: [
+                    _pageHeader(context, strings),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final wide =
+                              constraints.maxWidth >= 820 &&
+                              constraints.maxHeight >= 420;
+                          final preview = _previewPanel(strings, isViewer);
+                          final setup = _setupPanel(strings, result, isViewer);
+                          return Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: wide ? 1240 : 680,
+                              ),
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(
+                                  constraints.maxWidth < 380 ? 10 : 18,
+                                  6,
+                                  constraints.maxWidth < 380 ? 10 : 18,
+                                  12,
+                                ),
+                                child: wide
+                                    ? Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Expanded(
+                                            flex: 6,
+                                            child: SingleChildScrollView(
+                                              child: preview,
+                                            ),
                                           ),
-                                          child: setup,
-                                        ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            flex: 5,
+                                            child: SingleChildScrollView(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 8,
+                                              ),
+                                              child: setup,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : ListView(
+                                        padding: EdgeInsets.zero,
+                                        children: [
+                                          preview,
+                                          const SizedBox(height: 12),
+                                          setup,
+                                        ],
                                       ),
-                                    ],
-                                  )
-                                : ListView(
-                                    padding: EdgeInsets.zero,
-                                    children: [
-                                      preview,
-                                      const SizedBox(height: 12),
-                                      setup,
-                                    ],
-                                  ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    if (_joinError != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 96),
+                          child: SingleChildScrollView(
+                            child: _preJoinNotice(
+                              '${strings.connectionFailed}: ${_joinError is RealtimeException ? (_joinError! as RealtimeException).message : _joinError}',
+                              danger: true,
+                            ),
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    _footer(strings, result),
+                  ],
                 ),
-                _footer(strings, result),
+                if (_joining)
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: const Color(0xCBEFF3F9),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 340),
+                            child: RealtimeGlassSurface(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 26,
+                                vertical: 30,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const SizedBox(
+                                    width: 40,
+                                    height: 40,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      color: RealtimeUiTokens.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text(
+                                    strings.enteringRoom,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 18,
+                                      color: RealtimeUiTokens.text,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    strings.enteringRoomDetail,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: RealtimeUiTokens.textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -1067,65 +592,89 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   }
 
   Widget _pageHeader(BuildContext context, RealtimeStrings strings) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-    child: RealtimeGlassSurface(
-      radius: RealtimeUiTokens.dockRadius,
-      opacity: .88,
-      blur: RealtimeUiTokens.subtleBlur,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: strings.cancel,
-            onPressed: _saving ? null : _cancel,
-            style: IconButton.styleFrom(
-              foregroundColor: RealtimeUiTokens.text,
-              backgroundColor: RealtimeUiTokens.surfaceSubtle,
-            ),
-            icon: const Icon(Icons.arrow_back_rounded),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.title ?? strings.preJoinCheck,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: RealtimeUiTokens.text,
-                  ),
+    padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 570;
+        final provider = widget.backendProviderId;
+        final providerChip = provider == null
+            ? null
+            : RealtimePill(
+                label: strings.backendProviderLabel(
+                  provider.trim().isEmpty
+                      ? strings.preJoinStatus('unknown')
+                      : mediaProviderDisplayName(provider),
                 ),
-                if (widget.roomLabel?.isNotEmpty == true)
-                  Text(
-                    widget.roomLabel!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: RealtimeUiTokens.textMuted,
-                      fontSize: 12,
+                icon: Icons.hub_outlined,
+                foreground: RealtimeUiTokens.primary,
+                background: RealtimeUiTokens.primarySubtle,
+                borderColor: RealtimeUiTokens.primaryBorder,
+              );
+        return RealtimeGlassSurface(
+          radius: RealtimeUiTokens.dockRadius,
+          opacity: .93,
+          blur: RealtimeUiTokens.subtleBlur,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: strings.cancel,
+                    onPressed: _saving ? null : _cancel,
+                    style: IconButton.styleFrom(
+                      foregroundColor: RealtimeUiTokens.text,
+                      backgroundColor: RealtimeUiTokens.surfaceSubtle,
+                    ),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.title ?? strings.preJoinCheck,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: RealtimeUiTokens.text,
+                          ),
+                        ),
+                        Text(
+                          widget.roomLabel?.isNotEmpty == true
+                              ? strings.roomLabel(widget.roomLabel!)
+                              : strings.preJoinCheck,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: RealtimeUiTokens.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-              ],
-            ),
-          ),
-          if (widget.backendProviderId case final provider?) ...[
-            const SizedBox(width: 8),
-            RealtimePill(
-              label: strings.backendProviderLabel(
-                provider.trim().isEmpty
-                    ? strings.preJoinStatus('unknown')
-                    : mediaProviderDisplayName(provider),
+                  if (!compact && providerChip != null) ...[
+                    const SizedBox(width: 10),
+                    providerChip,
+                  ],
+                ],
               ),
-              icon: Icons.hub_outlined,
-              foreground: RealtimeUiTokens.primary,
-              background: RealtimeUiTokens.primarySubtle,
-              borderColor: RealtimeUiTokens.primaryBorder,
-            ),
-          ],
-        ],
-      ),
+              if (compact && providerChip != null) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: providerChip,
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     ),
   );
 
@@ -1138,13 +687,25 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
         children: [
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              strings.camera,
-              style: const TextStyle(
-                color: RealtimeUiTokens.text,
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-              ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.video_camera_front_rounded,
+                  size: 18,
+                  color: RealtimeUiTokens.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isViewer ? strings.live : strings.camera,
+                    style: const TextStyle(
+                      color: RealtimeUiTokens.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           ClipRRect(
@@ -1152,7 +713,7 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
             child: AspectRatio(
               aspectRatio: 16 / 9,
               child: ColoredBox(
-                color: const Color(0xFFE9EEF6),
+                color: const Color(0xFF172239),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -1161,6 +722,14 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
                         renderer: _preview!.renderer,
                         track: track,
                         fit: BoxFit.contain,
+                      )
+                    else if (_joining)
+                      const Center(
+                        child: Icon(
+                          Icons.video_camera_front_rounded,
+                          color: Color(0xFFDEE7F8),
+                          size: 32,
+                        ),
                       )
                     else
                       Center(
@@ -1171,17 +740,17 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
                               width: 68,
                               height: 68,
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: .70),
+                                color: Colors.white.withValues(alpha: .12),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: RealtimeUiTokens.borderStrong,
+                                  color: Colors.white.withValues(alpha: .24),
                                 ),
                               ),
                               child: Icon(
                                 isViewer
                                     ? Icons.live_tv_outlined
                                     : Icons.person_outline_rounded,
-                                color: RealtimeUiTokens.primary,
+                                color: Colors.white,
                                 size: 30,
                               ),
                             ),
@@ -1193,8 +762,10 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
                                   ? strings.cameraPreviewUnavailable
                                   : strings.camera,
                               textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                color: RealtimeUiTokens.textMuted,
+                                color: Color(0xFFDEE7F8),
                                 fontSize: 13,
                               ),
                             ),
@@ -1209,9 +780,9 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
                             ? strings.you
                             : widget.displayName,
                         icon: Icons.person_outline_rounded,
-                        foreground: RealtimeUiTokens.text,
-                        background: Colors.white,
-                        borderColor: RealtimeUiTokens.borderStrong,
+                        foreground: Colors.white,
+                        background: const Color(0xCC1E293B),
+                        borderColor: const Color(0x55FFFFFF),
                       ),
                     ),
                     if (_loading)
@@ -1227,8 +798,9 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
           ),
           const SizedBox(height: 14),
           if (!isViewer && _preview != null) _mediaToggles(strings),
-          if (_previewError != null ||
-              (!isViewer && _preview == null && !_loading))
+          if (!_joining &&
+              (_previewError != null ||
+                  (!isViewer && _preview == null && !_loading)))
             Padding(
               padding: const EdgeInsets.only(top: 10),
               child: _preJoinNotice(
@@ -1455,7 +1027,9 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   }
 
   Widget _resultContent(RealtimeStrings strings, MediaPreJoinResult? result) {
-    if (_loading) return _LoadingView(label: strings.runningPreJoinChecks);
+    if (_loading) {
+      return MediaPreJoinLoadingView(label: strings.runningPreJoinChecks);
+    }
     if (_error != null) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -1478,11 +1052,11 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ResultView(
+        MediaPreJoinResultView(
           result: result,
           permissionStates: _permissionStates,
           requestingPermission: _requestingPermission,
-          canOpenAppSettings: widget.permissionRequester.canOpenAppSettings,
+          canOpenAppSettings: _permissions.canOpenAppSettings,
           onPermissionAction: _onPermissionAction,
         ),
         Align(
@@ -1524,49 +1098,59 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
         : result?.role == MediaRole.host
         ? strings.enterLiveRoom
         : strings.joinMeeting;
+    final providerLabel = result?.providerId == null
+        ? strings.preJoinCheck
+        : mediaProviderDisplayName(result!.providerId!);
+    final action = SizedBox(
+      height: 48,
+      child: RealtimeGlassButton(
+        onPressed: !_loading && !_saving && result?.isReady == true
+            ? _enter
+            : null,
+        isLoading: _saving,
+        icon: Icons.arrow_forward_rounded,
+        child: Text(label),
+      ),
+    );
     return RealtimeGlassSurface(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       radius: RealtimeUiTokens.dockRadius,
       opacity: .92,
       blur: RealtimeUiTokens.subtleBlur,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              result?.providerId == null
-                  ? strings.preJoinCheck
-                  : mediaProviderDisplayName(result!.providerId!),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: RealtimeUiTokens.textMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final provider = Text(
+            providerLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: RealtimeUiTokens.textMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
-          ),
-          const SizedBox(width: 12),
-          // The CTA must stay a flex child: a hard maxWidth of 320 plus the
-          // 12px gap overflows the footer on 390px phone viewports, where the
-          // glass surface leaves only ~331.8px of usable width.
-          Flexible(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 320),
-              child: SizedBox(
-                height: 48,
-                child: RealtimeGlassButton(
-                  onPressed: !_loading && !_saving && result?.isReady == true
-                      ? _enter
-                      : null,
-                  isLoading: _saving,
-                  icon: Icons.arrow_forward_rounded,
-                  child: Text(label),
+          );
+          if (constraints.maxWidth < 540) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 8),
+                  child: provider,
                 ),
-              ),
-            ),
-          ),
-        ],
+                action,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: provider),
+              const SizedBox(width: 12),
+              SizedBox(width: 270, child: action),
+            ],
+          );
+        },
       ),
     );
   }
