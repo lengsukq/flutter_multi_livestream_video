@@ -51,10 +51,10 @@ void main() {
         expect(
           () => TrtcJoinInfo.fromJson(joinPayload(userId: 'another-user')),
           throwsA(
-            isA<MediaError>().having(
+            isA<RealtimeException>().having(
               (error) => error.code,
               'code',
-              MediaErrorCode.invalidJoinInfo,
+              RealtimeErrorCode.invalidArgument,
             ),
           ),
         );
@@ -66,10 +66,13 @@ void main() {
       final invalidAppId = joinPayload()
         ..['trtc'] = {...joinPayload()['trtc'] as Map, 'sdkAppId': 0};
 
-      expect(() => TrtcJoinInfo.fromJson(missing), throwsA(isA<MediaError>()));
+      expect(
+        () => TrtcJoinInfo.fromJson(missing),
+        throwsA(isA<RealtimeException>()),
+      );
       expect(
         () => TrtcJoinInfo.fromJson(invalidAppId),
-        throwsA(isA<MediaError>()),
+        throwsA(isA<RealtimeException>()),
       );
     });
   });

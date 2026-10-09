@@ -119,8 +119,8 @@ abstract class _TrtcSessionBase
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _requireConnected();
     if (!supportsProcessedVideoSource(source)) {
-      throw const MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Processed video is unavailable.',
       );
     }
@@ -155,15 +155,15 @@ abstract class _TrtcSessionBase
     _requireConnected();
     if (device.kind != MediaDeviceKind.camera ||
         !capabilities.canSelectCamera) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         providerId: providerId,
         message: 'This media device cannot be selected.',
       );
     }
     if (_processedSink.source == null) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         providerId: providerId,
         message: 'Prepare the SDK video source before selecting a camera.',
       );
@@ -180,6 +180,9 @@ abstract class _TrtcSessionBase
   Timer? _refreshTimer;
   bool _enterRequested = false;
   bool _disposed = false;
+  bool _disposing = false;
+  bool _leaveRequestedDuringJoin = false;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   int _streamGeneration = 0;
 
   final _stateController = StreamController<MediaSessionState>.broadcast();
@@ -231,7 +234,19 @@ abstract class _TrtcSessionBase
   @override
   Future<void> join(MediaJoinInfo joinInfo) {
     final current = _joinFuture;
-    if (current != null) return current;
+    if (current != null) {
+      if (_leaveRequestedDuringJoin) {
+        return Future.error(
+          RealtimeException(
+            code: RealtimeErrorCode.cancelled,
+            providerId: providerId,
+            message: 'The previous TRTC join is still being cancelled.',
+          ),
+        );
+      }
+      return current;
+    }
+    _leaveRequestedDuringJoin = false;
     late final Future<void> future;
     future = _join(joinInfo).whenComplete(() {
       if (identical(_joinFuture, future)) _joinFuture = null;
@@ -245,8 +260,8 @@ abstract class _TrtcSessionBase
     if (state != MediaSessionState.idle &&
         state != MediaSessionState.ended &&
         state != MediaSessionState.failed) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'This TRTC session is already joining or active.',
         providerId: providerId,
       );
@@ -255,15 +270,15 @@ abstract class _TrtcSessionBase
         rawInfo.providerId != providerId ||
         rawInfo.role != role ||
         rawInfo.participantId != rawInfo.userId) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information does not match this TRTC session.',
         providerId: providerId,
       );
     }
     if (_activeTrtcSession != null && !identical(_activeTrtcSession, this)) {
-      throw MediaError(
-        code: MediaErrorCode.sessionAlreadyActive,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'Another TRTC session is already using the native engine.',
         providerId: providerId,
       );
@@ -276,8 +291,15 @@ abstract class _TrtcSessionBase
       while (true) {
         try {
           await _enterRoom(_joinInfo!);
+          if (_leaveRequestedDuringJoin || _disposed) {
+            throw RealtimeException(
+              code: RealtimeErrorCode.cancelled,
+              providerId: providerId,
+              message: 'The TRTC join was cancelled.',
+            );
+          }
           break;
-        } on MediaError catch (error) {
+        } on RealtimeException catch (error) {
           if (refreshedOnJoin ||
               !_isCredentialError(error) ||
               _refreshCallback == null) {
@@ -311,16 +333,31 @@ abstract class _TrtcSessionBase
       _setState(MediaSessionState.connected);
       _scheduleCredentialRefresh();
     } catch (error) {
-      final mapped = _mapError(error, 'Unable to join the TRTC room.');
+      final cancelled = _leaveRequestedDuringJoin || _disposed;
+      final mapped = cancelled
+          ? RealtimeException(
+              code: RealtimeErrorCode.cancelled,
+              providerId: providerId,
+              message: 'The TRTC join was cancelled.',
+              cause: error,
+            )
+          : _mapError(error, 'Unable to join the TRTC room.');
       await _releaseCloud();
       _activeTrtcSession = null;
-      _setState(MediaSessionState.failed, error: mapped);
+      if (!cancelled) _setState(MediaSessionState.failed, error: mapped);
       throw mapped;
     }
   }
 
   Future<void> _enterRoom(TrtcJoinInfo info) async {
     _engine ??= await _engineFactory();
+    if (_leaveRequestedDuringJoin || _disposed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.cancelled,
+        providerId: providerId,
+        message: 'The TRTC join was cancelled.',
+      );
+    }
     _setState(
       state == MediaSessionState.reconnecting
           ? MediaSessionState.reconnecting
@@ -331,15 +368,15 @@ abstract class _TrtcSessionBase
         .enterRoom(info, _engineEvents)
         .timeout(
           const Duration(seconds: 30),
-          onTimeout: () => throw MediaError(
-            code: MediaErrorCode.nativeError,
+          onTimeout: () => throw RealtimeException(
+            code: RealtimeErrorCode.providerError,
             message: 'TRTC did not confirm room entry before the timeout.',
             providerId: providerId,
           ),
         );
     if (result <= 0) {
-      throw MediaError(
-        code: MediaErrorCode.nativeError,
+      throw RealtimeException(
+        code: RealtimeErrorCode.providerError,
         message: 'TRTC rejected room entry (code $result).',
         details: {'code': result},
         providerId: providerId,
@@ -357,8 +394,8 @@ abstract class _TrtcSessionBase
       if (state == MediaSessionState.connected ||
           state == MediaSessionState.reconnecting) {
         _reportFailure(
-          MediaError(
-            code: MediaErrorCode.nativeError,
+          RealtimeException(
+            code: RealtimeErrorCode.providerError,
             message: 'TRTC reported an error: $message',
             details: {'code': code, 'message': message},
             providerId: providerId,
@@ -402,8 +439,8 @@ abstract class _TrtcSessionBase
     final current = _joinInfo;
     if (_disposed || current == null || callback == null) {
       _reportFailure(
-        MediaError(
-          code: MediaErrorCode.nativeError,
+        RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message:
               'TRTC credentials expired and no refresh callback is available.',
           providerId: providerId,
@@ -442,8 +479,8 @@ abstract class _TrtcSessionBase
   Future<TrtcJoinInfo> _refreshCredentials(TrtcJoinInfo current) async {
     final callback = _refreshCallback;
     if (callback == null) {
-      throw MediaError(
-        code: MediaErrorCode.nativeError,
+      throw RealtimeException(
+        code: RealtimeErrorCode.providerError,
         message: 'No backend credential refresh callback is configured.',
         providerId: providerId,
       );
@@ -456,8 +493,8 @@ abstract class _TrtcSessionBase
         refreshed.userId != current.userId ||
         refreshed.role != current.role ||
         refreshed.strRoomId != current.strRoomId) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'TRTC refresh credentials changed the current room identity.',
         providerId: providerId,
       );
@@ -657,15 +694,15 @@ abstract class _TrtcSessionBase
   Future<void> _sendMessage(String message, {required String topic}) async {
     final trimmed = message.trim();
     if (trimmed.isEmpty) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Message must not be empty.',
         providerId: providerId,
       );
     }
     if (!_capabilities.canSendData) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'TRTC viewers cannot send custom messages.',
         providerId: providerId,
       );
@@ -673,8 +710,8 @@ abstract class _TrtcSessionBase
     _requireConnected();
     final payload = jsonEncode({'topic': topic, 'message': trimmed});
     if (utf8.encode(payload).length > 1000) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'TRTC custom messages must be 1000 bytes or fewer.',
         providerId: providerId,
       );
@@ -682,8 +719,8 @@ abstract class _TrtcSessionBase
     try {
       final sent = _engine!.sendCustomCmdMsg(_customMessageCommandId, payload);
       if (!sent) {
-        throw MediaError(
-          code: MediaErrorCode.nativeError,
+        throw RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message: 'TRTC did not accept the custom message.',
           providerId: providerId,
         );
@@ -746,7 +783,7 @@ abstract class _TrtcSessionBase
     );
   }
 
-  bool _isCredentialError(MediaError error) =>
+  bool _isCredentialError(RealtimeException error) =>
       error.details is Map &&
       (error.details as Map)['code'] == _userSigCheckFailed;
 
@@ -756,22 +793,22 @@ abstract class _TrtcSessionBase
           (message.toLowerCase().contains('expired') ||
               message.toLowerCase().contains('过期')));
 
-  MediaError _mapError(Object error, String message) {
-    if (error is MediaError) return error.withProvider(providerId);
-    return MediaError(
-      code: MediaErrorCode.nativeError,
+  RealtimeException _mapError(Object error, String message) {
+    if (error is RealtimeException) return error.withProvider(providerId);
+    return RealtimeException(
+      code: RealtimeErrorCode.providerError,
       message: message,
       details: error,
       providerId: providerId,
     );
   }
 
-  void _reportFailure(MediaError error) {
+  void _reportFailure(RealtimeException error) {
     _setSnapshot(_snapshot.copyWith(lastError: error));
     _eventController.add(MediaFailureEvent(error));
   }
 
-  void _setState(MediaSessionState value, {MediaError? error}) {
+  void _setState(MediaSessionState value, {RealtimeException? error}) {
     if (_snapshot.state == value && error == null) return;
     final previous = _snapshot.state;
     _setSnapshot(_snapshot.copyWith(state: value, lastError: error));
@@ -790,8 +827,8 @@ abstract class _TrtcSessionBase
 
   void _requireConnected() {
     if (state != MediaSessionState.connected) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The TRTC session is not connected.',
         providerId: providerId,
       );
@@ -799,9 +836,9 @@ abstract class _TrtcSessionBase
   }
 
   void _ensureNotDisposed() {
-    if (_disposed) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+    if (_disposed || _disposing) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The TRTC session has been disposed.',
         providerId: providerId,
       );
@@ -824,11 +861,13 @@ abstract class _TrtcSessionBase
     if (_disposed) return;
     final joining = _joinFuture;
     if (joining != null) {
-      try {
-        await joining;
-      } catch (_) {
-        return;
-      }
+      _leaveRequestedDuringJoin = true;
+      // A native enterRoom can be unresponsive until its provider timeout.
+      // Release immediately and reject any later completion in _join.
+      await _releaseCloud();
+      _activeTrtcSession = null;
+      _setState(MediaSessionState.ended);
+      return;
     }
     if (state == MediaSessionState.ended || state == MediaSessionState.idle) {
       _setState(MediaSessionState.ended);
@@ -852,28 +891,21 @@ abstract class _TrtcSessionBase
   }
 
   @override
-  Future<void> dispose() {
-    final current = _disposeFuture;
-    if (current != null) return current;
-    late final Future<void> future;
-    future = _dispose().whenComplete(() {
-      if (identical(_disposeFuture, future)) _disposeFuture = null;
-    });
-    _disposeFuture = future;
-    return future;
-  }
+  Future<void> dispose() => _disposeFuture ??= _dispose();
 
   Future<void> _dispose() async {
-    if (_disposed) return;
-    await leave();
+    _disposing = true;
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('trtc.leave', leave);
     _disposed = true;
     _refreshCallback = null;
     _refreshTimer?.cancel();
     _setState(MediaSessionState.disposed);
-    await _stateController.close();
-    await _snapshotController.close();
-    await _eventController.close();
-    await _statsController.close();
+    await cleanup.run('states', _stateController.close);
+    await cleanup.run('snapshots', _snapshotController.close);
+    await cleanup.run('events', _eventController.close);
+    await cleanup.run('stats', _statsController.close);
+    cleanup.finish(domain: providerId);
   }
 }
 
@@ -943,8 +975,8 @@ abstract class _TrtcInteractiveSession extends _TrtcSessionBase
   Future<void> setScreenShareEnabled(bool enabled) async {
     _requireConnected();
     if (!capabilities.canScreenShare) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'TRTC screen sharing is supported on Android and iOS only.',
         providerId: providerId,
       );
@@ -976,8 +1008,8 @@ abstract class _TrtcInteractiveSession extends _TrtcSessionBase
         position == MediaCameraPosition.front,
       );
       if (result < 0) {
-        throw MediaError(
-          code: MediaErrorCode.nativeError,
+        throw RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message: 'TRTC camera switch failed (code $result).',
           details: {'code': result},
           providerId: providerId,
@@ -990,8 +1022,8 @@ abstract class _TrtcInteractiveSession extends _TrtcSessionBase
 
   @override
   Future<List<MediaAudioDevice>> listAudioDevices() => Future.error(
-    MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message:
           'TRTC audio-device enumeration is not supported by this adapter.',
       providerId: providerId,
@@ -1000,8 +1032,8 @@ abstract class _TrtcInteractiveSession extends _TrtcSessionBase
 
   @override
   Future<void> selectAudioDevice(MediaAudioDevice device) => Future.error(
-    MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: 'TRTC audio-device selection is not supported by this adapter.',
       providerId: providerId,
     ),

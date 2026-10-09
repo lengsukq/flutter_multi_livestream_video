@@ -30,8 +30,8 @@ class TrtcSessionFactory implements MediaSessionFactory {
   MediaSession createSession(MediaJoinInfo joinInfo) {
     if (joinInfo.providerId != providerId ||
         !supportedRoles.contains(joinInfo.role)) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'TRTC session cannot be created for this provider or role.',
         providerId: TrtcJoinInfo.providerIdValue,
       );

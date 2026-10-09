@@ -2,6 +2,7 @@ import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.da
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_trtc/flutter_realtime_media_trtc.dart';
@@ -23,6 +24,38 @@ TrtcJoinInfo joinInfo({MediaRole role = MediaRole.participant}) => TrtcJoinInfo(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'leave cancels a pending TRTC enter without reviving the room',
+    () async {
+      final pending = Completer<int>();
+      final engine = _FakeTrtcEngine()..pendingEnter = pending.future;
+      final session = TrtcSessionFactory(
+        engineFactory: () async => engine,
+      ).createSession(joinInfo());
+      final joining = session.join(joinInfo());
+      final cancelled = expectLater(
+        joining,
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.cancelled,
+          ),
+        ),
+      );
+      // Let the async factory resolve before leaving the pending SDK enter.
+      await Future<void>.delayed(Duration.zero);
+      await session.leave().timeout(const Duration(seconds: 2));
+      expect(session.state, MediaSessionState.ended);
+      expect(engine.disposed, isTrue);
+
+      pending.complete(1);
+      await cancelled;
+      expect(session.state, MediaSessionState.ended);
+      await session.dispose();
+    },
+  );
+
   test(
     'processed source owns camera control and detaches before leave',
     () async {
@@ -138,10 +171,10 @@ void main() {
       await expectLater(
         interactive.sendMessage(List.filled(1000, 'x').join()),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidArgument,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -226,7 +259,7 @@ void main() {
       expect(session.state, MediaSessionState.connected);
       engineEvents.onError?.call(-42, 'native failure');
       await Future<void>.delayed(Duration.zero);
-      expect(session.snapshot.lastError?.code, MediaErrorCode.nativeError);
+      expect(session.snapshot.lastError?.code, RealtimeErrorCode.providerError);
       await session.leave();
       expect(session.state, MediaSessionState.ended);
       expect(engine.exitCount, 1);
@@ -253,10 +286,10 @@ void main() {
       await expectLater(
         (session as BroadcastViewerSession).sendMessage('not allowed'),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -312,7 +345,7 @@ void main() {
       await expectLater(
         session.join(joinInfo()),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.providerId,
             'providerId',
             'trtc',
@@ -327,6 +360,7 @@ void main() {
 
 class _FakeTrtcEngine implements TrtcEngine {
   final List<int> enterResults = [];
+  Future<int>? pendingEnter;
   final List<TrtcJoinInfo> enteredRooms = [];
   final List<String> calls = [];
   TrtcEngineEvents? lastEvents;
@@ -339,6 +373,7 @@ class _FakeTrtcEngine implements TrtcEngine {
   Future<int> enterRoom(TrtcJoinInfo joinInfo, TrtcEngineEvents events) async {
     enteredRooms.add(joinInfo);
     lastEvents = events;
+    if (pendingEnter != null) return pendingEnter!;
     return enterResults.isEmpty ? 1 : enterResults.removeAt(0);
   }
 

@@ -38,8 +38,8 @@ class TrtcJoinInfo extends MediaJoinInfo {
   factory TrtcJoinInfo.fromJson(Map<String, dynamic> json) {
     final provider = json['provider']?.toString().trim().toLowerCase();
     if (provider != providerIdValue) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information does not identify the TRTC provider.',
         providerId: providerIdValue,
       );
@@ -56,16 +56,16 @@ class TrtcJoinInfo extends MediaJoinInfo {
     );
     final role = MediaRole.tryParse(json['role']);
     if (role == null) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'TRTC join information is missing a valid role.',
         providerId: providerIdValue,
       );
     }
     final block = json['trtc'];
     if (block is! Map) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information is missing the TRTC credential block.',
         providerId: providerIdValue,
       );
@@ -76,8 +76,8 @@ class TrtcJoinInfo extends MediaJoinInfo {
         ? sdkAppIdValue.toInt()
         : int.tryParse(sdkAppIdValue?.toString() ?? '');
     if (sdkAppId == null || sdkAppId <= 0) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'TRTC SDKAppId must be a positive integer.',
         providerId: providerIdValue,
       );
@@ -88,8 +88,8 @@ class TrtcJoinInfo extends MediaJoinInfo {
       providerId: providerIdValue,
     );
     if (participantId != userId) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'TRTC userId must match participantId.',
         providerId: providerIdValue,
       );
