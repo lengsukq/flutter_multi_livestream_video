@@ -46,10 +46,25 @@ void main() {
       final second = board.state!.activePageId;
       await expectLater(
         board.begin(shape('late', AnnotationTool.pen), canvasId: oldCanvas),
-        throwsStateError,
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidState,
+          ),
+        ),
       );
       await board.addPage();
-      await expectLater(board.addPage(), throwsStateError);
+      await expectLater(
+        board.addPage(),
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidState,
+          ),
+        ),
+      );
       await board.deletePage(board.state!.activePageId);
       expect(board.state!.activePageId, second);
       await board.selectPage(first);
@@ -57,11 +72,26 @@ void main() {
       expect(board.canvas.canvasId, isNot(oldCanvas));
       await expectLater(
         board.begin(shape('late', AnnotationTool.pen), canvasId: oldCanvas),
-        throwsStateError,
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidState,
+          ),
+        ),
       );
       await board.deletePage(first);
       expect(board.state!.activePageId, second);
-      await expectLater(board.deletePage(second), throwsStateError);
+      await expectLater(
+        board.deletePage(second),
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidState,
+          ),
+        ),
+      );
       await board.dispose();
     },
   );
@@ -76,33 +106,70 @@ void main() {
         'canvasId': state.canvas.canvasId,
         ...shape('stroke', AnnotationTool.pen).toJson(),
       };
-      final first = await repo.action('begin', data, eventId: 'event-1');
-      final replay = await repo.action('begin', data, eventId: 'event-1');
+      final first = await repo.action(
+        WhiteboardCommand(WhiteboardAction.begin, data, eventId: 'event-1'),
+      );
+      final replay = await repo.action(
+        WhiteboardCommand(WhiteboardAction.begin, data, eventId: 'event-1'),
+      );
       expect(replay.revision, first.revision);
       expect(replay.canvas.shapes.length, 1);
       await expectLater(
-        repo.action('clear', data, eventId: 'event-1'),
-        throwsStateError,
+        repo.action(
+          WhiteboardCommand(WhiteboardAction.clear, data, eventId: 'event-1'),
+        ),
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidState,
+          ),
+        ),
       );
       await expectLater(
-        repo.action('begin', data, eventId: 'event-2'),
-        throwsStateError,
+        repo.action(
+          WhiteboardCommand(WhiteboardAction.begin, data, eventId: 'event-2'),
+        ),
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidState,
+          ),
+        ),
       );
       await expectLater(
-        repo.action('begin', {
-          ...data,
-          'expectedRevision': first.revision,
-          'id': 'bad',
-          'points': [
-            {'x': 2, 'y': 0},
-          ],
-        }, eventId: 'bad'),
-        throwsArgumentError,
+        repo.action(
+          WhiteboardCommand(WhiteboardAction.begin, {
+            ...data,
+            'expectedRevision': first.revision,
+            'id': 'bad',
+            'points': [
+              {'x': 2, 'y': 0},
+            ],
+          }, eventId: 'bad'),
+        ),
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidArgument,
+          ),
+        ),
       );
       await repo.close();
       final readOnly = WhiteboardSession.local(canEdit: false);
       await readOnly.start();
-      await expectLater(readOnly.addPage(), throwsStateError);
+      await expectLater(
+        readOnly.addPage(),
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidState,
+          ),
+        ),
+      );
       await readOnly.dispose();
     },
   );
@@ -119,7 +186,13 @@ void main() {
       expect(board.canvas.canvasId, isNot(oldCanvas));
       await expectLater(
         board.begin(shape('delayed', AnnotationTool.pen), canvasId: oldCanvas),
-        throwsStateError,
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidState,
+          ),
+        ),
       );
       await board.dispose();
     },

@@ -34,7 +34,10 @@ class SystemAnnotationViewport {
         height <= 0 ||
         x + width > 1 ||
         y + height > 1) {
-      throw ArgumentError('Viewport must be inside the primary display.');
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
+        message: 'Viewport must be inside the primary display.',
+      );
     }
     return {'x': x, 'y': y, 'width': width, 'height': height};
   }
@@ -58,6 +61,8 @@ class SystemScreenAnnotationController {
   Future<void>? _pump;
   Future<void> _lifecycle = Future.value();
   bool _active = false, _disposed = false;
+  Future<void>? _disposeFuture;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   bool _clearOnClose = false;
   Object? _error;
   String _canvasId = '', _sessionId = '';
@@ -96,7 +101,19 @@ class SystemScreenAnnotationController {
   }
 
   Future<T> _serial<T>(Future<T> Function() action) {
-    final result = _lifecycle.then((_) => action());
+    final result = _lifecycle.then((_) => action()).catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          domain: 'annotation',
+          stackTrace: stack,
+        ),
+        stack,
+      );
+    });
     _lifecycle = result.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
@@ -107,24 +124,49 @@ class SystemScreenAnnotationController {
   /// Request overlay access on user intent, before optional backend setup.
   /// Android opens its system settings only when access has not been granted.
   Future<void> requestPermission() => _serial(() async {
-    if (_disposed) throw StateError('System annotations disposed');
+    if (_disposed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'System annotations disposed',
+      );
+    }
     final caps = await capabilities();
-    if (!caps.supported) throw UnsupportedError(caps.reason);
-    if (_disposed) throw StateError('System annotations disposed');
+    if (!caps.supported) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message: caps.reason,
+      );
+    }
+    if (_disposed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'System annotations disposed',
+      );
+    }
     if (_active || !caps.permissionRequired) return;
     if (_owner != null && _owner != this) {
-      throw StateError('Another room owns the system annotation window');
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Another room owns the system annotation window',
+      );
     }
     _owner = this;
     _sessionId =
         '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}';
     try {
       if (await _channel.invokeMethod<bool>('requestPermission') != true) {
-        throw StateError(
-          'Allow drawing over other apps in Android settings, then retry.',
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message:
+              'Allow drawing over other apps in Android settings, then retry.',
         );
       }
-      if (_disposed) throw StateError('System annotations disposed');
+      if (_disposed) {
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message: 'System annotations disposed',
+        );
+      }
     } finally {
       if (_owner == this) _owner = null;
     }
@@ -134,19 +176,43 @@ class SystemScreenAnnotationController {
     SystemAnnotationViewport viewport = const SystemAnnotationViewport(),
     String languageCode = 'en',
   }) => _serial(() async {
-    if (_disposed) throw StateError('System annotations disposed');
+    if (_disposed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'System annotations disposed',
+      );
+    }
     if (_active) return;
     if (_owner != null && _owner != this) {
-      throw StateError('Another room owns the system annotation window');
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Another room owns the system annotation window',
+      );
     }
     if (!annotations.canEdit || !annotations.canvas.active) {
-      throw StateError('An editable shared screen is required');
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'An editable shared screen is required',
+      );
     }
     final caps = await capabilities();
-    if (_disposed) throw StateError('System annotations disposed');
-    if (!caps.supported) throw UnsupportedError(caps.reason);
+    if (_disposed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'System annotations disposed',
+      );
+    }
+    if (!caps.supported) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message: caps.reason,
+      );
+    }
     if (_owner != null && _owner != this) {
-      throw StateError('Another room owns the system annotation window');
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Another room owns the system annotation window',
+      );
     }
     final rect = viewport.toJson();
     _owner = this;
@@ -158,8 +224,10 @@ class SystemScreenAnnotationController {
       _channel.setMethodCallHandler(_onNative);
       if (caps.permissionRequired &&
           await _channel.invokeMethod<bool>('requestPermission') != true) {
-        throw StateError(
-          'Allow drawing over other apps in Android settings, then retry.',
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message:
+              'Allow drawing over other apps in Android settings, then retry.',
         );
       }
       // Permission dialogs may outlive a screen share or teacher privilege.
@@ -167,8 +235,9 @@ class SystemScreenAnnotationController {
           !annotations.canEdit ||
           annotations.canvas.canvasId != _canvasId ||
           !annotations.canvas.active) {
-        throw StateError(
-          'The shared screen changed while requesting permission',
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message: 'The shared screen changed while requesting permission',
         );
       }
       _canvasSub = annotations.canvases.listen((canvas) {
@@ -428,10 +497,12 @@ class SystemScreenAnnotationController {
     _emit();
   }
 
-  Future<void> dispose() async {
-    if (_disposed) return;
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+  Future<void> _dispose() async {
     _disposed = true;
-    await stop();
-    await _states.close();
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('system.windows', stop);
+    await cleanup.run('system.states', _states.close);
+    cleanup.finish(domain: 'annotation');
   }
 }

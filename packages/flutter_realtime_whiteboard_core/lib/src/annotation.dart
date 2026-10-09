@@ -1,26 +1,30 @@
+import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
+
 /// Points are relative to the shared content rectangle, excluding letterboxes.
 class AnnotationPoint {
   const AnnotationPoint(this.x, this.y);
   final double x, y;
   Map<String, Object> toJson() => {'x': x, 'y': y};
   factory AnnotationPoint.fromJson(Map<String, dynamic> value) =>
+      JsonReader(value).decode(() => AnnotationPoint._fromJsonUnchecked(value));
+  factory AnnotationPoint._fromJsonUnchecked(Map<String, dynamic> value) =>
       AnnotationPoint(
-        (value['x'] as num).toDouble(),
-        (value['y'] as num).toDouble(),
+        JsonReader(value).required<num>('x').toDouble(),
+        JsonReader(value).required<num>('y').toDouble(),
       );
 }
 
 enum AnnotationTool { pen, highlight, circle, arrow, text }
 
 class AnnotationShape {
-  const AnnotationShape({
+  AnnotationShape({
     required this.id,
     required this.tool,
-    required this.points,
+    required List<AnnotationPoint> points,
     this.color = 0xfff59e0b,
     this.width = 3,
     this.text = '',
-  });
+  }) : points = List.unmodifiable(points);
   final String id, text;
   final AnnotationTool tool;
   final List<AnnotationPoint> points;
@@ -34,29 +38,28 @@ class AnnotationShape {
     'text': text,
   };
   factory AnnotationShape.fromJson(Map<String, dynamic> value) =>
+      JsonReader(value).decode(() => AnnotationShape._fromJsonUnchecked(value));
+  factory AnnotationShape._fromJsonUnchecked(Map<String, dynamic> value) =>
       AnnotationShape(
-        id: value['id'] as String,
-        tool: AnnotationTool.values.byName(value['tool'] as String),
-        points: List.unmodifiable(
-          (value['points'] as List).map(
-            (p) =>
-                AnnotationPoint.fromJson(Map<String, dynamic>.from(p as Map)),
-          ),
-        ),
-        color: value['color'] as int,
-        width: value['width'] as int,
-        text: value['text'] as String? ?? '',
+        id: JsonReader(value).required<String>('id'),
+        tool: JsonReader(value).enumValue('tool', AnnotationTool.values),
+        points: JsonReader(
+          value,
+        ).objects('points', AnnotationPoint.fromJson, optional: false),
+        color: JsonReader(value).required<int>('color'),
+        width: JsonReader(value).required<int>('width'),
+        text: JsonReader(value).optional<String>('text') ?? '',
       );
 }
 
 class AnnotationCanvas {
-  const AnnotationCanvas({
+  AnnotationCanvas({
     this.canvasId = '',
     this.sourceKey = '',
     this.participantId = '',
-    this.shapes = const [],
+    List<AnnotationShape> shapes = const [],
     this.embeddedInVideo = false,
-  });
+  }) : shapes = List.unmodifiable(shapes);
   final String canvasId, sourceKey, participantId;
   final List<AnnotationShape> shapes;
 
@@ -64,18 +67,20 @@ class AnnotationCanvas {
   /// Receivers must not draw the same vector marks a second time.
   final bool embeddedInVideo;
   bool get active => sourceKey.isNotEmpty;
-  factory AnnotationCanvas.fromJson(Map<String, dynamic> value) =>
+  factory AnnotationCanvas.fromJson(Map<String, dynamic> value) => JsonReader(
+    value,
+  ).decode(() => AnnotationCanvas._fromJsonUnchecked(value));
+  factory AnnotationCanvas._fromJsonUnchecked(Map<String, dynamic> value) =>
       AnnotationCanvas(
-        canvasId: value['canvasId'] as String? ?? '',
-        sourceKey: value['sourceKey'] as String? ?? '',
-        participantId: value['participantId'] as String? ?? '',
-        embeddedInVideo: value['embeddedInVideo'] == true,
-        shapes: List.unmodifiable(
-          (value['shapes'] as List? ?? []).map(
-            (s) =>
-                AnnotationShape.fromJson(Map<String, dynamic>.from(s as Map)),
-          ),
-        ),
+        canvasId: JsonReader(value).optional<String>('canvasId') ?? '',
+        sourceKey: JsonReader(value).optional<String>('sourceKey') ?? '',
+        participantId:
+            JsonReader(value).optional<String>('participantId') ?? '',
+        embeddedInVideo:
+            (JsonReader(value).optional<bool>('embeddedInVideo') ?? false),
+        shapes: JsonReader(
+          value,
+        ).objects('shapes', AnnotationShape.fromJson, optional: true),
       );
 }
 

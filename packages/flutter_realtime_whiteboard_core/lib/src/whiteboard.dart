@@ -1,3 +1,5 @@
+import 'whiteboard_command.dart';
+import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -8,38 +10,41 @@ enum SharedContentMode { members, screen, whiteboard }
 class WhiteboardPage {
   const WhiteboardPage({required this.id, required this.title});
   final String id, title;
-  factory WhiteboardPage.fromJson(Map<String, dynamic> value) => WhiteboardPage(
-    id: value['id'] as String,
-    title: value['title'] as String,
-  );
+  factory WhiteboardPage.fromJson(Map<String, dynamic> value) =>
+      JsonReader(value).decode(() => WhiteboardPage._fromJsonUnchecked(value));
+  factory WhiteboardPage._fromJsonUnchecked(Map<String, dynamic> value) =>
+      WhiteboardPage(
+        id: JsonReader(value).required<String>('id'),
+        title: JsonReader(value).required<String>('title'),
+      );
 }
 
 /// Only the active canvas is transmitted; repositories retain inactive pages.
 class WhiteboardState {
-  const WhiteboardState({
+  WhiteboardState({
     required this.revision,
     required this.canEdit,
-    required this.pages,
+    required List<WhiteboardPage> pages,
     required this.activePageId,
     required this.canvas,
     this.maxPages = 20,
-  });
+  }) : pages = List.unmodifiable(pages);
   final int revision, maxPages;
   final bool canEdit;
   final List<WhiteboardPage> pages;
   final String activePageId;
   final AnnotationCanvas canvas;
   factory WhiteboardState.fromJson(Map<String, dynamic> value) =>
+      JsonReader(value).decode(() => WhiteboardState._fromJsonUnchecked(value));
+  factory WhiteboardState._fromJsonUnchecked(Map<String, dynamic> value) =>
       WhiteboardState(
-        revision: value['revision'] as int? ?? 0,
-        canEdit: value['canEdit'] as bool? ?? false,
-        maxPages: value['maxPages'] as int? ?? 20,
-        pages: List.unmodifiable(
-          (value['pages'] as List).map(
-            (p) => WhiteboardPage.fromJson(Map<String, dynamic>.from(p as Map)),
-          ),
-        ),
-        activePageId: value['activePageId'] as String,
+        revision: JsonReader(value).optional<int>('revision') ?? 0,
+        canEdit: JsonReader(value).optional<bool>('canEdit') ?? false,
+        maxPages: JsonReader(value).optional<int>('maxPages') ?? 20,
+        pages: JsonReader(
+          value,
+        ).objects('pages', WhiteboardPage.fromJson, optional: false),
+        activePageId: JsonReader(value).required<String>('activePageId'),
         canvas: AnnotationCanvas.fromJson(
           Map<String, dynamic>.from(value['canvas'] as Map),
         ),
@@ -59,11 +64,14 @@ class SharedContentState {
   final AnnotationCanvas screen;
   final bool canManage;
   final int revision;
-  factory SharedContentState.fromJson(Map<String, dynamic> value) =>
+  factory SharedContentState.fromJson(Map<String, dynamic> value) => JsonReader(
+    value,
+  ).decode(() => SharedContentState._fromJsonUnchecked(value));
+  factory SharedContentState._fromJsonUnchecked(Map<String, dynamic> value) =>
       SharedContentState(
-        revision: value['revision'] as int? ?? 0,
-        mode: SharedContentMode.values.byName(value['mode'] as String),
-        canManage: value['canManage'] as bool? ?? false,
+        revision: JsonReader(value).optional<int>('revision') ?? 0,
+        mode: JsonReader(value).enumValue('mode', SharedContentMode.values),
+        canManage: JsonReader(value).optional<bool>('canManage') ?? false,
         whiteboard: WhiteboardState.fromJson(
           Map<String, dynamic>.from(value['whiteboard'] as Map),
         ),
@@ -76,11 +84,7 @@ class SharedContentState {
 abstract interface class WhiteboardRepository {
   Stream<WhiteboardState> get states;
   Future<WhiteboardState> snapshot();
-  Future<WhiteboardState> action(
-    String action,
-    Map<String, Object?> data, {
-    required String eventId,
-  });
+  Future<WhiteboardState> action(WhiteboardCommand command);
   Future<void> close();
 }
 
@@ -123,7 +127,12 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
     canvas: _canvases[_active]!,
   );
   void _check() {
-    if (_closed) throw StateError('Whiteboard repository closed');
+    if (_closed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Whiteboard repository closed',
+      );
+    }
   }
 
   @override
@@ -133,38 +142,59 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
   }
 
   @override
-  Future<WhiteboardState> action(
-    String action,
-    Map<String, Object?> data, {
-    required String eventId,
-  }) async {
+  Future<WhiteboardState> action(WhiteboardCommand command) async {
+    final action = command.action.wireName;
+    final data = command.payload;
+    final eventId = command.eventId;
     _check();
-    if (!canEdit) throw StateError('Whiteboard is read-only');
+    if (!canEdit) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Whiteboard is read-only',
+      );
+    }
     final key = jsonEncode([action, data]);
     final previous = _handled[eventId];
     if (previous != null) {
-      if (previous != key) throw StateError('Conflicting eventId');
+      if (previous != key) {
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message: 'Conflicting eventId',
+        );
+      }
       return _snapshot();
     }
     if (data['expectedRevision'] != _revision) {
-      throw StateError('Whiteboard revision changed');
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Whiteboard revision changed',
+      );
     }
     var canvas = _canvases[_active]!;
     final shapes = List<AnnotationShape>.of(canvas.shapes);
     switch (action) {
       case 'page.add':
         if (_pages.length >= maxPages) {
-          throw StateError('Whiteboard page limit reached');
+          throw RealtimeException(
+            code: RealtimeErrorCode.invalidState,
+            message: 'Whiteboard page limit reached',
+          );
         }
-        final title = (data['title'] as String? ?? '').trim();
+        final title = (JsonReader(data).optional<String>('title') ?? '').trim();
         if (title.isEmpty || title.length > 120) {
-          throw ArgumentError('Use a page title of 1-120 characters');
+          throw RealtimeException(
+            code: RealtimeErrorCode.invalidArgument,
+            message: 'Use a page title of 1-120 characters',
+          );
         }
         _add(title);
       case 'page.select':
-        final id = data['pageId'] as String;
+        final id = JsonReader(data).required<String>('pageId');
         if (!_canvases.containsKey(id)) {
-          throw StateError('Page no longer exists');
+          throw RealtimeException(
+            code: RealtimeErrorCode.invalidState,
+            message: 'Page no longer exists',
+          );
         }
         _active = id;
         final selected = _canvases[id]!;
@@ -175,10 +205,20 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
           shapes: selected.shapes,
         );
       case 'page.delete':
-        final id = data['pageId'] as String;
+        final id = JsonReader(data).required<String>('pageId');
         final index = _pages.indexWhere((p) => p.id == id);
-        if (index < 0) throw StateError('Page no longer exists');
-        if (_pages.length == 1) throw StateError('Keep at least one page');
+        if (index < 0) {
+          throw RealtimeException(
+            code: RealtimeErrorCode.invalidState,
+            message: 'Page no longer exists',
+          );
+        }
+        if (_pages.length == 1) {
+          throw RealtimeException(
+            code: RealtimeErrorCode.invalidState,
+            message: 'Keep at least one page',
+          );
+        }
         _pages.removeAt(index);
         _canvases.remove(id);
         if (_active == id) {
@@ -196,7 +236,10 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
       case 'undo':
       case 'clear':
         if (data['pageId'] != _active || data['canvasId'] != canvas.canvasId) {
-          throw StateError('Canvas or active page changed');
+          throw RealtimeException(
+            code: RealtimeErrorCode.invalidState,
+            message: 'Canvas or active page changed',
+          );
         }
         if (action == 'clear') {
           shapes.clear();
@@ -221,17 +264,26 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
                     p.y < 0 ||
                     p.y > 1,
               )) {
-            throw ArgumentError('Use 1-100 normalized points');
+            throw RealtimeException(
+              code: RealtimeErrorCode.invalidArgument,
+              message: 'Use 1-100 normalized points',
+            );
           }
-          final id = data['id'] as String;
+          final id = JsonReader(data).required<String>('id');
           if (action == 'begin') {
             if (id.isEmpty ||
                 id.length > 128 ||
                 shapes.any((s) => s.id == id)) {
-              throw ArgumentError('Invalid or duplicate shape id');
+              throw RealtimeException(
+                code: RealtimeErrorCode.invalidArgument,
+                message: 'Invalid or duplicate shape id',
+              );
             }
             if (shapes.length >= 200) {
-              throw StateError('Canvas shape limit reached');
+              throw RealtimeException(
+                code: RealtimeErrorCode.invalidState,
+                message: 'Canvas shape limit reached',
+              );
             }
             final shape = AnnotationShape.fromJson(
               Map<String, dynamic>.from(data),
@@ -242,21 +294,35 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
                 shape.width > 20 ||
                 (shape.tool == AnnotationTool.text &&
                     (shape.text.trim().isEmpty || shape.text.length > 200))) {
-              throw ArgumentError('Invalid annotation style');
+              throw RealtimeException(
+                code: RealtimeErrorCode.invalidArgument,
+                message: 'Invalid annotation style',
+              );
             }
             shapes.add(shape);
           } else {
             final index = shapes.indexWhere((s) => s.id == id);
-            if (index < 0) throw StateError('Stroke not found');
+            if (index < 0) {
+              throw RealtimeException(
+                code: RealtimeErrorCode.invalidState,
+                message: 'Stroke not found',
+              );
+            }
             final old = shapes[index];
             if (![
               AnnotationTool.pen,
               AnnotationTool.highlight,
             ].contains(old.tool)) {
-              throw StateError('Only freehand strokes accept appended points');
+              throw RealtimeException(
+                code: RealtimeErrorCode.invalidState,
+                message: 'Only freehand strokes accept appended points',
+              );
             }
             if (old.points.length + points.length > 2048) {
-              throw StateError('Stroke point limit reached');
+              throw RealtimeException(
+                code: RealtimeErrorCode.invalidState,
+                message: 'Stroke point limit reached',
+              );
             }
             shapes[index] = AnnotationShape(
               id: old.id,
@@ -276,7 +342,10 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
         );
         _canvases[_active] = canvas;
       default:
-        throw ArgumentError('Unknown whiteboard action');
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
+          message: 'Unknown whiteboard action',
+        );
     }
     _revision++;
     _handled[eventId] = key;
@@ -310,11 +379,13 @@ class WhiteboardSession implements AnnotationController {
   Future<void>? _queue;
   Future<void>? _starting;
   bool _disposed = false;
+  Future<void>? _disposeFuture;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   WhiteboardState? get state => _state;
   Stream<WhiteboardState> get states => _states.stream;
   Stream<Object> get errors => _errors.stream;
   @override
-  AnnotationCanvas get canvas => _state?.canvas ?? const AnnotationCanvas();
+  AnnotationCanvas get canvas => _state?.canvas ?? AnnotationCanvas();
   @override
   Stream<AnnotationCanvas> get canvases => states.map((s) => s.canvas);
   @override
@@ -328,7 +399,16 @@ class WhiteboardSession implements AnnotationController {
   }
 
   Future<void> start() {
-    if (_disposed) return Future.error(StateError('Whiteboard disposed'));
+    if (_disposed) {
+      return Future.error(
+        const RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message: 'Whiteboard disposed',
+          domain: 'whiteboard',
+        ),
+      );
+    }
+
     if (_state != null) return Future<void>.value();
     return _starting ??=
         (() async {
@@ -338,30 +418,71 @@ class WhiteboardSession implements AnnotationController {
               if (!_disposed) _errors.add(e);
             },
           );
-          _accept(await repository.snapshot());
+          await refresh();
         })().whenComplete(() {
           _starting = null;
         });
   }
 
   Future<void> refresh() async {
-    if (_disposed) throw StateError('Whiteboard disposed');
-    _accept(await repository.snapshot());
+    if (_disposed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Whiteboard disposed',
+      );
+    }
+    try {
+      _accept(await repository.snapshot());
+    } catch (error, stack) {
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          domain: 'whiteboard',
+          operation: 'snapshot',
+          stackTrace: stack,
+        ),
+        stack,
+      );
+    }
   }
 
-  Future<void> _act(String action, Map<String, Object?> data) {
+  Future<void> _act(WhiteboardAction action, Map<String, Object?> data) {
     final result = (_queue ?? Future<void>.value()).then((_) async {
-      if (_disposed) throw StateError('Whiteboard disposed');
+      if (_disposed) {
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message: 'Whiteboard disposed',
+        );
+      }
       if (_state == null) await start();
-      if (!canEdit) throw StateError('Whiteboard is read-only');
-      _accept(
-        await repository.action(
-          action,
-          {...data, 'expectedRevision': _state!.revision},
-          eventId:
-              '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}',
-        ),
-      );
+      if (!canEdit) {
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message: 'Whiteboard is read-only',
+        );
+      }
+      try {
+        _accept(
+          await repository.action(
+            WhiteboardCommand(
+              action,
+              {...data, 'expectedRevision': _state!.revision},
+              eventId:
+                  '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}',
+            ),
+          ),
+        );
+      } catch (error, stack) {
+        Error.throwWithStackTrace(
+          normalizeRealtimeException(
+            error,
+            domain: 'whiteboard',
+            operation: action.wireName,
+            stackTrace: stack,
+          ),
+          stack,
+        );
+      }
     });
     final tail = result.catchError((Object e) {
       if (!_disposed) _errors.add(e);
@@ -375,46 +496,50 @@ class WhiteboardSession implements AnnotationController {
     return result;
   }
 
-  Future<void> addPage({String? title}) => _act('page.add', {
+  Future<void> addPage({String? title}) => _act(WhiteboardAction.pageAdd, {
     'title': title ?? 'Page ${(_state?.pages.length ?? 0) + 1}',
   });
   Future<void> selectPage(String pageId) =>
-      _act('page.select', {'pageId': pageId});
+      _act(WhiteboardAction.pageSelect, {'pageId': pageId});
   Future<void> deletePage(String pageId) =>
-      _act('page.delete', {'pageId': pageId});
+      _act(WhiteboardAction.pageDelete, {'pageId': pageId});
   Map<String, Object?> _target(String canvasId) => {
     'canvasId': canvasId,
     'pageId': canvas.sourceKey,
   };
   @override
   Future<void> begin(AnnotationShape shape, {required String canvasId}) =>
-      _act('begin', {..._target(canvasId), ...shape.toJson()});
+      _act(WhiteboardAction.begin, {..._target(canvasId), ...shape.toJson()});
   @override
   Future<void> append(
     String shapeId,
     List<AnnotationPoint> points, {
     required String canvasId,
-  }) => _act('append', {
+  }) => _act(WhiteboardAction.append, {
     ..._target(canvasId),
     'id': shapeId,
     'points': points.map((p) => p.toJson()).toList(),
   });
   @override
-  Future<void> undo() => _act('undo', _target(canvas.canvasId));
+  Future<void> undo() => _act(WhiteboardAction.undo, _target(canvas.canvasId));
   @override
-  Future<void> clear() => _act('clear', _target(canvas.canvasId));
-  Future<void> dispose() async {
-    if (_disposed) return;
+  Future<void> clear() =>
+      _act(WhiteboardAction.clear, _target(canvas.canvasId));
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+  Future<void> _dispose() async {
     _disposed = true;
-    await _subscription?.cancel();
-    try {
-      if (_starting != null) await _starting;
-      if (_queue != null) await _queue;
-    } catch (_) {
-      /* callers received errors */
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('whiteboard.subscription', () async {
+      await _subscription?.cancel();
+    });
+    await cleanup.run('whiteboard.queue', () async {
+      await _queue;
+    });
+    if (ownsRepository) {
+      await cleanup.run('whiteboard.repository', repository.close);
     }
-    if (ownsRepository) await repository.close();
-    await _states.close();
-    await _errors.close();
+    await cleanup.run('whiteboard.states', _states.close);
+    await cleanup.run('whiteboard.errors', _errors.close);
+    cleanup.finish(domain: 'whiteboard');
   }
 }

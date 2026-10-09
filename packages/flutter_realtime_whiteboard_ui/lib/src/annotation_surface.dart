@@ -209,7 +209,7 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
     stream: widget.session.canvases,
     initialData: widget.session.canvas,
     builder: (context, snapshot) {
-      final canvas = snapshot.data ?? const AnnotationCanvas();
+      final canvas = snapshot.data ?? AnnotationCanvas();
       // System-window strokes already occur in captured video. Editing happens
       // in that window, and drawing vectors here would duplicate the video ink.
       final teacher =
