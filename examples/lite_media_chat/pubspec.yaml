@@ -6,10 +6,12 @@ environment:
   sdk: ^3.12.0
   flutter: ">=3.47.0"
 dependencies:
+  flutter_realtime_sdk_ui:
+    path: ../../packages/flutter_realtime_sdk_ui
   flutter:
     sdk: flutter
-  flutter_realtime_sdk_base:
-    path: ../../packages/flutter_realtime_sdk_base
+  flutter_realtime_sdk_runtime:
+    path: ../../packages/flutter_realtime_sdk_runtime
   flutter_realtime_provider_livekit:
     path: ../../packages/flutter_realtime_provider_livekit
   flutter_realtime_provider_ivs_chat:

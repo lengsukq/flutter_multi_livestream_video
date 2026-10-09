@@ -1,5 +1,6 @@
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_realtime_sdk_base/flutter_realtime_sdk_base.dart';
+import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_provider_livekit/flutter_realtime_provider_livekit.dart';
 
 void main() => runApp(const MaterialApp(home: LiteExample()));
@@ -13,7 +14,7 @@ class LiteExample extends StatefulWidget {
 class _LiteExampleState extends State<LiteExample> {
   final _code = TextEditingController();
   final _name = TextEditingController(text: 'Guest');
-  late final _realtime = RealtimeLite(
+  late final _realtime = Realtime(
     backendUrl: const String.fromEnvironment('REALTIME_BACKEND_URL'),
     providers: [createLivekitProvider()],
   );

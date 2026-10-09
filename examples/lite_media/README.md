@@ -1,6 +1,6 @@
 # lite_media
 
-Registers LiveKit only using `RealtimeLite`.
+Registers LiveKit only using `Realtime`.
 Configure the reference backend to return these providers for the room.
 
 ```sh

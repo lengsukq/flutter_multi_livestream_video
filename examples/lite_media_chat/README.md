@@ -1,6 +1,6 @@
 # lite_media_chat
 
-Registers LiveKit and independent IVS Chat using `RealtimeLite`.
+Registers LiveKit and independent IVS Chat using `Realtime`.
 Configure the reference backend to return these providers for the room.
 
 ```sh
