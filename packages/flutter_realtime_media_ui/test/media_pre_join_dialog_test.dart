@@ -22,6 +22,87 @@ void main() {
     },
   );
 
+  test('preview owner shares native release and disallows early rebind', () async {
+    final gate = Completer<void>();
+    final old = _DelayedDisposePreview(gate.future);
+    final owner = PreJoinPreviewOwner();
+    owner.bind(old, onFailure: (_) {});
+    final first = owner.release();
+    final second = owner.release();
+    expect(identical(first, second), isTrue);
+    expect(old.disposeCalls, 1);
+    expect(
+      () => owner.bind(_FakeLocalPreview(), onFailure: (_) {}),
+      throwsStateError,
+    );
+    gate.complete();
+    await Future.wait([first, second]);
+    final replacement = _FakeLocalPreview();
+    owner.bind(replacement, onFailure: (_) {});
+    await owner.release();
+    expect(old.disposeCalls, 1);
+    expect(replacement.disposeCalls, 1);
+  });
+
+  testWidgets(
+    'duplicate Pre-Join enters and forced route removal do not create late navigation',
+    (tester) async {
+      final navigatorKey = GlobalKey<NavigatorState>();
+      final gate = Completer<void>();
+      final preview = _FakeLocalPreview();
+      Route<dynamic>? preJoinRoute;
+      var connectionAttempts = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: FilledButton(
+                onPressed: () => MediaPreJoinPage.show(
+                  context,
+                  runCheck: _readyResult,
+                  openPreview: (_, _) async => preview,
+                  permissionRequester: const _TestPermissionRequester(),
+                  onEnter: (pageContext, _) async {
+                    connectionAttempts++;
+                    preJoinRoute = ModalRoute.of(pageContext);
+                    await gate.future;
+                    if (!pageContext.mounted) return;
+                    Navigator.of(pageContext).pushReplacement<void, MediaLocalPreviewSettings>(
+                      MaterialPageRoute(
+                        builder: (_) => const Scaffold(body: Text('Late room')),
+                      ),
+                    );
+                  },
+                ),
+                child: const Text('Prepare'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Prepare'));
+      await tester.pumpAndSettle();
+      final join = find.text('Join meeting');
+      await tester.tap(join);
+      await tester.pump();
+      expect(connectionAttempts, 1);
+      expect(preview.disposeCalls, 1);
+      expect(find.text('Entering room…'), findsOneWidget);
+      // The in-flight join disables the button and cannot be scheduled again.
+      expect(find.byType(MediaPreJoinPage), findsOneWidget);
+      navigatorKey.currentState!.removeRoute(preJoinRoute!);
+      await tester.pumpAndSettle();
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(connectionAttempts, 1);
+      expect(preview.disposeCalls, 1);
+      expect(find.text('Prepare'), findsOneWidget);
+      expect(find.text('Late room'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test(
     'device setup ignores superseded device query and preserves background',
     () async {
@@ -574,6 +655,17 @@ void main() {
       expect(chosen!.cameraEnabled, isFalse);
     },
   );
+}
+
+class _DelayedDisposePreview extends _FakeLocalPreview {
+  _DelayedDisposePreview(this.releaseGate);
+  final Future<void> releaseGate;
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
+    await releaseGate;
+  }
 }
 
 class _DelayedLocalPreview extends _FakeLocalPreview {
