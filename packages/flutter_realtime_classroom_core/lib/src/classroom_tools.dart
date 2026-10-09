@@ -17,11 +17,14 @@ class ClassroomMaterial {
     required this.url,
   });
   final String id, title, url;
-  factory ClassroomMaterial.fromJson(Map<String, dynamic> value) =>
+  factory ClassroomMaterial.fromJson(Map<String, dynamic> value) => JsonReader(
+    value,
+  ).decode(() => ClassroomMaterial._fromJsonUnchecked(value));
+  factory ClassroomMaterial._fromJsonUnchecked(Map<String, dynamic> value) =>
       ClassroomMaterial(
-        id: value['id'] as String,
-        title: value['title'] as String,
-        url: value['url'] as String,
+        id: JsonReader(value).required<String>('id'),
+        title: JsonReader(value).required<String>('title'),
+        url: JsonReader(value).required<String>('url'),
       );
 }
 
@@ -36,11 +39,13 @@ class ClassroomNotice {
   final DateTime createdAt;
   bool get isFocusReminder => kind == 'focus';
   factory ClassroomNotice.fromJson(Map<String, dynamic> value) =>
+      JsonReader(value).decode(() => ClassroomNotice._fromJsonUnchecked(value));
+  factory ClassroomNotice._fromJsonUnchecked(Map<String, dynamic> value) =>
       ClassroomNotice(
-        id: value['id'] as String,
-        kind: value['kind'] as String,
-        text: value['text'] as String,
-        createdAt: DateTime.parse(value['createdAt'] as String),
+        id: JsonReader(value).required<String>('id'),
+        kind: JsonReader(value).required<String>('kind'),
+        text: JsonReader(value).required<String>('text'),
+        createdAt: JsonReader(value).dateTime('createdAt'),
       );
 }
 
@@ -53,14 +58,17 @@ class ClassroomHomework {
   });
   final String id, title, instructions;
   final DateTime? dueAt;
-  factory ClassroomHomework.fromJson(Map<String, dynamic> value) =>
+  factory ClassroomHomework.fromJson(Map<String, dynamic> value) => JsonReader(
+    value,
+  ).decode(() => ClassroomHomework._fromJsonUnchecked(value));
+  factory ClassroomHomework._fromJsonUnchecked(Map<String, dynamic> value) =>
       ClassroomHomework(
-        id: value['id'] as String,
-        title: value['title'] as String,
-        instructions: value['instructions'] as String,
+        id: JsonReader(value).required<String>('id'),
+        title: JsonReader(value).required<String>('title'),
+        instructions: JsonReader(value).required<String>('instructions'),
         dueAt: value['dueAt'] == null
             ? null
-            : DateTime.parse(value['dueAt'] as String),
+            : JsonReader(value).dateTime('dueAt'),
       );
 }
 
@@ -73,27 +81,32 @@ class ClassroomTimer {
     return duration.isNegative ? Duration.zero : duration;
   }
 
-  factory ClassroomTimer.fromJson(Map<String, dynamic> value) => ClassroomTimer(
-    title: value['title'] as String,
-    endsAt: DateTime.parse(value['endsAt'] as String),
-  );
+  factory ClassroomTimer.fromJson(Map<String, dynamic> value) =>
+      JsonReader(value).decode(() => ClassroomTimer._fromJsonUnchecked(value));
+  factory ClassroomTimer._fromJsonUnchecked(Map<String, dynamic> value) =>
+      ClassroomTimer(
+        title: JsonReader(value).required<String>('title'),
+        endsAt: JsonReader(value).dateTime('endsAt'),
+      );
 }
 
 enum ClassroomActivityKind { quiz, poll }
 
 class ClassroomActivity {
-  const ClassroomActivity({
+  ClassroomActivity({
     required this.id,
     required this.kind,
     required this.title,
-    required this.options,
+    required List<String> options,
     required this.closed,
     this.responseCount = 0,
     this.selfAnswer,
     this.correctOption,
-    this.counts,
-    this.answers = const {},
-  });
+    List<int>? counts,
+    Map<String, int> answers = const {},
+  }) : options = List.unmodifiable(options),
+       counts = counts == null ? null : List.unmodifiable(counts),
+       answers = Map.unmodifiable(answers);
   final String id, title;
   final ClassroomActivityKind kind;
   final List<String> options;
@@ -103,19 +116,22 @@ class ClassroomActivity {
   final int? correctOption, selfAnswer;
   final List<int>? counts;
   final Map<String, int> answers;
-  factory ClassroomActivity.fromJson(Map<String, dynamic> value) =>
+  factory ClassroomActivity.fromJson(Map<String, dynamic> value) => JsonReader(
+    value,
+  ).decode(() => ClassroomActivity._fromJsonUnchecked(value));
+  factory ClassroomActivity._fromJsonUnchecked(Map<String, dynamic> value) =>
       ClassroomActivity(
-        id: value['id'] as String,
-        kind: ClassroomActivityKind.values.byName(value['kind'] as String),
-        title: value['title'] as String,
-        options: List.unmodifiable((value['options'] as List).cast<String>()),
-        closed: value['closed'] as bool,
-        responseCount: value['responseCount'] as int? ?? 0,
-        selfAnswer: value['selfAnswer'] as int?,
-        correctOption: value['correctOption'] as int?,
+        id: JsonReader(value).required<String>('id'),
+        kind: JsonReader(value).enumValue('kind', ClassroomActivityKind.values),
+        title: JsonReader(value).required<String>('title'),
+        options: JsonReader(value).list<String>('options'),
+        closed: JsonReader(value).required<bool>('closed'),
+        responseCount: JsonReader(value).optional<int>('responseCount') ?? 0,
+        selfAnswer: JsonReader(value).optional<int>('selfAnswer'),
+        correctOption: JsonReader(value).optional<int>('correctOption'),
         counts: value['counts'] == null
             ? null
-            : List.unmodifiable((value['counts'] as List).cast<int>()),
+            : JsonReader(value).list<int>('counts'),
         answers: Map.unmodifiable(
           (value['answers'] as Map? ?? {}).cast<String, int>(),
         ),
@@ -137,33 +153,40 @@ class ClassroomAttendance {
   final Duration onlineDuration;
   final DateTime? firstJoinedAt, lastJoinedAt, lastLeftAt;
   factory ClassroomAttendance.fromJson(Map<String, dynamic> value) =>
+      JsonReader(
+        value,
+      ).decode(() => ClassroomAttendance._fromJsonUnchecked(value));
+  factory ClassroomAttendance._fromJsonUnchecked(Map<String, dynamic> value) =>
       ClassroomAttendance(
-        userId: value['userId'] as String,
-        displayName: value['displayName'] as String,
-        online: value['online'] as bool,
+        userId: JsonReader(value).required<String>('userId'),
+        displayName: JsonReader(value).required<String>('displayName'),
+        online: JsonReader(value).required<bool>('online'),
         onlineDuration: Duration(
-          milliseconds: value['onlineMilliseconds'] as int? ?? 0,
+          milliseconds:
+              JsonReader(value).optional<int>('onlineMilliseconds') ?? 0,
         ),
-        firstJoinedAt: DateTime.tryParse(
-          value['firstJoinedAt'] as String? ?? '',
-        ),
-        lastJoinedAt: DateTime.tryParse(value['lastJoinedAt'] as String? ?? ''),
-        lastLeftAt: DateTime.tryParse(value['lastLeftAt'] as String? ?? ''),
+        firstJoinedAt: JsonReader(value).optionalDateTime('firstJoinedAt'),
+        lastJoinedAt: JsonReader(value).optionalDateTime('lastJoinedAt'),
+        lastLeftAt: JsonReader(value).optionalDateTime('lastLeftAt'),
       );
 }
 
 /// Null ClassroomState.tools means the control plane has not implemented this
 /// extension; a V1-only backend stays compatible and does not show dead tools.
 class ClassroomToolsState {
-  const ClassroomToolsState({
-    this.notices = const [],
-    this.homework = const [],
-    this.materials = const [],
-    this.activities = const [],
+  ClassroomToolsState({
+    List<ClassroomNotice> notices = const [],
+    List<ClassroomHomework> homework = const [],
+    List<ClassroomMaterial> materials = const [],
+    List<ClassroomActivity> activities = const [],
     this.timer,
     this.content,
-    this.annotation = const AnnotationCanvas(),
-  });
+    AnnotationCanvas? annotation,
+  }) : annotation = annotation ?? AnnotationCanvas(),
+       notices = List.unmodifiable(notices),
+       homework = List.unmodifiable(homework),
+       materials = List.unmodifiable(materials),
+       activities = List.unmodifiable(activities);
   final List<ClassroomNotice> notices;
   final List<ClassroomHomework> homework;
   final List<ClassroomMaterial> materials;
@@ -171,7 +194,11 @@ class ClassroomToolsState {
   final ClassroomTimer? timer;
   final AnnotationCanvas annotation;
   final SharedContentState? content;
-  factory ClassroomToolsState.fromJson(Map<String, dynamic> value) {
+  factory ClassroomToolsState.fromJson(Map<String, dynamic> value) =>
+      JsonReader(
+        value,
+      ).decode(() => ClassroomToolsState._fromJsonUnchecked(value));
+  factory ClassroomToolsState._fromJsonUnchecked(Map<String, dynamic> value) {
     List<T> list<T>(String key, T Function(Map<String, dynamic>) decode) =>
         List.unmodifiable(
           (value[key] as List? ?? []).map(

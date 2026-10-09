@@ -15,14 +15,11 @@ class Repository implements ClassroomRepository {
     students: const [],
     questions: const [],
     stats: const ClassroomStats(),
-    tools: supported ? const ClassroomToolsState() : null,
+    tools: supported ? ClassroomToolsState() : null,
   );
   @override
-  Future<ClassroomState> action(
-    String type, {
-    Map<String, String> data = const {},
-  }) {
-    calls.add((type, data));
+  Future<ClassroomState> action(ClassroomCommand command) {
+    calls.add((command.wireName, command.toWireData()));
     return snapshot();
   }
 
@@ -32,7 +29,7 @@ class Repository implements ClassroomRepository {
 
 void main() {
   test(
-    'tools delegate structured actions while preserving V1 repository signature',
+    'tools delegate structured actions while serializing typed repository commands',
     () async {
       final repository = Repository();
       final session = ClassroomSession(
@@ -62,7 +59,7 @@ void main() {
       await session.closeActivity('q1');
       await session.annotations.setSource('screen');
       await session.annotations.begin(
-        const AnnotationShape(
+        AnnotationShape(
           id: 's1',
           tool: AnnotationTool.pen,
           points: [AnnotationPoint(.1, .2)],
@@ -105,7 +102,13 @@ void main() {
     expect(session.state!.capabilities.canUseTools, false);
     await expectLater(
       session.publishAnnouncement('Hello'),
-      throwsUnsupportedError,
+      throwsA(
+        isA<RealtimeException>().having(
+          (e) => e.code,
+          'code',
+          RealtimeErrorCode.unsupportedFeature,
+        ),
+      ),
     );
     await session.dispose();
   });

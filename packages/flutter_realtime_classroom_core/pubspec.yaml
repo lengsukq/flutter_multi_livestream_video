@@ -5,6 +5,8 @@ publish_to: none
 environment:
   sdk: ^3.12.0
 dependencies:
+  flutter_realtime_foundation:
+    path: ../flutter_realtime_foundation
   flutter_realtime_whiteboard_core:
     path: ../flutter_realtime_whiteboard_core
   http: ^1.4.0

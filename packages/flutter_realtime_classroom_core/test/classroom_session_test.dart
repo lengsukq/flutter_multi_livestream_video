@@ -10,10 +10,8 @@ class FakeClassroomRepository implements ClassroomRepository {
   @override
   Future<ClassroomState> snapshot() async => next;
   @override
-  Future<ClassroomState> action(
-    String type, {
-    Map<String, String> data = const {},
-  }) async {
+  Future<ClassroomState> action(ClassroomCommand command) async {
+    final type = command.wireName;
     calls.add(type);
     return next;
   }
