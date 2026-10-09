@@ -28,6 +28,7 @@ class StandaloneChatDemoPage extends StatefulWidget {
 
 class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
   final _room = TextEditingController();
+  int _tabIndex = 0;
   bool _busy = false;
   String? _error;
   List<ChatRoomSummary> _availableRooms = const [];
@@ -118,6 +119,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
       _busy = true;
       _error = null;
     });
+
     try {
       final roomCode = _room.text.trim();
       final request = create
@@ -168,9 +170,11 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
   @override
   Widget build(BuildContext context) {
     final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
+
     final content = Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
+        constraints: const BoxConstraints(maxWidth: 580),
         child: ListView(
           shrinkWrap: widget.embedded,
           physics: widget.embedded
@@ -195,10 +199,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                       onPressed: _busy
                           ? null
                           : () => Navigator.of(context).maybePop(),
-                      icon: const Icon(
-                        Icons.arrow_back_rounded,
-                        color: RealtimeUiTokens.text,
-                      ),
+                      icon: Icon(Icons.arrow_back_rounded, color: style.text),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -208,8 +209,8 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                       children: [
                         Text(
                           strings.standaloneChat,
-                          style: const TextStyle(
-                            color: RealtimeUiTokens.text,
+                          style: TextStyle(
+                            color: style.text,
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
                           ),
@@ -217,8 +218,8 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                         const SizedBox(height: 2),
                         Text(
                           strings.independentProductChat,
-                          style: const TextStyle(
-                            color: RealtimeUiTokens.textMuted,
+                          style: TextStyle(
+                            color: style.textMuted,
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
@@ -228,125 +229,197 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
             ],
+
+            // 1. User Profile Card
             RealtimeGlassSurface(
               radius: RealtimeUiTokens.cardRadius,
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              margin: const EdgeInsets.only(bottom: 14),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: style.primarySubtle,
+                    child: Text(
+                      widget.displayName.isNotEmpty
+                          ? widget.displayName.characters.first.toUpperCase()
+                          : '?',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: style.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.displayName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: RealtimeStyle.of(context).text,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.userId,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: RealtimeStyle.of(context).textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  RealtimePill(
+                    label: strings.chatOnline,
+                    foreground: const Color(0xFF10B981),
+                    background: const Color(0xFFECFDF5),
+                    borderColor: const Color(0xFFA7F3D0),
+                  ),
+                ],
+              ),
+            ),
+
+            // 2. Main Exploration Container
+            RealtimeGlassSurface(
+              radius: RealtimeUiTokens.cardRadius,
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  RealtimeSheetHeader(
-                    title: strings.independentProductChat,
-                    subtitle: strings.independentProductChatDescription,
-                    icon: Icons.forum_outlined,
-                  ),
-                  const SizedBox(height: 22),
-                  RealtimeGlassTextField(
-                    controller: _room,
-                    label: strings.roomCode,
-                    prefixIcon: Icons.tag_rounded,
-                    suffix: RealtimePill(
-                      label: strings.randomCode,
-                      icon: Icons.casino_outlined,
-                      foreground: RealtimeUiTokens.primary,
-                      background: RealtimeUiTokens.primarySubtle,
-                      borderColor: RealtimeUiTokens.primaryBorder,
-                      onTap: _busy ? null : _generateRandomCode,
-                    ),
-                  ),
-                  if (!widget.embedded) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+                  // Segmented Tabs Header
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: RealtimeStyle.of(context).surfaceSubtle,
+                      borderRadius: BorderRadius.circular(
+                        RealtimeUiTokens.controlRadius,
                       ),
-                      decoration: BoxDecoration(
-                        color: RealtimeUiTokens.surfaceSubtle.withValues(
-                          alpha: .78,
-                        ),
-                        borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.controlRadius,
-                        ),
-                        border: Border.all(color: RealtimeUiTokens.border),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.person_outline_rounded,
-                            color: RealtimeUiTokens.primary,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  widget.displayName,
-                                  style: const TextStyle(
-                                    color: RealtimeUiTokens.text,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  widget.userId,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: RealtimeUiTokens.textMuted,
-                                    fontSize: 11.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                      border: Border.all(
+                        color: RealtimeStyle.of(context).border,
                       ),
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _tabButton(
+                            index: 0,
+                            label: strings.exploreChatRooms,
+                            icon: Icons.explore_outlined,
+                            badge: _availableRooms.length,
+                          ),
+                        ),
+                        Expanded(
+                          child: _tabButton(
+                            index: 1,
+                            label: strings.quickCreateRoom,
+                            icon: Icons.add_comment_outlined,
+                          ),
+                        ),
+                        Expanded(
+                          child: _tabButton(
+                            index: 2,
+                            label: strings.joinByCode,
+                            icon: Icons.login_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
                   if (_error != null) ...[
-                    const SizedBox(height: 14),
                     Container(
                       padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 14),
                       decoration: BoxDecoration(
-                        color: RealtimeUiTokens.dangerSubtle,
+                        color: style.dangerSubtle,
                         borderRadius: BorderRadius.circular(
                           RealtimeUiTokens.controlRadius,
                         ),
                         border: Border.all(
-                          color: RealtimeUiTokens.dangerBorder,
+                          color: style.isDark
+                              ? const Color(0xFF7F1D1D)
+                              : const Color(0xFFFECDD3),
                         ),
                       ),
                       child: Text(
                         _error!,
-                        style: const TextStyle(
-                          color: RealtimeUiTokens.danger,
+                        style: TextStyle(
+                          color: style.isDark
+                              ? const Color(0xFFFCA5A5)
+                              : style.danger,
                           fontSize: 12.5,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ],
-                  const SizedBox(height: 20),
-                  RealtimeGlassButton(
-                    onPressed: _busy ? null : () => _open(create: true),
-                    isLoading: _busy,
-                    icon: Icons.add_comment_rounded,
-                    child: Text(strings.createChatRoom),
-                  ),
-                  const SizedBox(height: 10),
-                  RealtimeGlassButton(
-                    onPressed: _busy ? null : () => _open(create: false),
-                    secondary: true,
-                    icon: Icons.login_rounded,
-                    child: Text(strings.joinChatRoom),
-                  ),
-                  const SizedBox(height: 22),
-                  _buildAvailableRooms(),
+
+                  // Tab 0: Explore active rooms
+                  if (_tabIndex == 0) _buildAvailableRooms(),
+
+                  // Tab 1: Quick Create Room
+                  if (_tabIndex == 1) ...[
+                    RealtimeSheetHeader(
+                      title: strings.createChatRoom,
+                      subtitle: strings.independentProductChatDescription,
+                      icon: Icons.add_comment_rounded,
+                    ),
+                    const SizedBox(height: 16),
+                    RealtimeGlassTextField(
+                      controller: _room,
+                      label: strings.roomCode,
+                      prefixIcon: Icons.tag_rounded,
+                      suffix: RealtimePill(
+                        label: strings.randomCode,
+                        icon: Icons.casino_outlined,
+                        foreground: style.primary,
+                        background: style.primarySubtle,
+                        borderColor: style.primaryBorder,
+                        onTap: _busy ? null : _generateRandomCode,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    RealtimeGlassButton(
+                      onPressed: _busy ? null : () => _open(create: true),
+                      isLoading: _busy,
+                      icon: Icons.add_comment_rounded,
+                      child: Text(strings.createChatRoom),
+                    ),
+                  ],
+
+                  // Tab 2: Join by code
+                  if (_tabIndex == 2) ...[
+                    RealtimeSheetHeader(
+                      title: strings.joinChatRoom,
+                      subtitle: strings.enterChatRoomCode,
+                      icon: Icons.login_rounded,
+                    ),
+                    const SizedBox(height: 16),
+                    RealtimeGlassTextField(
+                      controller: _room,
+                      label: strings.roomCode,
+                      prefixIcon: Icons.tag_rounded,
+                    ),
+                    const SizedBox(height: 16),
+                    RealtimeGlassButton(
+                      onPressed: _busy ? null : () => _open(create: false),
+                      isLoading: _busy,
+                      icon: Icons.login_rounded,
+                      child: Text(strings.joinChatRoom),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -354,6 +427,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
         ),
       ),
     );
+
     if (widget.embedded) return content;
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -361,7 +435,68 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
     );
   }
 
+  Widget _tabButton({
+    required int index,
+    required String label,
+    required IconData icon,
+    int badge = 0,
+  }) {
+    final style = RealtimeStyle.of(context);
+    final active = _tabIndex == index;
+    return InkWell(
+      onTap: () => setState(() => _tabIndex = index),
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? style.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+          border: active ? Border.all(color: style.border) : null,
+          boxShadow: active ? style.cardShadow : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: active ? style.primary : style.textMuted,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                color: active ? style.primary : style.textMuted,
+              ),
+            ),
+            if (badge > 0) ...[
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                decoration: BoxDecoration(
+                  color: active ? style.primary : style.borderStrong,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$badge',
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAvailableRooms() {
+    final style = RealtimeStyle.of(context);
     final strings = DemoStrings.of(context);
     final rooms = _availableRooms;
     return Column(
@@ -377,10 +512,10 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                       strings.availableChatRooms,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13.5,
+                      style: TextStyle(
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
-                        color: RealtimeUiTokens.text,
+                        color: style.text,
                       ),
                     ),
                   ),
@@ -388,9 +523,9 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                     const SizedBox(width: 8),
                     RealtimePill(
                       label: '${rooms.length}',
-                      foreground: RealtimeUiTokens.primary,
-                      background: RealtimeUiTokens.primarySubtle,
-                      borderColor: RealtimeUiTokens.primaryBorder,
+                      foreground: style.primary,
+                      background: style.primarySubtle,
+                      borderColor: style.primaryBorder,
                     ),
                   ],
                 ],
@@ -411,7 +546,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         if (_roomsError != null)
           Text(
             _roomsError!,
@@ -419,22 +554,32 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
           )
         else if (rooms.isEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 14),
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 14),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.62),
+              color: style.surfaceSubtle,
               borderRadius: BorderRadius.circular(
                 RealtimeUiTokens.controlRadius,
               ),
-              border: Border.all(color: RealtimeUiTokens.border),
+              border: Border.all(color: style.border),
             ),
-            child: Text(
-              strings.noActiveChatRooms,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: RealtimeUiTokens.textMuted,
-                fontWeight: FontWeight.w500,
-              ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 32,
+                  color: style.textMuted,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  strings.noActiveChatRooms,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: style.textMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           )
         else
@@ -452,21 +597,19 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                 child: Row(
                   children: [
                     Container(
-                      width: 38,
-                      height: 38,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
-                        color: RealtimeUiTokens.primarySubtle,
+                        color: style.primarySubtle,
                         borderRadius: BorderRadius.circular(
                           RealtimeUiTokens.compactRadius,
                         ),
-                        border: Border.all(
-                          color: RealtimeUiTokens.primaryBorder,
-                        ),
+                        border: Border.all(color: style.primaryBorder),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.forum_outlined,
-                        size: 18,
-                        color: RealtimeUiTokens.primary,
+                        size: 20,
+                        color: style.primary,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -478,10 +621,10 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                             room.roomCode,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 14,
+                            style: TextStyle(
+                              fontSize: 14.5,
                               fontWeight: FontWeight.w800,
-                              color: RealtimeUiTokens.text,
+                              color: style.text,
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -489,9 +632,9 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                             strings.chatProviderDisplayName(room.providerId),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
-                              color: RealtimeUiTokens.textMuted,
+                              color: style.textMuted,
                             ),
                           ),
                         ],
@@ -501,9 +644,9 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                     RealtimePill(
                       label: DemoStrings.of(context).join,
                       icon: Icons.login_rounded,
-                      foreground: RealtimeUiTokens.primary,
-                      background: RealtimeUiTokens.primarySubtle,
-                      borderColor: RealtimeUiTokens.primaryBorder,
+                      foreground: style.primary,
+                      background: style.primarySubtle,
+                      borderColor: style.primaryBorder,
                       onTap: _busy
                           ? null
                           : () {
