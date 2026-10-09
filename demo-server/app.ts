@@ -58,6 +58,7 @@ import { createRoomClosure } from './services/room-closure.ts';
 import { createRoomRegistryService } from './services/room-registry-service.ts';
 import { createAdminAuth } from './services/admin-auth.ts';
 import { createProviderSelection } from './services/provider-selection.ts';
+import { createRoomOperations } from './services/room-operations.ts';
 import { normalizeRoomCode, normalizeUserId, normalizeDisplayName, normalizeDeviceId, bindDevicePresence, parseRole, parseRoomMode, creatorRoleForMode, joinRoleForRoom } from './services/room-input.ts';
 import { createTrtcProvider } from './providers/trtc.ts';
 import { localizeDemoMessage, resolveDemoLanguage } from './i18n.ts';
@@ -132,15 +133,6 @@ app.use((req, res, next) => {
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value == null || value.trim() === '') return fallback;
   return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
-}
-
-function pruneStaleAttendees(entry: RoomEntry, now: number, insideOperation = false): void {
-  // Dashboard reads must not replace membership during an awaited RTC update.
-  if (!insideOperation && roomOperations.isBusy(entry)) return;
-  entry.attendees = entry.attendees.filter((attendee) => {
-    const lastSeen = attendee.lastHeartbeatMs;
-    return lastSeen == null || now - lastSeen <= PARTICIPANT_STALE_AFTER_MS;
-  });
 }
 
 function bindLogicalIdentity(
@@ -289,6 +281,18 @@ const {
   generateRoomCode, registerRoom, assertRole, resolveRoom, resolveChimeRoom,
 } = createRoomRegistryService({ roomDirectory, providerRegistry, chimeProvider });
 
+const closeRoomUnlocked = createRoomClosure({
+  providerRegistry, chatProviderRegistry, roomDirectory,
+  classroomDirectory, liveInteractionDirectory, logEvent,
+});
+const {
+  pruneStaleAttendees, withRoomOperation, assertRoomOpen, closeRoom,
+  summarizeRoom, isRoomPartiallyClosed,
+} = createRoomOperations({
+  roomDirectory, providerRegistry, roomOperations,
+  participantStaleAfterMs: PARTICIPANT_STALE_AFTER_MS, closeRoomUnlocked,
+});
+
 registerChatRoutes(app, {
   chatRoomDirectory, chatProviderRegistry,
   currentChatProvider: () => activeChatProvider,
@@ -407,69 +411,6 @@ const { loadPersistedProvider, loadPersistedChatProvider, persistActiveProviders
 let activeProvider = loadPersistedProvider();
 let activeChatProvider = loadPersistedChatProvider();
 
-function withRoomOperation<T>(entry: RoomEntry, operation: () => Promise<T> | T): Promise<T> {
-  return roomOperations.run(entry, () => {
-    if (roomDirectory.get(entry.roomCode) !== entry) {
-      throw new ProviderOperationError(404, 'room-not-found', 'The requested room was not found.');
-    }
-    return operation();
-  });
-}
-
-function assertRoomOpen(entry: RoomEntry): void {
-  if (isRoomPartiallyClosed(entry)) {
-    throw new ProviderOperationError(409, 'room-closing', 'The room is closing.');
-  }
-}
-
-async function closeRoom(entry: RoomEntry, reason: string): Promise<void> {
-  await withRoomOperation(entry, () => closeRoomUnlocked(entry, reason));
-}
-
-// Caller owns the room operation queue; avoids recursively acquiring it.
-const closeRoomUnlocked = createRoomClosure({
-  providerRegistry, chatProviderRegistry, roomDirectory,
-  classroomDirectory, liveInteractionDirectory, logEvent,
-});
-
-function summarizeRoom(entry: RoomEntry, req?: Request): RoomSummary {
-  pruneStaleAttendees(entry, Date.now());
-  const provider = providerRegistry.require(entry.provider);
-  const host = req ? `${req.protocol}://${req.get('host')}` : '';
-  const providerSummary = provider.summarizeRoom(entry, { host });
-  return {
-    ...providerSummary,
-    provider: publicProviderId(entry.provider),
-    ...(isAwsEngine(entry.provider)
-      ? { vendor: AWS_VENDOR_ID, engine: entry.provider }
-      : {}),
-    attendees: providerSummary.attendees.map((attendee) => ({
-      attendeeId: attendee.attendeeId,
-      ...(attendee.providerParticipantId
-        ? { providerParticipantId: attendee.providerParticipantId }
-        : {}),
-      externalUserId: attendee.externalUserId,
-      ...(attendee.userId ? { userId: attendee.userId } : {}),
-      ...(attendee.displayName ? { displayName: attendee.displayName } : {}),
-      joinedAt: attendee.joinedAt,
-      ...(attendee.lastHeartbeatMs != null
-        ? { lastHeartbeatMs: attendee.lastHeartbeatMs }
-        : {}),
-      ...(attendee.role ? { role: attendee.role } : {}),
-      ...(attendee.deviceId ? { deviceId: attendee.deviceId } : {}),
-    })),
-    ...(entry.roomMode ? { roomMode: entry.roomMode } : {}),
-    ...(entry.chatProvider ? { chatProvider: entry.chatProvider } : {}),
-  };
-}
-
-function isRoomPartiallyClosed(entry: RoomEntry): boolean {
-  return (
-    entry.closePending === true ||
-    entry.mediaClosed === true ||
-    entry.chatClosed === true
-  );
-}
 
 if (!IS_VERCEL) {
   setInterval(() => {
