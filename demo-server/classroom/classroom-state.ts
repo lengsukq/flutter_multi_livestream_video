@@ -38,6 +38,8 @@ type State = {
   questionTimes: Map<string, number[]>;
   seenStudents: Map<string, SeenStudent>;
   speakGrants: number;
+  feedback: NonNullable<ClassroomStoredState['feedback']>;
+  feedbackTimes: Map<string, number[]>;
 };
 
 const fail = (message: string, code = 'invalid-argument', status = 400): never => {
@@ -116,6 +118,8 @@ export class ClassroomStateDirectory {
       questionTimes: [...state.questionTimes],
       seenStudents: [...state.seenStudents],
       speakGrants: state.speakGrants,
+      feedback: state.feedback,
+      feedbackTimes: [...state.feedbackTimes],
     });
   }
 
@@ -138,6 +142,8 @@ export class ClassroomStateDirectory {
       questionTimes: new Map(saved.questionTimes),
       seenStudents: new Map(saved.seenStudents),
       speakGrants: saved.speakGrants,
+      feedback: (saved.feedback ?? []).slice(-200),
+      feedbackTimes: new Map(saved.feedbackTimes ?? []),
     };
   }
 
@@ -150,6 +156,7 @@ export class ClassroomStateDirectory {
         raised: new Map(), grants: new Set(), grantParticipants: new Map(),
         questions: new Map(), handledIds: new Map(),
         questionTimes: new Map(), seenStudents: new Map(), speakGrants: 0,
+        feedback: [], feedbackTimes: new Map(),
       };
       this.rooms.set(entry, state);
     }
@@ -226,6 +233,8 @@ export class ClassroomStateDirectory {
       revision: state.revision,
       speakEnforcement: entry.classroomSpeakEnforcement ?? 'advisory',
       students, questions,
+      feedbackSupported: true,
+      feedback: state.feedback.filter(item => isTeacher || item.userId === selfUserId),
       tools: classroomToolsSnapshot(this.getTools(entry), isTeacher, selfUserId),
       attendance: [...state.seenStudents.values()]
         .filter(person => person.userId !== entry.classroomTeacherUserId && (isTeacher || person.userId === selfUserId))
@@ -266,7 +275,10 @@ export class ClassroomStateDirectory {
     const target = String(raw.userId ?? '').trim();
     const questionId = String(raw.questionId ?? '').trim();
     const text = String(raw.text ?? '').trim();
-    const operationKey = JSON.stringify(action.startsWith('tool.')
+    const feedbackKind = String(raw.kind ?? '');
+    const operationKey = JSON.stringify(action === 'feedback.send'
+      ? [userId, action, feedbackKind]
+      : action.startsWith('tool.')
       ? [userId, action, target, questionId, text, raw.payload ?? '']
       : [userId, action, target, questionId, text]);
     if (idempotency) {
@@ -278,6 +290,28 @@ export class ClassroomStateDirectory {
     }
     let changed = false;
     switch (action) {
+      case 'feedback.send': {
+        if (isTeacher || userId === entry.classroomTeacherUserId) {
+          fail('Only students can send classroom feedback', 'forbidden', 403);
+        }
+        const kinds = ['understood', 'great', 'idea', 'question', 'clap'] as const;
+        const kind = kinds.find(value => value === feedbackKind);
+        if (!kind) fail('Unknown classroom feedback kind');
+        const now = Date.now();
+        const recent = (state.feedbackTimes.get(userId) ?? []).filter(time => now - time < 10_000);
+        if (recent.length >= 5) fail('Please wait before sending more feedback', 'rate-limited', 429);
+        // Only authenticated participant metadata supplies the sender identity.
+        state.feedback.push({
+          id: crypto.randomUUID(), userId,
+          displayName: requester.displayName ?? userId,
+          kind: kind!, createdAt: new Date(now).toISOString(),
+        });
+        if (state.feedback.length > 200) state.feedback.splice(0, state.feedback.length - 200);
+        recent.push(now);
+        state.feedbackTimes.set(userId, recent);
+        changed = true;
+        break;
+      }
       case 'hand.raise':
         if (!state.raised.has(userId)) {
           state.raised.set(userId, ++state.nextRaiseOrder);

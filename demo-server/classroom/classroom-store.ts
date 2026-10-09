@@ -26,6 +26,12 @@ export interface ClassroomStoredState {
     lastSeenMs: number; online: boolean;
   }]>;
   speakGrants: number;
+  feedback?: Array<{
+    id: string; userId: string; displayName: string;
+    kind: 'understood' | 'great' | 'idea' | 'question' | 'clap';
+    createdAt: string;
+  }>;
+  feedbackTimes?: Array<[string, number[]]>;
 }
 
 /** Replaceable state adapter. For multiple app instances use a shared

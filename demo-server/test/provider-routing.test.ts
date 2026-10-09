@@ -48,6 +48,8 @@ interface ApiBody {
   stats?: { onlineCount: number; handsRaised: number; pendingQuestions: number };
   students?: Array<{ userId: string; handRaised: boolean; canSpeak: boolean; online?: boolean }>;
   questions?: Array<{ id: string; text: string; status: string; answer?: string }>;
+  feedbackSupported?: boolean;
+  feedback?: Array<{ id: string; userId: string; displayName: string; kind: string; createdAt: string }>;
   providerList?: Array<{
     id: string;
     capabilities?: Array<{
@@ -646,6 +648,24 @@ test('teacher plus two students and host plus two viewers share authenticated in
   assert.equal(teacher.status, 200); assert.equal(alice.status, 200); assert.equal(bob.status, 200);
   const auth = (body: ApiBody) => ({ requesterParticipantId: body.participantId, participantCredential: body.participantCredential });
   const teacherAuth = { ...auth(teacher.body), roomOwnerCredential: teacher.body.roomOwnerCredential };
+  const feedback = await post('/rooms/teachingE2E1/classroom/action', {
+    ...auth(alice.body), action: 'feedback.send', kind: 'question',
+    userId: 'bob-e2e', displayName: 'Forged', eventId: 'feedback-http-alice-1',
+  });
+  assert.equal(feedback.status, 200);
+  assert.equal(feedback.body.feedback?.[0]?.userId, 'alice-e2e');
+  assert.equal(feedback.body.feedback?.[0]?.displayName, 'Alice');
+  const teacherFeedback = await post('/rooms/teachingE2E1/classroom/snapshot', teacherAuth);
+  assert.equal(teacherFeedback.body.feedback?.[0]?.kind, 'question');
+  assert.equal(teacherFeedback.body.feedbackSupported, true);
+  assert.deepEqual((await post('/rooms/teachingE2E1/classroom/snapshot', auth(bob.body))).body.feedback, []);
+  assert.equal((await post('/rooms/teachingE2E1/classroom/action', {
+    requesterParticipantId: alice.body.participantId,
+    action: 'feedback.send', kind: 'great',
+  })).status, 403);
+  assert.equal((await post('/rooms/teachingE2E1/classroom/action', {
+    ...teacherAuth, action: 'feedback.send', kind: 'great',
+  })).status, 403);
   const action = (credentials: object, name: string, payload: object) => post('/rooms/teachingE2E1/classroom/action', {
     ...credentials, action: `tool.${name}`, payload: JSON.stringify(payload),
   });
