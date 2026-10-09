@@ -17,79 +17,78 @@ class _RoomChatPanel extends StatelessWidget {
 }
 
 extension _RoomChatRendering on _MediaRoomViewState {
-  Widget _renderProductChat(ChatSession chat, {bool showHeader = true}) =>
-      StreamBuilder<ChatConnectionState>(
-        key: ValueKey(chat),
-        stream: chat.states,
-        initialData: chat.state,
-        builder: (context, stateSnapshot) {
-          final connectionState = stateSnapshot.data ?? chat.state;
-          return StreamBuilder<List<ChatMessage>>(
-            stream: chat.messageSnapshots,
-            initialData: chat.messages,
-            builder: (context, messageSnapshot) {
-              final messages = messageSnapshot.data ?? chat.messages;
-              _syncChatScroll(messages);
-              return RealtimeGlassSurface(
-                radius: RealtimeUiTokens.cardRadius,
-                opacity: .90,
-                child: Column(
-                  children: [
-                    if (showHeader) ...[
-                      _chatHeader(connectionState, messages.length),
-                      Divider(height: 1, color: RealtimeStyle.of(context).border),
-                    ],
-                    Expanded(
-                      child: messages.isEmpty
-                          ? _emptyChat()
-                          : ListView.builder(
-                              key: const ValueKey('chat-message-list'),
-                              controller: _chatScroll,
-                              reverse: true,
-                              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                              itemCount: messages.length,
-                              itemBuilder: (context, index) {
-                                final messageIndex =
-                                    messages.length - 1 - index;
-                                final message = messages[messageIndex];
-                                final previous = messageIndex > 0
-                                    ? messages[messageIndex - 1]
-                                    : null;
-                                return Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: _chatMessage(
-                                      chat,
-                                      message,
-                                      previousMessage: previous,
-                                    ),
-                                  );
-                              },
-                            ),
-                    ),
-                    if (_hasNewChatMessages)
-                      TextButton.icon(
-                        icon: const Icon(Icons.arrow_downward_rounded),
-                        label: Text(RealtimeStrings.of(context).newMessages),
-                        onPressed: () {
-                          _hasNewChatMessages = false;
-                          _chatRevision.value++;
-                          if (_chatScroll.hasClients) {
-                            _chatScroll.animateTo(
-                              0,
-                              duration: const Duration(milliseconds: 180),
-                              curve: Curves.easeOut,
+  Widget _renderProductChat(
+    ChatSession chat, {
+    bool showHeader = true,
+  }) => StreamBuilder<ChatConnectionState>(
+    key: ValueKey(chat),
+    stream: chat.states,
+    initialData: chat.state,
+    builder: (context, stateSnapshot) {
+      final connectionState = stateSnapshot.data ?? chat.state;
+      return ValueListenableBuilder<List<ChatMessage>>(
+        valueListenable: _chatEvents.danmaku,
+        builder: (context, messages, _) {
+          _syncChatScroll(messages);
+          return RealtimeGlassSurface(
+            radius: RealtimeUiTokens.cardRadius,
+            opacity: .90,
+            child: Column(
+              children: [
+                if (showHeader) ...[
+                  _chatHeader(connectionState, messages.length),
+                  Divider(height: 1, color: RealtimeStyle.of(context).border),
+                ],
+                Expanded(
+                  child: messages.isEmpty
+                      ? _emptyChat()
+                      : ListView.builder(
+                          key: const ValueKey('chat-message-list'),
+                          controller: _chatScroll,
+                          reverse: true,
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final messageIndex = messages.length - 1 - index;
+                            final message = messages[messageIndex];
+                            final previous = messageIndex > 0
+                                ? messages[messageIndex - 1]
+                                : null;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: _chatMessage(
+                                chat,
+                                message,
+                                previousMessage: previous,
+                              ),
                             );
-                          }
-                        },
-                      ),
-                    _chatComposer(chat, connectionState),
-                  ],
+                          },
+                        ),
                 ),
-              );
-            },
+                if (_hasNewChatMessages)
+                  TextButton.icon(
+                    icon: const Icon(Icons.arrow_downward_rounded),
+                    label: Text(RealtimeStrings.of(context).newMessages),
+                    onPressed: () {
+                      _hasNewChatMessages = false;
+                      _chatRevision.value++;
+                      if (_chatScroll.hasClients) {
+                        _chatScroll.animateTo(
+                          0,
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOut,
+                        );
+                      }
+                    },
+                  ),
+                _chatComposer(chat, connectionState),
+              ],
+            ),
           );
         },
       );
+    },
+  );
 
   Widget _chatHeader(ChatConnectionState connectionState, int messageCount) {
     final style = RealtimeStyle.of(context);
@@ -107,11 +106,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
               ),
               border: Border.all(color: style.primaryBorder),
             ),
-            child: Icon(
-              Icons.forum_outlined,
-              size: 17,
-              color: style.primary,
-            ),
+            child: Icon(Icons.forum_outlined, size: 17, color: style.primary),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -213,11 +208,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
                   RealtimeUiTokens.compactRadius,
                 ),
               ),
-              child: Icon(
-                Icons.forum_outlined,
-                size: 22,
-                color: style.primary,
-              ),
+              child: Icon(Icons.forum_outlined, size: 22, color: style.primary),
             ),
             const SizedBox(height: 10),
             Text(
@@ -231,10 +222,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
             const SizedBox(height: 3),
             Text(
               strings.startConversation,
-              style: TextStyle(
-                fontSize: 11,
-                color: style.textMuted,
-              ),
+              style: TextStyle(fontSize: 11, color: style.textMuted),
             ),
           ],
         ),
@@ -260,10 +248,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
           child: Text(
             message.message,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 10.5,
-              color: style.textMuted,
-            ),
+            style: TextStyle(fontSize: 10.5, color: style.textMuted),
           ),
         ),
       );
@@ -369,9 +354,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       decoration: BoxDecoration(
         color: style.surface.withValues(alpha: style.isDark ? 0.85 : 0.95),
-        border: Border(
-          top: BorderSide(color: style.border),
-        ),
+        border: Border(top: BorderSide(color: style.border)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -391,10 +374,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
                 enabled: enabled,
                 minLines: 1,
                 maxLines: 3,
-                style: TextStyle(
-                  color: style.text,
-                  fontSize: 13,
-                ),
+                style: TextStyle(color: style.text, fontSize: 13),
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
                   hintText: connectionState.isConnected
@@ -402,10 +382,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
                             ? strings.messageHint
                             : strings.readOnly
                       : strings.chatState(connectionState.name),
-                  hintStyle: TextStyle(
-                    fontSize: 12,
-                    color: style.textMuted,
-                  ),
+                  hintStyle: TextStyle(fontSize: 12, color: style.textMuted),
                   filled: false,
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,

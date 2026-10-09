@@ -380,6 +380,9 @@ void main() {
       ),
     );
     await tester.pump();
+    await tester.pump();
+    expect(find.text('hello'), findsOneWidget);
+    expect(chat.sentMessages, isEmpty);
     expect(
       tester.widget<TextField>(find.byType(TextField).first).controller!.text,
       'draft',
@@ -609,7 +612,8 @@ void main() {
     },
   );
 
-  testWidgets('standalone chat UI follows zh-CN host locale', (tester) async {     final chat = _FakeChatSession();
+  testWidgets('standalone chat UI follows zh-CN host locale', (tester) async {
+    final chat = _FakeChatSession();
 
     await tester.pumpWidget(
       MaterialApp(
