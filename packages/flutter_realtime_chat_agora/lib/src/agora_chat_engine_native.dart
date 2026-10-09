@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:agora_chat_sdk/agora_chat_sdk.dart';
+import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart'
+    show RealtimeException, RealtimeErrorCode;
 
 import 'agora_chat_engine.dart';
 import 'agora_chat_engine_macos.dart' as macos;
@@ -28,6 +30,8 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
   bool _roomJoinAttempted = false;
   bool _connecting = false;
   bool _disconnectRequested = false;
+  final Map<String, Completer<void>> _pendingSends = {};
+  Duration sendTimeout = const Duration(seconds: 15);
 
   ChatClient get _client => ChatClient.getInstance;
 
@@ -78,7 +82,7 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
       ChatOptions.withAppKey(
         info.appKey,
         autoLogin: false,
-        messagesReceiveCallbackIncludeSend: true,
+        messagesReceiveCallbackIncludeSend: false,
       ),
     );
     _ensureConnecting();
@@ -114,6 +118,9 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
       ChatEventHandler(
         onMessagesReceived: (messages) {
           for (final message in messages) {
+            // Local sends are emitted only by their server-confirmed success
+            // callback. Some SDK versions also echo them into this listener.
+            if (message.from == _info?.providerUserId) continue;
             _emitMessage(message);
           }
         },
@@ -125,6 +132,19 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
         },
       ),
     );
+    _client.chatManager.addMessageEvent(_handlerId, ChatMessageEvent(
+      onSuccess: (localId, message) {
+        final pending = _pendingSends.remove(localId);
+        if (pending == null || pending.isCompleted) return;
+        _emitMessage(message);
+        pending.complete();
+      },
+      onError: (localId, _, error) {
+        final pending = _pendingSends.remove(localId);
+        if (pending == null || pending.isCompleted) return;
+        pending.completeError(error);
+      },
+    ));
     _client.chatRoomManager.addEventHandler(
       _handlerId,
       ChatRoomEventHandler(
@@ -179,10 +199,26 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
       'displayName': info.displayName,
       'participantId': info.participantId,
     };
-    await _client.chatManager.sendMessage(outgoing);
-    // The option messagesReceiveCallbackIncludeSend normally echoes this
-    // message. Emit here as well; ChatSession de-duplicates by message id.
-    _emitMessage(outgoing);
+    final localId = outgoing.msgId;
+    final pending = Completer<void>();
+    _pendingSends[localId] = pending;
+    try {
+      // The vendor send future only acknowledges native enqueueing; its
+      // original object still carries a temporary local ID. The success
+      // callback above carries the canonical server message ID.
+      await Future.wait<void>([
+        _client.chatManager.sendMessage(outgoing).then((_) {}),
+        pending.future.timeout(sendTimeout, onTimeout: () {
+          throw const RealtimeException(
+            code: RealtimeErrorCode.timeout,
+            providerId: AgoraChatJoinInfo.providerIdValue,
+            message: 'Agora Chat message delivery was not confirmed in time.',
+          );
+        }),
+      ], eagerError: true);
+    } finally {
+      _pendingSends.remove(localId);
+    }
   }
 
   @override
@@ -196,6 +232,16 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
   @override
   Future<void> disconnect() async {
     _disconnectRequested = true;
+    for (final pending in _pendingSends.values) {
+      if (!pending.isCompleted) {
+        pending.completeError(const RealtimeException(
+          code: RealtimeErrorCode.cancelled,
+          providerId: AgoraChatJoinInfo.providerIdValue,
+          message: 'Agora Chat message delivery was cancelled by disconnect.',
+        ));
+      }
+    }
+    _pendingSends.clear();
     if (!identical(_owner, this)) return;
     final info = _info;
     if (_roomJoinAttempted && info != null) {
@@ -225,6 +271,7 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
       await disconnect();
     } finally {
       _client.chatManager.removeEventHandler(_handlerId);
+      _client.chatManager.removeMessageEvent(_handlerId);
       _client.chatRoomManager.removeEventHandler(_handlerId);
       _client.removeConnectionEventHandler(_handlerId);
       _disposed = true;
