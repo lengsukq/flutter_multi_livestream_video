@@ -24,8 +24,8 @@ class AgoraChatSessionFactory implements ChatSessionFactory {
   @override
   ChatSession createSession(ChatJoinInfo joinInfo) {
     if (joinInfo is! AgoraChatJoinInfo || joinInfo.providerId != providerId) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Agora Chat session cannot use these credentials.',
         providerId: AgoraChatJoinInfo.providerIdValue,
       );

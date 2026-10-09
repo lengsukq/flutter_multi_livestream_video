@@ -30,24 +30,24 @@ class AgoraChatJoinInfo extends ChatJoinInfo {
   factory AgoraChatJoinInfo.fromJson(Map<String, dynamic> json) {
     final provider = json['chatProvider']?.toString().trim().toLowerCase();
     if (provider != providerIdValue) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Chat credentials do not identify Agora Chat.',
         providerId: providerIdValue,
       );
     }
     final role = ChatRole.tryParse(json['role']);
     if (role == null) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Agora Chat credentials are missing a valid role.',
         providerId: providerIdValue,
       );
     }
     final rawChat = json['chat'];
     if (rawChat is! Map) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Agora Chat credentials are missing the chat block.',
         providerId: providerIdValue,
       );
@@ -55,8 +55,8 @@ class AgoraChatJoinInfo extends ChatJoinInfo {
     final chat = Map<String, Object?>.from(rawChat);
     final capabilities = _readCapabilities(chat);
     if (!capabilities.contains('SEND_MESSAGE')) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Agora Chat credentials must allow SEND_MESSAGE.',
         providerId: providerIdValue,
       );
@@ -89,8 +89,8 @@ class AgoraChatJoinInfo extends ChatJoinInfo {
   static String _requireString(Map<dynamic, dynamic> json, String key) {
     final value = json[key]?.toString().trim() ?? '';
     if (value.isEmpty) {
-      throw ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Agora Chat credentials are missing $key.',
         providerId: providerIdValue,
       );
@@ -104,8 +104,8 @@ class AgoraChatJoinInfo extends ChatJoinInfo {
         ? raw.toInt()
         : int.tryParse(raw?.toString() ?? '');
     if (value == null || value <= 0) {
-      throw ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Agora Chat $key must be a positive integer.',
         providerId: providerIdValue,
       );

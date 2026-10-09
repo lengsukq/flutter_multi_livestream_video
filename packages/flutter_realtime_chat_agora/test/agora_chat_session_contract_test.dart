@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter_realtime_chat_agora/flutter_realtime_chat_agora.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeEngine implements AgoraChatEngine {
+  Future<void>? pendingConnect;
   AgoraChatEngineEvents events = const AgoraChatEngineEvents();
   AgoraChatTokenProvider? tokenProvider;
   final List<String> calls = [];
@@ -16,6 +18,7 @@ class _FakeEngine implements AgoraChatEngine {
     this.events = events;
     this.tokenProvider = tokenProvider;
     calls.add('connect:${info.token}');
+    if (pendingConnect != null) await pendingConnect;
     events.onConnected?.call();
   }
 
@@ -55,6 +58,33 @@ const hint =
     '{"v":1,"type":"classroom.state.changed","roomCode":"123456","revision":3,"eventId":"hint-3","timestampMs":1000}';
 
 void main() {
+  test('Agora Chat disconnect ignores a late native connect result', () async {
+    final pending = Completer<void>();
+    final engine = _FakeEngine()..pendingConnect = pending.future;
+    final factory = AgoraChatSessionFactory(engineFactory: () async => engine);
+    final info = factory.parseJoinInfo(_joinJson());
+    final session = factory.createSession(info);
+    final connecting = session.connect(info);
+    final cancelled = expectLater(
+      connecting,
+      throwsA(
+        isA<RealtimeException>().having(
+          (error) => error.code,
+          'code',
+          RealtimeErrorCode.cancelled,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await session.disconnect();
+    pending.complete();
+    await cancelled;
+    expect(session.state, ChatConnectionState.disconnected);
+    engine.events.onConnected?.call();
+    expect(session.state, ChatConnectionState.disconnected);
+    await session.dispose();
+  });
+
   test('Agora system hints do not appear in regular chat history', () async {
     final engine = _FakeEngine();
     final factory = AgoraChatSessionFactory(engineFactory: () async => engine);
@@ -124,10 +154,10 @@ void main() {
     await expectLater(
       session.disconnectUser('user-2'),
       throwsA(
-        isA<ChatError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          ChatErrorCode.unsupportedFeature,
+          RealtimeErrorCode.unsupportedFeature,
         ),
       ),
     );

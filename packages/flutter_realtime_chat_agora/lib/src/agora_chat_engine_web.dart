@@ -118,8 +118,8 @@ class _AgoraChatWebDriver implements WebChatDriver<AgoraChatJoinInfo> {
   AgoraChatJoinInfo get _activeInfo {
     final info = _info;
     if (!_created || info == null) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidState,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'Agora Chat Web driver is not connected.',
         providerId: AgoraChatJoinInfo.providerIdValue,
       );
@@ -165,8 +165,8 @@ class _AgoraChatWebDriver implements WebChatDriver<AgoraChatJoinInfo> {
 
   Future<void> _command(String name, Map<String, Object?> arguments) async {
     if (!_created) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidState,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'Agora Chat Web driver is not connected.',
         providerId: AgoraChatJoinInfo.providerIdValue,
       );
@@ -183,8 +183,8 @@ class _AgoraChatWebDriver implements WebChatDriver<AgoraChatJoinInfo> {
 
   static JSObject get _bridge {
     if (!_globalThis.has('AgoraChatBridge')) {
-      throw const ChatError(
-        code: ChatErrorCode.unsupportedPlatform,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedPlatform,
         message:
             'The local chat provider bridge has not been loaded. Follow the Web setup instructions.',
         providerId: AgoraChatJoinInfo.providerIdValue,
