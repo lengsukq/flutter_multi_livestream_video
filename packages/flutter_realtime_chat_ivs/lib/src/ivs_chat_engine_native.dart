@@ -121,13 +121,13 @@ class _NativeIvsChatEngine implements IvsChatEngine {
     try {
       await _methods.invokeMethod<void>(method, arguments);
     } on PlatformException catch (error) {
-      throw ChatError(
+      throw RealtimeException(
         code: switch (error.code) {
-          'invalid_state' => ChatErrorCode.invalidState,
-          'forbidden' => ChatErrorCode.forbidden,
-          'unauthorized' => ChatErrorCode.unauthorized,
-          'unsupported_platform' => ChatErrorCode.unsupportedPlatform,
-          _ => ChatErrorCode.nativeError,
+          'invalid_state' => RealtimeErrorCode.invalidState,
+          'forbidden' => RealtimeErrorCode.forbidden,
+          'unauthorized' => RealtimeErrorCode.unauthorized,
+          'unsupported_platform' => RealtimeErrorCode.unsupportedPlatform,
+          _ => RealtimeErrorCode.providerError,
         },
         message:
             error.message ??

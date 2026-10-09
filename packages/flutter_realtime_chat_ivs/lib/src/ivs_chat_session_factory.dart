@@ -24,8 +24,8 @@ class IvsChatSessionFactory implements ChatSessionFactory {
   @override
   ChatSession createSession(ChatJoinInfo joinInfo) {
     if (joinInfo is! IvsChatJoinInfo || joinInfo.providerId != providerId) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS Chat session cannot use these credentials.',
         providerId: IvsChatJoinInfo.providerIdValue,
       );

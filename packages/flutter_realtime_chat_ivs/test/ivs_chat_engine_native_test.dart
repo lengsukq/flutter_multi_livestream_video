@@ -164,10 +164,10 @@ void main() {
     await expectLater(
       engine.connect(_joinInfo(), const IvsChatEngineEvents()),
       throwsA(
-        isA<ChatError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          ChatErrorCode.invalidState,
+          RealtimeErrorCode.invalidState,
         ),
       ),
     );

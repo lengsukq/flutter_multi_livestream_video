@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_ivs/flutter_realtime_chat_ivs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeIvsChatEngine implements IvsChatEngine {
+  Future<void>? pendingConnect;
   IvsChatEngineEvents events = const IvsChatEngineEvents();
   IvsChatTokenProvider? tokenProvider;
   final List<String> calls = [];
@@ -16,6 +18,7 @@ class _FakeIvsChatEngine implements IvsChatEngine {
     this.events = events;
     this.tokenProvider = tokenProvider;
     calls.add('connect:${info.token}');
+    if (pendingConnect != null) await pendingConnect;
     events.onConnected?.call();
   }
 
@@ -76,6 +79,33 @@ const hint =
     '{"v":1,"type":"classroom.state.changed","roomCode":"123456","revision":3,"eventId":"hint-3","timestampMs":1000}';
 
 void main() {
+  test('IVS Chat late connect is cancelled by disconnect', () async {
+    final pending = Completer<void>();
+    final engine = _FakeIvsChatEngine()..pendingConnect = pending.future;
+    final factory = IvsChatSessionFactory(engineFactory: () async => engine);
+    final info = factory.parseJoinInfo(_joinJson());
+    final session = factory.createSession(info);
+    final connecting = session.connect(info);
+    final cancelled = expectLater(
+      connecting,
+      throwsA(
+        isA<RealtimeException>().having(
+          (error) => error.code,
+          'code',
+          RealtimeErrorCode.cancelled,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await session.disconnect();
+    pending.complete();
+    await cancelled;
+    expect(session.state, ChatConnectionState.disconnected);
+    engine.events.onConnected?.call();
+    expect(session.state, ChatConnectionState.disconnected);
+    await session.dispose();
+  });
+
   test('IVS system hints do not enter the ChatSession timeline', () async {
     final engine = _FakeIvsChatEngine();
     final factory = IvsChatSessionFactory(engineFactory: () async => engine);
@@ -147,10 +177,10 @@ void main() {
     await expectLater(
       session.deleteMessage('message-1'),
       throwsA(
-        isA<ChatError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          ChatErrorCode.forbidden,
+          RealtimeErrorCode.forbidden,
         ),
       ),
     );
@@ -237,10 +267,10 @@ void main() {
     expect(
       () => IvsChatJoinInfo.fromJson(json),
       throwsA(
-        isA<ChatError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          ChatErrorCode.invalidJoinInfo,
+          RealtimeErrorCode.invalidArgument,
         ),
       ),
     );

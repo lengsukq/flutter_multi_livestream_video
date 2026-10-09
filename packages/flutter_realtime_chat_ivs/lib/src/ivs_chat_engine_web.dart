@@ -152,8 +152,8 @@ class _IvsChatWebDriver implements WebChatDriver<IvsChatJoinInfo> {
 
   static JSObject get _bridge {
     if (!_globalThis.has('IvsChatMessagingBridge')) {
-      throw const ChatError(
-        code: ChatErrorCode.unsupportedPlatform,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedPlatform,
         message:
             'The local chat provider bridge has not been loaded. Follow the Web setup instructions.',
         providerId: IvsChatJoinInfo.providerIdValue,

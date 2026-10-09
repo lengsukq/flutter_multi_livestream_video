@@ -32,8 +32,8 @@ class IvsChatJoinInfo extends ChatJoinInfo {
   factory IvsChatJoinInfo.fromJson(Map<String, dynamic> json) {
     final provider = json['chatProvider']?.toString().trim().toLowerCase();
     if (provider != providerIdValue) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Chat credentials do not identify Amazon IVS Chat.',
         providerId: providerIdValue,
       );
@@ -44,16 +44,16 @@ class IvsChatJoinInfo extends ChatJoinInfo {
     final displayName = _requireString(json, 'displayName');
     final role = ChatRole.tryParse(json['role']);
     if (role == null) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS Chat credentials are missing a valid role.',
         providerId: providerIdValue,
       );
     }
     final rawChat = json['chat'];
     if (rawChat is! Map) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS Chat credentials are missing the chat block.',
         providerId: providerIdValue,
       );
@@ -77,8 +77,8 @@ class IvsChatJoinInfo extends ChatJoinInfo {
       'sessionExpirationTimeMs',
     );
     if (!capabilities.contains('SEND_MESSAGE')) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS Chat token must allow SEND_MESSAGE.',
         providerId: providerIdValue,
       );
@@ -86,8 +86,8 @@ class IvsChatJoinInfo extends ChatJoinInfo {
     if (role != ChatRole.host &&
         (capabilities.contains('DELETE_MESSAGE') ||
             capabilities.contains('DISCONNECT_USER'))) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message:
             'Only host chat credentials may include moderation capabilities.',
         providerId: providerIdValue,
@@ -112,8 +112,8 @@ class IvsChatJoinInfo extends ChatJoinInfo {
   static String _requireString(Map<dynamic, dynamic> json, String key) {
     final value = json[key]?.toString().trim() ?? '';
     if (value.isEmpty) {
-      throw ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS Chat credentials are missing $key.',
         providerId: providerIdValue,
       );
@@ -127,8 +127,8 @@ class IvsChatJoinInfo extends ChatJoinInfo {
         ? raw.toInt()
         : int.tryParse(raw?.toString() ?? '');
     if (value == null || value <= 0) {
-      throw ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'IVS Chat $key must be a positive Unix timestamp.',
         providerId: providerIdValue,
       );
