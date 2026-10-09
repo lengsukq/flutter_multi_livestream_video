@@ -1,5 +1,5 @@
 class ChatMessage {
-  const ChatMessage({
+  ChatMessage({
     required this.id,
     required this.userId,
     required this.message,
@@ -8,8 +8,8 @@ class ChatMessage {
     this.topic = 'chat',
     this.type = 'message',
     this.providerId,
-    this.attributes = const {},
-  });
+    Map<String, String> attributes = const {},
+  }) : attributes = Map.unmodifiable(attributes);
 
   final String id;
   final String userId;

@@ -44,8 +44,8 @@ class ChatClient {
   StandaloneChatProvisioner get _standaloneProvisioner {
     final value = provisioner;
     if (value is StandaloneChatProvisioner) return value;
-    throw const ChatError(
-      code: ChatErrorCode.unsupportedFeature,
+    throw const RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message:
           'Standalone room creation/join requires a '
           'StandaloneChatProvisioner.',
@@ -123,8 +123,8 @@ class ChatClient {
         parsed.participantId != baseline.participantId ||
         parsed.userId != baseline.userId ||
         parsed.role != baseline.role) {
-      throw ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message:
             'Provisioned chat credentials changed the provider, room, '
             'participant, user, or role.',
@@ -166,9 +166,19 @@ class ChatClient {
               )
             : null,
       );
-    } catch (_) {
-      await session.dispose();
-      rethrow;
+    } catch (error, stack) {
+      final cleanup = Cleanup();
+      await cleanup.run('session.rollback', session.dispose);
+      cleanup.finish(domain: session.providerId, cause: error);
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          providerId: session.providerId,
+          operation: 'join',
+          stackTrace: stack,
+        ),
+        stack,
+      );
     }
   }
 
@@ -189,8 +199,8 @@ class ChatClient {
       }
       final backend = this.backend;
       if (backend == null) {
-        throw const ChatError(
-          code: ChatErrorCode.unsupportedFeature,
+        throw const RealtimeException(
+          code: RealtimeErrorCode.unsupportedFeature,
           message:
               'connectRoom requires a ChatProvisioner or the optional HTTP '
               'backend convenience layer.',
@@ -207,8 +217,8 @@ class ChatClient {
       if (joinInfo.providerId.trim().toLowerCase() != response.providerId ||
           joinInfo.roomCode != response.roomCode ||
           joinInfo.participantId != participantId) {
-        throw ChatError(
-          code: ChatErrorCode.invalidJoinInfo,
+        throw RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
           message:
               'Chat adapter join information does not match the backend response.',
           providerId: response.providerId,

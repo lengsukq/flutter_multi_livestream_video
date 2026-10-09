@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
@@ -54,8 +53,8 @@ class HttpStandaloneChatProvisioner
     final providerId =
         created['chatProvider']?.toString().trim().toLowerCase() ?? '';
     if (providerId.isEmpty) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Standalone chat create response is missing chatProvider.',
       );
     }
@@ -90,8 +89,8 @@ class HttpStandaloneChatProvisioner
     final providerId =
         data['chatProvider']?.toString().trim().toLowerCase() ?? '';
     if (providerId.isEmpty) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Standalone chat response is missing chatProvider.',
       );
     }
@@ -142,7 +141,7 @@ class HttpStandaloneChatProvisioner
     final raw = data['rooms'];
     if (raw is! List) return const [];
     return raw
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map((item) {
           final map = Map<String, dynamic>.from(item);
           return ChatRoomSummary(
@@ -213,7 +212,7 @@ class _HttpStandaloneChatModeration
     final raw = data['members'];
     if (raw is! List) return const [];
     return raw
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map((value) {
           final item = Map<String, dynamic>.from(value);
           return ChatMember(
@@ -271,8 +270,8 @@ class _HttpStandaloneChatModeration
   }
 
   Future<void> _unsupported(String operation) => Future<void>.error(
-    ChatError(
-      code: ChatErrorCode.unsupportedFeature,
+    RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: 'The selected chat provider does not support $operation.',
       providerId: joinInfo.providerId,
     ),
@@ -281,12 +280,10 @@ class _HttpStandaloneChatModeration
 
 class ChatBackendClient implements StandaloneChatModerationProvider {
   ChatBackendClient(this.config, {http.Client? httpClient})
-    : _httpClient = httpClient ?? http.Client(),
-      _ownsHttpClient = httpClient == null;
+    : _executor = RealtimeHttpExecutor(client: httpClient);
 
   final ChatBackendConfig config;
-  final http.Client _httpClient;
-  final bool _ownsHttpClient;
+  final RealtimeHttpExecutor _executor;
   bool _disposed = false;
 
   Future<ChatBackendJoinResponse> issueToken({
@@ -314,8 +311,8 @@ class ChatBackendClient implements StandaloneChatModerationProvider {
         data['provider']?.toString().trim().toLowerCase() ??
         '';
     if (providerId.isEmpty) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Backend chat response is missing chatProvider.',
       );
     }
@@ -346,62 +343,29 @@ class ChatBackendClient implements StandaloneChatModerationProvider {
     Map<String, Object?>? body,
   }) async {
     if (_disposed) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidState,
-        message: 'The chat backend client has been disposed.',
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'The chat backend client is closed.',
       );
     }
-    try {
-      final request = http.Request(method, _uri(path));
-      request.headers.addAll(await _headers());
-      if (body != null) request.body = jsonEncode(body);
-      final streamed = await _httpClient
-          .send(request)
-          .timeout(config.requestTimeout);
-      final response = await http.Response.fromStream(streamed);
-      final decoded = response.body.trim().isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(response.body);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw _httpError(response.statusCode, decoded);
-      }
-      if (decoded is! Map) {
-        throw const ChatError(
-          code: ChatErrorCode.invalidJoinInfo,
-          message: 'Chat backend returned a non-object JSON response.',
-        );
-      }
-      final data = Map<String, dynamic>.from(decoded);
-      final version = data['contractVersion'];
-      if (version != null &&
-          version.toString() != '$chatBackendContractVersion') {
-        throw ChatError(
-          code: ChatErrorCode.invalidJoinInfo,
-          message: 'Unsupported chat contract version: $version.',
-        );
-      }
-      return data;
-    } on ChatError {
-      rethrow;
-    } on TimeoutException catch (error) {
-      throw ChatError(
-        code: ChatErrorCode.timeout,
-        message: 'Chat backend request timed out.',
-        details: error,
-      );
-    } on FormatException catch (error) {
-      throw ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
-        message: 'Chat backend returned invalid JSON.',
-        details: error,
-      );
-    } catch (error) {
-      throw ChatError(
-        code: ChatErrorCode.network,
-        message: 'Unable to complete chat backend request.',
-        details: error,
+    final data = await _executor.request(
+      method: method,
+      uri: _uri(path),
+      timeout: config.requestTimeout,
+      domain: 'chat',
+      headers: _headers,
+      body: body,
+    );
+    final version = data['contractVersion'];
+    if (version != null &&
+        version.toString() != '$chatBackendContractVersion') {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
+        message: 'Unsupported chat backend contract version.',
+        domain: 'chat',
       );
     }
+    return data;
   }
 
   Future<Map<String, String>> _headers() async {
@@ -424,44 +388,11 @@ class ChatBackendClient implements StandaloneChatModerationProvider {
     return Uri.parse('$base$path');
   }
 
-  ChatError _httpError(int statusCode, Object? body) {
-    String? backendCode;
-    String? message;
-    Object? details;
-    if (body is Map) {
-      final error = body['error'];
-      if (error is Map) {
-        backendCode = error['code']?.toString();
-        message = error['message']?.toString();
-        details = error['details'];
-      }
-    }
-    final code = switch (backendCode) {
-      'unauthorized' => ChatErrorCode.unauthorized,
-      'forbidden' => ChatErrorCode.forbidden,
-      'room-not-found' => ChatErrorCode.roomNotFound,
-      'unsupported-provider' => ChatErrorCode.providerNotRegistered,
-      'provider-not-configured' => ChatErrorCode.providerNotConfigured,
-      _ when statusCode == 400 => ChatErrorCode.invalidArgument,
-      _ when statusCode == 401 => ChatErrorCode.unauthorized,
-      _ when statusCode == 403 => ChatErrorCode.forbidden,
-      _ when statusCode == 404 => ChatErrorCode.roomNotFound,
-      _ when statusCode == 503 => ChatErrorCode.providerNotConfigured,
-      _ when statusCode >= 500 => ChatErrorCode.serverError,
-      _ => ChatErrorCode.unknown,
-    };
-    return ChatError(
-      code: code,
-      message: message ?? 'Chat backend request failed with HTTP $statusCode.',
-      details: details ?? body,
-    );
-  }
-
   String _required(String value, String name) {
     final normalized = value.trim();
     if (normalized.isEmpty) {
-      throw ChatError(
-        code: ChatErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: '$name must not be empty.',
       );
     }
@@ -471,6 +402,6 @@ class ChatBackendClient implements StandaloneChatModerationProvider {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
-    if (_ownsHttpClient) _httpClient.close();
+    _executor.close();
   }
 }

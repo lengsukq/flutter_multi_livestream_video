@@ -50,8 +50,8 @@ class ChatRegistry {
   ChatSessionFactory require(String providerId) {
     final factory = lookup(providerId);
     if (factory == null) {
-      throw ChatError(
-        code: ChatErrorCode.providerNotRegistered,
+      throw RealtimeException(
+        code: RealtimeErrorCode.providerNotRegistered,
         message:
             'No chat adapter is registered for provider "$providerId". '
             'Registered providers: ${providerIds.join(', ')}.',

@@ -53,8 +53,8 @@ class _FakeSession extends ChatSession {
     ChatCredentialProvider? credentialProvider,
   }) async {
     if (joinInfo is! _FakeJoinInfo) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Fake session requires parsed credentials.',
         providerId: 'fake',
       );
@@ -62,8 +62,8 @@ class _FakeSession extends ChatSession {
     if (credentialProvider != null) {
       final refreshed = await credentialProvider();
       if (refreshed is! _FakeJoinInfo) {
-        throw const ChatError(
-          code: ChatErrorCode.invalidJoinInfo,
+        throw const RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
           message: 'Fake session requires parsed refreshed credentials.',
           providerId: 'fake',
         );
@@ -89,8 +89,8 @@ class _FakeSession extends ChatSession {
   @override
   Future<void> deleteMessage(String messageId) async {
     if (!capabilities.canDeleteMessage) {
-      throw const ChatError(
-        code: ChatErrorCode.unsupportedFeature,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Not supported.',
       );
     }
@@ -99,8 +99,8 @@ class _FakeSession extends ChatSession {
   @override
   Future<void> disconnectUser(String userId) async {
     if (!capabilities.canDisconnectUser) {
-      throw const ChatError(
-        code: ChatErrorCode.unsupportedFeature,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Not supported.',
       );
     }
@@ -138,8 +138,8 @@ class _FakeFactory extends ChatSessionFactory {
   @override
   ChatSession createSession(ChatJoinInfo joinInfo) {
     if (joinInfo is! _FakeJoinInfo) {
-      throw const ChatError(
-        code: ChatErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Fake factory requires parsed credentials.',
         providerId: 'fake',
       );

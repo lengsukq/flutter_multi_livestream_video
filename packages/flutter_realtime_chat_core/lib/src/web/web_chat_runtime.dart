@@ -242,18 +242,22 @@ class WebChatRuntime<T> {
     return true;
   }
 
-  ChatError _stateError(String message) => ChatError(
-    code: ChatErrorCode.invalidState,
+  RealtimeException _stateError(String message) => RealtimeException(
+    code: RealtimeErrorCode.invalidState,
     message: message,
     providerId: providerId,
   );
 }
 
-ChatError mapWebChatError(String providerId, String fallback, Object error) {
-  if (error is ChatError) return error.withProvider(providerId);
+RealtimeException mapWebChatError(
+  String providerId,
+  String fallback,
+  Object error,
+) {
+  if (error is RealtimeException) return error.withProvider(providerId);
   if (error is UnsupportedError) {
-    return ChatError(
-      code: ChatErrorCode.unsupportedFeature,
+    return RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: error.message ?? fallback,
       providerId: providerId,
       details: error,
@@ -267,18 +271,18 @@ ChatError mapWebChatError(String providerId, String fallback, Object error) {
       error is _ProviderEventError && error.code == 403 ||
           message.contains('forbidden') ||
           message.contains('permission')
-      ? ChatErrorCode.forbidden
+      ? RealtimeErrorCode.forbidden
       : error is _ProviderEventError && error.code == 401 ||
             message.contains('unauthorized') ||
             message.contains('token') ||
             message.contains('authentication')
-      ? ChatErrorCode.unauthorized
+      ? RealtimeErrorCode.unauthorized
       : message.contains('timeout')
-      ? ChatErrorCode.timeout
+      ? RealtimeErrorCode.timeout
       : message.contains('network') || message.contains('offline')
-      ? ChatErrorCode.network
-      : ChatErrorCode.nativeError;
-  return ChatError(
+      ? RealtimeErrorCode.network
+      : RealtimeErrorCode.providerError;
+  return RealtimeException(
     code: code,
     message: '$fallback $rawMessage',
     providerId: providerId,

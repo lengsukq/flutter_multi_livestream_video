@@ -24,3 +24,5 @@ export 'src/session/chat_system_messaging.dart';
 export 'src/session/chat_session_factory.dart';
 
 export 'src/model/chat_message_buffer.dart';
+
+export 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';

@@ -28,5 +28,5 @@ class ChatUserDisconnected extends ChatEvent {
 
 class ChatFailureEvent extends ChatEvent {
   const ChatFailureEvent(this.error);
-  final ChatError error;
+  final RealtimeException error;
 }

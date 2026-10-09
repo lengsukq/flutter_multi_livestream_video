@@ -58,7 +58,7 @@ void main() {
             'Web chat failure.',
             StateError('token expired'),
           ).code,
-          ChatErrorCode.unauthorized,
+          RealtimeErrorCode.unauthorized,
         );
         await runtime.disconnect();
         expect(driver.disconnectCalls, 1);
@@ -80,7 +80,7 @@ void main() {
         await expectLater(
           runtime.connect('bad', const WebChatDriverEvents()),
           throwsA(
-            isA<ChatError>().having(
+            isA<RealtimeException>().having(
               (error) => error.providerId,
               'providerId',
               'fake-chat',
@@ -104,7 +104,7 @@ void main() {
       );
       await expectLater(
         runtime.sendMessage('hello'),
-        throwsA(isA<ChatError>()),
+        throwsA(isA<RealtimeException>()),
       );
       await runtime.dispose();
     });
