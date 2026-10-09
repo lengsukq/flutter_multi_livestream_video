@@ -172,6 +172,8 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
             return;
           }
           _bindPreview(preview);
+          await _disableInitialCapture(preview);
+          if (!mounted) return;
           await _mediaSetup.loadDevices(preview);
           setState(() {});
         } catch (error) {
@@ -197,6 +199,14 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
   }
 
   Future<void> _disposePreview() => _previewOwner.release();
+
+  Future<void> _disableInitialCapture(MediaLocalPreviewSession? preview) async {
+    if (preview == null) return;
+    if (preview.settings.microphoneEnabled) {
+      await preview.setMicrophoneEnabled(false);
+    }
+    if (preview.settings.cameraEnabled) await preview.setCameraEnabled(false);
+  }
 
   Future<void> _enter() async {
     final result = _result;
@@ -424,6 +434,8 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
         return;
       }
       _bindPreview(preview);
+      await _disableInitialCapture(preview);
+      if (!mounted) return;
       await _mediaSetup.loadDevices(preview);
       setState(() {});
     } catch (error) {

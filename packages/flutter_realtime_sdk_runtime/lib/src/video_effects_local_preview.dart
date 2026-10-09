@@ -12,13 +12,12 @@ class VideoEffectsLocalPreviewSession
     required this.providerId,
     required this.role,
     required this.bridge,
-    required this.source,
   }) : _settings = const MediaLocalPreviewSettings(
          microphoneEnabled: false,
-         cameraEnabled: true,
+         cameraEnabled: false,
        ) {
     _failureSubscription = bridge.failures
-        .where((failure) => failure.sourceId == source.id)
+        .where((failure) => failure.sourceId == _source?.id)
         .listen((failure) {
           if (_disposed) return;
           _settings = _settings.copyWith(cameraEnabled: false);
@@ -45,14 +44,10 @@ class VideoEffectsLocalPreviewSession
       );
     }
     final effects = bridge ?? VideoEffectsBridge();
-    final source = await effects.createSource(
-      config: const VideoEffectsSourceConfig(frameRate: 30),
-    );
     return VideoEffectsLocalPreviewSession._(
       providerId: providerId,
       role: role,
       bridge: effects,
-      source: source,
     );
   }
 
@@ -63,11 +58,21 @@ class VideoEffectsLocalPreviewSession
   final MediaRole role;
 
   final VideoEffectsBridge bridge;
-  final ProcessedVideoSource source;
+  ProcessedVideoSource? _source;
+
+  /// Available after the user has enabled the camera at least once.
+  ProcessedVideoSource get source =>
+      _source ??
+      (throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message:
+            'Enable the preview camera before accessing its processed source.',
+      ));
+  Future<ProcessedVideoSource>? _creatingSource;
   MediaLocalPreviewSettings _settings;
   // Processing failures hide the broken track without changing the user's
   // camera choice. A successful effect change can restore that choice.
-  bool _requestedCameraEnabled = true;
+  bool _requestedCameraEnabled = false;
   bool _disposed = false;
   Future<void>? _disposeFuture;
   Duration cleanupTimeout = const Duration(seconds: 10);
@@ -87,8 +92,9 @@ class VideoEffectsLocalPreviewSession
   );
 
   @override
-  MediaVideoTrack? get cameraTrack =>
-      _settings.cameraEnabled ? ProcessedVideoTrack(source: source) : null;
+  MediaVideoTrack? get cameraTrack => _settings.cameraEnabled && _source != null
+      ? ProcessedVideoTrack(source: _source!)
+      : null;
 
   @override
   MediaTrackRenderer get renderer => const VideoEffectsTrackRenderer();
@@ -121,7 +127,10 @@ class VideoEffectsLocalPreviewSession
         )
         .toList(growable: false);
     final selected = devices
-        .where((device) => device.id == source.cameraDeviceId)
+        .where(
+          (device) =>
+              device.id == (_source?.cameraDeviceId ?? _settings.camera?.id),
+        )
         .firstOrNull;
     if (_settings.camera == null && selected != null) {
       _settings = _settings.copyWith(camera: selected);
@@ -141,7 +150,8 @@ class VideoEffectsLocalPreviewSession
         providerId: providerId,
       );
     }
-    await bridge.selectCamera(source, device.id);
+    final source = _source;
+    if (source != null) await bridge.selectCamera(source, device.id);
     _ensureActive();
     _settings = _settings.copyWith(camera: device);
   }
@@ -157,7 +167,8 @@ class VideoEffectsLocalPreviewSession
   @override
   Future<void> setCameraEnabled(bool enabled) async {
     _ensureActive();
-    await bridge.setEnabled(source, enabled);
+    final source = enabled ? await _ensureSource() : _source;
+    if (source != null) await bridge.setEnabled(source, enabled);
     _ensureActive();
     _requestedCameraEnabled = enabled;
     _settings = _settings.copyWith(cameraEnabled: enabled);
@@ -173,8 +184,9 @@ class VideoEffectsLocalPreviewSession
         providerId: providerId,
       );
     }
-    await bridge.setEffect(source, effect);
-    if (_requestedCameraEnabled && !_settings.cameraEnabled) {
+    final source = _source;
+    if (source != null) await bridge.setEffect(source, effect);
+    if (source != null && _requestedCameraEnabled && !_settings.cameraEnabled) {
       await bridge.setEnabled(source, true);
     }
     _ensureActive();
@@ -192,7 +204,18 @@ class VideoEffectsLocalPreviewSession
     await cleanup.run('preview.subscription', () async {
       await _failureSubscription?.cancel();
     });
-    await cleanup.run('preview.source', () => bridge.disposeSource(source));
+    await cleanup.run('preview.pendingSource', () async {
+      try {
+        await _creatingSource;
+      } catch (_) {
+        /* The enable caller receives the failure. */
+      }
+    });
+    await cleanup.run('preview.source', () async {
+      final source = _source;
+      _source = null;
+      if (source != null) await bridge.disposeSource(source);
+    });
     await cleanup.run('preview.failures', _failures.close);
     cleanup.finish(domain: 'videoEffects');
   }
@@ -205,5 +228,29 @@ class VideoEffectsLocalPreviewSession
         providerId: providerId,
       );
     }
+  }
+
+  Future<ProcessedVideoSource> _ensureSource() async {
+    _ensureActive();
+    if (_source != null) return _source!;
+    return _creatingSource ??= _createSource().whenComplete(
+      () => _creatingSource = null,
+    );
+  }
+
+  Future<ProcessedVideoSource> _createSource() async {
+    final source = await bridge.createSource(
+      config: VideoEffectsSourceConfig(
+        frameRate: 30,
+        cameraDeviceId: _settings.camera?.id,
+        effect: _settings.backgroundEffect,
+      ),
+    );
+    if (_disposed) {
+      await bridge.disposeSource(source);
+      _ensureActive();
+    }
+    _source = source;
+    return source;
   }
 }

@@ -14,7 +14,7 @@ import '../view/media_track_view.dart';
 class MediaLocalPreviewSettings {
   const MediaLocalPreviewSettings({
     this.microphoneEnabled = false,
-    this.cameraEnabled = true,
+    this.cameraEnabled = false,
     this.microphone,
     this.camera,
     this.audioOutput,
@@ -74,6 +74,8 @@ abstract interface class MediaLocalPreviewSession
 /// Opt-in factory implemented by adapters that support independent local
 /// camera preview before backend room credentials are issued.
 abstract interface class MediaLocalPreviewFactory {
+  /// Return with microphone and camera capture disabled. Capture starts only
+  /// after the user explicitly enables a device on the preview session.
   Future<MediaLocalPreviewSession> createLocalPreview({
     required MediaRole role,
   });

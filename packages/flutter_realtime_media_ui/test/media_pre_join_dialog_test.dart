@@ -324,6 +324,13 @@ void main() {
       );
       await tester.tap(find.text('Open preparation'));
       await tester.pumpAndSettle();
+      // Preview capture is opt-in: the camera track must appear only after
+      // explicit user consent, and remain responsive at each viewport width.
+      expect(find.byType(MediaTrackView), findsNothing);
+      final cameraToggle = find.widgetWithText(FilterChip, 'Camera');
+      await tester.ensureVisible(cameraToggle);
+      await tester.tap(cameraToggle);
+      await tester.pumpAndSettle();
       for (final size in <Size>[
         const Size(320, 640),
         const Size(390, 844),
@@ -484,7 +491,9 @@ void main() {
     await tester.tap(find.text('Open preparation'));
     await tester.pumpAndSettle();
     expect(find.text('Morgan'), findsOneWidget);
-    expect(find.byType(MediaTrackView), findsOneWidget);
+    expect(preview.settings.microphoneEnabled, isFalse);
+    expect(preview.settings.cameraEnabled, isFalse);
+    expect(find.byType(MediaTrackView), findsNothing);
 
     await tester.tap(find.byTooltip('Cancel'));
     await tester.pumpAndSettle();

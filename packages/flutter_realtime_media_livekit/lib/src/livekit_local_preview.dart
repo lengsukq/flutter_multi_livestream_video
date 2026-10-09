@@ -21,27 +21,11 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
   }) async {
     final canPublish = role != MediaRole.viewer;
     final capabilities = _previewCapabilities(canPublish);
-    lk.LocalVideoTrack? camera;
-    try {
-      if (canPublish) camera = await lk.LocalVideoTrack.createCameraTrack();
-      return LiveKitLocalPreviewSession._(
+    return LiveKitLocalPreviewSession._(
         role: role,
         capabilities: capabilities,
-        cameraTrack: camera,
+        cameraTrack: null,
       );
-    } catch (error) {
-      try {
-        await camera?.stop();
-      } catch (_) {}
-      throw RealtimeException(
-        code: _isPermissionFailure(error)
-            ? RealtimeErrorCode.permissionDenied
-            : RealtimeErrorCode.providerError,
-        message: 'Unable to start the LiveKit camera preview.',
-        details: error,
-        providerId: 'livekit',
-      );
-    }
   }
 
   static MediaCapabilities _previewCapabilities(bool canPublish) {

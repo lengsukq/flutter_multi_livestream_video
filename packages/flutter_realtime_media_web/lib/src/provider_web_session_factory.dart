@@ -185,7 +185,7 @@ class ProviderWebSessionFactory
       previewId: previewId,
       settings: {
         'role': role.wireName,
-        'cameraEnabled': true,
+        'cameraEnabled': false,
         'microphoneEnabled': false,
         'backgroundEffect': {
           'type': MediaBackgroundEffectType.none.name,
@@ -214,7 +214,7 @@ class ProviderWebLocalPreviewSession
     required this.capabilities,
   }) : _settings = const MediaLocalPreviewSettings(
          microphoneEnabled: false,
-         cameraEnabled: true,
+         cameraEnabled: false,
        ),
        _cameraTrack = ProviderWebVideoTrack(
          providerId: providerId,
@@ -241,7 +241,8 @@ class ProviderWebLocalPreviewSession
   bool _disposed = false;
 
   @override
-  MediaVideoTrack get cameraTrack => _cameraTrack;
+  MediaVideoTrack? get cameraTrack =>
+      _settings.cameraEnabled ? _cameraTrack : null;
 
   @override
   MediaTrackRenderer get renderer => const ProviderWebTrackRenderer();

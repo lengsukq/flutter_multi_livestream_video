@@ -734,6 +734,26 @@ test('Agora Web camera selection stays inside the SDK processor pipeline', async
   await bridge.dispose('agora', 'agora-2');
 });
 
+test('Pre-Join bridge creates no capture until camera is explicitly enabled', async () => {
+  const { bridge, calls } = await createAgoraHarness();
+  await bridge.createLocalPreview('agora', 'prejoin-off', JSON.stringify({ role: 'participant' }));
+  await bridge.command('agora', 'prejoin-off', 'setBackgroundEffect', JSON.stringify({ type: 'blur' }));
+  await bridge.command('agora', 'prejoin-off', 'selectDevice', JSON.stringify({ kind: 'camera', id: 'camera-two' }));
+  assert.equal(calls.some(call => call.startsWith('getUserMedia:')), false);
+  await bridge.command('agora', 'prejoin-off', 'setVideoEnabled', JSON.stringify({ enabled: true }));
+  assert.equal(calls.filter(call => call.startsWith('getUserMedia:')).length, 1);
+  assert.equal(calls.some(call => call.startsWith('join:') || call.startsWith('publish:')), false);
+  await bridge.dispose('agora', 'prejoin-off');
+  assert.ok(calls.includes('stop:sdk-processed-video'));
+});
+
+test('canceling an untouched Pre-Join bridge never opens camera or microphone', async () => {
+  const { bridge, calls } = await createAgoraHarness();
+  await bridge.createLocalPreview('agora', 'prejoin-cancel', JSON.stringify({ role: 'participant' }));
+  await bridge.dispose('agora', 'prejoin-cancel');
+  assert.equal(calls.some(call => call.startsWith('getUserMedia:')), false);
+});
+
 test('SDK local preview applies blur without joining or publishing to Agora', async () => {
   const { effectsBridge, calls } = await createAgoraHarness();
 
