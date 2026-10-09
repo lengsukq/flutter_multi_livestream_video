@@ -675,137 +675,137 @@ class _LiveBottomControls extends StatelessWidget {
             const SizedBox(width: 8),
           ],
 
-              // Host tool: Camera Toggle
-              if (isHost && interactive != null && caps.canPublishVideo) ...[
-                RealtimeGlassIconButton(
-                  tooltip: snapshot.localVideoEnabled
-                      ? strings.stopVideo
-                      : strings.startVideo,
-                  icon: snapshot.localVideoEnabled
-                      ? Icons.videocam_rounded
-                      : Icons.videocam_off_rounded,
-                  size: 40,
-                  radius: RealtimeUiTokens.pillRadius,
-                  danger: !snapshot.localVideoEnabled,
-                  active: snapshot.localVideoEnabled,
-                  onPressed: () => host.runAction(
-                    () => interactive.setVideoEnabled(
-                      !snapshot.localVideoEnabled,
+          // Host tool: Camera Toggle
+          if (isHost && interactive != null && caps.canPublishVideo) ...[
+            RealtimeGlassIconButton(
+              tooltip: snapshot.localVideoEnabled
+                  ? strings.stopVideo
+                  : strings.startVideo,
+              icon: snapshot.localVideoEnabled
+                  ? Icons.videocam_rounded
+                  : Icons.videocam_off_rounded,
+              size: 40,
+              radius: RealtimeUiTokens.pillRadius,
+              danger: !snapshot.localVideoEnabled,
+              active: snapshot.localVideoEnabled,
+              onPressed: () => host.runAction(
+                () => interactive.setVideoEnabled(
+                  !snapshot.localVideoEnabled,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+
+          // Host tool: Switch Camera
+          if (isHost &&
+              interactive != null &&
+              caps.canSwitchCamera &&
+              snapshot.localVideoEnabled) ...[
+            RealtimeGlassIconButton(
+              tooltip: strings.switchCamera,
+              icon: Icons.cameraswitch_rounded,
+              size: 40,
+              radius: RealtimeUiTokens.pillRadius,
+              onPressed: () => host.runAction(
+                () => interactive.switchCamera(MediaCameraPosition.back),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+
+          // Host tool: Virtual Background / Beauty
+          if (isHost &&
+              caps.canPublishVideo &&
+              host
+                  .backgroundEffects
+                  .backgroundCapabilities
+                  .isSupported) ...[
+            RealtimeGlassIconButton(
+              tooltip: strings.virtualBackground,
+              icon: Icons.auto_fix_high_rounded,
+              size: 40,
+              radius: RealtimeUiTokens.pillRadius,
+              active: host.backgroundEffects.backgroundEffect.enabled,
+              onPressed: host.openBackgroundEffects,
+            ),
+            const SizedBox(width: 8),
+          ],
+
+          // Gift Button (Viewer & Host if custom)
+          if (!isHost ||
+              host.view.liveGiftPanelOpener != null ||
+              host.view.extraControlsBuilder != null) ...[
+            RealtimeGlassIconButton(
+              tooltip: strings.sendGift,
+              icon: Icons.card_giftcard_rounded,
+              size: 40,
+              radius: RealtimeUiTokens.pillRadius,
+              onPressed: () => host.showLiveGiftSheet(),
+            ),
+          ],
+
+          if (host.view.liveLikes != null) ...[
+            const SizedBox(width: 8),
+            // Only expose interactions backed by an actual SDK controller.
+            Tooltip(
+              message: '${strings.totalLikes} ${host.likeCount}',
+              child: InkWell(
+                onTap: host.sendLike,
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.pillRadius,
+                ),
+                child: Container(
+                  height: 40,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF2D55), Color(0xFFFF5252)],
                     ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-
-              // Host tool: Switch Camera
-              if (isHost &&
-                  interactive != null &&
-                  caps.canSwitchCamera &&
-                  snapshot.localVideoEnabled) ...[
-                RealtimeGlassIconButton(
-                  tooltip: strings.switchCamera,
-                  icon: Icons.cameraswitch_rounded,
-                  size: 40,
-                  radius: RealtimeUiTokens.pillRadius,
-                  onPressed: () => host.runAction(
-                    () => interactive.switchCamera(MediaCameraPosition.back),
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-
-              // Host tool: Virtual Background / Beauty
-              if (isHost &&
-                  caps.canPublishVideo &&
-                  host
-                      .backgroundEffects
-                      .backgroundCapabilities
-                      .isSupported) ...[
-                RealtimeGlassIconButton(
-                  tooltip: strings.virtualBackground,
-                  icon: Icons.auto_fix_high_rounded,
-                  size: 40,
-                  radius: RealtimeUiTokens.pillRadius,
-                  active: host.backgroundEffects.backgroundEffect.enabled,
-                  onPressed: host.openBackgroundEffects,
-                ),
-                const SizedBox(width: 8),
-              ],
-
-              // Gift Button (Viewer & Host if custom)
-              if (!isHost ||
-                  host.view.liveGiftPanelOpener != null ||
-                  host.view.extraControlsBuilder != null) ...[
-                RealtimeGlassIconButton(
-                  tooltip: strings.sendGift,
-                  icon: Icons.card_giftcard_rounded,
-                  size: 40,
-                  radius: RealtimeUiTokens.pillRadius,
-                  onPressed: () => host.showLiveGiftSheet(),
-                ),
-              ],
-
-              if (host.view.liveLikes != null) ...[
-                const SizedBox(width: 8),
-                // Only expose interactions backed by an actual SDK controller.
-                Tooltip(
-                  message: '${strings.totalLikes} ${host.likeCount}',
-                  child: InkWell(
-                    onTap: host.sendLike,
                     borderRadius: BorderRadius.circular(
                       RealtimeUiTokens.pillRadius,
                     ),
-                    child: Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF2D55), Color(0xFFFF5252)],
-                        ),
-                        borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.pillRadius,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(
-                              0xFFFF2D55,
-                            ).withValues(alpha: 0.40),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(
+                          0xFFFF2D55,
+                        ).withValues(alpha: 0.40),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.favorite_rounded,
-                            size: 18,
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.favorite_rounded,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      if (host.likeCount > 0) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          '${host.likeCount}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
                             color: Colors.white,
                           ),
-                          if (host.likeCount > 0) ...[
-                            const SizedBox(width: 4),
-                            Text(
-                              '${host.likeCount}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ],
-            ],
-          ),
+              ),
+            ),
+          ],
+        ],
+        ),
         ],
       ),
     );
-  }
+}
 }
 
 /// Inline live chat input rendered directly above the bottom dock.

@@ -22,6 +22,15 @@ const String _defaultBackendUrl = String.fromEnvironment(
 );
 const String _appToken = String.fromEnvironment('MEDIA_APP_TOKEN');
 
+/// Optional test seam; production uses the full SDK with its built-in drivers.
+typedef DemoRealtimeFactory = Realtime Function(String backendUrl);
+typedef DemoRoomPageFactory =
+    Widget Function(
+      RealtimeConnection connection,
+      MediaLocalPreviewSettings settings,
+      MediaRoomMode? mode,
+    );
+
 /// Adaptive and clean Join Screen directly reusing SDK built-in glass UI.
 class JoinScreen extends StatefulWidget {
   const JoinScreen({
@@ -29,11 +38,21 @@ class JoinScreen extends StatefulWidget {
     required this.onLocaleChanged,
     required this.themeMode,
     required this.onThemeModeChanged,
+    this.realtimeFactory,
+    this.roomPageFactory,
+    this.backgroundPresets,
+    this.initialBackendUrl,
+    this.permissionRequester,
   });
 
   final ValueChanged<Locale> onLocaleChanged;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeModeChanged;
+  final DemoRealtimeFactory? realtimeFactory;
+  final DemoRoomPageFactory? roomPageFactory;
+  final Future<List<MediaBackgroundImagePreset>> Function()? backgroundPresets;
+  final String? initialBackendUrl;
+  final MediaPermissionRequester? permissionRequester;
 
   @override
   State<JoinScreen> createState() => _JoinScreenState();
@@ -77,7 +96,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     _roomTabs = TabController(length: 3, vsync: this);
     _deviceIdFuture = _identityStore.loadDeviceId();
     unawaited(_loadDisplayName());
-    _serverController.text = _defaultBackendUrl;
+    _serverController.text = widget.initialBackendUrl ?? _defaultBackendUrl;
     unawaited(_testConnection());
     unawaited(_refreshRooms(silent: true));
     _serverStatusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
@@ -285,10 +304,12 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     );
   }
 
-  Realtime _newRealtime() => Realtime.standard(
-    backendUrl: _server,
-    tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
-  );
+  Realtime _newRealtime() =>
+      widget.realtimeFactory?.call(_server) ??
+      Realtime.standard(
+        backendUrl: _server,
+        tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
+      );
 
   Future<void> _runPreJoin(
     Realtime realtime, {
@@ -302,10 +323,13 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final backgroundPresets = await DemoBackground.presets;
+      final backgroundPresets =
+          await (widget.backgroundPresets?.call() ?? DemoBackground.presets);
       if (!mounted) return;
       await MediaPreJoinPage.show(
         context,
+        permissionRequester:
+            widget.permissionRequester ?? const DefaultMediaPermissionProbe(),
         onEnter: onEnter,
         runCheck: () => realtime.preJoin(
           role: role,
@@ -337,23 +361,27 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     required MediaLocalPreviewSettings initialMediaSettings,
     MediaRoomMode? roomMode,
   }) async {
-    final realtimeRoom = connection.mediaRoom!;
     if (!preJoinContext.mounted) {
       await connection.dispose();
       return;
     }
 
     try {
+      final destination =
+          widget.roomPageFactory?.call(
+            connection,
+            initialMediaSettings,
+            roomMode,
+          ) ??
+          MeetingRoomPage(
+            room: connection.mediaRoom!,
+            initialMediaSettings: initialMediaSettings,
+            roomMode: roomMode,
+          );
       await Navigator.of(
         preJoinContext,
       ).pushReplacement<void, MediaLocalPreviewSettings>(
-        MaterialPageRoute(
-          builder: (_) => MeetingRoomPage(
-            room: realtimeRoom,
-            initialMediaSettings: initialMediaSettings,
-            roomMode: roomMode,
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => destination),
       );
     } finally {
       await connection.dispose();
