@@ -1,4 +1,4 @@
-import 'package:flutter_realtime_sdk_base/flutter_realtime_sdk_base.dart';
+import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_chat_ivs/flutter_realtime_chat_ivs.dart';
 
 const _mobileAndMac = {

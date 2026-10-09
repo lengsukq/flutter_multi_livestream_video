@@ -1,4 +1,7 @@
-import 'package:flutter_realtime_sdk_base/flutter_realtime_sdk_base.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_ivs/flutter_realtime_media_ivs.dart';
 
@@ -15,6 +18,7 @@ List<RealtimeProviderDriver> createDrivers(int maxMessages) => [
     plugin: RealtimeProviderPlugin(
       id: 'chime',
       metadata: const RealtimeProviderMetadata(displayName: 'AWS'),
+      effectsProbe: (role) => _probeEffects('chime', role),
       mediaFactory: ChimeSessionFactory(),
       renderer: const ChimeTrackRenderer(),
     ),
@@ -23,11 +27,44 @@ List<RealtimeProviderDriver> createDrivers(int maxMessages) => [
     platforms: _mobileAndMac,
     publicProviderId: 'aws',
     mediaRoomModes: const {MediaRoomMode.broadcast},
-    plugin: const RealtimeProviderPlugin(
+    plugin: RealtimeProviderPlugin(
       id: 'ivs',
       metadata: RealtimeProviderMetadata(displayName: 'AWS'),
+      effectsProbe: (role) => _probeEffects('ivs', role),
       mediaFactory: IvsSessionFactory(),
       renderer: IvsTrackRenderer(),
     ),
   ),
 ];
+
+Future<MediaBackgroundCapabilities> _probeEffects(
+  String engine,
+  MediaRole role,
+) async {
+  if (role == MediaRole.viewer ||
+      (!kIsWeb &&
+          defaultTargetPlatform != TargetPlatform.android &&
+          defaultTargetPlatform != TargetPlatform.macOS)) {
+    return const MediaBackgroundCapabilities.none();
+  }
+  if (!await VideoEffectsBridge().isSupported()) {
+    return const MediaBackgroundCapabilities.none();
+  }
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+    final channel = {
+      'chime': 'com.oneplusdream.aws.chime.methodChannel',
+      'ivs': 'com.oneplusdream.flutter_realtime_media_ivs/methods',
+    }[engine];
+    if (channel != null &&
+        await MethodChannel(
+              channel,
+            ).invokeMethod<bool>('probeProcessedVideoInput') !=
+            true) {
+      return const MediaBackgroundCapabilities.none();
+    }
+  }
+  return const MediaBackgroundCapabilities(
+    canBlur: true,
+    canReplaceImage: true,
+  );
+}

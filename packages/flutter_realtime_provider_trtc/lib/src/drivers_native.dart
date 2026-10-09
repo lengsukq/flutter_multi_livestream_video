@@ -1,4 +1,6 @@
-import 'package:flutter_realtime_sdk_base/flutter_realtime_sdk_base.dart';
+import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_media_trtc/flutter_realtime_media_trtc.dart';
 
 const _mobileAndMac = {
@@ -10,11 +12,31 @@ const _mobileAndDesktop = {..._mobileAndMac, RealtimeRuntimePlatform.windows};
 List<RealtimeProviderDriver> createDrivers(int maxMessages) => [
   RealtimeProviderDriver(
     platforms: _mobileAndDesktop,
-    plugin: const RealtimeProviderPlugin(
+    plugin: RealtimeProviderPlugin(
       id: 'trtc',
       metadata: RealtimeProviderMetadata(displayName: 'Tencent TRTC'),
+      effectsProbe: (role) => _probeEffects('trtc', role),
       mediaFactory: TrtcSessionFactory(),
       renderer: TrtcTrackRenderer(),
     ),
   ),
 ];
+
+Future<MediaBackgroundCapabilities> _probeEffects(
+  String engine,
+  MediaRole role,
+) async {
+  if (role == MediaRole.viewer ||
+      (!kIsWeb &&
+          defaultTargetPlatform != TargetPlatform.android &&
+          defaultTargetPlatform != TargetPlatform.macOS)) {
+    return const MediaBackgroundCapabilities.none();
+  }
+  if (!await VideoEffectsBridge().isSupported()) {
+    return const MediaBackgroundCapabilities.none();
+  }
+  return const MediaBackgroundCapabilities(
+    canBlur: true,
+    canReplaceImage: true,
+  );
+}

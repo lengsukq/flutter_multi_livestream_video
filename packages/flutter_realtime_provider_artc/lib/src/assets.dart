@@ -1,4 +1,4 @@
-import 'package:flutter_realtime_sdk_base/flutter_realtime_sdk_base.dart';
+import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 
 Future<void> loadAssets({
   Iterable<String> mediaProviderIds = const [],
@@ -13,6 +13,6 @@ Future<void> loadAssets({
     'assets/packages/flutter_realtime_provider_artc/assets/aliyun-rtc-sdk.js',
   );
   await loadRealtimeBundledWebScript(
-    'assets/packages/flutter_realtime_sdk_base/assets/media-provider-bridge.js',
+    'assets/packages/flutter_realtime_media_web/assets/media-provider-bridge.js',
   );
 }

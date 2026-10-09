@@ -1,4 +1,4 @@
-import 'package:flutter_realtime_sdk_base/flutter_realtime_sdk_base.dart';
+import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'src/drivers_native.dart'
     if (dart.library.js_interop) 'src/drivers_web.dart'
     as platform;
