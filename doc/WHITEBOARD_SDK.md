@@ -4,7 +4,7 @@
 
 `flutter_realtime_whiteboard_core` is pure Dart. It depends on neither media,
 Chat nor Classroom. `flutter_realtime_whiteboard_ui` adds Flutter widgets only.
-The full SDK and `RealtimeLite` export the public models and widgets.
+The full SDK and `Realtime` export the public models and widgets.
 
 ```dart
 final board = WhiteboardSession.local();

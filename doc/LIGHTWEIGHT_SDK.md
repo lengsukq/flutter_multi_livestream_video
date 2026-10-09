@@ -1,10 +1,10 @@
 # Lightweight provider composition / 轻量接入
 
-`flutter_realtime_sdk` remains the all-provider compatibility entry point.
-`flutter_realtime_sdk_base` owns provider-neutral request, connection, room,
+`flutter_realtime_sdk` provides the all-provider convenience entry point.
+`flutter_realtime_sdk_runtime` owns provider-neutral request, connection, room,
 event, error and registry contracts; full-package exports point to those same
-types rather than duplicate models. `RealtimeLite` requires explicit bundles.
-Shared UI and effects remain dependencies in this first version.
+types rather than duplicate models. `Realtime(providers: …)` requires explicit bundles.
+Runtime has no built-in UI dependency. Add flutter_realtime_sdk_ui explicitly when using the ready-to-use views; effects remain a platform controller dependency.
 
 | Optional package | Registration function | Public provider |
 | --- | --- | --- |
@@ -38,6 +38,5 @@ both their dependency graphs and actual Web artifacts. Compare byte counts for
 the same release target; a lightweight sample and the full Demo have different UI
 and should not be treated as a controlled startup-latency benchmark.
 
-简体中文：旧入口和公开类型保持兼容，新入口显式注册供应商，App 不写平台分支。
-此版本只裁剪未选供应商依赖，保留公共 UI 与效果组件。缓存上限影响本地显示历史，
+简体中文：运行入口显式注册供应商，App 不写平台分支。运行层不依赖现成 UI，按需加入 SDK UI。缓存上限影响本地显示历史，
 不删除服务端消息；跨供应商历史分页与真实连麦仍是后续独立功能。

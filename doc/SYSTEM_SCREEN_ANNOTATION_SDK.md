@@ -3,7 +3,7 @@
 ## 包与入口
 
 `flutter_realtime_screen_annotation` 是独立 Flutter 插件，依赖 Flutter 和
-Whiteboard Core，不依赖 Demo 或具体媒体供应商。`flutter_realtime_sdk_base`
+Whiteboard Core，不依赖 Demo 或具体媒体供应商。`flutter_realtime_sdk_runtime`
 负责与课堂共享内容生命周期衔接，完整 `flutter_realtime_sdk` 导出同一组公开接口。
 
 功能：可移动工具条、操作/绘制切换、画笔、高亮、圆圈、箭头、文字、撤销、清除。

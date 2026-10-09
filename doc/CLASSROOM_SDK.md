@@ -9,7 +9,7 @@ The independent packages are:
   optional revision transport.
 - flutter_realtime_classroom_ui: teacher/student panels and an optional
   floating classroom entry point.
-- flutter_realtime_sdk_base: attaches a ClassroomSession to RealtimeRoom for
+- flutter_realtime_sdk_runtime: attaches a ClassroomSession to RealtimeRoom for
   backend-provisioned Meeting rooms, choosing a product IM system-hint
   transport when available or RTC Data when not.
 
@@ -158,7 +158,7 @@ the classroom control envelope.
 cd demo-server && npm test && npm run typecheck
 cd ../packages/flutter_realtime_classroom_core && flutter test
 cd ../flutter_realtime_classroom_ui && flutter test
-cd ../flutter_realtime_sdk_base && flutter analyze
+cd ../flutter_realtime_sdk_runtime && flutter analyze
 cd ../../example && flutter analyze && flutter build web
 ~~~
 

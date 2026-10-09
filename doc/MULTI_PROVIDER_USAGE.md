@@ -169,8 +169,8 @@ authorization, persistence, rate limiting, or deployment templates.
 
 ## Explicit lightweight composition
 
-Applications may keep `Realtime.standard()` or choose `RealtimeLite` from
-`flutter_realtime_sdk_base` with optional provider bundles. Driver registration
+Applications may keep `Realtime.standard()` or choose `Realtime` from
+`flutter_realtime_sdk_runtime` with optional provider bundles. Driver registration
 and platform selection stay inside each bundle; Web resources are local to the
 selected package. Custom adapters can expose `RealtimeProviderBundle` without
 depending on the all-provider SDK. See the lightweight integration guide and

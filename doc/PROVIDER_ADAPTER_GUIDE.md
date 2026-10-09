@@ -28,8 +28,8 @@ API. The backend must also be able to enforce the corresponding permission.
 
 ## Explicit lightweight composition
 
-Applications may keep `Realtime.standard()` or choose `RealtimeLite` from
-`flutter_realtime_sdk_base` with optional provider bundles. Driver registration
+Applications may keep `Realtime.standard()` or choose `Realtime` from
+`flutter_realtime_sdk_runtime` with optional provider bundles. Driver registration
 and platform selection stay inside each bundle; Web resources are local to the
 selected package. Custom adapters can expose `RealtimeProviderBundle` without
 depending on the all-provider SDK. See the lightweight integration guide and
@@ -37,3 +37,9 @@ unified acceptance checklist in `doc/` (or the current documentation directory).
 
 轻量接入保留统一请求、事件和房间类型；平台路由在注册包内部完成。
 产品聊天缓存可配置，跨供应商服务端历史分页与真实连麦另行推进。
+
+## Quality contracts
+
+Use the public runtime library to register a bundle. Media and product Chat are independent. Add an optional `RealtimeProviderPlugin.effectsProbe` callback for processed-video capability; platform channels and input probes belong to the provider. An unregistered probe grants no additional effect capability. Failed probes are retryable and diagnostic.
+
+Translate failures to the shared `RealtimeException`/`RealtimeErrorCode` contract. Keep third-party implementation imports in the documented native bridge boundary. Inject provider SDK construction for lifecycle fault tests. Disposal shares one future, attempts all resource stages and retains primary join failure plus rollback failures.
