@@ -1,6 +1,7 @@
 export 'media_participant_tile.dart' show MediaParticipantTile;
 import 'room_members_controller.dart';
 import 'room_chat_events_controller.dart';
+import 'room_rtc_data_panel.dart';
 import 'initial_media_settings_controller.dart';
 import 'dart:async';
 
@@ -133,7 +134,6 @@ class MediaRoomView extends StatefulWidget {
 class _MediaRoomViewState extends State<MediaRoomView>
     implements MediaRoomLayoutHost {
   final _message = TextEditingController();
-  final _rtcDataMessage = TextEditingController();
   final _liveChatInput = TextEditingController();
   final _liveChatInputFocus = FocusNode();
   final _chatScroll = ScrollController();
@@ -284,7 +284,6 @@ class _MediaRoomViewState extends State<MediaRoomView>
       _loadingRoomMembers = false;
       _focusedParticipantId = null;
       _message.clear();
-      _rtcDataMessage.clear();
       _liveChatInput.clear();
       _liveChatInputOpen = false;
       _liveChatSending = false;
@@ -470,7 +469,6 @@ class _MediaRoomViewState extends State<MediaRoomView>
     _chatEvents.dispose();
     _chatRevision.dispose();
     _message.dispose();
-    _rtcDataMessage.dispose();
     _liveChatInput.dispose();
     _liveChatInputFocus.dispose();
     _chatScroll.dispose();
@@ -1805,64 +1803,13 @@ class _MediaRoomViewState extends State<MediaRoomView>
     }
   }
 
-  Widget _rtcData() {
-    if (!session.capabilities.canSendData) return const SizedBox.shrink();
-    final strings = RealtimeStrings.of(context);
-    return RealtimeGlassSurface(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      radius: RealtimeUiTokens.controlRadius,
-      opacity: .88,
-      child: Row(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: RealtimePill(
-              label: strings.rtcData,
-              foreground: RealtimeUiTokens.primary,
-              background: RealtimeUiTokens.primarySubtle,
-              borderColor: RealtimeUiTokens.primaryBorder,
-            ),
-          ),
-          Expanded(
-            child: TextField(
-              controller: _rtcDataMessage,
-              decoration: InputDecoration(
-                hintText: strings.debugDataPayload,
-                filled: false,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-              ),
-              onSubmitted: (_) => _sendRtcData(),
-            ),
-          ),
-          IconButton(
-            onPressed: _sendRtcData,
-            icon: const Icon(
-              Icons.send_rounded,
-              color: RealtimeUiTokens.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _sendRtcData() {
-    final text = _rtcDataMessage.text.trim();
-    if (text.isEmpty) return;
-    observeDetached(
-      _run(
-        () => session.sendData(
-          text,
-          options: const MediaSendOptions(topic: 'debug'),
-        ),
-      ).then((_) {
-        if (mounted && _error == null) _rtcDataMessage.clear();
-      }),
-    );
-  }
+  Widget _rtcData() => RoomRtcDataPanel(
+    key: ValueKey(widget.room),
+    session: session,
+    onError: (message) {
+      if (mounted) setState(() => _error = message);
+    },
+  );
 
   Future<void> _openBackgroundEffects() async {
     var effect = _backgroundEffects.backgroundEffect;
