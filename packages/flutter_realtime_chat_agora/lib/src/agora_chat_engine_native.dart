@@ -10,10 +10,13 @@ import 'agora_chat_join_info.dart';
 Future<AgoraChatEngine> createPlatformAgoraChatEngine() async =>
     Platform.isMacOS
     ? macos.createMacOSAgoraChatEngine()
-    : _AgoraSdkChatEngine();
+    : AgoraSdkChatEngine();
 
-class _AgoraSdkChatEngine implements AgoraChatEngine {
-  static const _handlerId = 'flutter_realtime_chat_agora';
+// Internal implementation; not exported by the package entrypoint.
+class AgoraSdkChatEngine implements AgoraChatEngine {
+  static int _nextHandlerId = 0;
+  final String _handlerId = 'flutter_realtime_chat_agora_${_nextHandlerId++}';
+  static AgoraSdkChatEngine? _owner;
 
   AgoraChatEngineEvents _events = const AgoraChatEngineEvents();
   AgoraChatTokenProvider? _tokenProvider;
@@ -21,6 +24,10 @@ class _AgoraSdkChatEngine implements AgoraChatEngine {
   bool _connected = false;
   bool _disposed = false;
   bool _refreshing = false;
+  bool _loggedIn = false;
+  bool _roomJoinAttempted = false;
+  bool _connecting = false;
+  bool _disconnectRequested = false;
 
   ChatClient get _client => ChatClient.getInstance;
 
@@ -31,6 +38,37 @@ class _AgoraSdkChatEngine implements AgoraChatEngine {
     AgoraChatTokenProvider? tokenProvider,
   }) async {
     if (_disposed) throw StateError('Agora Chat engine is disposed.');
+    if (_connecting || _loggedIn || _connected) {
+      throw StateError('Agora Chat engine is already active.');
+    }
+    if (_owner != null && !identical(_owner, this)) {
+      throw StateError('Another native Agora Chat session is already active.');
+    }
+    // ChatClient is a process-wide singleton. Reserve it before any await so
+    // another room cannot replace its handlers or log out an active session.
+    _owner = this;
+    _connecting = true;
+    _disconnectRequested = false;
+    try {
+      await _connect(info, events, tokenProvider: tokenProvider);
+    } catch (_) {
+      try {
+        await disconnect();
+      } catch (_) {
+        // Preserve the original login/join failure. A later cleanup can retry.
+      }
+      rethrow;
+    } finally {
+      _connecting = false;
+      _releaseIfIdle();
+    }
+  }
+
+  Future<void> _connect(
+    AgoraChatJoinInfo info,
+    AgoraChatEngineEvents events, {
+    AgoraChatTokenProvider? tokenProvider,
+  }) async {
     _events = events;
     _tokenProvider = tokenProvider;
     _info = info;
@@ -43,7 +81,9 @@ class _AgoraSdkChatEngine implements AgoraChatEngine {
         messagesReceiveCallbackIncludeSend: true,
       ),
     );
+    _ensureConnecting();
     await _client.startCallback();
+    _ensureConnecting();
     _client.addConnectionEventHandler(
       _handlerId,
       ConnectionEventHandler(
@@ -107,8 +147,21 @@ class _AgoraSdkChatEngine implements AgoraChatEngine {
       ),
     );
 
+    // Native login can outlive a Dart hot restart or an older failed join.
+    // Only stale login is cleared here; active adapter sessions are guarded
+    // by _owner above. Reauthenticate using this room's credentials.
+    final staleLogin = await _client.isLoginBefore();
+    _ensureConnecting();
+    if (staleLogin) {
+      await _client.logout(false);
+      _ensureConnecting();
+    }
     await _client.loginWithToken(info.providerUserId, info.token);
+    _loggedIn = true;
+    _ensureConnecting();
+    _roomJoinAttempted = true;
     await _client.chatRoomManager.joinChatRoom(info.chatRoomId);
+    _ensureConnecting();
     _connected = true;
     _events.onConnected?.call();
   }
@@ -142,37 +195,65 @@ class _AgoraSdkChatEngine implements AgoraChatEngine {
 
   @override
   Future<void> disconnect() async {
-    if (!_connected) return;
+    _disconnectRequested = true;
+    if (!identical(_owner, this)) return;
     final info = _info;
-    if (info != null) {
+    if (_roomJoinAttempted && info != null) {
       try {
         await _client.chatRoomManager.leaveChatRoom(info.chatRoomId);
       } catch (_) {
         // Logout below still closes this local session.
       }
+      _roomJoinAttempted = false;
     }
     try {
-      await _client.logout(false);
+      if (_loggedIn) {
+        await _client.logout(false);
+        _loggedIn = false;
+      }
     } finally {
       _connected = false;
       _events.onDisconnected?.call('clientDisconnect');
+      _releaseIfIdle();
     }
   }
 
   @override
   Future<void> dispose() async {
     if (_disposed) return;
-    await disconnect();
-    _client.chatManager.removeEventHandler(_handlerId);
-    _client.chatRoomManager.removeEventHandler(_handlerId);
-    _client.removeConnectionEventHandler(_handlerId);
-    _disposed = true;
-    _tokenProvider = null;
-    _info = null;
+    try {
+      await disconnect();
+    } finally {
+      _client.chatManager.removeEventHandler(_handlerId);
+      _client.chatRoomManager.removeEventHandler(_handlerId);
+      _client.removeConnectionEventHandler(_handlerId);
+      _disposed = true;
+      _tokenProvider = null;
+      _info = null;
+      _releaseIfIdle();
+    }
+  }
+
+  void _ensureConnecting() {
+    if (_disposed || _disconnectRequested) {
+      throw StateError('Agora Chat connection was cancelled.');
+    }
+  }
+
+  void _releaseIfIdle() {
+    if (identical(_owner, this) && !_connecting && (!_loggedIn || _disposed)) {
+      _owner = null;
+    }
   }
 
   Future<void> _refreshToken() async {
-    if (_refreshing || _disposed) return;
+    if (_refreshing ||
+        _disposed ||
+        _disconnectRequested ||
+        !_loggedIn ||
+        !identical(_owner, this)) {
+      return;
+    }
     final provider = _tokenProvider;
     if (provider == null) {
       _events.onError?.call(401, 'Agora Chat token expired.');
@@ -181,6 +262,7 @@ class _AgoraSdkChatEngine implements AgoraChatEngine {
     _refreshing = true;
     try {
       final refreshed = await provider();
+      if (_disposed || _disconnectRequested || !identical(_owner, this)) return;
       _info = refreshed;
       await _client.renewAgoraToken(refreshed.token);
       _events.onConnected?.call();
