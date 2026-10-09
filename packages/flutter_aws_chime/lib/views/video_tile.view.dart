@@ -1,3 +1,4 @@
+import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -64,7 +65,7 @@ class MeetingVideoTileView extends StatelessWidget {
         controller.addOnPlatformViewCreatedListener(
           params.onPlatformViewCreated,
         );
-        controller.create();
+        observeDetached(controller.create());
         return controller;
       },
     );

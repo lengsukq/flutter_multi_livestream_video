@@ -25,6 +25,11 @@ class ChimeMeetingSession {
 
   MeetingSnapshot _snapshot = MeetingSnapshot();
   bool _disposed = false;
+  bool _disposing = false;
+  bool _reserved = false;
+  bool _nativeJoinStarted = false;
+  Future<void>? _leaveFuture;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   Completer<void>? _joinCompletion;
   Completer<void>? _leaveCompletion;
 
@@ -50,8 +55,8 @@ class ChimeMeetingSession {
     if (_snapshot.state != MeetingState.idle &&
         _snapshot.state != MeetingState.ended &&
         _snapshot.state != MeetingState.failed) {
-      throw const ChimeException(
-        code: ChimeErrorCode.invalidState,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'This meeting session is already joining or active.',
       );
     }
@@ -59,13 +64,14 @@ class ChimeMeetingSession {
     try {
       joinInfo.validate();
     } on FormatException catch (error) {
-      throw ChimeException(
-        code: ChimeErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: error.message.toString(),
       );
     }
 
     _channel.reserve(this, _handleNativeCall);
+    _reserved = true;
     final localId = joinInfo.attendee.attendeeId;
     _replaceSnapshot(
       MeetingSnapshot(
@@ -85,20 +91,24 @@ class ChimeMeetingSession {
     _joinCompletion = joinCompletion;
 
     try {
-      ChimeException? permissionError;
+      RealtimeException? permissionError;
       for (final method in [
         'manageAudioPermissions',
         'manageVideoPermissions',
       ]) {
         try {
+          _ensureNotDisposed();
           await _channel.invoke(method);
-        } on ChimeException catch (error) {
-          if (error.code != ChimeErrorCode.permissionDenied) rethrow;
+        } on RealtimeException catch (error) {
+          if (error.code != RealtimeErrorCode.permissionDenied) rethrow;
           permissionError ??= error;
         }
       }
       if (permissionError != null) throw permissionError;
+      _ensureNotDisposed();
+      _nativeJoinStarted = true;
       await _channel.invoke('join', joinInfo.toJson());
+      _ensureNotDisposed();
       if (_snapshot.state == MeetingState.joining) {
         _setState(MeetingState.connecting);
       }
@@ -112,22 +122,31 @@ class ChimeMeetingSession {
             ),
           );
         }
-      } on ChimeException {
+      } on RealtimeException {
         // Device discovery is optional and must not turn a successful join
         // into a failed meeting.
       }
-    } on ChimeException {
-      _failJoin();
-      _channel.release(this);
-      rethrow;
-    } catch (error) {
-      _failJoin();
-      _channel.release(this);
-      throw ChimeException(
-        code: ChimeErrorCode.unknown,
-        message: 'Unable to join the Chime meeting.',
-        details: error,
+    } catch (error, stack) {
+      final primary = normalizeRealtimeException(
+        error,
+        domain: 'media',
+        operation: 'join',
+        providerId: 'chime',
+        stackTrace: stack,
       );
+      if (!_disposing) {
+        final cleanup = Cleanup(timeout: cleanupTimeout);
+        if (_nativeJoinStarted) {
+          await cleanup.run('chime.native.rollback', () async {
+            await _channel.invoke('stop');
+          });
+        }
+        _nativeJoinStarted = false;
+        _failJoin();
+        _releaseChannel();
+        cleanup.finish(domain: 'chime', cause: primary);
+      }
+      Error.throwWithStackTrace(primary, stack);
     } finally {
       if (!joinCompletion.isCompleted) joinCompletion.complete();
       if (identical(_joinCompletion, joinCompletion)) _joinCompletion = null;
@@ -136,19 +155,23 @@ class ChimeMeetingSession {
 
   /// Leaves the current meeting. Calling this while idle or after leaving is
   /// safe and does not issue an extra native stop request.
-  Future<void> leave() async {
+  Future<void> leave() => _leaveFuture ??= _leave().whenComplete(() {
+    _leaveFuture = null;
+  });
+
+  Future<void> _leave() async {
     _ensureNotDisposed();
     final state = _snapshot.state;
     if (state == MeetingState.idle ||
         state == MeetingState.ended ||
         state == MeetingState.failed) {
-      _channel.release(this);
+      _releaseChannel();
       if (state != MeetingState.ended) _setState(MeetingState.ended);
       return;
     }
     if (state == MeetingState.joining || state == MeetingState.leaving) {
-      throw const ChimeException(
-        code: ChimeErrorCode.invalidState,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The meeting cannot leave while another transition is active.',
       );
     }
@@ -159,8 +182,8 @@ class ChimeMeetingSession {
     try {
       await _channel.invoke('stop');
       _finishMeeting();
-    } on ChimeException catch (error) {
-      if (error.code == ChimeErrorCode.sessionNotFound) {
+    } on RealtimeException catch (error) {
+      if (error.code == RealtimeErrorCode.invalidState) {
         _finishMeeting();
         return;
       }
@@ -174,39 +197,39 @@ class ChimeMeetingSession {
 
   /// Releases stream resources. It is safe to call more than once.
   Future<void>? _disposeCompletion;
-
-  Future<void> dispose() {
-    final current = _disposeCompletion;
-    if (current != null) return current;
-
-    late final Future<void> completion;
-    completion = _dispose().catchError((Object error, StackTrace stackTrace) {
-      if (identical(_disposeCompletion, completion)) {
-        _disposeCompletion = null;
-      }
-      Error.throwWithStackTrace(error, stackTrace);
-    });
-    _disposeCompletion = completion;
-    return completion;
-  }
+  Future<void> dispose() => _disposeCompletion ??= _dispose();
 
   Future<void> _dispose() async {
-    if (_disposed) return;
-    if (_snapshot.state == MeetingState.joining) {
+    _disposing = true;
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('chime.join.pending', () async {
       await _joinCompletion?.future;
-    }
-    if (_snapshot.state == MeetingState.leaving) {
+    });
+    await cleanup.run('chime.leave.pending', () async {
       await _leaveCompletion?.future;
+    });
+    if (_reserved && _nativeJoinStarted) {
+      await cleanup.run('chime.native.stop', () async {
+        try {
+          await _channel.invoke('stop');
+        } on RealtimeException catch (error) {
+          if (error.code != RealtimeErrorCode.invalidState) rethrow;
+        }
+      });
     }
-    if (_isActiveState(_snapshot.state)) {
-      await leave();
-    }
-    _channel.release(this);
+    _nativeJoinStarted = false;
+    await cleanup.run('chime.channel', _releaseChannel);
     _disposed = true;
-    _setState(MeetingState.disposed);
-    await _snapshotController.close();
-    await _stateController.close();
-    await _eventController.close();
+    _snapshot = MeetingSnapshot(state: MeetingState.disposed);
+    await cleanup.run('chime.snapshots', _snapshotController.close);
+    await cleanup.run('chime.states', _stateController.close);
+    await cleanup.run('chime.events', _eventController.close);
+    cleanup.finish(domain: 'chime');
+  }
+
+  void _releaseChannel() {
+    _reserved = false;
+    _channel.release(this);
   }
 
   Future<void> setMuted(bool muted) async {
@@ -233,8 +256,8 @@ class ChimeMeetingSession {
     _ensureActive();
     final value = await _channel.invoke('listAudioDevices');
     if (value is! List) {
-      throw const ChimeException(
-        code: ChimeErrorCode.nativeError,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.providerError,
         message: 'The native SDK returned an invalid audio-device list.',
       );
     }
@@ -248,8 +271,8 @@ class ChimeMeetingSession {
   Future<void> selectAudioDevice(ChimeAudioDevice device) async {
     _ensureActive();
     if (device.label.trim().isEmpty) {
-      throw const ChimeException(
-        code: ChimeErrorCode.invalidArgument,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Audio device name must not be empty.',
       );
     }
@@ -264,8 +287,8 @@ class ChimeMeetingSession {
   }) async {
     _ensureActive();
     if (message.trim().isEmpty || topic.trim().isEmpty || lifetimeMs <= 0) {
-      throw const ChimeException(
-        code: ChimeErrorCode.invalidArgument,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Message, topic, and positive lifetime are required.',
       );
     }
@@ -289,6 +312,7 @@ class ChimeMeetingSession {
   }
 
   Future<void> _handleNativeCall(MethodCall call) async {
+    if (_disposed || _disposing) return;
     final args = call.arguments;
     switch (call.method) {
       case 'join':
@@ -471,13 +495,15 @@ class ChimeMeetingSession {
   }
 
   void _setState(MeetingState state) {
+    if (_disposing || _disposed) return;
     if (_snapshot.state == state) return;
     _replaceSnapshot(_snapshot.copyWith(state: state));
     _stateController.add(state);
   }
 
   void _finishMeeting() {
-    _channel.release(this);
+    if (_disposing || _disposed) return;
+    _releaseChannel();
     final stateChanged = _snapshot.state != MeetingState.ended;
     _replaceSnapshot(
       MeetingSnapshot(
@@ -493,12 +519,14 @@ class ChimeMeetingSession {
   }
 
   void _failJoin() {
-    _channel.release(this);
+    if (_disposing || _disposed) return;
+    _releaseChannel();
     _replaceSnapshot(MeetingSnapshot(state: MeetingState.failed));
     if (!_stateController.isClosed) _stateController.add(MeetingState.failed);
   }
 
   void _replaceSnapshot(MeetingSnapshot snapshot) {
+    if (_disposing || _disposed) return;
     _snapshot = snapshot;
     if (!_snapshotController.isClosed) _snapshotController.add(snapshot);
   }
@@ -509,9 +537,9 @@ class ChimeMeetingSession {
       state == MeetingState.reconnecting;
 
   void _ensureNotDisposed() {
-    if (_disposed) {
-      throw const ChimeException(
-        code: ChimeErrorCode.invalidState,
+    if (_disposed || _disposing) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'This meeting session has been disposed.',
       );
     }
@@ -520,8 +548,8 @@ class ChimeMeetingSession {
   void _ensureActive() {
     _ensureNotDisposed();
     if (!_isActiveState(_snapshot.state)) {
-      throw const ChimeException(
-        code: ChimeErrorCode.invalidState,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'Join a meeting before calling this operation.',
       );
     }

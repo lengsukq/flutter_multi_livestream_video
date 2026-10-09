@@ -23,8 +23,8 @@ class ChimeNativeChannel {
   void reserve(Object owner, NativeCallHandler eventHandler) {
     _ensureSupportedPlatform();
     if (_owner != null && !identical(_owner, owner)) {
-      throw const ChimeException(
-        code: ChimeErrorCode.meetingAlreadyActive,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'Only one Chime meeting can be active per Flutter engine.',
       );
     }
@@ -45,8 +45,8 @@ class ChimeNativeChannel {
     try {
       final raw = await _channel.invokeMethod<Object?>(method, arguments);
       if (raw is! Map) {
-        throw ChimeException(
-          code: ChimeErrorCode.nativeError,
+        throw RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message: 'Native method "$method" returned an invalid response.',
           details: raw,
         );
@@ -54,7 +54,7 @@ class ChimeNativeChannel {
 
       final response = Map<String, dynamic>.from(raw);
       if (response['success'] != true) {
-        throw ChimeException(
+        throw RealtimeException(
           code: _errorCode(response['code']?.toString()),
           message:
               response['message']?.toString() ??
@@ -63,17 +63,17 @@ class ChimeNativeChannel {
         );
       }
       return response['data'];
-    } on ChimeException {
+    } on RealtimeException {
       rethrow;
     } on PlatformException catch (error) {
-      throw ChimeException(
+      throw RealtimeException(
         code: _errorCode(error.code),
         message: error.message ?? 'Native method "$method" failed.',
         details: error.details,
       );
     } on MissingPluginException {
-      throw const ChimeException(
-        code: ChimeErrorCode.unsupportedPlatform,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedPlatform,
         message: 'AWS Chime meetings are supported on iOS and Android only.',
       );
     }
@@ -94,23 +94,23 @@ class ChimeNativeChannel {
         (defaultTargetPlatform != TargetPlatform.iOS &&
             defaultTargetPlatform != TargetPlatform.android &&
             defaultTargetPlatform != TargetPlatform.macOS)) {
-      throw const ChimeException(
-        code: ChimeErrorCode.unsupportedPlatform,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedPlatform,
         message: 'AWS Chime meetings are supported on iOS, Android, and macOS.',
       );
     }
   }
 
-  ChimeErrorCode _errorCode(String? value) => switch (value) {
-    'invalid_join_info' => ChimeErrorCode.invalidJoinInfo,
-    'invalid_argument' => ChimeErrorCode.invalidArgument,
-    'invalid_state' => ChimeErrorCode.invalidState,
-    'meeting_already_active' => ChimeErrorCode.meetingAlreadyActive,
-    'permission_denied' => ChimeErrorCode.permissionDenied,
-    'unsupported_platform' => ChimeErrorCode.unsupportedPlatform,
-    'session_not_found' => ChimeErrorCode.sessionNotFound,
-    'method_not_implemented' => ChimeErrorCode.methodNotImplemented,
-    'native_error' || 'Failed' => ChimeErrorCode.nativeError,
-    _ => ChimeErrorCode.unknown,
+  RealtimeErrorCode _errorCode(String? value) => switch (value) {
+    'invalid_join_info' => RealtimeErrorCode.invalidArgument,
+    'invalid_argument' => RealtimeErrorCode.invalidArgument,
+    'invalid_state' => RealtimeErrorCode.invalidState,
+    'meeting_already_active' => RealtimeErrorCode.invalidState,
+    'permission_denied' => RealtimeErrorCode.permissionDenied,
+    'unsupported_platform' => RealtimeErrorCode.unsupportedPlatform,
+    'session_not_found' => RealtimeErrorCode.invalidState,
+    'method_not_implemented' => RealtimeErrorCode.unsupportedFeature,
+    'native_error' || 'Failed' => RealtimeErrorCode.providerError,
+    _ => RealtimeErrorCode.unknown,
   };
 }

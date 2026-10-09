@@ -116,10 +116,10 @@ void main() {
           ),
         ),
         throwsA(
-          isA<ChimeException>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'error code',
-            ChimeErrorCode.invalidJoinInfo,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -254,10 +254,10 @@ void main() {
       await expectLater(
         session.join(_joinInfo()),
         throwsA(
-          isA<ChimeException>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'error code',
-            ChimeErrorCode.permissionDenied,
+            RealtimeErrorCode.permissionDenied,
           ),
         ),
       );
@@ -289,8 +289,8 @@ void main() {
     try {
       await session.join(_joinInfo());
       fail('Expected join to fail.');
-    } on ChimeException catch (error) {
-      expect(error.code, ChimeErrorCode.permissionDenied);
+    } on RealtimeException catch (error) {
+      expect(error.code, RealtimeErrorCode.permissionDenied);
       expect(error.message, 'No microphone permission.');
       expect(error.details, {'source': 'native'});
     }
@@ -306,10 +306,10 @@ void main() {
       await expectLater(
         first.join(_joinInfo()),
         throwsA(
-          isA<ChimeException>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'error code',
-            ChimeErrorCode.invalidState,
+            RealtimeErrorCode.invalidState,
           ),
         ),
       );
@@ -317,10 +317,10 @@ void main() {
       await expectLater(
         second.join(_joinInfo()),
         throwsA(
-          isA<ChimeException>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'error code',
-            ChimeErrorCode.meetingAlreadyActive,
+            RealtimeErrorCode.invalidState,
           ),
         ),
       );
@@ -332,67 +332,84 @@ void main() {
     },
   );
 
-  test('dispose waits for an in-flight join and then leaves it', () async {
-    final session = activeSession = ChimeMeetingSession();
-    final permissionResult = Completer<Object?>();
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_channel, (call) async {
-          calls.add(call);
-          if (call.method == 'manageAudioPermissions') {
-            return permissionResult.future;
-          }
-          return switch (call.method) {
-            'listAudioDevices' => _success([]),
-            _ => _success('ok'),
-          };
-        });
-
-    final joining = session.join(_joinInfo());
-    final disposing = session.dispose();
-    permissionResult.complete(_success());
-    await Future.wait([joining, disposing]);
-
-    expect(session.state, MeetingState.disposed);
-    expect(calls.any((call) => call.method == 'stop'), isTrue);
-  });
-
-  test('dispose can be retried after a native leave failure', () async {
-    final session = activeSession = ChimeMeetingSession();
-    var stopAttempts = 0;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_channel, (call) async {
-          calls.add(call);
-          if (call.method == 'stop' && stopAttempts++ == 0) {
-            return {
-              'success': false,
-              'code': 'native_error',
-              'message': 'Could not leave the meeting.',
-              'data': null,
-              'details': null,
+  test(
+    'dispose prevents a late permission result from starting native join',
+    () async {
+      final session = activeSession = ChimeMeetingSession();
+      final permissionResult = Completer<Object?>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_channel, (call) async {
+            calls.add(call);
+            if (call.method == 'manageAudioPermissions') {
+              return permissionResult.future;
+            }
+            return switch (call.method) {
+              'listAudioDevices' => _success([]),
+              _ => _success('ok'),
             };
-          }
-          return switch (call.method) {
-            'listAudioDevices' => _success([]),
-            _ => _success('ok'),
-          };
-        });
-    await session.join(_joinInfo());
+          });
 
-    await expectLater(
-      session.dispose(),
-      throwsA(
-        isA<ChimeException>().having(
-          (error) => error.code,
-          'error code',
-          ChimeErrorCode.nativeError,
+      final joining = session.join(_joinInfo());
+      final disposing = session.dispose();
+      final rejected = expectLater(joining, throwsA(isA<RealtimeException>()));
+      permissionResult.complete(_success());
+      await Future.wait([rejected, disposing]);
+
+      expect(session.state, MeetingState.disposed);
+      expect(calls.any((call) => call.method == 'join'), isFalse);
+    },
+  );
+
+  test(
+    'native stop failure still closes streams and reuses the same result',
+    () async {
+      final session = activeSession = ChimeMeetingSession();
+      var stopAttempts = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(_channel, (call) async {
+            calls.add(call);
+            if (call.method == 'stop' && stopAttempts++ == 0) {
+              return {
+                'success': false,
+                'code': 'native_error',
+                'message': 'Could not leave the meeting.',
+                'data': null,
+                'details': null,
+              };
+            }
+            return switch (call.method) {
+              'listAudioDevices' => _success([]),
+              _ => _success('ok'),
+            };
+          });
+      await session.join(_joinInfo());
+
+      final first = session.dispose(), second = session.dispose();
+      expect(identical(first, second), true);
+      await expectLater(
+        first,
+        throwsA(
+          isA<RealtimeException>()
+              .having(
+                (error) => error.code,
+                'code',
+                RealtimeErrorCode.cleanupFailed,
+              )
+              .having(
+                (error) =>
+                    (error.details as List<CleanupFailure>).map((f) => f.stage),
+                'stage',
+                contains('chime.native.stop'),
+              ),
         ),
-      ),
-    );
-
-    await session.dispose();
-    expect(session.state, MeetingState.disposed);
-    expect(stopAttempts, 2);
-  });
+      );
+      expect(session.state, MeetingState.disposed);
+      expect(identical(session.dispose(), first), true);
+      expect(stopAttempts, 1);
+      expect(await session.states.isEmpty, true);
+      activeSession = null;
+    },
+  );
 
   test(
     'rejects unsupported platforms and controls outside an active session',
@@ -401,22 +418,22 @@ void main() {
       await expectLater(
         session.setMuted(true),
         throwsA(
-          isA<ChimeException>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'error code',
-            ChimeErrorCode.invalidState,
+            RealtimeErrorCode.invalidState,
           ),
         ),
       );
       // ignore: deprecated_member_use
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
       await expectLater(
         session.join(_joinInfo()),
         throwsA(
-          isA<ChimeException>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'error code',
-            ChimeErrorCode.unsupportedPlatform,
+            RealtimeErrorCode.unsupportedPlatform,
           ),
         ),
       );
