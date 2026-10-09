@@ -32,8 +32,8 @@ class NativeProcessedVideoSink {
     Map<String, Object?> arguments = const {},
   }) async {
     if (!supports(value)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         providerId: providerId,
         message: 'Unsupported processed-video source.',
       );

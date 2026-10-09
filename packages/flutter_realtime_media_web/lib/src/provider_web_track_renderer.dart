@@ -53,12 +53,14 @@ class _ProviderWebVideoViewState extends State<_ProviderWebVideoView> {
   }
 
   void _attach(ProviderWebVideoTrack track, String elementId) {
-    ProviderWebBridge.attachVideo(
-      providerId: track.providerId,
-      sessionId: track.sessionId,
-      trackId: track.id,
-      elementId: elementId,
-    ).catchError((_) {});
+    observeDetached(
+      ProviderWebBridge.attachVideo(
+        providerId: track.providerId,
+        sessionId: track.sessionId,
+        trackId: track.id,
+        elementId: elementId,
+      ).catchError((_) {}),
+    );
   }
 
   void _detach(ProviderWebVideoTrack track, String elementId) {

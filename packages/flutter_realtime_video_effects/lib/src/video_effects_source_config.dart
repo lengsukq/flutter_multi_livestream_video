@@ -22,8 +22,8 @@ class VideoEffectsSourceConfig {
         height > 4096 ||
         frameRate < 1 ||
         frameRate > 60) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Video dimensions must be 1–4096 and frame rate 1–60.',
       );
     }

@@ -58,8 +58,8 @@ class ProviderWebSessionFactory
     if (actualProvider != null &&
         actualProvider.isNotEmpty &&
         actualProvider != providerId) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message:
             'Expected $providerId join information, got "$actualProvider".',
         providerId: providerId,
@@ -73,8 +73,8 @@ class ProviderWebSessionFactory
     final participantId = _participantIdFromPayload(json);
     final role = MediaRole.tryParse(json['role']) ?? MediaRole.participant;
     if (!supportedRoles.contains(role)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: '$providerId does not support the ${role.wireName} role.',
         providerId: providerId,
       );
@@ -101,8 +101,8 @@ class ProviderWebSessionFactory
         if (id != null && id.isNotEmpty) return id;
       }
     }
-    throw MediaError(
-      code: MediaErrorCode.invalidJoinInfo,
+    throw RealtimeException(
+      code: RealtimeErrorCode.invalidArgument,
       message: 'Join information is missing participantId.',
       providerId: providerId,
     );
@@ -130,8 +130,8 @@ class ProviderWebSessionFactory
     if (joinInfo is! ProviderWebJoinInfo ||
         joinInfo.providerId != providerId ||
         !supportedRoles.contains(joinInfo.role)) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'The join information does not match the $providerId adapter.',
         providerId: providerId,
       );
@@ -170,8 +170,8 @@ class ProviderWebSessionFactory
     required MediaRole role,
   }) async {
     if (role == MediaRole.viewer) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: '$providerId viewers do not publish local camera video.',
         providerId: providerId,
       );
@@ -313,8 +313,8 @@ class ProviderWebLocalPreviewSession
   Future<void> setBackgroundEffect(MediaBackgroundEffect effect) async {
     _ensureNotDisposed();
     if (!backgroundCapabilities.supports(effect)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             '$providerId does not support the requested SDK background '
             'effect in local preview.',
@@ -339,8 +339,8 @@ class ProviderWebLocalPreviewSession
 
   void _ensureNotDisposed() {
     if (_disposed) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The local preview has already been disposed.',
         providerId: providerId,
       );
@@ -591,8 +591,8 @@ abstract class ProviderWebSessionBase
       return;
     }
     if (!backgroundCapabilities.supports(effect)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             '$providerId does not support the requested SDK video effect '
             'for this role or browser.',
@@ -606,8 +606,8 @@ abstract class ProviderWebSessionBase
         _backgroundEffect = effect;
         return;
       }
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message:
             'Attach an SDK processed video source before applying '
             'background effects.',
@@ -632,8 +632,8 @@ abstract class ProviderWebSessionBase
   ) async {
     _ensureActive();
     if (!supportsProcessedVideoSourceInternal(source)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             '$providerId cannot publish the supplied SDK processed '
             'video source on Web.',
@@ -675,8 +675,8 @@ abstract class ProviderWebSessionBase
         joinInfo.role != role ||
         joinInfo.roomCode.isEmpty ||
         joinInfo.participantId.isEmpty) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information does not match this $providerId session.',
         providerId: providerId,
       );
@@ -684,8 +684,8 @@ abstract class ProviderWebSessionBase
     if (state != MediaSessionState.idle &&
         state != MediaSessionState.ended &&
         state != MediaSessionState.failed) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'This $providerId session is already active.',
         providerId: providerId,
       );
@@ -753,31 +753,27 @@ abstract class ProviderWebSessionBase
   }
 
   @override
-  Future<void> dispose() {
-    final current = _disposeFuture;
-    if (current != null) return current;
-    late final Future<void> future;
-    future = _dispose().whenComplete(() {
-      if (identical(_disposeFuture, future)) _disposeFuture = null;
-    });
-    _disposeFuture = future;
-    return future;
-  }
+  Future<void> dispose() => _disposeFuture ??= _dispose();
 
   Future<void> _dispose() async {
-    if (_disposed) return;
-    if (state.isActive || state == MediaSessionState.connecting) {
-      try {
-        await leave();
-      } catch (_) {}
-    }
-    await ProviderWebBridge.dispose(providerId, sessionId);
     _disposed = true;
+    final cleanup = Cleanup();
+    if (state.isActive || state == MediaSessionState.connecting) {
+      await cleanup.run(
+        'bridge.leave',
+        () => ProviderWebBridge.leave(providerId, sessionId),
+      );
+    }
+    await cleanup.run(
+      'bridge.dispose',
+      () => ProviderWebBridge.dispose(providerId, sessionId),
+    );
     _setState(MediaSessionState.disposed);
-    await _stateController.close();
-    await _snapshotController.close();
-    await _eventController.close();
-    await _statsController.close();
+    await cleanup.run('states', _stateController.close);
+    await cleanup.run('snapshots', _snapshotController.close);
+    await cleanup.run('events', _eventController.close);
+    await cleanup.run('stats', _statsController.close);
+    cleanup.finish(domain: providerId);
   }
 
   Future<void> setMuted(bool muted) async {
@@ -841,8 +837,8 @@ abstract class ProviderWebSessionBase
     _ensureActive();
     _requireCapability(capabilities.canSendData, 'sending data messages');
     if (message.trim().isEmpty || topic.trim().isEmpty) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Message and topic must not be empty.',
         providerId: providerId,
       );
@@ -943,8 +939,8 @@ abstract class ProviderWebSessionBase
         _emit(MediaMessageReceived(message));
         break;
       case 'error':
-        final error = MediaError(
-          code: MediaErrorCode.nativeError,
+        final error = RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message: event['message']?.toString() ?? 'Browser media SDK error.',
           providerId: providerId,
         );
@@ -958,7 +954,7 @@ abstract class ProviderWebSessionBase
     final nextTracks = <String, ProviderWebVideoTrack>{};
     final rawTracks = event['tracks'];
     if (rawTracks is List) {
-      for (final raw in rawTracks.whereType<Map>()) {
+      for (final raw in rawTracks.whereType<Map<Object?, Object?>>()) {
         final value = Map<String, Object?>.from(raw);
         final id = value['id']?.toString().trim() ?? '';
         if (id.isEmpty) continue;
@@ -987,7 +983,7 @@ abstract class ProviderWebSessionBase
     final rawParticipants = event['participants'];
     final participants = <MediaParticipant>[];
     if (rawParticipants is List) {
-      for (final raw in rawParticipants.whereType<Map>()) {
+      for (final raw in rawParticipants.whereType<Map<Object?, Object?>>()) {
         final value = Map<String, Object?>.from(raw);
         final id = value['id']?.toString().trim() ?? '';
         if (id.isEmpty) continue;
@@ -1083,7 +1079,11 @@ abstract class ProviderWebSessionBase
     _emit(MediaNetworkStatsUpdated(stats));
   }
 
-  void _setState(MediaSessionState next, {String? reason, MediaError? error}) {
+  void _setState(
+    MediaSessionState next, {
+    String? reason,
+    RealtimeException? error,
+  }) {
     if (state == next) return;
     final previous = state;
     _updateSnapshot(
@@ -1136,8 +1136,8 @@ abstract class ProviderWebSessionBase
   void _ensureActive() {
     _ensureNotDisposed();
     if (!state.isActive) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message:
             'Cannot control $providerId media while the session is $state.',
         providerId: providerId,
@@ -1147,8 +1147,8 @@ abstract class ProviderWebSessionBase
 
   void _ensureNotDisposed() {
     if (_disposed || state == MediaSessionState.disposed) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'This $providerId session has been disposed.',
         providerId: providerId,
       );
@@ -1157,8 +1157,8 @@ abstract class ProviderWebSessionBase
 
   void _requireCapability(bool supported, String feature) {
     if (!supported) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             '$providerId $feature is not supported in this browser session.',
         providerId: providerId,
@@ -1166,12 +1166,12 @@ abstract class ProviderWebSessionBase
     }
   }
 
-  MediaError _mapError(String fallback, Object error) {
-    if (error is MediaError) return error.withProvider(providerId);
-    return MediaError(
+  RealtimeException _mapError(String fallback, Object error) {
+    if (error is RealtimeException) return error.withProvider(providerId);
+    return RealtimeException(
       code: error.toString().toLowerCase().contains('permission')
-          ? MediaErrorCode.permissionDenied
-          : MediaErrorCode.nativeError,
+          ? RealtimeErrorCode.permissionDenied
+          : RealtimeErrorCode.providerError,
       message: '$fallback ${error.toString()}',
       details: error,
       providerId: providerId,

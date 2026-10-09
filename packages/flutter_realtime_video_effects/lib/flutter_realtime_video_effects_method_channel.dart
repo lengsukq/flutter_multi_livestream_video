@@ -87,7 +87,7 @@ class MethodChannelFlutterRealtimeVideoEffects
         await methodChannel.invokeListMethod<Object?>('listCameras') ??
         const [];
     return values
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map(
           (value) => VideoEffectsCameraDevice.fromJson(
             value.map((key, value) => MapEntry(key.toString(), value)),

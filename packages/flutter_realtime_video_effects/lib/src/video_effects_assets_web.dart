@@ -19,8 +19,8 @@ Future<void> _loadScript(String file) async {
   final error = script.onError.listen((_) {
     if (!ready.isCompleted) {
       ready.completeError(
-        MediaError(
-          code: MediaErrorCode.nativeError,
+        RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message: 'Unable to load the video effects runtime: $file.',
         ),
       );

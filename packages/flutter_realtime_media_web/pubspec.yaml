@@ -9,6 +9,8 @@ environment:
   flutter: ">=3.47.0"
 
 dependencies:
+  flutter_realtime_foundation:
+    path: ../flutter_realtime_foundation
   flutter:
     sdk: flutter
   flutter_realtime_media_core:
@@ -21,3 +23,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+
+flutter:
+  assets:
+    - assets/media-provider-bridge.js

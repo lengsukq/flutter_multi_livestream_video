@@ -72,8 +72,8 @@ class ProviderWebBridge {
 
   static JSObject get _bridge {
     if (!_globalThis.has('MediaProviderBridge')) {
-      throw const MediaError(
-        code: MediaErrorCode.unsupportedPlatform,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedPlatform,
         message:
             'The locally bundled browser media SDK bridge has not been loaded.',
         details: {'reason': 'web-sdk-unavailable'},
@@ -143,7 +143,7 @@ class ProviderWebBridge {
     final decoded = jsonDecode(result);
     if (decoded is! List) return const [];
     return decoded
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map((item) => Map<String, Object?>.from(item))
         .toList(growable: false);
   }
@@ -214,18 +214,18 @@ class ProviderWebBridge {
     }
   }
 
-  static MediaError _mapError(
+  static RealtimeException _mapError(
     String providerId,
     String fallback,
     Object error,
   ) {
-    if (error is MediaError) return error.withProvider(providerId);
+    if (error is RealtimeException) return error.withProvider(providerId);
     final message = error.toString();
     final lower = message.toLowerCase();
     final code = lower.contains('permission') || lower.contains('notallowed')
-        ? MediaErrorCode.permissionDenied
-        : MediaErrorCode.nativeError;
-    return MediaError(
+        ? RealtimeErrorCode.permissionDenied
+        : RealtimeErrorCode.providerError;
+    return RealtimeException(
       code: code,
       message: '$fallback $message',
       details: error,
