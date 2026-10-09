@@ -45,6 +45,15 @@ class DemoStrings {
 
   String get appSubtitle =>
       isZh ? '多服务商直播与音视频 SDK' : 'Multi-Provider Livestream & Video SDK';
+  String get workspaceEyebrow => isZh ? '实时互动工作台' : 'REALTIME WORKSPACE';
+  String get workspaceTitle => isZh ? '连接，从这里开始。' : 'Bring everyone together.';
+  String get workspaceDescription => isZh
+      ? '一个入口体验会议、直播与聊天。无论手机、平板还是桌面，都可以快速创建或加入。'
+      : 'Meet, go live, and chat from one place. Create or join on any screen.';
+  String get workspaceMeetings => isZh ? '多人会议' : 'Meetings';
+  String get workspaceLive => isZh ? '互动直播' : 'Go live';
+  String get workspaceChat => isZh ? '即时聊天' : 'Chat';
+  String get startHere => isZh ? '选择你想做的事' : 'What would you like to do?';
   String get backendServiceEndpoint =>
       isZh ? '后端服务地址' : 'Backend Service Endpoint';
   String get demoBackendUrl => isZh ? 'Demo 后端 URL' : 'Demo Backend URL';
