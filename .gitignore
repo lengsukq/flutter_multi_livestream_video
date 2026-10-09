@@ -99,3 +99,18 @@ node_modules/
 !/demo-server/.env.example
 /demo-server/.provider-state.json
 .vercel
+
+# Generated Flutter scaffolding (flutter run/create outputs, never commit).
+# Workspace root is a Dart tooling package, not a Flutter app: android/app,
+# ios/Runner, linux/flutter, macos/Flutter here are accidental tool outputs.
+# example/devtools_options.yaml is a local DevTools state file.
+**/GeneratedPluginRegistrant.java
+**/Flutter/GeneratedPluginRegistrant.swift
+**/Runner/GeneratedPluginRegistrant.h
+**/Runner/GeneratedPluginRegistrant.m
+**/Flutter/Generated.xcconfig
+**/Flutter/flutter_export_environment.sh
+**/Flutter/ephemeral/
+**/linux/flutter/generated_*
+**/android/local.properties
+**/devtools_options.yaml
