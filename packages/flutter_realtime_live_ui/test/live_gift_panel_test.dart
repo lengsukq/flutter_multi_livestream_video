@@ -7,7 +7,7 @@ class Repository implements LiveInteractionRepository {
   final ids = <String>[];
   bool fail = true;
   @override
-  Future<LiveInteractionState> snapshot() async => const LiveInteractionState(
+  Future<LiveInteractionState> snapshot() async => LiveInteractionState(
     roomCode: 'live1',
     revision: 0,
     selfUserId: 'alice',

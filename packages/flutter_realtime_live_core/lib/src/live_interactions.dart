@@ -1,15 +1,17 @@
+import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 
 class LiveGift {
   const LiveGift({required this.id, required this.name, required this.icon});
   final String id, name, icon;
-  factory LiveGift.fromJson(Map<String, dynamic> value) => LiveGift(
-    id: value['id'] as String,
-    name: value['name'] as String,
-    icon: value['icon'] as String,
+  factory LiveGift.fromJson(Map<String, dynamic> value) =>
+      JsonReader(value).decode(() => LiveGift._fromJsonUnchecked(value));
+  factory LiveGift._fromJsonUnchecked(Map<String, dynamic> value) => LiveGift(
+    id: JsonReader(value).required<String>('id'),
+    name: JsonReader(value).required<String>('name'),
+    icon: JsonReader(value).required<String>('icon'),
   );
 }
 
@@ -27,29 +29,34 @@ class LiveGiftEvent {
   final String id, userId, displayName, recipientId, giftId;
   final int sequence, quantity;
   final DateTime timestamp;
-  factory LiveGiftEvent.fromJson(Map<String, dynamic> value) => LiveGiftEvent(
-    id: value['id'] as String,
-    sequence: value['sequence'] as int,
-    userId: value['userId'] as String,
-    displayName: value['displayName'] as String,
-    recipientId: value['recipientId'] as String,
-    giftId: value['giftId'] as String,
-    quantity: value['quantity'] as int,
-    timestamp: DateTime.parse(value['timestamp'] as String),
-  );
+  factory LiveGiftEvent.fromJson(Map<String, dynamic> value) =>
+      JsonReader(value).decode(() => LiveGiftEvent._fromJsonUnchecked(value));
+  factory LiveGiftEvent._fromJsonUnchecked(Map<String, dynamic> value) =>
+      LiveGiftEvent(
+        id: JsonReader(value).required<String>('id'),
+        sequence: JsonReader(value).required<int>('sequence'),
+        userId: JsonReader(value).required<String>('userId'),
+        displayName: JsonReader(value).required<String>('displayName'),
+        recipientId: JsonReader(value).required<String>('recipientId'),
+        giftId: JsonReader(value).required<String>('giftId'),
+        quantity: JsonReader(value).required<int>('quantity'),
+        timestamp: JsonReader(value).dateTime('timestamp'),
+      );
 }
 
 class LiveInteractionState {
-  const LiveInteractionState({
+  LiveInteractionState({
     required this.roomCode,
     required this.revision,
     required this.selfUserId,
     required this.recipientId,
     required this.canSendGift,
-    this.catalog = const [],
-    this.events = const [],
-    this.totals = const {},
-  });
+    List<LiveGift> catalog = const [],
+    List<LiveGiftEvent> events = const [],
+    Map<String, int> totals = const {},
+  }) : catalog = List.unmodifiable(catalog),
+       events = List.unmodifiable(events),
+       totals = Map.unmodifiable(totals);
   final String roomCode, selfUserId, recipientId;
   final int revision;
   final bool canSendGift;
@@ -57,22 +64,22 @@ class LiveInteractionState {
   final List<LiveGiftEvent> events;
   final Map<String, int> totals;
   factory LiveInteractionState.fromJson(Map<String, dynamic> value) =>
+      JsonReader(
+        value,
+      ).decode(() => LiveInteractionState._fromJsonUnchecked(value));
+  factory LiveInteractionState._fromJsonUnchecked(Map<String, dynamic> value) =>
       LiveInteractionState(
-        roomCode: value['roomCode'] as String,
-        revision: value['revision'] as int,
-        selfUserId: value['selfUserId'] as String,
-        recipientId: value['recipientId'] as String,
-        canSendGift: value['canSendGift'] as bool,
-        catalog: List.unmodifiable(
-          (value['catalog'] as List).map(
-            (g) => LiveGift.fromJson(Map<String, dynamic>.from(g as Map)),
-          ),
-        ),
-        events: List.unmodifiable(
-          (value['events'] as List).map(
-            (g) => LiveGiftEvent.fromJson(Map<String, dynamic>.from(g as Map)),
-          ),
-        ),
+        roomCode: JsonReader(value).required<String>('roomCode'),
+        revision: JsonReader(value).required<int>('revision'),
+        selfUserId: JsonReader(value).required<String>('selfUserId'),
+        recipientId: JsonReader(value).required<String>('recipientId'),
+        canSendGift: JsonReader(value).required<bool>('canSendGift'),
+        catalog: JsonReader(
+          value,
+        ).objects('catalog', LiveGift.fromJson, optional: false),
+        events: JsonReader(
+          value,
+        ).objects('events', LiveGiftEvent.fromJson, optional: false),
         totals: Map.unmodifiable((value['totals'] as Map).cast<String, int>()),
       );
 }
@@ -103,46 +110,41 @@ class HttpLiveInteractionRepository implements LiveInteractionRepository {
     required this.participantCredential,
     this.tokenProvider,
     http.Client? client,
+    this.requestTimeout = const Duration(seconds: 10),
   }) : _base = Uri.parse(backendUrl),
-       _client = client ?? http.Client(),
-       _ownsClient = client == null;
+       _executor = RealtimeHttpExecutor(client: client);
   final Uri _base;
   final String roomCode, participantId, participantCredential;
   final FutureOr<String?> Function()? tokenProvider;
-  final http.Client _client;
-  final bool _ownsClient;
+  final RealtimeHttpExecutor _executor;
+  final Duration requestTimeout;
   Future<LiveInteractionState> _post(
     String operation,
     Map<String, Object?> data,
   ) async {
-    final bearer = await tokenProvider?.call();
-    final uri = _base.replace(
-      path:
-          '${_base.path.replaceFirst(RegExp(r'/$'), '')}/rooms/${Uri.encodeComponent(roomCode)}/live/$operation',
+    final json = await _executor.request(
+      method: 'POST',
+      uri: _base.replace(
+        path:
+            '${_base.path.replaceFirst(RegExp(r"/$"), "")}/rooms/${Uri.encodeComponent(roomCode)}/live/$operation',
+      ),
+      timeout: requestTimeout,
+      domain: 'live',
+      headers: () async {
+        final bearer = await tokenProvider?.call();
+        return {
+          'Content-Type': 'application/json',
+          if (bearer != null && bearer.isNotEmpty)
+            'Authorization': 'Bearer $bearer',
+        };
+      },
+      body: {
+        'requesterParticipantId': participantId,
+        'participantCredential': participantCredential,
+        ...data,
+      },
     );
-    final response = await _client
-        .post(
-          uri,
-          headers: {
-            'Content-Type': 'application/json',
-            if (bearer != null && bearer.isNotEmpty)
-              'Authorization': 'Bearer $bearer',
-          },
-          body: jsonEncode({
-            'requesterParticipantId': participantId,
-            'participantCredential': participantCredential,
-            ...data,
-          }),
-        )
-        .timeout(const Duration(seconds: 10));
-    if (response.statusCode != 200) {
-      throw StateError(
-        'Live interaction failed (HTTP ${response.statusCode}): ${response.body}',
-      );
-    }
-    return LiveInteractionState.fromJson(
-      Map<String, dynamic>.from(jsonDecode(response.body) as Map),
-    );
+    return JsonReader(json).decode(() => LiveInteractionState.fromJson(json));
   }
 
   @override
@@ -159,7 +161,7 @@ class HttpLiveInteractionRepository implements LiveInteractionRepository {
   });
   @override
   void close() {
-    if (_ownsClient) _client.close();
+    _executor.close();
   }
 }
 
@@ -179,6 +181,8 @@ class LiveInteractionSession {
   static final _random = Random.secure();
   LiveInteractionState? _state;
   bool _disposed = false;
+  Future<void>? _disposeFuture;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   Timer? _timer;
   StreamSubscription<int>? _hints;
   Future<void>? _pending;
@@ -191,7 +195,12 @@ class LiveInteractionSession {
   String newEventId() =>
       '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}';
   Future<void> start() async {
-    if (_disposed) throw StateError('Live interactions disposed');
+    if (_disposed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Live interactions disposed',
+      );
+    }
     _hints ??= revisionTransport?.revisions.listen(
       (revision) {
         if (revision > (_state?.revision ?? -1)) _requestAutomaticRefresh();
@@ -227,7 +236,12 @@ class LiveInteractionSession {
   /// Explicit reads bypass the automatic cooldown; all reads share one flight.
   Future<void> refresh() {
     if (_disposed) {
-      return Future.error(StateError('Live interactions disposed'));
+      return Future.error(
+        const RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message: 'Live interactions disposed',
+        ),
+      );
     }
     if (_pending != null) return _pending!;
     _automaticRefreshRequested = false;
@@ -243,7 +257,19 @@ class LiveInteractionSession {
   }
 
   Future<void> _reload() async {
-    _setState(await repository.snapshot());
+    try {
+      _setState(await repository.snapshot());
+    } catch (error, stack) {
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          domain: 'live',
+          operation: 'snapshot',
+          stackTrace: stack,
+        ),
+        stack,
+      );
+    }
   }
 
   void _setState(LiveInteractionState next) {
@@ -265,19 +291,46 @@ class LiveInteractionSession {
     int quantity = 1,
     String? eventId,
   }) async {
-    if (_disposed) throw StateError('Live interactions disposed');
+    if (_disposed) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Live interactions disposed',
+      );
+    }
     if (quantity < 1 || quantity > 99) {
-      throw RangeError.range(quantity, 1, 99, 'quantity');
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
+        message: 'Gift quantity must be between 1 and 99.',
+        domain: 'live',
+        operation: 'sendGift',
+      );
     }
     if (_state == null) await start();
-    if (_state?.canSendGift != true) throw StateError('The host is offline');
-    _setState(
-      await repository.sendGift(
-        giftId,
-        quantity,
-        eventId: eventId ?? newEventId(),
-      ),
-    );
+    if (_state?.canSendGift != true) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'The host is offline',
+      );
+    }
+    try {
+      _setState(
+        await repository.sendGift(
+          giftId,
+          quantity,
+          eventId: eventId ?? newEventId(),
+        ),
+      );
+    } catch (error, stack) {
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          domain: 'live',
+          operation: 'sendGift',
+          stackTrace: stack,
+        ),
+        stack,
+      );
+    }
     if (_disposed) return;
     try {
       await revisionTransport?.publish(_state!.revision);
@@ -286,22 +339,43 @@ class LiveInteractionSession {
     }
   }
 
-  Future<void> dispose() async {
-    if (_disposed) return;
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
     _disposed = true;
-    _timer?.cancel();
-    _automaticRefreshTimer?.cancel();
-    _automaticRefreshRequested = false;
-    await _hints?.cancel();
-    try {
-      await _pending;
-    } catch (_) {
-      /* In-flight errors were reported to the caller. */
-    }
-    await revisionTransport?.dispose();
-    repository.close();
-    await _states.close();
-    await _events.close();
-    await _errors.close();
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('poll.timer', () async {
+      _timer?.cancel();
+    });
+    await cleanup.run('refresh.timer', () async {
+      _automaticRefreshTimer?.cancel();
+      _automaticRefreshRequested = false;
+    });
+    await cleanup.run('revision.subscription', () async {
+      await _hints?.cancel();
+    });
+    await cleanup.run('refresh.pending', () async {
+      try {
+        await _pending;
+      } catch (_) {
+        /* The refresh caller receives its failure. */
+      }
+    });
+    await cleanup.run('revision.transport', () async {
+      await revisionTransport?.dispose();
+    });
+    await cleanup.run('repository', () async {
+      repository.close();
+    });
+    await cleanup.run('states', () async {
+      await _states.close();
+    });
+    await cleanup.run('events', () async {
+      await _events.close();
+    });
+    await cleanup.run('errors', () async {
+      await _errors.close();
+    });
+    cleanup.finish(domain: 'live');
   }
 }

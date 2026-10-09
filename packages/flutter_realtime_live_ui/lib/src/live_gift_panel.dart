@@ -54,7 +54,7 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
 
   @override
   void dispose() {
-    _errors?.cancel();
+    observeDetached(_errors?.cancel());
     super.dispose();
   }
 
@@ -375,7 +375,7 @@ class _LiveGiftBannerState extends State<LiveGiftBanner> {
   @override
   void dispose() {
     _hide?.cancel();
-    _events?.cancel();
+    observeDetached(_events?.cancel());
     super.dispose();
   }
 
@@ -415,4 +415,3 @@ class _LiveGiftBannerState extends State<LiveGiftBanner> {
           ),
   );
 }
-

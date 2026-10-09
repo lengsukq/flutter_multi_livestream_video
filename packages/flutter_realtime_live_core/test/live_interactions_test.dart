@@ -104,14 +104,26 @@ void main() {
       repository.fail = true;
       await expectLater(
         session.sendGift('star', eventId: 'retry-gift-001'),
-        throwsStateError,
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidState,
+          ),
+        ),
       );
       repository.fail = false;
       await session.sendGift('star', eventId: 'retry-gift-001');
       expect(repository.ids, ['retry-gift-001', 'retry-gift-001']);
       await expectLater(
         session.sendGift('star', quantity: 100),
-        throwsRangeError,
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.invalidArgument,
+          ),
+        ),
       );
       await session.dispose();
     },
@@ -129,9 +141,9 @@ void main() {
             'selfUserId': 'alice',
             'recipientId': 'host',
             'canSendGift': true,
-            'catalog': [],
-            'events': [],
-            'totals': {},
+            'catalog': <Object?>[],
+            'events': <Object?>[],
+            'totals': <String, int>{},
           }),
           200,
         );
