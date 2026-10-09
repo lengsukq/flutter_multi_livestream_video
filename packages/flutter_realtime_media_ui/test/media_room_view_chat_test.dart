@@ -1348,6 +1348,184 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await fixture.dispose();
   });
+
+  testWidgets('live comment pill expands inline without a second sheet', (
+    tester,
+  ) async {
+    final fixture = _RoomFixture(role: MediaRole.viewer);
+    final chat = _FakeChatSession();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaRoomView(
+          room: fixture.room,
+          renderer: const _FakeRenderer(),
+          chatSession: chat,
+          config: const MediaRoomViewConfig(
+            roomMode: MediaRoomMode.broadcast,
+            confirmBeforeLeave: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // Tapping the capsule expands the input inline in the same page.
+    final capsule = find.ancestor(
+      of: find.text('Say something…'),
+      matching: find.byType(InkWell),
+    );
+    await tester.tap(capsule.first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'hello live');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pumpAndSettle();
+
+    expect(chat.sentMessages, contains('hello live'));
+    // Input stays expanded for follow-up messages.
+    expect(find.byType(TextField), findsOneWidget);
+
+    // Tapping the capsule again collapses the inline input.
+    await tester.tap(capsule.first);
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await chat.dispose();
+    await fixture.dispose();
+  });
+
+  testWidgets(
+    'broadcast host can toggle microphone and camera on the live stage',
+    (tester) async {
+      final fixture = _RoomFixture(
+        role: MediaRole.host,
+        participants: const [
+          MediaParticipant(id: 'me', displayName: 'Host Me', isLocal: true),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+            config: const MediaRoomViewConfig(
+              roomMode: MediaRoomMode.broadcast,
+              confirmBeforeLeave: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Host should see mic and camera toggle buttons in initial state (muted, camera off)
+      final micButton = find.byIcon(Icons.mic_off_rounded);
+      expect(micButton, findsOneWidget);
+      await tester.tap(micButton);
+      await tester.pump();
+      expect(fixture.media.toggleMuteCalls, 1);
+
+      final camButton = find.descendant(
+        of: find.byType(RealtimeGlassIconButton),
+        matching: find.byIcon(Icons.videocam_off_rounded),
+      );
+      expect(camButton, findsOneWidget);
+      await tester.tap(camButton);
+      await tester.pump();
+      expect(fixture.media.videoCalls, [true]);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets(
+    'broadcast with multiple participants only renders the host on the stage',
+    (tester) async {
+      final fixture = _RoomFixture(
+        role: MediaRole.viewer,
+        participants: const [
+          MediaParticipant(
+            id: 'viewer1',
+            displayName: 'Viewer 1',
+            isLocal: true,
+          ),
+          MediaParticipant(
+            id: 'host',
+            displayName: 'Main Host',
+            isVideoEnabled: false,
+          ),
+          MediaParticipant(id: 'viewer2', displayName: 'Viewer 2'),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.light(),
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+            config: const MediaRoomViewConfig(
+              roomMode: MediaRoomMode.broadcast,
+              confirmBeforeLeave: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Only host is resolved on the stage (and host camera is off, so shows off-camera placeholder)
+      expect(find.text('Main Host'), findsOneWidget);
+      expect(find.text('Viewer 1'), findsNothing);
+      expect(find.text('Viewer 2'), findsNothing);
+      expect(find.byIcon(Icons.videocam_off_rounded), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await fixture.dispose();
+    },
+  );
+
+  testWidgets(
+    'light theme uses light background on MediaRoomView stage instead of black',
+    (tester) async {
+      final fixture = _RoomFixture(
+        role: MediaRole.host,
+        participants: const [
+          MediaParticipant(id: 'me', displayName: 'Host', isLocal: true),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.light(),
+          home: MediaRoomView(
+            room: fixture.room,
+            renderer: const _FakeRenderer(),
+            config: const MediaRoomViewConfig(
+              roomMode: MediaRoomMode.broadcast,
+              confirmBeforeLeave: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Stage ColoredBox should match RealtimeStyle.light.background
+      final stageBoxes = tester.widgetList<ColoredBox>(find.byType(ColoredBox));
+      final hasLightBg = stageBoxes.any(
+        (box) => box.color == RealtimeStyle.light.background,
+      );
+      expect(hasLightBg, isTrue);
+
+      // And should NOT have black stage background
+      final hasBlackBg = stageBoxes.any((box) => box.color == Colors.black);
+      expect(hasBlackBg, isFalse);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await fixture.dispose();
+    },
+  );
 }
 
 class _ManagedRoomFixture {
@@ -1639,8 +1817,12 @@ class _FakeMediaSession
     initialMediaCalls.add('muted:$muted');
   }
 
+  int toggleMuteCalls = 0;
+
   @override
-  Future<void> toggleMute() async {}
+  Future<void> toggleMute() async {
+    toggleMuteCalls++;
+  }
 
   @override
   Future<void> setVideoEnabled(bool enabled) async {

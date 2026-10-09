@@ -850,7 +850,9 @@ class _LiveInlineChatInputState extends State<_LiveInlineChatInput> {
     try {
       await widget.chat.sendMessage(trimmed);
       if (!mounted) return;
-      widget.host.hideLiveChatInput();
+      _controller.clear();
+      // Keep the input expanded so follow-up messages don't require
+      // reopening; the capsule tap collapses it.
     } finally {
       if (mounted) setState(() => _sending = false);
     }
