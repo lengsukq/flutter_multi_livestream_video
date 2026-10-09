@@ -34,8 +34,8 @@ class ArtcSessionFactory implements MediaSessionFactory, MediaPreJoinProbe {
   MediaSession createSession(MediaJoinInfo joinInfo) {
     if (joinInfo.providerId != providerId ||
         !supportedRoles.contains(joinInfo.role)) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'ARTC session cannot be created for this provider or role.',
         providerId: ArtcJoinInfo.providerIdValue,
       );

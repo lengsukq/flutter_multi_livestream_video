@@ -45,8 +45,8 @@ class ArtcJoinInfo extends MediaJoinInfo {
   factory ArtcJoinInfo.fromJson(Map<String, dynamic> json) {
     final provider = json['provider']?.toString().trim().toLowerCase();
     if (provider != providerIdValue) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information does not identify the ARTC provider.',
         providerId: providerIdValue,
       );
@@ -63,16 +63,16 @@ class ArtcJoinInfo extends MediaJoinInfo {
     );
     final role = MediaRole.tryParse(json['role']);
     if (role == null) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'ARTC join information is missing a valid role.',
         providerId: providerIdValue,
       );
     }
     final block = json['artc'];
     if (block is! Map) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information is missing the ARTC credential block.',
         providerId: providerIdValue,
       );
@@ -94,8 +94,8 @@ class ArtcJoinInfo extends MediaJoinInfo {
       providerId: providerIdValue,
     );
     if (participantId != userId) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'ARTC userId must match participantId.',
         providerId: providerIdValue,
       );
@@ -110,8 +110,8 @@ class ArtcJoinInfo extends MediaJoinInfo {
         ? expiryValue.toInt()
         : int.tryParse(expiryValue?.toString() ?? '') ?? 0;
     if (expiresAtMs <= 0) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message:
             'ARTC expiresAtMs must be a positive Unix timestamp in milliseconds.',
         providerId: providerIdValue,

@@ -42,6 +42,10 @@ abstract class _ArtcMediaSession
   MediaCameraPosition _cameraPosition = MediaCameraPosition.front;
   int _trackGeneration = 0;
   bool _disposed = false;
+  bool _joinCancelled = false;
+  Future<void>? _joinFuture;
+  Future<void>? _disposeFuture;
+  Duration cleanupTimeout = const Duration(seconds: 10);
 
   @override
   final MediaRole role;
@@ -86,8 +90,8 @@ abstract class _ArtcMediaSession
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _requireActive();
     if (!supportsProcessedVideoSource(source)) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         providerId: providerId,
         message:
             'Processed video input is unavailable for this role or platform.',
@@ -123,15 +127,15 @@ abstract class _ArtcMediaSession
     _requireActive();
     if (device.kind != MediaDeviceKind.camera ||
         !capabilities.canSelectCamera) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         providerId: providerId,
         message: 'This media device cannot be selected.',
       );
     }
     if (_processedSink.source == null) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         providerId: providerId,
         message: 'Prepare the SDK video source before selecting a camera.',
       );
@@ -180,16 +184,34 @@ abstract class _ArtcMediaSession
       .length;
 
   @override
-  Future<void> join(MediaJoinInfo joinInfo) async {
+  Future<void> join(MediaJoinInfo joinInfo) {
+    if (_joinFuture != null) {
+      return Future.error(
+        _error(
+          RealtimeErrorCode.invalidState,
+          'An ARTC join is already in progress.',
+        ),
+      );
+    }
+    _joinCancelled = false;
+    late final Future<void> future;
+    future = _join(joinInfo).whenComplete(() {
+      if (identical(_joinFuture, future)) _joinFuture = null;
+    });
+    _joinFuture = future;
+    return future;
+  }
+
+  Future<void> _join(MediaJoinInfo joinInfo) async {
     if (_disposed || _state == MediaSessionState.disposed) {
       throw _error(
-        MediaErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'An ARTC session cannot join after dispose.',
       );
     }
     if (_state == MediaSessionState.joining || _state.isActive) {
       throw _error(
-        MediaErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'This ARTC session is already joining or active.',
       );
     }
@@ -198,13 +220,13 @@ abstract class _ArtcMediaSession
         joinInfo.role != role ||
         joinInfo.participantId != joinInfo.userId) {
       throw _error(
-        MediaErrorCode.invalidJoinInfo,
+        RealtimeErrorCode.invalidArgument,
         'ARTC join information does not match this session.',
       );
     }
     if (_activeSession != null && !identical(_activeSession, this)) {
       throw _error(
-        MediaErrorCode.sessionAlreadyActive,
+        RealtimeErrorCode.invalidState,
         'ARTC supports one active engine session per app process.',
       );
     }
@@ -244,10 +266,12 @@ abstract class _ArtcMediaSession
     _setState(MediaSessionState.joining);
     try {
       _engine ??= await engineFactory();
+      _ensureJoinNotCancelled();
       _setState(MediaSessionState.connecting);
       await _engine!.join(joinInfo, _createEngineEvents());
+      _ensureJoinNotCancelled();
       await _probeProcessedVideoInput();
-      if (_disposed) return;
+      _ensureJoinNotCancelled();
       final local = MediaParticipant(
         id: joinInfo.userId,
         displayName: joinInfo.displayName.isEmpty
@@ -269,16 +293,29 @@ abstract class _ArtcMediaSession
       _setState(MediaSessionState.connected);
       _scheduleCredentialRefresh();
     } catch (error) {
-      final mapped = _mapError(error, 'Unable to join the ARTC channel.');
-      await _releaseEngine(leave: true);
-      _activeSession = null;
-      _setState(MediaSessionState.failed, error: mapped);
+      final cancelled = _disposed || _joinCancelled;
+      final mapped = cancelled
+          ? _error(RealtimeErrorCode.cancelled, 'The ARTC join was cancelled.')
+          : _mapError(error, 'Unable to join the ARTC channel.');
+      await _releaseEngine(leave: !cancelled);
+      if (identical(_activeSession, this)) _activeSession = null;
+      if (!cancelled) _setState(MediaSessionState.failed, error: mapped);
       throw mapped;
     }
   }
 
+  void _ensureJoinNotCancelled() {
+    if (_disposed || _joinCancelled) {
+      throw _error(RealtimeErrorCode.cancelled, 'The ARTC join was cancelled.');
+    }
+  }
+
+  Future<void>? _leaveFuture;
   @override
-  Future<void> leave() async {
+  Future<void> leave() => _leaveFuture ??= _leave().whenComplete(() {
+    _leaveFuture = null;
+  });
+  Future<void> _leave() async {
     if (_disposed ||
         _state == MediaSessionState.ended ||
         _state == MediaSessionState.idle) {
@@ -286,8 +323,10 @@ abstract class _ArtcMediaSession
     }
     _refreshTimer?.cancel();
     _refreshTimer = null;
+    _joinCancelled = _joinCancelled || _joinFuture != null;
     _setState(MediaSessionState.leaving);
     await _releaseEngine(leave: true);
+    if (_joinCancelled) await _releaseEngine(leave: false);
     _activeSession = null;
     _trackGeneration++;
     _setSnapshot(
@@ -304,47 +343,51 @@ abstract class _ArtcMediaSession
   }
 
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
-    await leave();
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
     _disposed = true;
-    _refreshCallback = null;
-    _refreshTimer?.cancel();
-    await _releaseEngine(leave: false);
-    if (identical(_activeSession, this)) _activeSession = null;
-    _setState(MediaSessionState.disposed);
-    await _states.close();
-    await _snapshots.close();
-    await _events.close();
+    _joinCancelled = true;
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('refresh.timer', () async {
+      _refreshTimer?.cancel();
+      _refreshCallback = null;
+    });
+    if (_state.isActive || _state == MediaSessionState.connecting) {
+      await cleanup.run('engine.leave', () => _releaseEngine(leave: true));
+    }
+    await cleanup.run('engine.dispose', () => _releaseEngine(leave: false));
+    await cleanup.run('active.owner', () async {
+      if (identical(_activeSession, this)) _activeSession = null;
+    });
+    await cleanup.run('terminal', () async {
+      _setState(MediaSessionState.disposed);
+    });
+    await cleanup.run('states', () async {
+      await _states.close();
+    });
+    await cleanup.run('snapshots', () async {
+      await _snapshots.close();
+    });
+    await cleanup.run('events', () async {
+      await _events.close();
+    });
+    cleanup.finish(domain: providerId);
   }
 
   Future<void> _releaseEngine({required bool leave}) async {
-    try {
-      await _processedSink.detach();
-    } catch (error) {
-      if (!_events.isClosed) {
-        _events.add(
-          MediaFailureEvent(
-            _mapError(error, 'Unable to detach the processed video input.'),
-          ),
-        );
-      }
-    }
     final engine = _engine;
-    if (engine == null) return;
-    if (leave) {
-      try {
-        await engine.leave();
-      } catch (_) {
-        // Always release the provider even when its leave callback fails.
-      }
-    } else {
-      try {
-        await engine.dispose();
-      } finally {
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('processed.input', _processedSink.detach);
+    if (engine != null) {
+      if (leave) {
+        await cleanup.run('engine.leave', engine.leave);
+      } else {
         _engine = null;
+        await cleanup.run('engine.dispose', engine.dispose);
       }
     }
+    cleanup.finish(domain: providerId);
   }
 
   ArtcEngineEvents _createEngineEvents() => ArtcEngineEvents(
@@ -373,7 +416,7 @@ abstract class _ArtcMediaSession
         participants: [..._snapshot.participants, participant],
       ),
     );
-    _events.add(MediaParticipantJoined(participant));
+    _emit(MediaParticipantJoined(participant));
   }
 
   void _participantLeft(String userId) {
@@ -386,7 +429,7 @@ abstract class _ArtcMediaSession
             .toList(),
       ),
     );
-    _events.add(
+    _emit(
       MediaParticipantLeft(
         participantId: userId,
         displayName: existing.displayName,
@@ -417,9 +460,9 @@ abstract class _ArtcMediaSession
       final track = participants
           .firstWhere((item) => item.id == userId)
           .videoTrack!;
-      _events.add(MediaTrackPublished(track));
+      _emit(MediaTrackPublished(track));
     } else {
-      _events.add(
+      _emit(
         MediaTrackUnpublished(
           trackId: 'artc:$userId:camera:$_trackGeneration',
           participantId: userId,
@@ -438,7 +481,7 @@ abstract class _ArtcMediaSession
         )
         .toList();
     _setSnapshot(_snapshot.copyWith(participants: participants));
-    _events.add(
+    _emit(
       MediaTrackMutedChanged(
         participantId: userId,
         muted: !available,
@@ -455,7 +498,7 @@ abstract class _ArtcMediaSession
         participants: [..._snapshot.participants, participant],
       ),
     );
-    _events.add(MediaParticipantJoined(participant));
+    _emit(MediaParticipantJoined(participant));
   }
 
   void _receiveMessage(String userId, String rawData) {
@@ -480,18 +523,18 @@ abstract class _ArtcMediaSession
       providerId: providerId,
     );
     _appendMessage(item);
-    _events.add(MediaMessageReceived(item));
+    _emit(MediaMessageReceived(item));
   }
 
   void _onNativeError(int code, String message) {
-    final error = MediaError(
-      code: MediaErrorCode.nativeError,
+    final error = RealtimeException(
+      code: RealtimeErrorCode.providerError,
       message: 'ARTC reported an error: $message',
       details: {'code': code, 'message': message},
       providerId: providerId,
     );
     _setSnapshot(_snapshot.copyWith(lastError: error));
-    _events.add(MediaFailureEvent(error));
+    _emit(MediaFailureEvent(error));
   }
 
   MediaParticipant? _participantById(String userId) {
@@ -544,7 +587,7 @@ abstract class _ArtcMediaSession
     } catch (error) {
       final mapped = _mapError(error, 'Unable to renew ARTC credentials.');
       _setSnapshot(_snapshot.copyWith(lastError: mapped));
-      _events.add(MediaFailureEvent(mapped));
+      _emit(MediaFailureEvent(mapped));
       _setState(MediaSessionState.failed, error: mapped);
       await _releaseEngine(leave: true);
       _activeSession = null;
@@ -565,7 +608,7 @@ abstract class _ArtcMediaSession
         refreshed.appId != current.appId ||
         refreshed.role != current.role) {
       throw _error(
-        MediaErrorCode.invalidJoinInfo,
+        RealtimeErrorCode.invalidArgument,
         'ARTC refresh credentials changed the active room or identity.',
       );
     }
@@ -588,7 +631,14 @@ abstract class _ArtcMediaSession
     );
   }
 
-  void _setState(MediaSessionState next, {MediaError? error}) {
+  void _setState(MediaSessionState next, {RealtimeException? error}) {
+    if (_disposed) {
+      if (next == MediaSessionState.disposed) {
+        _state = next;
+        _snapshot = _snapshot.copyWith(state: next);
+      }
+      return;
+    }
     final previous = _state;
     if (previous == next && error == null) return;
     _state = next;
@@ -599,11 +649,16 @@ abstract class _ArtcMediaSession
     );
     _states.add(next);
     _snapshots.add(_snapshot);
-    _events.add(MediaConnectionStateChanged(previous: previous, current: next));
-    if (error != null) _events.add(MediaFailureEvent(error));
+    _emit(MediaConnectionStateChanged(previous: previous, current: next));
+    if (error != null) _emit(MediaFailureEvent(error));
+  }
+
+  void _emit(MediaEvent event) {
+    if (!_disposed && !_events.isClosed) _events.add(event);
   }
 
   void _setSnapshot(MediaSnapshot next) {
+    if (_disposed) return;
     _snapshot = next;
     _snapshots.add(next);
   }
@@ -614,22 +669,22 @@ abstract class _ArtcMediaSession
     );
   }
 
-  MediaError _mapError(Object error, String fallback) {
-    if (error is MediaError) return error.withProvider(providerId);
-    return MediaError(
-      code: MediaErrorCode.unknown,
+  RealtimeException _mapError(Object error, String fallback) {
+    if (error is RealtimeException) return error.withProvider(providerId);
+    return RealtimeException(
+      code: RealtimeErrorCode.unknown,
       message: error.toString().isEmpty ? fallback : error.toString(),
       providerId: providerId,
     );
   }
 
-  MediaError _error(MediaErrorCode code, String message) =>
-      MediaError(code: code, message: message, providerId: providerId);
+  RealtimeException _error(RealtimeErrorCode code, String message) =>
+      RealtimeException(code: code, message: message, providerId: providerId);
 
   void _requireActive() {
     if (!_state.isActive || _engine == null) {
       throw _error(
-        MediaErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'ARTC media controls require an active session.',
       );
     }
@@ -638,7 +693,7 @@ abstract class _ArtcMediaSession
   void _requireCapability(bool allowed, String feature) {
     if (!allowed) {
       throw _error(
-        MediaErrorCode.unsupportedFeature,
+        RealtimeErrorCode.unsupportedFeature,
         'ARTC $role sessions do not support $feature.',
       );
     }
@@ -649,7 +704,7 @@ abstract class _ArtcMediaSession
     _requireCapability(_capabilities.canSendData, 'sending data messages');
     if (_snapshot.localMuted && !_snapshot.localVideoEnabled) {
       throw _error(
-        MediaErrorCode.invalidState,
+        RealtimeErrorCode.invalidState,
         'ARTC data messages require an active local audio or video stream. Enable the microphone or camera first.',
       );
     }
@@ -657,14 +712,14 @@ abstract class _ArtcMediaSession
     final normalizedTopic = topic.trim();
     if (content.isEmpty || normalizedTopic.isEmpty) {
       throw _error(
-        MediaErrorCode.invalidArgument,
+        RealtimeErrorCode.invalidArgument,
         'ARTC messages and topics must not be empty.',
       );
     }
     final envelope = jsonEncode({'message': content, 'topic': normalizedTopic});
     if (utf8.encode(envelope).length > 1000) {
       throw _error(
-        MediaErrorCode.invalidArgument,
+        RealtimeErrorCode.invalidArgument,
         'ARTC data messages must be at most 1000 UTF-8 bytes.',
       );
     }
@@ -686,7 +741,7 @@ abstract class _ArtcMediaSession
     _requireCapability(_capabilities.canPublishAudio, 'publishing audio');
     await _engine!.setMuted(muted);
     _setSnapshot(_snapshot.copyWith(localMuted: muted));
-    _events.add(MediaLocalMediaChanged(muted: muted));
+    _emit(MediaLocalMediaChanged(muted: muted));
   }
 
   Future<void> _setVideoEnabled(bool enabled) async {
@@ -720,9 +775,9 @@ abstract class _ArtcMediaSession
         ),
       );
       if (enabled) {
-        _events.add(MediaTrackPublished(localTrack!));
+        _emit(MediaTrackPublished(localTrack!));
       } else {
-        _events.add(
+        _emit(
           MediaTrackUnpublished(
             trackId: 'artc:${info.userId}:camera:$_trackGeneration',
             participantId: info.userId,
@@ -730,7 +785,7 @@ abstract class _ArtcMediaSession
         );
       }
     }
-    _events.add(MediaLocalMediaChanged(videoEnabled: enabled));
+    _emit(MediaLocalMediaChanged(videoEnabled: enabled));
   }
 
   Future<void> _switchCamera(MediaCameraPosition position) async {

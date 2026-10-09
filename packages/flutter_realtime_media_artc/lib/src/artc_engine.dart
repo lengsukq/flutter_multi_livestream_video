@@ -177,14 +177,14 @@ class _NativeArtcEngine implements ArtcEngine {
     try {
       await _methodChannel.invokeMethod<void>(method, arguments);
     } on PlatformException catch (error) {
-      throw MediaError(
+      throw RealtimeException(
         code: switch (error.code) {
-          'permission_denied' => MediaErrorCode.permissionDenied,
-          'invalid_state' => MediaErrorCode.invalidState,
-          'unsupported_platform' => MediaErrorCode.unsupportedPlatform,
-          'unsupported_feature' => MediaErrorCode.unsupportedFeature,
-          'invalid_join_info' => MediaErrorCode.invalidJoinInfo,
-          _ => MediaErrorCode.nativeError,
+          'permission_denied' => RealtimeErrorCode.permissionDenied,
+          'invalid_state' => RealtimeErrorCode.invalidState,
+          'unsupported_platform' => RealtimeErrorCode.unsupportedPlatform,
+          'unsupported_feature' => RealtimeErrorCode.unsupportedFeature,
+          'invalid_join_info' => RealtimeErrorCode.invalidArgument,
+          _ => RealtimeErrorCode.providerError,
         },
         message: error.message ?? 'ARTC native call failed (${error.code}).',
         details: error.details,

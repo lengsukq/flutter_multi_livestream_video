@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
@@ -36,6 +37,33 @@ Map<String, Object?> response({MediaRole role = MediaRole.participant}) => {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('ARTC late join remains cancelled after leaving pending room', () async {
+    final pending = Completer<void>();
+    final engine = _FakeArtcEngine()..pendingJoin = pending.future;
+    final session = ArtcSessionFactory(
+      engineFactory: () async => engine,
+    ).createSession(joinInfo());
+    final joining = session.join(joinInfo());
+    final cancelled = expectLater(
+      joining,
+      throwsA(
+        isA<RealtimeException>().having(
+          (error) => error.code,
+          'code',
+          RealtimeErrorCode.cancelled,
+        ),
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    await session.leave().timeout(const Duration(seconds: 2));
+    expect(session.state, MediaSessionState.ended);
+    pending.complete();
+    await cancelled;
+    expect(session.state, MediaSessionState.ended);
+    await session.dispose();
+    expect(engine.disposed, isTrue);
+  });
+
   test(
     'processed source owns camera control and detaches before leave',
     () async {
@@ -173,10 +201,10 @@ void main() {
     expect(
       () => ArtcJoinInfo.fromJson(invalidProvider),
       throwsA(
-        isA<MediaError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          MediaErrorCode.invalidJoinInfo,
+          RealtimeErrorCode.invalidArgument,
         ),
       ),
     );
@@ -185,10 +213,10 @@ void main() {
     expect(
       () => ArtcJoinInfo.fromJson(wrongUser),
       throwsA(
-        isA<MediaError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          MediaErrorCode.invalidJoinInfo,
+          RealtimeErrorCode.invalidArgument,
         ),
       ),
     );
@@ -197,10 +225,10 @@ void main() {
     expect(
       () => ArtcJoinInfo.fromJson(noExpiry),
       throwsA(
-        isA<MediaError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          MediaErrorCode.invalidJoinInfo,
+          RealtimeErrorCode.invalidArgument,
         ),
       ),
     );
@@ -227,10 +255,10 @@ void main() {
       await expectLater(
         interactive.sendMessage('too early'),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidState,
+            RealtimeErrorCode.invalidState,
           ),
         ),
       );
@@ -248,10 +276,10 @@ void main() {
       await expectLater(
         interactive.setScreenShareEnabled(true),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -329,10 +357,10 @@ void main() {
       await expectLater(
         (session as BroadcastViewerSession).sendMessage('not allowed'),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -418,10 +446,10 @@ void main() {
     await expectLater(
       second.join(joinInfo()),
       throwsA(
-        isA<MediaError>().having(
+        isA<RealtimeException>().having(
           (error) => error.code,
           'code',
-          MediaErrorCode.sessionAlreadyActive,
+          RealtimeErrorCode.invalidState,
         ),
       ),
     );
@@ -431,6 +459,7 @@ void main() {
 }
 
 class _FakeArtcEngine implements ArtcEngine {
+  Future<void>? pendingJoin;
   final List<ArtcJoinInfo> joined = [];
   final List<String> calls = [];
   ArtcEngineEvents? events;
@@ -441,6 +470,7 @@ class _FakeArtcEngine implements ArtcEngine {
   Future<void> join(ArtcJoinInfo info, ArtcEngineEvents events) async {
     joined.add(info);
     this.events = events;
+    if (pendingJoin != null) await pendingJoin;
   }
 
   @override
