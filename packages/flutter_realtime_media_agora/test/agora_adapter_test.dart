@@ -63,10 +63,10 @@ void main() {
           },
         }),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidJoinInfo,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -78,14 +78,14 @@ void main() {
           'provider': 'livekit',
           'roomCode': 'room-a',
         }),
-        throwsA(isA<MediaError>()),
+        throwsA(isA<RealtimeException>()),
       );
       expect(
         () => AgoraJoinInfo.fromBackendResponse({
           'provider': 'agora',
           'roomCode': 'room-a',
         }),
-        throwsA(isA<MediaError>()),
+        throwsA(isA<RealtimeException>()),
       );
     });
 
@@ -102,10 +102,10 @@ void main() {
           },
         }),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidJoinInfo,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -194,10 +194,10 @@ void main() {
       await expectLater(
         participant.switchCamera(MediaCameraPosition.back),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );
@@ -216,10 +216,10 @@ void main() {
           ),
         ),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidJoinInfo,
+            RealtimeErrorCode.invalidArgument,
           ),
         ),
       );
@@ -232,10 +232,10 @@ void main() {
       await expectLater(
         session.setMuted(false),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.invalidState,
+            RealtimeErrorCode.invalidState,
           ),
         ),
       );
@@ -248,10 +248,10 @@ void main() {
       expect(
         () => session.setScreenShareEnabled(true),
         throwsA(
-          isA<MediaError>().having(
+          isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            MediaErrorCode.unsupportedFeature,
+            RealtimeErrorCode.unsupportedFeature,
           ),
         ),
       );

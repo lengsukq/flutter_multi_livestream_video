@@ -33,8 +33,8 @@ class AgoraJoinInfo extends MediaJoinInfo {
     if (provider != null &&
         provider.isNotEmpty &&
         provider != providerIdValue) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Expected Agora join information, got "$provider".',
         providerId: providerIdValue,
       );
@@ -48,8 +48,8 @@ class AgoraJoinInfo extends MediaJoinInfo {
     final role = MediaRole.tryParse(json['role']) ?? MediaRole.participant;
     final agoraValue = json['agora'];
     if (agoraValue is! Map) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Join information is missing the "agora" provider block.',
         providerId: providerIdValue,
       );
@@ -74,8 +74,8 @@ class AgoraJoinInfo extends MediaJoinInfo {
 
     final uid = _parseUid(agora['uid']);
     if (uid == null || uid <= 0 || uid > 0x7fffffff) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'agora.uid must be an integer between 1 and 2147483647.',
         providerId: providerIdValue,
       );
@@ -86,8 +86,8 @@ class AgoraJoinInfo extends MediaJoinInfo {
         ? uid.toString()
         : participantId;
     if (resolvedParticipantId != uid.toString()) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'participantId must match agora.uid.',
         providerId: providerIdValue,
       );

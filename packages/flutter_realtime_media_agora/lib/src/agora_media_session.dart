@@ -67,13 +67,13 @@ abstract class _AgoraMediaSession
         MediaStatsProvider,
         ProcessedVideoSink,
         MediaDeviceController {
-  _AgoraMediaSession(this.role)
-    : _capabilities = _capabilitiesForRole(role),
+  _AgoraMediaSession(this.role, {agora.RtcEngine Function()? engineFactory})
+    : _engineFactory = engineFactory ?? agora.createAgoraRtcEngine,
+      _capabilities = _capabilitiesForRole(role),
       _snapshot = MediaSnapshot(
         role: role,
         capabilities: _capabilitiesForRole(role),
       );
-
   @override
   final MediaRole role;
 
@@ -92,6 +92,7 @@ abstract class _AgoraMediaSession
   final MediaCapabilities _capabilities;
   MediaSnapshot _snapshot;
   MediaSessionState _state = MediaSessionState.idle;
+  final agora.RtcEngine Function() _engineFactory;
   agora.RtcEngine? _engine;
   int? _customVideoTrackId;
   final _processedSink = NativeProcessedVideoSink(providerId: 'agora');
@@ -108,8 +109,8 @@ abstract class _AgoraMediaSession
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _ensurePublisherActive('processed video');
     if (!supportsProcessedVideoSource(source)) {
-      throw const MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Processed video is unavailable.',
       );
     }
@@ -152,15 +153,15 @@ abstract class _AgoraMediaSession
     _ensurePublisherActive('camera device selection');
     if (device.kind != MediaDeviceKind.camera ||
         !capabilities.canSelectCamera) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         providerId: providerId,
         message: 'This media device cannot be selected.',
       );
     }
     if (_processedSink.source == null) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         providerId: providerId,
         message: 'Prepare the SDK video source before selecting a camera.',
       );
@@ -181,6 +182,8 @@ abstract class _AgoraMediaSession
   bool _localMuted = true;
   bool _localVideoEnabled = false;
   bool _disposed = false;
+  bool _joinCancelled = false;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   MediaCameraPosition _cameraPosition = MediaCameraPosition.front;
   MediaConnectionStats? _connectionStats;
 
@@ -233,16 +236,17 @@ abstract class _AgoraMediaSession
 
   Future<void> _join(MediaJoinInfo rawJoinInfo) async {
     _ensureNotDisposed();
+    _joinCancelled = false;
     if (rawJoinInfo is! AgoraJoinInfo) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Agora session requires AgoraJoinInfo.',
         providerId: _agoraProviderId,
       );
     }
     if (rawJoinInfo.role != role) {
-      throw MediaError(
-        code: MediaErrorCode.invalidJoinInfo,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message:
             'Agora session role ${role.wireName} does not match join role '
             '${rawJoinInfo.role.wireName}.',
@@ -252,8 +256,8 @@ abstract class _AgoraMediaSession
     if (_state.isActive ||
         _state == MediaSessionState.joining ||
         _state == MediaSessionState.leaving) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'Agora session is already active or changing state.',
         providerId: providerId,
       );
@@ -269,12 +273,18 @@ abstract class _AgoraMediaSession
     _dataStreamId = null;
     _setState(MediaSessionState.joining);
 
-    final engine = agora.createAgoraRtcEngine();
+    final engine = _engineFactory();
     _engine = engine;
     final completer = Completer<void>();
     _joinCompleter = completer;
 
     try {
+      if (_disposed) {
+        throw const RealtimeException(
+          code: RealtimeErrorCode.cancelled,
+          message: 'Session is closing.',
+        );
+      }
       await engine.initialize(
         agora.RtcEngineContext(
           appId: rawJoinInfo.appId,
@@ -282,11 +292,14 @@ abstract class _AgoraMediaSession
               agora.ChannelProfileType.channelProfileLiveBroadcasting,
         ),
       );
+      _ensureJoinNotCancelled();
       final handler = _buildEventHandler();
       _eventHandler = handler;
       engine.registerEventHandler(handler);
       await engine.enableAudio();
+      _ensureJoinNotCancelled();
       await engine.enableVideo();
+      _ensureJoinNotCancelled();
       await engine.enableAudioVolumeIndication(
         interval: 250,
         smooth: 3,
@@ -300,23 +313,31 @@ abstract class _AgoraMediaSession
         uid: rawJoinInfo.uid,
         options: _channelOptions(),
       );
+      _ensureJoinNotCancelled();
 
       await completer.future.timeout(const Duration(seconds: 20));
+      _ensureJoinNotCancelled();
       _refreshSnapshot(clearLastError: true);
       if (_state != MediaSessionState.connected) {
         _setState(MediaSessionState.connected);
       }
-    } on MediaError {
-      await _tearDownEngine();
-      _setState(MediaSessionState.failed);
-      rethrow;
-    } catch (error) {
+    } on RealtimeException catch (error, stack) {
+      await _rollbackJoin(error, stack);
+    } catch (error, stack) {
       final mapped = _mapError(error, 'Unable to join the Agora channel.');
-      await _tearDownEngine();
-      _setState(MediaSessionState.failed, error: mapped);
-      throw mapped;
+      await _rollbackJoin(mapped, stack);
     } finally {
       _joinCompleter = null;
+    }
+  }
+
+  void _ensureJoinNotCancelled() {
+    if (_disposed || _joinCancelled) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.cancelled,
+        message: 'The Agora join was cancelled.',
+        providerId: providerId,
+      );
     }
   }
 
@@ -341,8 +362,8 @@ abstract class _AgoraMediaSession
   agora.RtcEngineEventHandler _buildEventHandler() {
     return agora.RtcEngineEventHandler(
       onError: (err, message) {
-        final error = MediaError(
-          code: MediaErrorCode.nativeError,
+        final error = RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message: 'Agora error ${err.name}: $message',
           details: err,
           providerId: providerId,
@@ -351,6 +372,12 @@ abstract class _AgoraMediaSession
         _reportFailure(error);
       },
       onJoinChannelSuccess: (connection, elapsed) {
+        if (_disposed ||
+            _joinCancelled ||
+            _state == MediaSessionState.leaving ||
+            _state == MediaSessionState.ended) {
+          return;
+        }
         final uid = connection.localUid ?? _joinInfo?.uid;
         if (uid != null) {
           _localUid = uid;
@@ -425,8 +452,8 @@ abstract class _AgoraMediaSession
           case agora.ConnectionStateType.connectionStateReconnecting:
             _setState(MediaSessionState.reconnecting, reason: reason.name);
           case agora.ConnectionStateType.connectionStateFailed:
-            final error = MediaError(
-              code: MediaErrorCode.nativeError,
+            final error = RealtimeException(
+              code: RealtimeErrorCode.providerError,
               message: 'Agora connection failed: ${reason.name}.',
               providerId: providerId,
             );
@@ -440,8 +467,8 @@ abstract class _AgoraMediaSession
           case agora.ConnectionStateType.connectionStateDisconnected:
             final pending = _joinCompleter;
             if (pending != null && !pending.isCompleted) {
-              final error = MediaError(
-                code: MediaErrorCode.nativeError,
+              final error = RealtimeException(
+                code: RealtimeErrorCode.providerError,
                 message:
                     'Agora disconnected before join completed: ${reason.name}.',
                 providerId: providerId,
@@ -521,8 +548,8 @@ abstract class _AgoraMediaSession
       onLocalVideoStateChanged: (source, state, reason) {
         if (state == agora.LocalVideoStreamState.localVideoStreamStateFailed) {
           _reportFailure(
-            MediaError(
-              code: MediaErrorCode.nativeError,
+            RealtimeException(
+              code: RealtimeErrorCode.providerError,
               message: 'Agora local video failed: ${reason.name}.',
               providerId: providerId,
             ),
@@ -565,8 +592,8 @@ abstract class _AgoraMediaSession
         _handleStreamMessage(remoteUid, data, sentTs);
       },
       onRequestToken: (connection) {
-        final error = MediaError(
-          code: MediaErrorCode.nativeError,
+        final error = RealtimeException(
+          code: RealtimeErrorCode.providerError,
           message:
               'Agora requested a new token before the session finished joining. '
               'Check the App ID, App Certificate, token TTL, channel name, and UID.',
@@ -576,8 +603,8 @@ abstract class _AgoraMediaSession
         _reportFailure(error);
       },
       onPermissionError: (permissionType) {
-        final error = MediaError(
-          code: MediaErrorCode.permissionDenied,
+        final error = RealtimeException(
+          code: RealtimeErrorCode.permissionDenied,
           message: 'Agora media permission denied: ${permissionType.name}.',
           providerId: providerId,
         );
@@ -587,7 +614,7 @@ abstract class _AgoraMediaSession
     );
   }
 
-  bool _failPendingJoin(MediaError error) {
+  bool _failPendingJoin(RealtimeException error) {
     final completer = _joinCompleter;
     if (completer == null || completer.isCompleted) return false;
     completer.completeError(error);
@@ -747,8 +774,8 @@ abstract class _AgoraMediaSession
 
   Future<void> switchCameraInternal(MediaCameraPosition position) async {
     if (!capabilities.canSwitchCamera) {
-      throw const MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'Agora front/back camera switching is available on Android and '
             'iOS only. macOS uses the current desktop camera.',
@@ -772,24 +799,24 @@ abstract class _AgoraMediaSession
   }
 
   Future<void> setScreenShareEnabledInternal(bool enabled) {
-    throw const MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw const RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: 'Agora screen sharing is deferred in this SDK version.',
       providerId: _agoraProviderId,
     );
   }
 
   Future<List<MediaAudioDevice>> listAudioDevicesInternal() {
-    throw const MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw const RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: 'Agora audio-device enumeration is not exposed yet.',
       providerId: _agoraProviderId,
     );
   }
 
   Future<void> selectAudioDeviceInternal(MediaAudioDevice device) {
-    throw const MediaError(
-      code: MediaErrorCode.unsupportedFeature,
+    throw const RealtimeException(
+      code: RealtimeErrorCode.unsupportedFeature,
       message: 'Agora audio-device selection is not exposed yet.',
       providerId: _agoraProviderId,
     );
@@ -824,8 +851,8 @@ abstract class _AgoraMediaSession
   Future<void> sendMessage(String message, {String topic = 'chat'}) async {
     _ensureActive();
     if (!capabilities.canSendData) {
-      throw const MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message:
             'Agora viewer data sending is disabled because RTC data streams '
             'are host-only in live broadcasting.',
@@ -835,15 +862,15 @@ abstract class _AgoraMediaSession
     final normalizedMessage = message.trim();
     final normalizedTopic = topic.trim();
     if (normalizedMessage.isEmpty) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Message must not be empty.',
         providerId: _agoraProviderId,
       );
     }
     if (normalizedTopic.isEmpty) {
-      throw const MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message: 'Message topic must not be empty.',
         providerId: _agoraProviderId,
       );
@@ -858,8 +885,8 @@ abstract class _AgoraMediaSession
       }),
     );
     if (encoded.length > 1024) {
-      throw MediaError(
-        code: MediaErrorCode.invalidArgument,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
         message:
             'Agora RTC data-stream messages must be at most 1024 bytes; '
             'encoded payload is ${encoded.length} bytes.',
@@ -885,6 +912,11 @@ abstract class _AgoraMediaSession
 
   Future<void> _leave() async {
     if (_disposed || _state == MediaSessionState.disposed) return;
+    if (_joinFuture != null) {
+      _joinCancelled = true;
+      final pending = _joinCompleter;
+      if (pending != null && !pending.isCompleted) pending.complete();
+    }
     if (_state == MediaSessionState.idle ||
         _state == MediaSessionState.ended ||
         _state == MediaSessionState.failed) {
@@ -900,7 +932,11 @@ abstract class _AgoraMediaSession
       try {
         await engine.leaveChannel();
       } catch (error) {
-        _reportFailure(_mapError(error, 'Unable to leave the Agora channel.'));
+        if (!_joinCancelled) {
+          _reportFailure(
+            _mapError(error, 'Unable to leave the Agora channel.'),
+          );
+        }
       }
     }
     await _tearDownEngine();
@@ -916,20 +952,37 @@ abstract class _AgoraMediaSession
   Future<void> dispose() => _disposeFuture ??= _dispose();
 
   Future<void> _dispose() async {
-    if (_disposed) return;
-    if (_state.isActive ||
-        _state == MediaSessionState.joining ||
-        _state == MediaSessionState.leaving) {
-      await leave();
-    } else {
-      await _tearDownEngine();
-    }
     _disposed = true;
-    _setState(MediaSessionState.disposed);
-    await _stateController.close();
-    await _snapshotController.close();
-    await _eventController.close();
-    await _statsController.close();
+    _joinCancelled = true;
+    final pending = _joinCompleter;
+    if (pending != null && !pending.isCompleted) pending.complete();
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('join.pending', () async {
+      try {
+        await _joinFuture;
+      } catch (_) {
+        /* The join caller receives its failure. */
+      }
+    });
+    await cleanup.run('engine', () async {
+      await _tearDownEngine();
+    });
+    await cleanup.run('terminal', () async {
+      _setState(MediaSessionState.disposed);
+    });
+    await cleanup.run('states', () async {
+      await _stateController.close();
+    });
+    await cleanup.run('snapshots', () async {
+      await _snapshotController.close();
+    });
+    await cleanup.run('events', () async {
+      await _eventController.close();
+    });
+    await cleanup.run('stats', () async {
+      await _statsController.close();
+    });
+    cleanup.finish(domain: providerId);
   }
 
   void _updateConnectionStats(MediaConnectionStats value) {
@@ -949,46 +1002,60 @@ abstract class _AgoraMediaSession
         _ => MediaNetworkQuality.unknown,
       };
 
+  Future<Never> _rollbackJoin(
+    RealtimeException primary,
+    StackTrace stack,
+  ) async {
+    final cancelled = _disposed || _joinCancelled;
+    final error = cancelled
+        ? RealtimeException(
+            code: RealtimeErrorCode.cancelled,
+            message: 'The Agora join was cancelled.',
+            providerId: providerId,
+            cause: primary,
+          )
+        : primary;
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('join.rollback', _tearDownEngine);
+    if (!cancelled) _setState(MediaSessionState.failed, error: error);
+    cleanup.finish(domain: providerId, cause: error);
+    Error.throwWithStackTrace(error, stack);
+  }
+
   Future<void> _tearDownEngine() async {
-    try {
-      await _processedSink.detach();
-    } catch (error) {
-      _reportFailure(
-        _mapError(error, 'Unable to detach processed video input.'),
-      );
-    }
-    final customTrackId = _customVideoTrackId;
-    _customVideoTrackId = null;
     final engine = _engine;
     final handler = _eventHandler;
+    final customTrackId = _customVideoTrackId;
     _engine = null;
     _eventHandler = null;
+    _customVideoTrackId = null;
     _dataStreamId = null;
     _dataStreamFuture = null;
-    if (engine == null) return;
-    if (handler != null) {
-      engine.unregisterEventHandler(handler);
-    }
-    try {
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('processed.input', _processedSink.detach);
+    if (engine != null) {
+      if (handler != null) {
+        await cleanup.run(
+          'engine.events',
+          () => engine.unregisterEventHandler(handler),
+        );
+      }
       if (customTrackId != null) {
-        await engine.destroyCustomVideoTrack(customTrackId);
+        await cleanup.run(
+          'engine.customTrack',
+          () => engine.destroyCustomVideoTrack(customTrackId),
+        );
       }
-    } catch (_) {
-      // Releasing the engine below also releases its custom tracks.
-    } finally {
-      try {
-        await engine.release();
-      } catch (_) {
-        // Resource release is best-effort after leave/join failures.
-      }
+      await cleanup.run('engine.release', engine.release);
     }
+    cleanup.finish(domain: providerId);
   }
 
   agora.RtcEngine _requireEngine() {
     final engine = _engine;
     if (engine == null) {
-      throw MediaError(
-        code: MediaErrorCode.sessionNotFound,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The Agora engine is unavailable.',
         providerId: providerId,
       );
@@ -1024,8 +1091,8 @@ abstract class _AgoraMediaSession
   void _ensurePublisherActive(String feature) {
     _ensureActive();
     if (!_canPublish) {
-      throw MediaError(
-        code: MediaErrorCode.unsupportedFeature,
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
         message: 'Agora viewer sessions cannot use $feature.',
         providerId: providerId,
       );
@@ -1035,8 +1102,8 @@ abstract class _AgoraMediaSession
   void _ensureActive() {
     _ensureNotDisposed();
     if (!_state.isActive) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The Agora session is not active.',
         providerId: providerId,
       );
@@ -1045,15 +1112,19 @@ abstract class _AgoraMediaSession
 
   void _ensureNotDisposed() {
     if (_disposed || _state == MediaSessionState.disposed) {
-      throw MediaError(
-        code: MediaErrorCode.invalidState,
+      throw RealtimeException(
+        code: RealtimeErrorCode.invalidState,
         message: 'The Agora session has been disposed.',
         providerId: providerId,
       );
     }
   }
 
-  void _refreshSnapshot({MediaError? error, bool clearLastError = false}) {
+  void _refreshSnapshot({
+    RealtimeException? error,
+    bool clearLastError = false,
+  }) {
+    if (_disposed) return;
     _snapshot = _snapshot.copyWith(
       state: _state,
       role: role,
@@ -1072,7 +1143,18 @@ abstract class _AgoraMediaSession
     }
   }
 
-  void _setState(MediaSessionState next, {String? reason, MediaError? error}) {
+  void _setState(
+    MediaSessionState next, {
+    String? reason,
+    RealtimeException? error,
+  }) {
+    if (_disposed) {
+      if (next == MediaSessionState.disposed) {
+        _state = next;
+        _snapshot = _snapshot.copyWith(state: next);
+      }
+      return;
+    }
     final previous = _state;
     if (previous == next && error == null) return;
     _state = next;
@@ -1087,27 +1169,27 @@ abstract class _AgoraMediaSession
     );
   }
 
-  void _reportFailure(MediaError error) {
+  void _reportFailure(RealtimeException error) {
     _refreshSnapshot(error: error);
     _emit(MediaFailureEvent(error));
   }
 
   void _emit(MediaEvent event) {
-    if (!_eventController.isClosed) _eventController.add(event);
+    if (!_disposed && !_eventController.isClosed) _eventController.add(event);
   }
 
-  MediaError _mapError(Object error, String message) {
-    if (error is MediaError) return error.withProvider(providerId);
+  RealtimeException _mapError(Object error, String message) {
+    if (error is RealtimeException) return error.withProvider(providerId);
     if (error is TimeoutException) {
-      return MediaError(
-        code: MediaErrorCode.nativeError,
+      return RealtimeException(
+        code: RealtimeErrorCode.timeout,
         message: '$message Timed out waiting for Agora.',
         details: error,
         providerId: providerId,
       );
     }
-    return MediaError(
-      code: MediaErrorCode.nativeError,
+    return RealtimeException(
+      code: RealtimeErrorCode.providerError,
       message: message,
       details: error,
       providerId: providerId,
@@ -1117,7 +1199,7 @@ abstract class _AgoraMediaSession
 
 class AgoraInteractiveSession extends _AgoraMediaSession
     implements InteractiveMediaSession {
-  AgoraInteractiveSession() : super(MediaRole.participant);
+  AgoraInteractiveSession({super.engineFactory}) : super(MediaRole.participant);
 
   @override
   Future<void> setMuted(bool muted) => setMutedInternal(muted);
@@ -1148,7 +1230,7 @@ class AgoraInteractiveSession extends _AgoraMediaSession
 
 class AgoraHostSession extends _AgoraMediaSession
     implements BroadcastHostSession {
-  AgoraHostSession() : super(MediaRole.host);
+  AgoraHostSession({super.engineFactory}) : super(MediaRole.host);
 
   @override
   Future<void> setMuted(bool muted) => setMutedInternal(muted);
@@ -1179,5 +1261,5 @@ class AgoraHostSession extends _AgoraMediaSession
 
 class AgoraViewerSession extends _AgoraMediaSession
     implements BroadcastViewerSession {
-  AgoraViewerSession() : super(MediaRole.viewer);
+  AgoraViewerSession({super.engineFactory}) : super(MediaRole.viewer);
 }
