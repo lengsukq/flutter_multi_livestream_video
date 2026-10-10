@@ -24,6 +24,11 @@ class WhiteboardStrings {
       'addPage': ['新增页面', 'Add page'],
       'deletePage': ['删除当前页', 'Delete current page'],
       'page': ['第', 'Page'],
+      'whiteboard': ['白板演示', 'Whiteboard'],
+      'screenShare': ['屏幕共享', 'Screen Share'],
+      'stopSharing': ['停止共享', 'Stop Sharing'],
+      'prevPage': ['上一页', 'Previous page'],
+      'nextPage': ['下一页', 'Next page'],
     };
     return words[key]?[zh ? 0 : 1] ?? key;
   }

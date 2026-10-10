@@ -54,6 +54,11 @@ void main() {
           await tester.pump();
           await tester.dragFrom(rect.center, const Offset(25, 25));
           await tester.pumpAndSettle();
+          expect(
+            session.canvas.shapes.length,
+            greaterThan(0),
+            reason: 'At least one screen annotation must survive $label',
+          );
         }
         await tester.tap(find.byTooltip('Text'));
         await tester.pump();

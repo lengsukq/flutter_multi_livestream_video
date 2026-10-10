@@ -7,9 +7,14 @@ class MovableAnnotationToolbar extends StatefulWidget {
     super.key,
     required this.child,
     this.constrainToCanvas = false,
+    this.startAtTop = false,
   });
   final Widget child;
   final bool constrainToCanvas;
+
+  /// Screen-stage overlays should avoid covering the center gesture target.
+  /// Full whiteboard views keep tools low to avoid top pagination controls.
+  final bool startAtTop;
   @override
   State<MovableAnnotationToolbar> createState() =>
       _MovableAnnotationToolbarState();
@@ -47,6 +52,7 @@ class _MovableAnnotationToolbarState extends State<MovableAnnotationToolbar> {
             return CustomSingleChildLayout(
               delegate: _FloatingToolbarLayout(
                 position: _overlayPosition,
+                startAtTop: widget.startAtTop,
                 padding:
                     safe.copyWith(
                       bottom: keyboard > safe.bottom ? keyboard : safe.bottom,
@@ -124,9 +130,14 @@ class _MovableAnnotationToolbarState extends State<MovableAnnotationToolbar> {
 }
 
 class _FloatingToolbarLayout extends SingleChildLayoutDelegate {
-  _FloatingToolbarLayout({required this.position, required this.padding});
+  _FloatingToolbarLayout({
+    required this.position,
+    required this.padding,
+    required this.startAtTop,
+  });
   final Offset? position;
   final EdgeInsets padding;
+  final bool startAtTop;
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
@@ -153,8 +164,11 @@ class _FloatingToolbarLayout extends SingleChildLayoutDelegate {
       padding.top,
       size.height,
     );
-    // Start above the meeting dock, away from phone status bars and cutouts.
-    final desired = position ?? Offset(maxX, maxY - 96);
+    // The bottom placement does not obscure page actions on WhiteboardView.
+    // Screen annotation tools instead start at the top to avoid intercepting
+    // the center-of-video pen/highlighter gesture in landscape viewports.
+    final desired =
+        position ?? Offset(maxX, startAtTop ? padding.top : maxY - 96);
     return Offset(
       desired.dx.clamp(padding.left, maxX),
       desired.dy.clamp(padding.top, maxY),

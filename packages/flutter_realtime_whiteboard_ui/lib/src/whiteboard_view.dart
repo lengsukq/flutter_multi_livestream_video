@@ -2,13 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'annotation_surface.dart';
+import 'shared_content_stage_bar.dart';
 import 'whiteboard_strings.dart';
 
 /// Independent view: no media, chat or classroom session is required.
 /// The host owns and disposes the session. Students follow its active page.
 class WhiteboardView extends StatefulWidget {
-  const WhiteboardView({super.key, required this.session});
+  const WhiteboardView({super.key, required this.session, this.onStop});
   final WhiteboardSession session;
+  final VoidCallback? onStop;
   @override
   State<WhiteboardView> createState() => _WhiteboardViewState();
 }
@@ -60,56 +62,52 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               : Text('$_error'),
         );
       }
+      final activeIndex = state.pages.indexWhere(
+        (p) => p.id == state.activePageId,
+      );
+      final hasPrev = activeIndex > 0;
+      final hasNext = activeIndex >= 0 && activeIndex < state.pages.length - 1;
+
       return Column(
         children: [
-          Material(
-            child: Row(
-              children: [
-                Expanded(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    value: state.activePageId,
-                    items: state.pages
-                        .map(
-                          (p) => DropdownMenuItem(
-                            value: p.id,
-                            child: Text(p.title),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: state.canEdit && !_busy
-                        ? (id) => _run(() => widget.session.selectPage(id!))
-                        : null,
-                  ),
-                ),
-                Text(
-                  '${state.pages.indexWhere((p) => p.id == state.activePageId) + 1}/${state.pages.length}',
-                ),
-                if (state.canEdit) ...[
-                  IconButton(
-                    tooltip: s.t('addPage'),
-                    onPressed: !_busy && state.pages.length < state.maxPages
-                        ? () => _run(
-                            () => widget.session.addPage(
-                              title: s.zh
-                                  ? '第 ${state.pages.length + 1} 页'
-                                  : 'Page ${state.pages.length + 1}',
-                            ),
-                          )
-                        : null,
-                    icon: const Icon(Icons.note_add_outlined),
-                  ),
-                  IconButton(
-                    tooltip: s.t('deletePage'),
-                    onPressed: !_busy && state.pages.length > 1
-                        ? () => _run(
-                            () => widget.session.deletePage(state.activePageId),
-                          )
-                        : null,
-                    icon: const Icon(Icons.delete_outline),
-                  ),
-                ],
-              ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+            child: SharedContentStageBar(
+              title: s.t('whiteboard'),
+              badgeIcon: Icons.draw_outlined,
+              pageIndex: activeIndex >= 0 ? activeIndex : 0,
+              pageCount: state.pages.length,
+              onPreviousPage: state.canEdit && !_busy && hasPrev
+                  ? () => _run(
+                      () => widget.session.selectPage(
+                        state.pages[activeIndex - 1].id,
+                      ),
+                    )
+                  : null,
+              onNextPage: state.canEdit && !_busy && hasNext
+                  ? () => _run(
+                      () => widget.session.selectPage(
+                        state.pages[activeIndex + 1].id,
+                      ),
+                    )
+                  : null,
+              onAddPage: state.canEdit
+                  ? () => _run(
+                      () => widget.session.addPage(
+                        title: s.zh
+                            ? '第 ${state.pages.length + 1} 页'
+                            : 'Page ${state.pages.length + 1}',
+                      ),
+                    )
+                  : null,
+              canAddPage: !_busy && state.pages.length < state.maxPages,
+              onDeletePage: state.canEdit
+                  ? () => _run(
+                      () => widget.session.deletePage(state.activePageId),
+                    )
+                  : null,
+              canDeletePage: !_busy && state.pages.length > 1,
+              onStop: widget.onStop,
             ),
           ),
           if (_error != null)

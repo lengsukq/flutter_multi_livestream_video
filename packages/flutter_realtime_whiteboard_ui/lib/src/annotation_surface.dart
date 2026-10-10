@@ -15,12 +15,14 @@ class AnnotationSurface extends StatefulWidget {
     this.background,
     this.allowEditing = true,
     this.enableNavigation = true,
+    this.toolbarAtTop = false,
     this.editTooltip,
   });
   final AnnotationController session;
   final Widget? background;
   final bool allowEditing;
   final bool enableNavigation;
+  final bool toolbarAtTop;
   final String? editTooltip;
   @override
   State<AnnotationSurface> createState() => _AnnotationSurfaceState();
@@ -277,6 +279,7 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
               ),
               if (teacher)
                 MovableAnnotationToolbar(
+                  startAtTop: widget.toolbarAtTop,
                   child: Padding(
                     padding: const EdgeInsets.all(6),
                     child: AnnotationToolbar(
