@@ -173,7 +173,11 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
 
     final content = Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 580),
+        // Embedded chat shares the same width as the Video / Chat tabs.
+        // Only the standalone page keeps the narrower reading column.
+        constraints: widget.embedded
+            ? const BoxConstraints()
+            : const BoxConstraints(maxWidth: 580),
         child: ListView(
           shrinkWrap: widget.embedded,
           physics: widget.embedded
@@ -291,7 +295,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
             // 2. Main Exploration Container
             RealtimeGlassSurface(
               radius: RealtimeUiTokens.cardRadius,
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
