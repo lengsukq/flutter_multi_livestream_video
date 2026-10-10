@@ -326,10 +326,15 @@ void main() {
       home: Scaffold(body: RealtimeChatView(session: chat)),
     );
     await tester.pumpWidget(view(oldChat));
+    expect(oldChat._states.hasListener, isTrue);
+    expect(oldChat._snapshots.hasListener, isTrue);
     await tester.enterText(find.byType(TextField), 'old draft');
     await tester.tap(find.byIcon(Icons.send_rounded));
     await tester.pump();
     await tester.pumpWidget(view(newChat));
+    expect(oldChat._states.hasListener, isFalse);
+    expect(newChat._states.hasListener, isTrue);
+    expect(newChat._snapshots.hasListener, isTrue);
     await tester.enterText(find.byType(TextField), 'new draft');
     gate.complete();
     await tester.pump();
@@ -348,8 +353,10 @@ void main() {
     await tester.pump();
     expect(find.text('old room'), findsNothing);
     expect(oldChat._snapshots.hasListener, isFalse);
+    expect(oldChat._states.hasListener, isFalse);
     await tester.pumpWidget(const SizedBox.shrink());
     expect(newChat._snapshots.hasListener, isFalse);
+    expect(newChat._states.hasListener, isFalse);
     await oldChat.dispose();
     await newChat.dispose();
   });
@@ -696,8 +703,50 @@ void main() {
     expect(find.text('Alice'), findsOneWidget);
     expect(find.byIcon(Icons.person_remove_outlined), findsOneWidget);
     expect(find.text('Close chat room'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.person_remove_outlined));
+    await tester.pumpAndSettle();
+    expect(moderation.removedUsers, ['user-alice']);
 
     await tester.pumpWidget(const SizedBox.shrink());
+    await chat.dispose();
+  });
+
+  testWidgets('legacy chat search delegates to the shared chat state', (
+    tester,
+  ) async {
+    final chat = _FakeChatSession(
+      messages: [
+        ChatMessage(
+          id: 'alpha',
+          userId: 'sender',
+          message: 'Alpha-only message',
+          timestamp: DateTime(2026),
+        ),
+        ChatMessage(
+          id: 'beta',
+          userId: 'other',
+          message: 'Beta-only message',
+          timestamp: DateTime(2026),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: RealtimeChatView(session: chat)),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.search_rounded));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).first, 'alpha');
+    await tester.pump();
+    expect(find.text('Alpha-only message'), findsOneWidget);
+    expect(find.text('Beta-only message'), findsNothing);
+    await tester.tap(find.byIcon(Icons.search_off_rounded));
+    await tester.pump();
+    expect(find.text('Beta-only message'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(chat._snapshots.hasListener, isFalse);
     await chat.dispose();
   });
 
@@ -1406,8 +1455,9 @@ void main() {
     // Input stays expanded for follow-up messages.
     expect(find.byType(TextField), findsOneWidget);
 
-    // Tapping the capsule again collapses the inline input.
-    await tester.tap(capsule.first);
+    // Active TextField intercepts pointer events; use the explicit close
+    // control instead of relying on an ancestor InkWell hit target.
+    await tester.tap(find.byTooltip('Close comment input'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNothing);
 

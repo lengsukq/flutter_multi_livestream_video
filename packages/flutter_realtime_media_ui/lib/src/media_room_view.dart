@@ -1,6 +1,7 @@
 export 'media_participant_tile.dart' show MediaParticipantTile;
 import 'room_members_controller.dart';
 import 'room_chat_events_controller.dart';
+import 'room_auxiliary_subscriptions.dart';
 import 'room_rtc_data_panel.dart';
 import 'initial_media_settings_controller.dart';
 import 'dart:async';
@@ -29,6 +30,7 @@ import 'realtime_ui_style.dart';
 part 'room_members_panel.dart';
 part 'room_chat_panel.dart';
 part 'room_controls.dart';
+part 'legacy_room_media_stage.dart';
 
 typedef MediaParticipantBuilder =
     Widget Function(
@@ -132,13 +134,13 @@ class MediaRoomView extends StatefulWidget {
 }
 
 class _MediaRoomViewState extends State<MediaRoomView>
+    with _LegacyRoomMediaStage
     implements MediaRoomLayoutHost {
   final _message = TextEditingController();
   final _liveChatInput = TextEditingController();
   final _liveChatInputFocus = FocusNode();
   final _chatScroll = ScrollController();
-  StreamSubscription<Object?>? _micPermissionSub;
-  StreamSubscription<Object?>? _contentSub;
+  final _auxiliarySubscriptions = RoomAuxiliarySubscriptions();
   Widget? _cachedMediaStage;
   List<Object?> _mediaStageKey = [];
   final _memberRevision = ValueNotifier<int>(0);
@@ -162,11 +164,13 @@ class _MediaRoomViewState extends State<MediaRoomView>
   bool _liveChatSending = false;
   bool _copied = false;
   bool _initialSettingsApplied = false;
+  @override
   String? _focusedParticipantId;
   String? _error;
   List<_ManagedRoomMember>? _roomMembers;
   Object? _roomMembersError;
   bool _loadingRoomMembers = false;
+  @override
   MediaRoomLayoutMode _layoutMode = MediaRoomLayoutMode.grid;
   bool _cleanScreen = false;
   int get _likeCount => _liveReactions.totalLikes;
@@ -306,25 +310,29 @@ class _MediaRoomViewState extends State<MediaRoomView>
   }
 
   void _watchContent() {
-    observeDetached(_contentSub?.cancel());
-    _contentSub = widget.contentStageUpdates?.listen((_) {
-      if (mounted) setState(() => _cachedMediaStage = null);
-    });
+    _auxiliarySubscriptions.bindContent(
+      widget.contentStageUpdates,
+      invalidate: () {
+        if (mounted) setState(() => _cachedMediaStage = null);
+      },
+    );
   }
 
   void _watchMicPermission() {
-    observeDetached(_micPermissionSub?.cancel());
-    _micPermissionSub = widget.microphonePermissionUpdates?.listen((_) {
-      if (!mounted) return;
-      _controlRevision.value++;
-      if (widget.canEnableMicrophone?.call() == false &&
-          session is InteractiveMediaSession &&
-          !session.snapshot.localMuted) {
-        unawaited(
-          _run(() => (session as InteractiveMediaSession).setMuted(true)),
-        );
-      }
-    });
+    _auxiliarySubscriptions.bindMicrophone(
+      widget.microphonePermissionUpdates,
+      onPermissionChanged: () {
+        if (!mounted) return;
+        _controlRevision.value++;
+        if (widget.canEnableMicrophone?.call() == false &&
+            session is InteractiveMediaSession &&
+            !session.snapshot.localMuted) {
+          unawaited(
+            _run(() => (session as InteractiveMediaSession).setMuted(true)),
+          );
+        }
+      },
+    );
   }
 
   @override
@@ -460,8 +468,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
   @override
   void dispose() {
     _liveReactions.totalsRevision.removeListener(_onLikeTotalChanged);
-    observeDetached(_micPermissionSub?.cancel());
-    observeDetached(_contentSub?.cancel());
+    _auxiliarySubscriptions.dispose();
     _copyTimer?.cancel();
     _memberRevision.dispose();
     _controlRevision.dispose();
@@ -596,23 +603,12 @@ class _MediaRoomViewState extends State<MediaRoomView>
     if (canCloseRoom) {
       await showDialog<void>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: style.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: style.border),
-          ),
-          title: Text(
-            strings.leaveMeeting,
-            style: TextStyle(
-              color: style.text,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            strings.endMeetingForAllDesc,
-            style: TextStyle(color: style.textSecondary),
-          ),
+        builder: (ctx) => RealtimeGlassDialog(
+          icon: Icons.meeting_room_rounded,
+          iconColor: style.danger,
+          iconBackground: style.danger.withValues(alpha: 0.14),
+          title: Text(strings.leaveMeeting),
+          content: Text(strings.endMeetingForAllDesc),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -629,6 +625,11 @@ class _MediaRoomViewState extends State<MediaRoomView>
               style: OutlinedButton.styleFrom(
                 foregroundColor: style.text,
                 side: BorderSide(color: style.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.pillRadius,
+                  ),
+                ),
               ),
               child: Text(strings.leaveMeetingOnly),
             ),
@@ -640,6 +641,11 @@ class _MediaRoomViewState extends State<MediaRoomView>
               style: FilledButton.styleFrom(
                 backgroundColor: style.danger,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.pillRadius,
+                  ),
+                ),
               ),
               child: Text(strings.endMeetingForAll),
             ),
@@ -649,23 +655,12 @@ class _MediaRoomViewState extends State<MediaRoomView>
     } else {
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: style.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: style.border),
-          ),
-          title: Text(
-            strings.leaveMeeting,
-            style: TextStyle(
-              color: style.text,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Text(
-            strings.leaveRoomConfirmation,
-            style: TextStyle(color: style.textSecondary),
-          ),
+        builder: (ctx) => RealtimeGlassDialog(
+          icon: Icons.meeting_room_rounded,
+          iconColor: style.danger,
+          iconBackground: style.danger.withValues(alpha: 0.14),
+          title: Text(strings.leaveMeeting),
+          content: Text(strings.leaveRoomConfirmation),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -679,6 +674,11 @@ class _MediaRoomViewState extends State<MediaRoomView>
               style: FilledButton.styleFrom(
                 backgroundColor: style.danger,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.pillRadius,
+                  ),
+                ),
               ),
               child: Text(strings.leave),
             ),
@@ -696,23 +696,12 @@ class _MediaRoomViewState extends State<MediaRoomView>
     final style = RealtimeStyle.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: style.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: style.border),
-        ),
-        title: Text(
-          strings.endBroadcast,
-          style: TextStyle(
-            color: style.text,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(
-          strings.endBroadcastConfirmation,
-          style: TextStyle(color: style.textSecondary),
-        ),
+      builder: (ctx) => RealtimeGlassDialog(
+        icon: Icons.stop_circle_rounded,
+        iconColor: style.danger,
+        iconBackground: style.danger.withValues(alpha: 0.14),
+        title: Text(strings.endBroadcast),
+        content: Text(strings.endBroadcastConfirmation),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -726,6 +715,11 @@ class _MediaRoomViewState extends State<MediaRoomView>
             style: FilledButton.styleFrom(
               backgroundColor: style.danger,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.pillRadius,
+                ),
+              ),
             ),
             child: Text(strings.endBroadcast),
           ),
@@ -788,28 +782,17 @@ class _MediaRoomViewState extends State<MediaRoomView>
       return;
     }
     final extraControls = widget.extraControlsBuilder?.call(context);
-    final style = RealtimeStyle.of(context);
     if (extraControls != null && extraControls.isNotEmpty) {
       unawaited(
-        showModalBottomSheet<void>(
+        showRealtimeGlassBottomSheet<void>(
           context: context,
-          backgroundColor: Colors.transparent,
-          builder: (ctx) => Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: style.surface.withValues(alpha: 0.96),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(20),
-              ),
-              border: Border.all(color: style.border),
-            ),
-            child: SafeArea(
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 16,
-                runSpacing: 16,
-                children: extraControls,
-              ),
+          builder: (ctx) => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16,
+              runSpacing: 16,
+              children: extraControls,
             ),
           ),
         ),
@@ -831,93 +814,74 @@ class _MediaRoomViewState extends State<MediaRoomView>
     final caps = snapshot.capabilities;
 
     unawaited(
-      showModalBottomSheet<void>(
+      showRealtimeGlassBottomSheet<void>(
         context: context,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => Container(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-          decoration: BoxDecoration(
-            color: style.surface.withValues(alpha: 0.96),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            border: Border.all(color: style.border),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: style.borderStrong,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
+        builder: (ctx) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                strings.more,
+                style: TextStyle(
+                  color: style.text,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-                Text(
-                  strings.more,
-                  style: TextStyle(
-                    color: style.text,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    if (interactive != null && caps.canSwitchCamera)
-                      _moreTile(
-                        icon: Icons.cameraswitch_rounded,
-                        label: strings.switchCamera,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          unawaited(
-                            _run(
-                              () => interactive.switchCamera(
-                                MediaCameraPosition.back,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    if (caps.canPublishVideo &&
-                        _backgroundEffects.backgroundCapabilities.isSupported)
-                      _moreTile(
-                        icon: Icons.blur_on_rounded,
-                        label: strings.virtualBackground,
-                        isActive: _backgroundEffects.backgroundEffect.enabled,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          unawaited(_openBackgroundEffects());
-                        },
-                      ),
-                    if (widget.config.showRtcDataMessages && caps.canSendData)
-                      _moreTile(
-                        icon: Icons.data_object_rounded,
-                        label: strings.rtcData,
-                        isActive: _rtcDataOpen,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          _updateRoom(() => _rtcDataOpen = !_rtcDataOpen);
-                        },
-                      ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  if (interactive != null && caps.canSwitchCamera)
                     _moreTile(
-                      icon: Icons.copy_rounded,
-                      label: strings.copyMeetingCode,
+                      icon: Icons.cameraswitch_rounded,
+                      label: strings.switchCamera,
                       onTap: () {
                         Navigator.pop(ctx);
-                        _copyCode();
+                        unawaited(
+                          _run(
+                            () => interactive.switchCamera(
+                              MediaCameraPosition.back,
+                            ),
+                          ),
+                        );
                       },
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  if (caps.canPublishVideo &&
+                      _backgroundEffects.backgroundCapabilities.isSupported)
+                    _moreTile(
+                      icon: Icons.blur_on_rounded,
+                      label: strings.virtualBackground,
+                      isActive: _backgroundEffects.backgroundEffect.enabled,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        unawaited(_openBackgroundEffects());
+                      },
+                    ),
+                  if (widget.config.showRtcDataMessages && caps.canSendData)
+                    _moreTile(
+                      icon: Icons.data_object_rounded,
+                      label: strings.rtcData,
+                      isActive: _rtcDataOpen,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _updateRoom(() => _rtcDataOpen = !_rtcDataOpen);
+                      },
+                    ),
+                  _moreTile(
+                    icon: Icons.copy_rounded,
+                    label: strings.copyMeetingCode,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _copyCode();
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -947,11 +911,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isActive ? style.primary : style.text,
-              size: 24,
-            ),
+            Icon(icon, color: isActive ? style.primary : style.text, size: 24),
             const SizedBox(height: 6),
             Text(
               label,
@@ -1175,10 +1135,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
     final style = RealtimeStyle.of(context);
     final isLive = this.isLive;
     if (isLive) {
-      return ColoredBox(
-        color: style.background,
-        child: _buildLiveStage(value),
-      );
+      return ColoredBox(color: style.background, child: _buildLiveStage(value));
     }
     final customContent = widget.contentStageBuilder?.call(context, value);
     final stageContent = customContent != null
@@ -1205,10 +1162,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
             ],
           );
 
-    return ColoredBox(
-      color: style.background,
-      child: stageContent,
-    );
+    return ColoredBox(color: style.background, child: stageContent);
   }
 
   Widget _buildLiveStage(MediaSnapshot value) {
@@ -1219,22 +1173,26 @@ class _MediaRoomViewState extends State<MediaRoomView>
     // In livestream / broadcast, resolve the single host participant.
     final MediaParticipant? hostParticipant = isLocalHost
         ? (value.participants.where((p) => p.isLocal).firstOrNull ??
-            (value.localParticipantId != null
-                ? value.participants
-                    .where((p) => p.id == value.localParticipantId)
-                    .firstOrNull
-                : null) ??
-            MediaParticipant(
-              id: widget.room.participantId,
-              displayName: widget.room.participantId,
-              isLocal: true,
-              isVideoEnabled: value.localVideoEnabled,
-            ))
+              (value.localParticipantId != null
+                  ? value.participants
+                        .where((p) => p.id == value.localParticipantId)
+                        .firstOrNull
+                  : null) ??
+              MediaParticipant(
+                id: widget.room.participantId,
+                displayName: widget.room.participantId,
+                isLocal: true,
+                isVideoEnabled: value.localVideoEnabled,
+              ))
         : (value.participants
-                .where((p) => !p.isLocal && (p.isVideoEnabled || p.videoTrack != null))
-                .firstOrNull ??
-            value.participants.where((p) => !p.isLocal).firstOrNull ??
-            value.participants.firstOrNull);
+                  .where(
+                    (p) =>
+                        !p.isLocal &&
+                        (p.isVideoEnabled || p.videoTrack != null),
+                  )
+                  .firstOrNull ??
+              value.participants.where((p) => !p.isLocal).firstOrNull ??
+              value.participants.firstOrNull);
 
     // If custom participant builder provided, honor it.
     if (widget.participantBuilder != null && hostParticipant != null) {
@@ -1293,7 +1251,8 @@ class _MediaRoomViewState extends State<MediaRoomView>
       );
     }
 
-    final hasVideo = hostParticipant.videoTrack != null &&
+    final hasVideo =
+        hostParticipant.videoTrack != null &&
         (isLocalHost
             ? value.localVideoEnabled
             : hostParticipant.isVideoEnabled);
@@ -1318,11 +1277,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
       );
     }
 
-    return _buildLiveHostOffCameraPlaceholder(
-      hostParticipant,
-      strings,
-      style,
-    );
+    return _buildLiveHostOffCameraPlaceholder(hostParticipant, strings, style);
   }
 
   Widget _buildLiveHostOffCameraPlaceholder(
@@ -1419,11 +1374,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
       shadow: false,
       child: Row(
         children: [
-          Icon(
-            Icons.error_outline_rounded,
-            size: 18,
-            color: style.danger,
-          ),
+          Icon(Icons.error_outline_rounded, size: 18, color: style.danger),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -1491,7 +1442,10 @@ class _MediaRoomViewState extends State<MediaRoomView>
           if (!reconnecting)
             TextButton(
               onPressed: _leave,
-              child: Text(strings.leave, style: TextStyle(color: style.primary)),
+              child: Text(
+                strings.leave,
+                style: TextStyle(color: style.primary),
+              ),
             ),
         ],
       ),
@@ -1537,10 +1491,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
               Text(
                 strings.shareRoomCode,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: style.textMuted,
-                  fontSize: 13.5,
-                ),
+                style: TextStyle(color: style.textMuted, fontSize: 13.5),
               ),
               const SizedBox(height: 18),
               RealtimeGlassButton(
@@ -1554,156 +1505,6 @@ class _MediaRoomViewState extends State<MediaRoomView>
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _grid(MediaSnapshot value) => LayoutBuilder(
-    builder: (context, constraints) {
-      final participants = value.participants;
-      final count = participants.length;
-      final focused = count > 1 && _focusedParticipantId != null
-          ? participants.where((p) => p.id == _focusedParticipantId).firstOrNull
-          : null;
-      final isSpeaker = _layoutMode == MediaRoomLayoutMode.speaker;
-      final effectiveFocused =
-          focused ??
-          (isSpeaker && count > 1
-              ? (participants.where((p) => p.isSpeaking).firstOrNull ??
-                    participants.first)
-              : null);
-
-      if (effectiveFocused != null) {
-        final others = participants
-            .where((p) => p.id != effectiveFocused.id)
-            .toList(growable: false);
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-          child: Column(
-            children: [
-              Expanded(
-                flex: 3,
-                child: _buildParticipantWidget(
-                  effectiveFocused,
-                  isFocused: true,
-                  canFocus: true,
-                ),
-              ),
-              if (others.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 120,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: others.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 10),
-                    itemBuilder: (context, index) => AspectRatio(
-                      aspectRatio: 4 / 3,
-                      child: _buildParticipantWidget(
-                        others[index],
-                        isFocused: false,
-                        canFocus: true,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-      }
-
-      final columns = constraints.maxWidth > 900
-          ? (count <= 4 ? 2 : 3)
-          : constraints.maxWidth > 600
-          ? (count <= 2 ? 2 : 3)
-          : (count == 1 ? 1 : 2);
-      return GridView.builder(
-        padding: const EdgeInsets.all(12),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          childAspectRatio: count == 1 ? 4 / 3 : 1,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-        itemCount: count,
-        itemBuilder: (context, index) {
-          final participant = participants[index];
-          return _buildParticipantWidget(
-            participant,
-            isFocused: false,
-            canFocus: count > 1,
-          );
-        },
-      );
-    },
-  );
-
-  Widget _buildParticipantWidget(
-    MediaParticipant participant, {
-    required bool isFocused,
-    required bool canFocus,
-  }) {
-    if (widget.participantBuilder != null) {
-      return widget.participantBuilder!(context, participant, widget.renderer);
-    }
-    return MediaParticipantTile(
-      participant: participant,
-      renderer: widget.renderer,
-      isFocused: isFocused,
-      onTap: canFocus
-          ? () => setState(() {
-              _focusedParticipantId = _focusedParticipantId == participant.id
-                  ? null
-                  : participant.id;
-            })
-          : null,
-    );
-  }
-
-  Widget _screenShare(MediaSnapshot value) {
-    final strings = RealtimeStrings.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Center, not expand: a contained screen share must keep its own
-            // aspect ratio instead of being stretched or cropped, with the
-            // stage background showing as letterbox bars.
-            Center(
-              child: MediaTrackView(
-                renderer: widget.renderer,
-                track: value.contentShareTrack,
-                fit: BoxFit.contain,
-              ),
-            ),
-            if (value.contentShareTrack != null &&
-                widget.screenShareOverlayBuilder != null)
-              Center(
-                child: AspectRatio(
-                  aspectRatio: value.contentShareTrack!.aspectRatio,
-                  child: widget.screenShareOverlayBuilder!(
-                    context,
-                    value.contentShareTrack!,
-                  ),
-                ),
-              ),
-            Positioned(
-              left: 10,
-              top: 10,
-              child: RealtimePill(
-                label: strings.screenShare,
-                icon: Icons.present_to_all_rounded,
-                foreground: Colors.white,
-                background: const Color(0xB3000000),
-                borderColor: const Color(0x40FFFFFF),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -1815,50 +1616,45 @@ class _MediaRoomViewState extends State<MediaRoomView>
     var effect = _backgroundEffects.backgroundEffect;
     var busy = false;
     String? errorMessage;
-    await showModalBottomSheet<void>(
+    await showRealtimeGlassBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, updateSheet) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                BackgroundEffectSelector(
-                  capabilities: _backgroundEffects.backgroundCapabilities,
-                  effect: effect,
-                  imageBytes: widget.config.backgroundImageBytes,
-                  imagePresets: widget.config.backgroundImagePresets,
-                  busy: busy,
-                  onChanged: (next) async {
-                    updateSheet(() {
-                      busy = true;
-                      errorMessage = null;
-                    });
-                    try {
-                      await _backgroundEffects.setBackgroundEffect(next);
-                      effect = next;
-                      if (mounted) setState(() => _error = null);
-                    } catch (error) {
-                      errorMessage = error.toString();
-                    } finally {
-                      if (sheetContext.mounted) {
-                        updateSheet(() => busy = false);
-                      }
+        builder: (sheetContext, updateSheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              BackgroundEffectSelector(
+                capabilities: _backgroundEffects.backgroundCapabilities,
+                effect: effect,
+                imageBytes: widget.config.backgroundImageBytes,
+                imagePresets: widget.config.backgroundImagePresets,
+                busy: busy,
+                onChanged: (next) async {
+                  updateSheet(() {
+                    busy = true;
+                    errorMessage = null;
+                  });
+                  try {
+                    await _backgroundEffects.setBackgroundEffect(next);
+                    effect = next;
+                    if (mounted) setState(() => _error = null);
+                  } catch (error) {
+                    errorMessage = error.toString();
+                  } finally {
+                    if (sheetContext.mounted) {
+                      updateSheet(() => busy = false);
                     }
-                  },
-                ),
-                if (errorMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    errorMessage!,
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                ],
+                  }
+                },
+              ),
+              if (errorMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(errorMessage!, style: const TextStyle(color: Colors.red)),
               ],
-            ),
+            ],
           ),
         ),
       ),

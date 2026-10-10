@@ -16,6 +16,8 @@ dependencies:
     path: ../flutter_realtime_media_core
   flutter_realtime_chat_core:
     path: ../flutter_realtime_chat_core
+  flutter_realtime_chat_ui:
+    path: ../flutter_realtime_chat_ui
 dev_dependencies:
   flutter_test:
     sdk: flutter
