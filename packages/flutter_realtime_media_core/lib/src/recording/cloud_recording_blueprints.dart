@@ -1,0 +1,386 @@
+import 'cloud_recording_descriptor.dart';
+import 'recording_options.dart';
+
+/// Registry and blueprint generators for provider-specific cloud recording APIs.
+///
+/// Converts neutral [RecordingOptions] and room context into structured
+/// [CloudRecordingDescriptor]s that include official endpoints, HTTP methods,
+/// recommended headers, and ready-to-dispatch request body payloads.
+class CloudRecordingBlueprints {
+  CloudRecordingBlueprints._();
+
+  /// Builds a [CloudRecordingDescriptor] for the given [providerId] and room context.
+  static CloudRecordingDescriptor buildDescriptor({
+    required String providerId,
+    required String roomCode,
+    String? participantId,
+    RecordingOptions options = const RecordingOptions(
+      mode: RecordingMode.cloud,
+    ),
+    String action = 'start',
+  }) {
+    final normalizedProvider = providerId.toLowerCase().trim();
+
+    if (normalizedProvider.contains('agora')) {
+      return _buildAgoraDescriptor(roomCode, participantId, options, action);
+    } else if (normalizedProvider.contains('chime') ||
+        normalizedProvider.contains('aws')) {
+      return _buildAwsChimeDescriptor(roomCode, participantId, options, action);
+    } else if (normalizedProvider.contains('trtc') ||
+        normalizedProvider.contains('tencent')) {
+      return _buildTencentTrtcDescriptor(
+        roomCode,
+        participantId,
+        options,
+        action,
+      );
+    } else if (normalizedProvider.contains('artc') ||
+        normalizedProvider.contains('aliyun') ||
+        normalizedProvider.contains('alibaba')) {
+      return _buildAlibabaArtcDescriptor(
+        roomCode,
+        participantId,
+        options,
+        action,
+      );
+    } else if (normalizedProvider.contains('livekit')) {
+      return _buildLiveKitDescriptor(roomCode, participantId, options, action);
+    }
+
+    return _buildGenericDescriptor(
+      providerId,
+      roomCode,
+      participantId,
+      options,
+      action,
+    );
+  }
+
+  static CloudRecordingDescriptor _buildAgoraDescriptor(
+    String roomCode,
+    String? participantId,
+    RecordingOptions options,
+    String action,
+  ) {
+    final uid = participantId ?? '10001';
+    final tokenPlaceholder =
+        'demo-client-request-token-${DateTime.now().millisecondsSinceEpoch}';
+
+    // Map RecordingLayout to Agora mixedVideoLayout:
+    // 0: Floating, 1: Best-Fit (Grid), 2: Vertical
+    final agoraLayout = switch (options.layout) {
+      RecordingLayout.grid => 1,
+      RecordingLayout.speaker => 0,
+      RecordingLayout.screenShare => 2,
+      RecordingLayout.custom => 3,
+    };
+
+    // Stream types: 0: audio, 1: video, 2: audio & video
+    final streamTypes = switch (options.streamType) {
+      RecordingStreamType.audioOnly => 0,
+      RecordingStreamType.videoOnly => 1,
+      RecordingStreamType.both => 2,
+    };
+
+    final basePayload = <String, dynamic>{
+      'cname': roomCode,
+      'uid': uid,
+      'clientRequestToken': tokenPlaceholder,
+      'recordingConfig': {
+        'channelType': 0, // 0: Communication, 1: Live Broadcast
+        'streamTypes': streamTypes,
+        'transcodeMode': 0, // 0: Mixed stream, 1: Individual streams
+        'transcodingConfig': {
+          'mixedVideoLayout': agoraLayout,
+          'width': 1280,
+          'height': 720,
+          'fps': 15,
+          'bitrate': 1130,
+        },
+      },
+      'recordingFileConfig': {
+        'avFileType': [options.containerFormat.name, 'hls'],
+      },
+      'storageConfig': {
+        'vendor': 1, // 1: AWS S3, 2: Aliyun OSS, 3: Tencent COS, etc.
+        'region': 0,
+        'bucket': 'your-recording-bucket',
+        'accessKey': 'YOUR_STORAGE_ACCESS_KEY',
+        'secretKey': 'YOUR_STORAGE_SECRET_KEY',
+        'fileNamePrefix': ['recordings', roomCode],
+      },
+    };
+
+    _deepMerge(basePayload, options.rawProviderParams);
+
+    return CloudRecordingDescriptor(
+      providerId: 'agora',
+      action: action,
+      endpoint:
+          'https://api.agora.io/v1/apps/{appId}/cloud_recording/resourceid/{resourceId}/mode/mix/$action',
+      httpMethod: 'POST',
+      suggestedHeaders: const {
+        'Content-Type': 'application/json;charset=utf-8',
+        'Authorization': 'Basic <BASE64(CustomerKey:CustomerSecret)>',
+      },
+      payload: basePayload,
+      documentationUrl:
+          'https://doc.shengwang.cn/doc/cloud-recording/restful/overview',
+      description: 'Agora Cloud Recording REST API (Composite Recording Mode)',
+    );
+  }
+
+  static CloudRecordingDescriptor _buildAwsChimeDescriptor(
+    String roomCode,
+    String? participantId,
+    RecordingOptions options,
+    String action,
+  ) {
+    final layoutName = switch (options.layout) {
+      RecordingLayout.grid => 'GridView',
+      RecordingLayout.speaker => 'ActiveSpeakerOnly',
+      RecordingLayout.screenShare => 'GridView',
+      RecordingLayout.custom => 'GridView',
+    };
+
+    final basePayload = <String, dynamic>{
+      'SourceType': 'ChimeSdkMeeting',
+      'SourceArn': 'arn:aws:chime:us-east-1:{awsAccountId}:meeting/$roomCode',
+      'SinkType': 'S3Bucket',
+      'SinkArn':
+          'arn:aws:s3:::your-recording-bucket/chime-recordings/$roomCode',
+      'ClientRequestToken':
+          'chime-rec-${DateTime.now().millisecondsSinceEpoch}',
+      'ChimeSdkMeetingConfiguration': {
+        'ArtifactsConfiguration': {
+          'Audio': {'MuxType': 'AudioOnly'},
+          'Video': {
+            'State': options.streamType == RecordingStreamType.audioOnly
+                ? 'Disabled'
+                : 'Enabled',
+            'MuxType': 'VideoOnly',
+          },
+          'Content': {'State': 'Enabled', 'MuxType': 'ContentOnly'},
+        },
+        'CompositedVideoArtifactsConfiguration': {
+          'Layout': layoutName,
+          'Resolution': 'HD',
+        },
+      },
+    };
+
+    _deepMerge(basePayload, options.rawProviderParams);
+
+    return CloudRecordingDescriptor(
+      providerId: 'chime',
+      action: action,
+      endpoint:
+          'https://media-pipelines-chime.{region}.amazonaws.com/sdk-meetings/media-capture-pipelines',
+      httpMethod: 'POST',
+      suggestedHeaders: const {
+        'Content-Type': 'application/json',
+        'Authorization':
+            'AWS4-HMAC-SHA256 Credential=.../media-pipelines-chime/...',
+        'x-amz-date': '<ISO8601-Date>',
+      },
+      payload: basePayload,
+      documentationUrl:
+          'https://docs.aws.amazon.com/chime-sdk/latest/APIReference/API_Operations_Amazon_Chime_SDK_Media_Pipelines.html',
+      description: 'AWS Chime SDK Media Capture Pipeline (Auto-record to S3)',
+    );
+  }
+
+  static CloudRecordingDescriptor _buildTencentTrtcDescriptor(
+    String roomCode,
+    String? participantId,
+    RecordingOptions options,
+    String action,
+  ) {
+    final trtcLayout = switch (options.layout) {
+      RecordingLayout.grid => 2, // 2: 预设九宫格
+      RecordingLayout.speaker => 1, // 1: 悬浮/画中画
+      RecordingLayout.screenShare => 3, // 3: 屏幕分享为主
+      RecordingLayout.custom => 4,
+    };
+
+    final basePayload = <String, dynamic>{
+      'Action': action == 'start'
+          ? 'CreateCloudRecording'
+          : 'StopCloudRecording',
+      'Version': '2019-07-22',
+      'SdkAppId': 1400000000,
+      'RoomId': roomCode,
+      'UserId': participantId ?? 'recorder_bot',
+      'RecordMode': 1, // 1: 合流录制, 2: 单流录制
+      'MixLayoutParams': {
+        'MixLayoutMode': trtcLayout,
+        'MaxMediaStreamNumber': 9,
+      },
+      'StorageParams': {
+        'CloudStorage': 0, // 0: 腾讯云 COS
+        'CloudStoreInfo': {
+          'Region': 'ap-guangzhou',
+          'Bucket': 'your-recording-bucket',
+          'AccessKey': 'YOUR_COS_SECRET_ID',
+          'SecretKey': 'YOUR_COS_SECRET_KEY',
+        },
+      },
+    };
+
+    _deepMerge(basePayload, options.rawProviderParams);
+
+    return CloudRecordingDescriptor(
+      providerId: 'trtc',
+      action: action,
+      endpoint: 'https://trtc.tencentcloudapi.com',
+      httpMethod: 'POST',
+      suggestedHeaders: const {
+        'Content-Type': 'application/json',
+        'Authorization': 'TC3-HMAC-SHA256 Credential=...',
+        'X-TC-Action': 'CreateCloudRecording',
+        'X-TC-Version': '2019-07-22',
+      },
+      payload: basePayload,
+      documentationUrl: 'https://cloud.tencent.com/document/api/647/44055',
+      description: 'Tencent Cloud TRTC Server API (CreateCloudRecording)',
+    );
+  }
+
+  static CloudRecordingDescriptor _buildAlibabaArtcDescriptor(
+    String roomCode,
+    String? participantId,
+    RecordingOptions options,
+    String action,
+  ) {
+    final basePayload = <String, dynamic>{
+      'Action': 'StartMPUTask',
+      'AppId': 'your-aliyun-artc-appid',
+      'ChannelId': roomCode,
+      'TaskId': 'task_${roomCode}_${DateTime.now().millisecondsSinceEpoch}',
+      'TaskProfile': '1080P',
+      'LayoutIds': [
+        options.layout == RecordingLayout.speaker ? 'speaker_pip' : 'grid_auto',
+      ],
+      'StorageConfig': {
+        'OssBucket': 'your-oss-bucket',
+        'OssEndpoint': 'oss-cn-shanghai.aliyuncs.com',
+      },
+    };
+
+    _deepMerge(basePayload, options.rawProviderParams);
+
+    return CloudRecordingDescriptor(
+      providerId: 'artc',
+      action: action,
+      endpoint: 'https://live.aliyuncs.com',
+      httpMethod: 'POST',
+      suggestedHeaders: const {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'ACS3-HMAC-SHA256 Credential=...',
+      },
+      payload: basePayload,
+      documentationUrl: 'https://help.aliyun.com/document_detail/450410.html',
+      description: 'Alibaba Cloud ARTC MPU Task (StartMPUTask)',
+    );
+  }
+
+  static CloudRecordingDescriptor _buildLiveKitDescriptor(
+    String roomCode,
+    String? participantId,
+    RecordingOptions options,
+    String action,
+  ) {
+    final livekitLayout = switch (options.layout) {
+      RecordingLayout.grid => 'grid',
+      RecordingLayout.speaker => 'speaker',
+      RecordingLayout.screenShare => 'speaker-dark',
+      RecordingLayout.custom => 'custom',
+    };
+
+    final basePayload = <String, dynamic>{
+      'room_name': roomCode,
+      'layout': livekitLayout,
+      'file_outputs': [
+        {
+          'filepath':
+              'recordings/$roomCode-{time}.${options.containerFormat.name}',
+          's3': {
+            'access_key': 'YOUR_S3_KEY',
+            'secret': 'YOUR_S3_SECRET',
+            'region': 'us-east-1',
+            'bucket': 'your-livekit-recordings',
+          },
+        },
+      ],
+    };
+
+    _deepMerge(basePayload, options.rawProviderParams);
+
+    return CloudRecordingDescriptor(
+      providerId: 'livekit',
+      action: action,
+      endpoint:
+          'https://{livekit-host}/twirp/livekit.Egress/StartRoomCompositeEgress',
+      httpMethod: 'POST',
+      suggestedHeaders: const {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer <LiveKit_Token_With_RoomRecord_Permission>',
+      },
+      payload: basePayload,
+      documentationUrl: 'https://docs.livekit.io/server/egress/',
+      description: 'LiveKit Server Egress API (StartRoomCompositeEgress)',
+    );
+  }
+
+  static CloudRecordingDescriptor _buildGenericDescriptor(
+    String providerId,
+    String roomCode,
+    String? participantId,
+    RecordingOptions options,
+    String action,
+  ) {
+    final basePayload = <String, dynamic>{
+      'roomCode': roomCode,
+      if (participantId != null) 'participantId': participantId,
+      'layout': options.layout.name,
+      'streamType': options.streamType.name,
+      'containerFormat': options.containerFormat.name,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+
+    _deepMerge(basePayload, options.rawProviderParams);
+
+    return CloudRecordingDescriptor(
+      providerId: providerId,
+      action: action,
+      endpoint:
+          'https://api.your-backend.com/v1/rooms/$roomCode/recording/$action',
+      httpMethod: 'POST',
+      suggestedHeaders: const {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer <User_Or_Service_Token>',
+      },
+      payload: basePayload,
+      documentationUrl:
+          'https://github.com/lengsukq/flutter_multi_livestream_video',
+      description: 'Generic Realtime Cloud Recording Proxy Descriptor',
+    );
+  }
+
+  /// Deeply merges [source] into [target].
+  static void _deepMerge(
+    Map<String, dynamic> target,
+    Map<String, dynamic> source,
+  ) {
+    for (final entry in source.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (value is Map<String, dynamic> &&
+          target[key] is Map<String, dynamic>) {
+        _deepMerge(target[key] as Map<String, dynamic>, value);
+      } else {
+        target[key] = value;
+      }
+    }
+  }
+}

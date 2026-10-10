@@ -273,6 +273,14 @@ class RoomVideoEffectsController implements MediaBackgroundEffectsController {
 
   Future<void> release() =>
       _serializeVideoOperation(_disposeProcessedVideoSource);
+
+  /// Invalidate in-flight creation synchronously when the owning room starts
+  /// disposal. Room cleanup may first await recording/annotation resources,
+  /// but no source may be attached during that interval.
+  void beginDisposal() {
+    _disposed = true;
+  }
+
   Future<void> dispose() => _disposeFuture ??= _dispose();
   Future<void> _dispose() async {
     _disposed = true;

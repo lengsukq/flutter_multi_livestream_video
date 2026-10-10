@@ -31,6 +31,8 @@ class MediaCapabilities {
     this.canListParticipants = false,
     this.canRemoveParticipants = false,
     this.canCloseRoom = false,
+    this.canRecordLocal = true,
+    this.canRecordCloud = true,
     this.management,
     this.maxVideoSubscriptions,
   });
@@ -96,6 +98,8 @@ class MediaCapabilities {
   final bool canListParticipants;
   final bool canRemoveParticipants;
   final bool canCloseRoom;
+  final bool canRecordLocal;
+  final bool canRecordCloud;
   final MediaManagementCapabilities? management;
 
   MediaManagementCapabilities get managementCapabilities =>
@@ -139,6 +143,8 @@ class MediaCapabilities {
     bool? canListParticipants,
     bool? canRemoveParticipants,
     bool? canCloseRoom,
+    bool? canRecordLocal,
+    bool? canRecordCloud,
     MediaManagementCapabilities? management,
     int? maxVideoSubscriptions,
   }) => MediaCapabilities(
@@ -168,6 +174,8 @@ class MediaCapabilities {
     canListParticipants: canListParticipants ?? this.canListParticipants,
     canRemoveParticipants: canRemoveParticipants ?? this.canRemoveParticipants,
     canCloseRoom: canCloseRoom ?? this.canCloseRoom,
+    canRecordLocal: canRecordLocal ?? this.canRecordLocal,
+    canRecordCloud: canRecordCloud ?? this.canRecordCloud,
     management: management ?? this.management,
     maxVideoSubscriptions: maxVideoSubscriptions ?? this.maxVideoSubscriptions,
   );

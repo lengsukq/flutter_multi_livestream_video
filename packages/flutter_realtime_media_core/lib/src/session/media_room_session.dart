@@ -10,6 +10,9 @@ import '../model/media_role.dart';
 import '../model/media_room_participant_summary.dart';
 import '../model/media_snapshot.dart';
 import '../model/media_state.dart';
+import '../recording/cloud_recording_blueprints.dart';
+import '../recording/cloud_recording_descriptor.dart';
+import '../recording/recording_options.dart';
 import 'media_session.dart';
 import 'media_background_effects_controller.dart';
 import 'media_room_extensions.dart';
@@ -257,6 +260,17 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
       );
     }
     return controller.setBackgroundEffect(effect);
+  }
+
+  /// Generates a structured [CloudRecordingDescriptor] for this room session
+  /// using the active provider's official API specifications.
+  CloudRecordingDescriptor describeCloudRecording([RecordingOptions? options]) {
+    return CloudRecordingBlueprints.buildDescriptor(
+      providerId: providerId,
+      roomCode: roomCode,
+      participantId: participantId,
+      options: options ?? const RecordingOptions(mode: RecordingMode.cloud),
+    );
   }
 
   /// Backend presence failures (heartbeat, leave notification, ...).

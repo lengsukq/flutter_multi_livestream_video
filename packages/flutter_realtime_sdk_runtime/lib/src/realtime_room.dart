@@ -1,5 +1,6 @@
 import 'room_video_effects_controller.dart';
 import 'room_annotation_coordinator.dart';
+import 'room_recording_controller.dart';
 import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
 import 'dart:async';
 
@@ -41,6 +42,11 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
       effectsCapabilities: effectsCapabilities,
       providerId: providerId,
       bridge: videoEffectsBridge,
+      onFailure: _reportFailure,
+    );
+    recording = RoomRecordingController(
+      media: media,
+      providerId: providerId,
       onFailure: _reportFailure,
     );
     _mediaEventSubscription = media.session.events.listen(_onMediaEvent);
@@ -133,6 +139,34 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
       ? null
       : RealtimeChatModeration(chat!, _productChatRoom?.moderation);
 
+  /// Recording controller for this room session.
+  late final RoomRecordingController recording;
+  MediaRecordingController get recordingController => recording;
+
+  /// Current recording status of the room.
+  RecordingStatus get recordingStatus => recording.status;
+
+  /// Emits recording status changes.
+  Stream<RecordingStatus> get recordingStatuses => recording.statuses;
+
+  /// Emits recorded duration updates every second.
+  Stream<Duration> get recordingDurations => recording.durations;
+
+  /// Starts recording with optional [options].
+  ///
+  /// Defaults to [RecordingMode.local] (writing directly to local sandbox storage).
+  Future<RecordingResult> startRecording([RecordingOptions? options]) =>
+      recording.startRecording(options);
+
+  /// Stops the active recording session and finishes writing files.
+  Future<RecordingResult?> stopRecording() => recording.stopRecording();
+
+  /// Generates a structured [CloudRecordingDescriptor] containing official
+  /// vendor API endpoints, HTTP headers, and request body payloads.
+  CloudRecordingDescriptor describeCloudRecording([
+    RecordingOptions? options,
+  ]) => recording.describeCloudRecording(options);
+
   void _onMediaState(MediaSessionState state) {
     _emitState();
     if (_disposed ||
@@ -181,10 +215,12 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
 
   Future<void> _dispose() async {
     _disposed = true;
+    _effects.beginDisposal();
     final cleanup = Cleanup(timeout: cleanupTimeout);
     await cleanup.run('annotation.coordinator', () async {
       await _annotations?.dispose();
     });
+    await cleanup.run('recording', recording.dispose);
     await cleanup.run('video.effects', _effects.dispose);
     await cleanup.run('sharedContent', () async {
       await sharedContent?.dispose();
