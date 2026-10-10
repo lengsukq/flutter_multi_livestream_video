@@ -11,7 +11,6 @@ export 'src/client/media_backend_config.dart';
 export 'src/client/media_backend_error.dart';
 export 'src/client/media_backend_transport.dart';
 export 'src/client/media_backend_transport_factory.dart';
-export 'src/client/media_backend_transport_factory.dart';
 export 'src/client/media_client.dart';
 export 'src/client/media_room_services.dart';
 export 'src/diagnostics/media_doctor.dart';

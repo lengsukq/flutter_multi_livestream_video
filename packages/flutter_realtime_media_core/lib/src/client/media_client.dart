@@ -64,12 +64,11 @@ class MediaClient {
        );
 
   MediaClient.withConfig(
-    MediaBackendConfig config, {
+    MediaBackendConfig this.config, {
     MediaRegistry? registry,
     MediaBackendTransport? transport,
     MediaPermissionProbe? permissionProbe,
-  }) : config = config,
-       registry = registry ?? MediaRegistry.global,
+  }) : registry = registry ?? MediaRegistry.global,
        backend = MediaBackendClient(config, transport: transport),
        permissionProbe = permissionProbe ?? const DefaultMediaPermissionProbe(),
        provisioner = null,
