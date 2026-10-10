@@ -18,6 +18,8 @@ dependencies:
     path: ../flutter_realtime_chat_core
   flutter_realtime_chat_ui:
     path: ../flutter_realtime_chat_ui
+  flutter_realtime_sdk_runtime:
+    path: ../flutter_realtime_sdk_runtime
 dev_dependencies:
   flutter_test:
     sdk: flutter

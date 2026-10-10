@@ -1,11 +1,27 @@
 import 'dart:async';
 
-import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
-import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
-import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
+import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('live media snapshot fallback is usable without optional UI', () {
+    final members = mergeSnapshotMembers(
+      const [],
+      MediaSnapshot(
+        participants: const [
+          MediaParticipant(
+            id: 'presenter',
+            displayName: 'Presenter',
+            isLocal: true,
+          ),
+        ],
+      ),
+      localRole: MediaRole.host,
+    );
+    expect(members.single.userId, 'media:presenter');
+    expect(members.single.media?.role, MediaRole.host);
+    expect(members.single.isSelf, true);
+  });
   test('logical identity merges media and chat membership once', () {
     final members = mergeRoomMembers(
       const [

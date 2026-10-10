@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart';
-import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart'
-    show RoomMembersController, RoomManagedMember, RoomMediaMemberAction;
 
 /// Room actions shared by independent widgets in a host-defined layout.
 enum RealtimeRoomUiAction {
@@ -47,17 +45,6 @@ class RealtimeRoomUiController extends ChangeNotifier {
         .listen((_) {
           if (!_disposed) notifyListeners();
         });
-    final classroom = room.classroom;
-    if (classroom != null) {
-      unawaited(
-        classroom.start().catchError((Object error) {
-          if (!_disposed) {
-            _error = error;
-            notifyListeners();
-          }
-        }),
-      );
-    }
     _liveState = room.liveInteractions?.state;
     _liveSubscription = room.liveInteractions?.states.listen((state) {
       if (_disposed) return;
@@ -69,35 +56,18 @@ class RealtimeRoomUiController extends ChangeNotifier {
       _receivedLikeCount += event.quantity;
       notifyListeners();
     });
-    // The session internally coalesces refreshes; starting it twice does not
-    // create multiple polling timers. It is owned and disposed by RealtimeRoom.
-    final live = room.liveInteractions;
-    if (live != null) {
-      unawaited(
-        live.start().catchError((Object error) {
-          if (!_disposed) {
-            _error = error;
-            notifyListeners();
-          }
-        }),
-      );
-    }
   }
 
   /// Shares the same partially-successful bulk moderation service as the
   /// legacy room. Failures are retained so a host can retry only failed IDs.
   Future<void> muteAllParticipants({bool retryFailed = false}) async {
     if (!canMuteAllParticipants) return;
-    final targets = retryFailed
-        ? _bulkMuteFailures.keys.toList(growable: false)
-        : _snapshot.participants
-              .where((member) => !member.isLocal)
-              .toList(growable: false);
-    if (targets.isEmpty) return;
+    final targets = retryFailed ? _bulkMuteFailures.keys.toList() : null;
+    if (targets != null && targets.isEmpty) return;
     await _execute(RealtimeRoomUiAction.participantManagement, () async {
-      final result = await _memberDirectory.mute(
+      final result = await _memberDirectory.muteAll(
         room.media,
-        targets,
+        targets: targets,
         isCurrent: () => !_disposed,
       );
       if (_disposed || !result.completed) return;
@@ -243,7 +213,7 @@ class RealtimeRoomUiController extends ChangeNotifier {
   );
 
   final RealtimeRoom room;
-  final RoomMembersController _memberDirectory = RoomMembersController();
+  RoomMembersController get _memberDirectory => room.memberDirectory;
   List<RoomManagedMember> _managedMembers = const [];
   Map<MediaParticipant, Object> _bulkMuteFailures = const {};
   Object? _memberLoadError;
@@ -271,31 +241,11 @@ class RealtimeRoomUiController extends ChangeNotifier {
   Object? get memberLoadError => _memberLoadError;
 
   /// Includes RTC-only and chat-only members, reconciled by logical user ID.
-  List<RoomManagedMember> get managedMembers {
-    final members = [..._managedMembers];
-    for (final participant in _snapshot.participants) {
-      if (members.any(
-        (member) => member.media?.participantId == participant.id,
-      )) {
-        continue;
-      }
-      members.add(
-        RoomManagedMember(
-          userId: 'media:${participant.id}',
-          displayName: participant.displayName.isEmpty
-              ? participant.id
-              : participant.displayName,
-          media: MediaRoomParticipantSummary(
-            participantId: participant.id,
-            displayName: participant.displayName,
-            role: participant.isLocal ? room.media.role : null,
-          ),
-          isSelf: participant.isLocal,
-        ),
-      );
-    }
-    return List.unmodifiable(members);
-  }
+  List<RoomManagedMember> get managedMembers => mergeSnapshotMembers(
+    _managedMembers,
+    _snapshot,
+    localRole: room.media.role,
+  );
 
   /// Explicit refresh avoids backend polling by every independent UI widget.
   Future<void> refreshManagedMembers() async {

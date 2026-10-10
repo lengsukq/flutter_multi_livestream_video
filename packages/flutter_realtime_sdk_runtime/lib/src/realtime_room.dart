@@ -1,4 +1,5 @@
 import 'room_video_effects_controller.dart';
+import 'members/room_members_controller.dart';
 import 'room_annotation_coordinator.dart';
 import 'room_recording_controller.dart';
 import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
@@ -75,11 +76,16 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
       _chatEventSubscription = chatSession.events.listen(_onChatEvent);
       _chatStateSubscription = chatSession.states.listen((_) => _emitState());
     }
+    // Auxiliary sessions belong to Runtime, not to a particular Widget tree.
+    unawaited(initialize());
   }
 
   final MediaRoomSession media;
   final String publicProviderId;
   final MediaTrackRenderer renderer;
+
+  /// UI-independent RTC + IM roster and moderation operations.
+  final RoomMembersController memberDirectory = RoomMembersController();
   final ChatSession? chat;
 
   /// Optional provider-neutral classroom SDK. Null for live/direct rooms.
@@ -100,6 +106,42 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   StreamSubscription<ChatConnectionState>? _chatStateSubscription;
   bool _disposed = false;
   Future<void>? _disposeFuture;
+  Future<void>? _initializeFuture;
+
+  /// Starts optional classroom/live sessions exactly once per room lifetime.
+  /// Failure is reported via [events] and does not disconnect healthy media.
+  Future<void> initialize() => _initializeFuture ??= _initialize();
+
+  Future<void> _initialize() async {
+    Future<void> start(String operation, Future<void> Function() action) async {
+      if (_disposed) return;
+      try {
+        await action();
+      } catch (error, stack) {
+        if (!_disposed) {
+          _reportFailure(
+            normalizeRealtimeException(
+              error,
+              domain: 'runtime',
+              operation: operation,
+              providerId: providerId,
+              stackTrace: stack,
+            ),
+          );
+        }
+      }
+    }
+
+    final operations = <Future<void>>[];
+    if (classroom != null) {
+      operations.add(start('classroom.start', classroom!.start));
+    }
+    if (liveInteractions != null) {
+      operations.add(start('live.start', liveInteractions!.start));
+    }
+    await Future.wait(operations);
+  }
+
   Duration cleanupTimeout = const Duration(seconds: 10);
   String get roomCode => media.roomCode;
   String get providerId => publicProviderId;
@@ -217,6 +259,9 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     _disposed = true;
     _effects.beginDisposal();
     final cleanup = Cleanup(timeout: cleanupTimeout);
+    // Startup may be waiting on a remote snapshot indefinitely; disposal
+    // must cancel/close the auxiliary sessions without waiting for that read.
+    // Late startup errors are ignored once _disposed is set.
     await cleanup.run('annotation.coordinator', () async {
       await _annotations?.dispose();
     });

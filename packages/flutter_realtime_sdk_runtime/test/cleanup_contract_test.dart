@@ -6,6 +6,32 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'Runtime starts classroom once without any UI and owns its cleanup',
+    () async {
+      final repository = _CountingRepository();
+      final room = RealtimeRoom(
+        media: MediaRoomSession.direct(
+          roomCode: 'r',
+          participantId: 'p',
+          session: _Media(),
+        ),
+        renderer: const _Renderer(),
+        classroom: ClassroomSession(
+          repository,
+          pollInterval: const Duration(days: 1),
+        ),
+        videoEffectsBridge: _Bridge(),
+        disposeClients: () {},
+      );
+      await room.initialize();
+      expect(repository.reads, 1);
+      await room.initialize();
+      expect(repository.reads, 1, reason: 'UI remount must not restart a room');
+      await room.dispose();
+      expect(repository.closed, isTrue);
+    },
+  );
+  test(
     'early classroom cleanup failure cannot skip media or client cleanup',
     () async {
       final media = _Media();
@@ -76,6 +102,21 @@ void main() {
     expect(command.payload['expectedRevision'], 1);
     expect(() => command.payload.clear(), throwsUnsupportedError);
   });
+}
+
+class _CountingRepository extends _Repository {
+  int reads = 0;
+  bool closed = false;
+  @override
+  Future<ClassroomState> snapshot() {
+    reads++;
+    return super.snapshot();
+  }
+
+  @override
+  void close() {
+    closed = true;
+  }
 }
 
 class _Repository implements ClassroomRepository {

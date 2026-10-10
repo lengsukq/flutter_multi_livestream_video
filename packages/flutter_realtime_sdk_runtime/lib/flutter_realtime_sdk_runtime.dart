@@ -16,6 +16,7 @@ export 'src/realtime_error.dart';
 export 'src/realtime_event.dart';
 export 'src/realtime_facade.dart';
 export 'src/realtime_room.dart';
+export 'src/members/room_members_controller.dart';
 export 'src/room_recording_controller.dart';
 export 'src/classroom_media_transport.dart';
 export 'src/classroom_chat_transport.dart';
