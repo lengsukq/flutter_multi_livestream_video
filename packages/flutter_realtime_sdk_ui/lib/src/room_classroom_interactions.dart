@@ -1,8 +1,9 @@
+import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_classroom_ui/flutter_realtime_classroom_ui.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
 import 'room_ui_controller.dart';
 
@@ -23,7 +24,7 @@ class RealtimeRaiseHandButton extends StatelessWidget {
         final raised = state.students.any(
           (student) => student.userId == state.selfUserId && student.handRaised,
         );
-        final zh = Localizations.localeOf(context).languageCode == 'zh';
+        final strings = RealtimeStrings.of(context);
         return OutlinedButton.icon(
           onPressed: controller.isPending(RealtimeRoomUiAction.classroom)
               ? null
@@ -32,9 +33,7 @@ class RealtimeRaiseHandButton extends StatelessWidget {
                   () => controller.setHandRaised(!raised),
                 ),
           icon: Icon(raised ? Icons.pan_tool_alt : Icons.pan_tool_outlined),
-          label: Text(
-            raised ? (zh ? '取消举手' : 'Lower hand') : (zh ? '举手' : 'Raise hand'),
-          ),
+          label: Text(raised ? strings.lowerHand : strings.raiseHand),
         );
       },
     );
@@ -331,7 +330,7 @@ class RealtimeClassroomToolsButton extends StatelessWidget {
         if (state?.capabilities.canUseTools != true) {
           return const SizedBox.shrink();
         }
-        final zh = Localizations.localeOf(context).languageCode == 'zh';
+        final zh = RealtimeStrings.of(context).isZh;
         return IconButton(
           tooltip: zh ? '课堂工具（公告、作业、倒计时）' : 'Classroom tools',
           icon: const Icon(Icons.build_outlined),

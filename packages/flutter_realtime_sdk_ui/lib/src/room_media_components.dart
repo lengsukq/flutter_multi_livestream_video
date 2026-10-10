@@ -151,7 +151,7 @@ class RealtimeScreenShareStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final zh = RealtimeStrings.of(context).isZh;
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {

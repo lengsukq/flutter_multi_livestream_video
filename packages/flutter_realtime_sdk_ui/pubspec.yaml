@@ -12,6 +12,10 @@ dependencies:
     sdk: flutter
   flutter_realtime_sdk_runtime:
     path: ../flutter_realtime_sdk_runtime
+  flutter_realtime_classroom_preset:
+    path: ../flutter_realtime_classroom_preset
+  flutter_realtime_live_preset:
+    path: ../flutter_realtime_live_preset
   flutter_realtime_media_core:
     path: ../flutter_realtime_media_core
   flutter_realtime_media_ui:

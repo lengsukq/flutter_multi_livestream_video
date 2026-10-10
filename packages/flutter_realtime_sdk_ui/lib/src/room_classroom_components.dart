@@ -1,7 +1,9 @@
+import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_classroom_ui/flutter_realtime_classroom_ui.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_whiteboard_ui/flutter_realtime_whiteboard_ui.dart';
 
@@ -108,7 +110,7 @@ class RealtimeSharedContentButton extends StatelessWidget {
         if (status.content?.canManage != true) {
           return const SizedBox.shrink();
         }
-        final zh = Localizations.localeOf(context).languageCode == 'zh';
+        final zh = RealtimeStrings.of(context).isZh;
         Future<void> run(Future<void> Function() action) async {
           try {
             await action();

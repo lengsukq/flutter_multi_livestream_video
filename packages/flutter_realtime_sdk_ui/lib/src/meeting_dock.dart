@@ -1,11 +1,8 @@
+import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
-    show SharedContentStatus;
-import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart'
-    show ClassroomFeedbackKind;
-import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'room_classroom_activities.dart';
 import 'room_classroom_interactions.dart';
 import 'room_control_components.dart';
@@ -232,18 +229,18 @@ class RealtimeDockMicrophoneButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RealtimeStrings.of(context);
     return RealtimeRoomActionButton(
       action: RealtimeRoomUiAction.microphone,
       builder: (context, onPressed, active, pending) {
         return RealtimeDockItem(
           icon: active ? Icons.mic_rounded : Icons.mic_off_rounded,
-          label: zh ? (active ? '麦克风' : '已静音') : (active ? 'Mic on' : 'Muted'),
+          label: active ? strings.micOn : strings.muted,
           isActive: active,
           isLoading: pending,
           onPressed: onPressed,
           showLabel: showLabel,
-          activeColor: Colors.teal,
+          activeColor: RealtimeUiTokens.iosBlue,
         );
       },
     );
@@ -257,20 +254,18 @@ class RealtimeDockCameraButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RealtimeStrings.of(context);
     return RealtimeRoomActionButton(
       action: RealtimeRoomUiAction.camera,
       builder: (context, onPressed, active, pending) {
         return RealtimeDockItem(
           icon: active ? Icons.videocam_rounded : Icons.videocam_off_rounded,
-          label: zh
-              ? (active ? '摄像头' : '已关视频')
-              : (active ? 'Cam on' : 'Cam off'),
+          label: active ? strings.camOn : strings.camOff,
           isActive: active,
           isLoading: pending,
           onPressed: onPressed,
           showLabel: showLabel,
-          activeColor: Colors.teal,
+          activeColor: RealtimeUiTokens.iosTeal,
         );
       },
     );
@@ -286,7 +281,7 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final room = RealtimeRoomUiScope.of(context).room;
     final shared = room.sharedContent;
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RealtimeStrings.of(context);
 
     if (shared == null) {
       // Standalone screen share mode without shared content controller
@@ -297,14 +292,12 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
             icon: active
                 ? Icons.stop_screen_share_rounded
                 : Icons.screen_share_rounded,
-            label: zh
-                ? (active ? '停止共享' : '共享屏幕')
-                : (active ? 'Stop share' : 'Share screen'),
+            label: active ? strings.stopSharing : strings.screenShare,
             isActive: active,
             isLoading: pending,
             onPressed: onPressed,
             showLabel: showLabel,
-            activeColor: Colors.amber.shade700,
+            activeColor: RealtimeUiTokens.iosOrange,
           );
         },
       );
@@ -342,7 +335,7 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.all(16),
                         child: Text(
-                          zh ? '选择共享内容' : 'Choose content to share',
+                          strings.chooseContentToShare,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -363,12 +356,8 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                             color: theme.colorScheme.primary,
                           ),
                         ),
-                        title: Text(zh ? '白板演示' : 'Whiteboard'),
-                        subtitle: Text(
-                          zh
-                              ? '打开多人协同互动白板与课件'
-                              : 'Open collaborative interactive whiteboard',
-                        ),
+                        title: Text(strings.whiteboard),
+                        subtitle: Text(strings.whiteboardDescription),
                         selected: mode == SharedContentMode.whiteboard,
                         onTap: () {
                           Navigator.pop(sheetContext);
@@ -381,20 +370,18 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.green.withValues(alpha: 0.12),
+                            color: RealtimeUiTokens.iosGreen.withValues(
+                              alpha: 0.12,
+                            ),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.screen_share_outlined,
-                            color: Colors.green,
+                            color: RealtimeUiTokens.iosGreen,
                           ),
                         ),
-                        title: Text(zh ? '共享桌面 / 屏幕' : 'Share Screen'),
-                        subtitle: Text(
-                          zh
-                              ? '共享电脑或手机屏幕给所有参会者'
-                              : 'Share your display with all participants',
-                        ),
+                        title: Text(strings.screenShare),
+                        subtitle: Text(strings.shareScreenDescription),
                         enabled: shared.canShare,
                         selected: mode == SharedContentMode.screen,
                         onTap: () {
@@ -416,14 +403,12 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Icon(
-                              Icons.stop_rounded,
+                              Icons.stop_screen_share_rounded,
                               color: theme.colorScheme.error,
                             ),
                           ),
                           title: Text(
-                            zh
-                                ? '停止共享，返回成员画面'
-                                : 'Stop sharing, back to members',
+                            strings.stopSharing,
                             style: TextStyle(color: theme.colorScheme.error),
                           ),
                           onTap: () {
@@ -451,14 +436,14 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
               : Icons.present_to_all_rounded,
           label: isSharing
               ? (mode == SharedContentMode.whiteboard
-                    ? (zh ? '白板中' : 'Whiteboard')
-                    : (zh ? '共享中' : 'Sharing'))
-              : (zh ? '共享内容' : 'Share'),
+                    ? strings.whiteboard
+                    : strings.stopSharing)
+              : strings.shareContent,
           isActive: isSharing,
           isLoading: status.busy,
           onPressed: status.content?.canManage == true ? openMenu : null,
           showLabel: showLabel,
-          activeColor: Colors.amber.shade700,
+          activeColor: RealtimeUiTokens.iosOrange,
         );
       },
     );
@@ -473,7 +458,7 @@ class RealtimeDockRaiseHandButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RealtimeStrings.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -486,9 +471,9 @@ class RealtimeDockRaiseHandButton extends StatelessWidget {
         );
         return RealtimeDockItem(
           icon: raised ? Icons.pan_tool_rounded : Icons.pan_tool_outlined,
-          label: zh ? (raised ? '已举手' : '举手') : (raised ? 'Lower' : 'Raise'),
+          label: raised ? strings.handRaised : strings.raiseHand,
           isActive: raised,
-          activeColor: Colors.amber.shade700,
+          activeColor: RealtimeUiTokens.iosOrange,
           showLabel: showLabel,
           onPressed: controller.isPending(RealtimeRoomUiAction.classroom)
               ? null
@@ -509,7 +494,7 @@ class RealtimeDockFeedbackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RealtimeStrings.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -517,10 +502,10 @@ class RealtimeDockFeedbackButton extends StatelessWidget {
           return const SizedBox.shrink();
         }
         return PopupMenuButton<ClassroomFeedbackKind>(
-          tooltip: zh ? '课堂反馈' : 'Classroom feedback',
+          tooltip: strings.isZh ? '课堂反馈' : 'Classroom feedback',
           child: RealtimeDockItem(
             icon: Icons.emoji_emotions_outlined,
-            label: zh ? '反馈' : 'React',
+            label: strings.isZh ? '课堂反馈' : 'Classroom feedback',
             showLabel: showLabel,
           ),
           onSelected: (kind) => controller.sendClassroomFeedback(kind),
@@ -558,39 +543,82 @@ class _RealtimeClassroomPanelState extends State<RealtimeClassroomPanel>
 
   @override
   Widget build(BuildContext context) {
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RealtimeStrings.of(context);
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                labelPadding: const EdgeInsets.symmetric(horizontal: 10),
-                labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                tabs: [
-                  Tab(text: zh ? '提问' : 'Questions'),
-                  Tab(text: zh ? '举手' : 'Hands'),
-                  Tab(text: zh ? '花名册' : 'Roster'),
-                  Tab(text: zh ? '测验' : 'Activities'),
-                ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 8, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: TabBar(
+                    controller: _tabController,
+                    dividerColor: Colors.transparent,
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: BoxDecoration(
+                      color: isDark ? const Color(0xFF2C3240) : Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    labelColor: theme.colorScheme.onSurface,
+                    unselectedLabelColor: RealtimeUiTokens.textMuted,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+                    labelStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    tabs: [
+                      Tab(text: strings.classroomQuestions),
+                      Tab(text: strings.classroomHands),
+                      Tab(text: strings.classroomRoster),
+                      Tab(text: strings.classroomActivities),
+                    ],
+                  ),
+                ),
               ),
-            ),
-            if (widget.onClose != null)
-              IconButton(
-                tooltip: zh ? '关闭面板' : 'Close panel',
-                onPressed: widget.onClose,
-                icon: const Icon(Icons.close_rounded),
-              ),
-          ],
+              if (widget.onClose != null) ...[
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: strings.closePanel,
+                  onPressed: widget.onClose,
+                  iconSize: 18,
+                  style: IconButton.styleFrom(
+                    backgroundColor: isDark
+                        ? Colors.white.withValues(alpha: 0.10)
+                        : Colors.black.withValues(alpha: 0.06),
+                    padding: const EdgeInsets.all(6),
+                    minimumSize: const Size(28, 28),
+                  ),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ],
+          ),
         ),
         Divider(
           height: 1,
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         Expanded(
           child: TabBarView(

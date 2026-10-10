@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
+import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
+import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 import 'package:flutter_realtime_live_ui/flutter_realtime_live_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
@@ -95,15 +97,20 @@ class _RealtimeRoomViewState extends State<RealtimeRoomView> {
           );
         }
         if (snapshot.hasError) {
+          final strings = RealtimeStrings.of(context);
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('无法启动摄像头背景处理'),
+                Text(
+                  strings.isZh
+                      ? '无法启动摄像头背景处理'
+                      : 'Failed to initialize camera background effect',
+                ),
                 Text(snapshot.error.toString()),
                 TextButton(
                   onPressed: widget.onLeave,
-                  child: const Text('退出房间'),
+                  child: Text(strings.leave),
                 ),
               ],
             ),

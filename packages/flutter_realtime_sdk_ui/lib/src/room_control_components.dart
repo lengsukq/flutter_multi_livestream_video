@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
+import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
 import 'room_ui_controller.dart';
@@ -34,7 +35,7 @@ class RealtimeRoomActionButton extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         final snapshot = controller.snapshot;
-        final isZh = Localizations.localeOf(context).languageCode == 'zh';
+        final isZh = RealtimeStrings.of(context).isZh;
         final active = switch (action) {
           RealtimeRoomUiAction.microphone => !snapshot.localMuted,
           RealtimeRoomUiAction.camera => snapshot.localVideoEnabled,
@@ -161,7 +162,7 @@ class RealtimeMediaDevicePicker extends StatelessWidget {
         if (!controller.canListMediaDevices(kind)) {
           return const SizedBox.shrink();
         }
-        final zh = Localizations.localeOf(context).languageCode == 'zh';
+        final zh = RealtimeStrings.of(context).isZh;
         final title = switch (kind) {
           MediaDeviceKind.microphone => zh ? '麦克风设备' : 'Microphone devices',
           MediaDeviceKind.camera => zh ? '摄像头设备' : 'Camera devices',
@@ -257,7 +258,7 @@ class RealtimeAudioOutputButton extends StatelessWidget {
         if (!controller.canListAudioOutputs) {
           return const SizedBox.shrink();
         }
-        final zh = Localizations.localeOf(context).languageCode == 'zh';
+        final zh = RealtimeStrings.of(context).isZh;
         return OutlinedButton.icon(
           icon: const Icon(Icons.speaker_outlined),
           label: Text(zh ? '音频输出' : 'Audio output'),
@@ -371,11 +372,7 @@ class RealtimeBackgroundEffectsButton extends StatelessWidget {
         ),
       ),
       icon: const Icon(Icons.blur_on_outlined),
-      label: Text(
-        Localizations.localeOf(context).languageCode == 'zh'
-            ? '虚拟背景'
-            : 'Background',
-      ),
+      label: Text(RealtimeStrings.of(context).backgroundEffects),
     );
   }
 }
@@ -438,11 +435,7 @@ class RealtimeLeaveButton extends StatelessWidget {
                 }
               },
         icon: const Icon(Icons.call_end),
-        label: Text(
-          Localizations.localeOf(context).languageCode == 'zh'
-              ? '离开会议'
-              : 'Leave meeting',
-        ),
+        label: Text(RealtimeStrings.of(context).leave),
       ),
     );
   }

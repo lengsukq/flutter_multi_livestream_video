@@ -359,9 +359,9 @@ class _ParticipantActions extends StatelessWidget {
     if (!canManage) {
       return Icon(member.isMuted ? Icons.mic_off : Icons.mic, size: 18);
     }
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RealtimeStrings.of(context);
     return PopupMenuButton<String>(
-      tooltip: zh ? '管理成员' : 'Manage participant',
+      tooltip: strings.manageRoom,
       enabled: !controller.isPending(
         RealtimeRoomUiAction.participantManagement,
       ),
@@ -376,16 +376,16 @@ class _ParticipantActions extends StatelessWidget {
               final approved = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: Text(zh ? '移出成员' : 'Remove participant'),
+                  title: Text(strings.removeParticipant),
                   content: Text(member.displayName),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
-                      child: Text(zh ? '取消' : 'Cancel'),
+                      child: Text(strings.cancel),
                     ),
                     FilledButton(
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: Text(zh ? '确定' : 'Remove'),
+                      child: Text(strings.removeMember),
                     ),
                   ],
                 ),
@@ -404,14 +404,17 @@ class _ParticipantActions extends StatelessWidget {
       },
       itemBuilder: (_) => [
         if (caps.muteParticipant.supported)
-          PopupMenuItem(value: 'mute', child: Text(zh ? '静音' : 'Mute')),
+          PopupMenuItem(value: 'mute', child: Text(strings.muteParticipant)),
         if (caps.stopParticipantVideo.supported)
           PopupMenuItem(
             value: 'stopVideo',
-            child: Text(zh ? '关闭摄像头' : 'Stop video'),
+            child: Text(strings.stopParticipantVideo),
           ),
         if (caps.removeParticipant.supported)
-          PopupMenuItem(value: 'remove', child: Text(zh ? '移出会议' : 'Remove')),
+          PopupMenuItem(
+            value: 'remove',
+            child: Text(strings.removeParticipant),
+          ),
       ],
     );
   }

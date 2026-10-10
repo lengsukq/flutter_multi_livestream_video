@@ -8,7 +8,8 @@ void main() {
     tester,
   ) async {
     final repository = _ClassroomRepository(ClassroomRole.student);
-    final room = _room(repository);
+    final room = await _initializedRoom(tester, repository);
+    addTearDown(room.dispose);
     await tester.pumpWidget(
       MaterialApp(
         home: RealtimeRoomUiScope(
@@ -41,16 +42,15 @@ void main() {
     await tester.pump();
     expect(repository.actions, contains('feedback.send'));
     await tester.pumpWidget(const SizedBox.shrink());
-    // Dispose the mocked classroom explicitly. RealtimeRoom.dispose also
-    // manages native shared-content tools outside this widget test's scope.
-    await room.classroom!.dispose();
+    await tester.runAsync(room.dispose);
   });
 
   testWidgets('teacher hand queue, Q&A and roster are separately placeable', (
     tester,
   ) async {
     final repository = _ClassroomRepository(ClassroomRole.teacher);
-    final room = _room(repository);
+    final room = await _initializedRoom(tester, repository);
+    addTearDown(room.dispose);
     await tester.pumpWidget(
       MaterialApp(
         home: RealtimeRoomUiScope(
@@ -78,7 +78,7 @@ void main() {
     await tester.pump();
     expect(repository.actions, contains('question.resolve'));
     await tester.pumpWidget(const SizedBox.shrink());
-    await room.classroom!.dispose();
+    await tester.runAsync(room.dispose);
   });
 
   testWidgets('independent quiz and poll list delegates answer and close', (
@@ -88,7 +88,8 @@ void main() {
       ClassroomRole.student,
       withActivity: true,
     );
-    final studentRoom = _room(studentRepository);
+    final studentRoom = await _initializedRoom(tester, studentRepository);
+    addTearDown(studentRoom.dispose);
     await tester.pumpWidget(
       MaterialApp(
         home: RealtimeRoomUiScope(
@@ -102,13 +103,14 @@ void main() {
     await tester.pump();
     expect(studentRepository.actions, contains('tool.activity.answer'));
     await tester.pumpWidget(const SizedBox.shrink());
-    await studentRoom.classroom!.dispose();
+    await tester.runAsync(studentRoom.dispose);
 
     final teacherRepository = _ClassroomRepository(
       ClassroomRole.teacher,
       withActivity: true,
     );
-    final teacherRoom = _room(teacherRepository);
+    final teacherRoom = await _initializedRoom(tester, teacherRepository);
+    addTearDown(teacherRoom.dispose);
     await tester.pumpWidget(
       MaterialApp(
         home: RealtimeRoomUiScope(
@@ -122,9 +124,20 @@ void main() {
     await tester.pump();
     expect(teacherRepository.actions, contains('tool.activity.close'));
     await tester.pumpWidget(const SizedBox.shrink());
-    await teacherRoom.classroom!.dispose();
+    await tester.runAsync(teacherRoom.dispose);
   });
 }
+
+Future<RealtimeRoom> _initializedRoom(
+  WidgetTester tester,
+  _ClassroomRepository repository,
+) async => (await tester.runAsync(() async {
+  // The Classroom session owns a periodic refresh timer and asynchronous
+  // cleanup deadlines. Create and start both in the real event loop.
+  final room = _room(repository);
+  await room.initialize();
+  return room;
+}))!;
 
 RealtimeRoom _room(_ClassroomRepository repository) => RealtimeRoom(
   media: MediaRoomSession.direct(
@@ -133,10 +146,13 @@ RealtimeRoom _room(_ClassroomRepository repository) => RealtimeRoom(
     session: _MediaSession(),
   ),
   renderer: const _Renderer(),
-  classroom: ClassroomSession(
-    repository,
-    pollInterval: const Duration(hours: 1),
-  ),
+  featurePlugins: [
+    ClassroomPreset(
+      enableForDirectRooms: true,
+      repositoryFactory: (_) => repository,
+      pollInterval: const Duration(hours: 1),
+    ),
+  ],
   disposeClients: () {},
 );
 

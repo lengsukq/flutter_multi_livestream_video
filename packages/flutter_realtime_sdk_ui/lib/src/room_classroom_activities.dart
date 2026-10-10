@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
+
 import 'room_ui_controller.dart';
 
 /// Read-only classroom engagement counters; the app places its own badge.
@@ -45,16 +47,23 @@ class RealtimeClassroomActivityList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
+    final strings = RealtimeStrings.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
         final state = controller.classroomState;
         final tools = state?.tools;
         if (tools == null) {
-          return const Center(child: Text('Activities unavailable'));
+          return RealtimeEmptyState(
+            icon: Icons.quiz_outlined,
+            title: strings.activitiesUnavailable,
+          );
         }
         if (tools.activities.isEmpty) {
-          return const Center(child: Text('No activities yet'));
+          return RealtimeEmptyState(
+            icon: Icons.assignment_outlined,
+            title: strings.noActivitiesYet,
+          );
         }
         final busy = controller.isPending(RealtimeRoomUiAction.classroom);
         return ListView.builder(
@@ -73,8 +82,8 @@ class RealtimeClassroomActivityList extends StatelessWidget {
                   ListTile(
                     title: Text(activity.title),
                     subtitle: Text(
-                      '${activity.kind.name} · ${activity.responseCount} responses'
-                      '${activity.closed ? ' · closed' : ''}',
+                      '${activity.kind.name} · ${activity.responseCount} ${strings.isZh ? '人参与' : 'responses'}'
+                      '${activity.closed ? (strings.isZh ? ' · 已结束' : ' · closed') : ''}',
                     ),
                     trailing: state.isTeacher && !activity.closed
                         ? TextButton(
@@ -88,7 +97,7 @@ class RealtimeClassroomActivityList extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                            child: const Text('Close'),
+                            child: Text(strings.close),
                           )
                         : null,
                   ),

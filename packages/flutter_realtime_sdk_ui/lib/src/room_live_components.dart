@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_live_ui/flutter_realtime_live_ui.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
+import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
 
 import 'room_ui_controller.dart';
 import 'room_media_components.dart';
@@ -175,7 +177,7 @@ class RealtimeLiveLikeButton extends StatelessWidget {
                 )
               : const Icon(Icons.favorite_rounded),
           label: Text(
-            '${Localizations.localeOf(context).languageCode == 'zh' ? '点赞' : 'Like'} $likes',
+            '${RealtimeStrings.of(context).isZh ? '点赞' : 'Like'} $likes',
           ),
         );
       },
@@ -190,10 +192,10 @@ class RealtimeLiveStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
+    final strings = RealtimeStrings.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        final isZh = Localizations.localeOf(context).languageCode == 'zh';
         final isViewer = controller.room.media.role == MediaRole.viewer;
         return Chip(
           avatar: Icon(
@@ -201,7 +203,7 @@ class RealtimeLiveStatus extends StatelessWidget {
             size: 16,
           ),
           label: Text(
-            '${isViewer ? (isZh ? '观看中' : 'Watching') : (isZh ? '直播中' : 'Live')} · ${controller.snapshot.participants.length}',
+            '${isViewer ? (strings.isZh ? '观看中' : 'Watching') : strings.liveStatus} · ${controller.snapshot.participants.length}',
           ),
         );
       },

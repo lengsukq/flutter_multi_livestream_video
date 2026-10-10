@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
 /// Independent, non-interactive meeting overlay for trusted classroom changes.
 ///
@@ -188,7 +189,7 @@ class _RealtimeClassroomEventOverlayState
 
   @override
   Widget build(BuildContext context) {
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final zh = RealtimeStrings.of(context).isZh;
     final timer = widget.classroom.state?.tools?.timer;
     final remaining = timer?.remaining();
     if (timer == null && _visible.isEmpty) return const SizedBox.shrink();
