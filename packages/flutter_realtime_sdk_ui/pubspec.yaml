@@ -16,6 +16,8 @@ dependencies:
     path: ../flutter_realtime_media_core
   flutter_realtime_media_ui:
     path: ../flutter_realtime_media_ui
+  flutter_realtime_chat_ui:
+    path: ../flutter_realtime_chat_ui
   flutter_realtime_classroom_ui:
     path: ../flutter_realtime_classroom_ui
   flutter_realtime_classroom_core:
@@ -32,3 +34,5 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+flutter:
+  uses-material-design: true
