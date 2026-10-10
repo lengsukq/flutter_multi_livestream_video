@@ -31,6 +31,8 @@ import { ChatRoomDirectory } from './chat/chat-room-directory.ts';
 import { LiveInteractionDirectory } from './live/live-interactions.ts';
 import { registerInteractionRoutes } from './routes/interaction-routes.ts';
 import { registerRoomRoutes } from './routes/room-routes.ts';
+import { registerRecordingRoutes } from './routes/recording-routes.ts';
+import { LiveKitCloudRecording } from './recording/livekit-cloud-recording.ts';
 import { registerChatRoutes } from './routes/chat-routes.ts';
 import { registerLegacyChimeRoutes } from './routes/legacy-chime-routes.ts';
 import { registerDashboardRoutes, type DashboardSelectionState } from './routes/dashboard-routes.ts';
@@ -484,6 +486,12 @@ registerLegacyChimeRoutes(app, {
   chimeProvider, roomDirectory, classroomDirectory, liveInteractionDirectory,
   generateRoomCode, registerRoom, resolveChimeRoom, logEvent, withRoomOperation,
   requireSameOrigin, requireAdmin,
+});
+
+registerRecordingRoutes(app, {
+  resolveRoom,
+  recorder: new LiveKitCloudRecording(),
+  contractError,
 });
 
 let server: ReturnType<typeof app.listen> | null = null;

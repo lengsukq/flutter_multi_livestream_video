@@ -29,5 +29,5 @@ test('typed router extraction retains every baseline HTTP verb and path', () => 
   const baseline = [...expected].sort(([verbA, pathA], [verbB, pathB]) =>
     verbA.localeCompare(verbB) || pathA.localeCompare(pathB));
   assert.deepEqual(sorted, baseline);
-  assert.equal(sorted.length, 43);
+  assert.equal(sorted.length, 48);
 });

@@ -170,5 +170,25 @@
   [
     "POST",
     "/rooms/:code/participants/remove"
+  ],
+  [
+    "GET",
+    "/rooms/:code/recording/export/:ticket"
+  ],
+  [
+    "POST",
+    "/rooms/:code/recording/download"
+  ],
+  [
+    "POST",
+    "/rooms/:code/recording/start"
+  ],
+  [
+    "POST",
+    "/rooms/:code/recording/status"
+  ],
+  [
+    "POST",
+    "/rooms/:code/recording/stop"
   ]
 ]
