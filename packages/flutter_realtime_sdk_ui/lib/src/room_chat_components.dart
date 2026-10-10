@@ -50,6 +50,7 @@ class RealtimeBulkMuteButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
+    final strings = RealtimeStrings.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -63,28 +64,29 @@ class RealtimeBulkMuteButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              tooltip: 'Mute all participants',
+              tooltip: strings.isZh ? '全员静音' : 'Mute all participants',
               icon: const Icon(Icons.volume_off_outlined),
               onPressed: busy
                   ? null
                   : () async {
                       final confirmed = await showDialog<bool>(
                         context: context,
+                        useRootNavigator: true,
                         builder: (dialogContext) => AlertDialog(
-                          title: const Text('Mute all participants?'),
-                          content: const Text(
-                            'Mute every other participant in this room.',
+                          title: Text(
+                            strings.isZh ? '全员静音？' : 'Mute all participants?',
                           ),
+                          content: Text(strings.muteAllConfirmation),
                           actions: [
                             TextButton(
                               onPressed: () =>
-                                  Navigator.pop(dialogContext, false),
-                              child: const Text('Cancel'),
+                                  Navigator.of(dialogContext).pop(false),
+                              child: Text(strings.cancel),
                             ),
                             FilledButton(
                               onPressed: () =>
-                                  Navigator.pop(dialogContext, true),
-                              child: const Text('Mute all'),
+                                  Navigator.of(dialogContext).pop(true),
+                              child: Text(strings.muteAll),
                             ),
                           ],
                         ),
@@ -95,7 +97,7 @@ class RealtimeBulkMuteButton extends StatelessWidget {
             ),
             if (controller.bulkMuteFailures.isNotEmpty)
               IconButton(
-                tooltip: 'Retry failed mutes',
+                tooltip: strings.isZh ? '重试失败成员' : 'Retry failed mutes',
                 icon: const Icon(Icons.refresh_outlined),
                 onPressed: busy
                     ? null
@@ -112,13 +114,16 @@ class RealtimeBulkMuteButton extends StatelessWidget {
     RealtimeRoomUiController controller, {
     required bool retry,
   }) async {
+    final strings = RealtimeStrings.of(context);
     try {
       await controller.muteAllParticipants(retryFailed: retry);
       if (context.mounted && controller.bulkMuteFailures.isNotEmpty) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(
-              '${controller.bulkMuteFailures.length} participants could not be muted.',
+              strings.isZh
+                  ? '${controller.bulkMuteFailures.length} 位成员未能静音'
+                  : '${controller.bulkMuteFailures.length} participants could not be muted.',
             ),
           ),
         );
@@ -168,24 +173,28 @@ class _RealtimeManagedParticipantListState
     String chatId,
     String name,
   ) async {
+    await Future<void>.delayed(Duration.zero);
+    if (!context.mounted) return;
+    final strings = RealtimeStrings.of(context);
     if (action == 'removeMedia' || action == 'removeChat') {
       final confirm = await showDialog<bool>(
         context: context,
+        useRootNavigator: true,
         builder: (dialogContext) => AlertDialog(
           title: Text(
             action == 'removeChat'
-                ? 'Remove from chat?'
-                : 'Remove from meeting?',
+                ? strings.removeFromChat
+                : strings.removeFromMedia,
           ),
           content: Text(name),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(strings.cancel),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Remove'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(strings.leave),
             ),
           ],
         ),
@@ -220,6 +229,10 @@ class _RealtimeManagedParticipantListState
   @override
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
+    final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
+    final isDark = style.isDark;
+
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -230,110 +243,467 @@ class _RealtimeManagedParticipantListState
         final canManageChat =
             chat?.isHost == true &&
             chat!.managementCapabilities.removeMember.supported;
+
         return Column(
           children: [
-            Row(
-              children: [
-                const SizedBox(width: 12),
-                Expanded(child: Text('Participants (${members.length})')),
-                const RealtimeBulkMuteButton(),
-                IconButton(
-                  tooltip: 'Refresh participants',
-                  onPressed: controller.membersLoading
-                      ? null
-                      : () => unawaited(controller.refreshManagedMembers()),
-                  icon: controller.membersLoading
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh),
+            // Clean subheader bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : Colors.black.withValues(alpha: 0.02),
+                border: Border(
+                  bottom: BorderSide(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.black.withValues(alpha: 0.05),
+                    width: 0.8,
+                  ),
                 ),
-              ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3.5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: style.primarySubtle,
+                      borderRadius: BorderRadius.circular(
+                        RealtimeUiTokens.pillRadius,
+                      ),
+                      border: Border.all(
+                        color: style.primaryBorder,
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${strings.participants} (${members.length})',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: style.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  const RealtimeBulkMuteButton(),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: strings.refresh,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: controller.membersLoading
+                        ? null
+                        : () => unawaited(controller.refreshManagedMembers()),
+                    icon: controller.membersLoading
+                        ? const SizedBox.square(
+                            dimension: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded, size: 18),
+                  ),
+                ],
+              ),
             ),
             if (controller.memberLoadError != null)
               Padding(
                 padding: const EdgeInsets.all(8),
                 child: Text(
                   controller.memberLoadError.toString(),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             Expanded(
-              child: ListView.builder(
-                itemCount: members.length,
-                itemBuilder: (context, index) {
-                  final member = members[index];
-                  final media = member.media;
-                  final chatMember = member.chat;
-                  final canManageMedia =
-                      !member.isSelf && media != null && mediaHost;
-                  final canRemoveChat =
-                      !member.isSelf && chatMember != null && canManageChat;
-                  final actions = <PopupMenuEntry<String>>[
-                    if (canManageMedia &&
-                        capabilities.muteParticipant.supported)
-                      const PopupMenuItem(value: 'mute', child: Text('Mute')),
-                    if (canManageMedia &&
-                        capabilities.stopParticipantVideo.supported)
-                      const PopupMenuItem(
-                        value: 'stopVideo',
-                        child: Text('Stop video'),
-                      ),
-                    if (canManageMedia &&
-                        capabilities.changeParticipantRole.supported)
-                      const PopupMenuItem(
-                        value: 'host',
-                        child: Text('Grant host'),
-                      ),
-                    if (canManageMedia &&
-                        capabilities.removeParticipant.supported)
-                      const PopupMenuItem(
-                        value: 'removeMedia',
-                        child: Text('Remove from media'),
-                      ),
-                    if (canRemoveChat)
-                      const PopupMenuItem(
-                        value: 'removeChat',
-                        child: Text('Remove from chat'),
-                      ),
-                  ];
-                  return ListTile(
-                    key: ValueKey(member.userId),
-                    leading: RealtimeAvatar(
-                      name: member.displayName,
-                      size: 36,
-                      isOnline: media != null || chatMember != null,
-                      showOnlineDot: true,
-                    ),
-                    title: Text(member.displayName),
-                    subtitle: Text(
-                      [
-                        if (media != null) 'Media online',
-                        if (chatMember != null) 'Chat online',
-                        if (member.isSelf) 'You',
-                      ].join(' · '),
-                    ),
-                    trailing: actions.isEmpty
-                        ? null
-                        : PopupMenuButton<String>(
-                            tooltip: 'Manage member',
-                            enabled: !controller.isPending(
-                              RealtimeRoomUiAction.participantManagement,
+              child: members.isEmpty
+                  ? Center(
+                      child: controller.membersLoading
+                          ? const CircularProgressIndicator(strokeWidth: 2)
+                          : Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.06)
+                                        : Colors.black.withValues(alpha: 0.04),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.group_off_rounded,
+                                    size: 28,
+                                    color: isDark
+                                        ? Colors.white38
+                                        : Colors.black38,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  strings.noManagedMembers,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white60
+                                        : RealtimeUiTokens.textMuted,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
-                            onSelected: (action) => _manage(
-                              context,
-                              controller,
-                              action,
-                              media?.participantId ?? '',
-                              chatMember?.userId ?? '',
-                              member.displayName,
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      itemCount: members.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 6),
+                      itemBuilder: (context, index) {
+                        final member = members[index];
+                        final media = member.media;
+                        final chatMember = member.chat;
+                        final canManageMedia =
+                            !member.isSelf && media != null && mediaHost;
+                        final canRemoveChat =
+                            !member.isSelf &&
+                            chatMember != null &&
+                            canManageChat;
+                        final isHost = media?.role == MediaRole.host;
+
+                        final actions = <PopupMenuEntry<String>>[
+                          if (canManageMedia &&
+                              capabilities.muteParticipant.supported)
+                            PopupMenuItem(
+                              value: 'mute',
+                              child: Text(strings.muteParticipant),
                             ),
-                            itemBuilder: (_) => actions,
+                          if (canManageMedia &&
+                              capabilities.stopParticipantVideo.supported)
+                            PopupMenuItem(
+                              value: 'stopVideo',
+                              child: Text(strings.stopParticipantVideo),
+                            ),
+                          if (canManageMedia &&
+                              capabilities.changeParticipantRole.supported)
+                            PopupMenuItem(
+                              value: 'host',
+                              child: Text(strings.grantHost),
+                            ),
+                          if (canManageMedia &&
+                              capabilities.removeParticipant.supported)
+                            PopupMenuItem(
+                              value: 'removeMedia',
+                              child: Text(strings.removeFromMedia),
+                            ),
+                          if (canRemoveChat)
+                            PopupMenuItem(
+                              value: 'removeChat',
+                              child: Text(strings.removeFromChat),
+                            ),
+                        ];
+
+                        final name = member.displayName.isEmpty
+                            ? member.userId
+                            : member.displayName;
+                        final initial = (name.isNotEmpty ? name[0] : 'U')
+                            .toUpperCase();
+
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 9,
                           ),
-                  );
-                },
-              ),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.05)
+                                : style.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(
+                              RealtimeUiTokens.cardRadius,
+                            ),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.10)
+                                  : style.border,
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              // Avatar
+                              Stack(
+                                alignment: Alignment.bottomRight,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: member.isSelf
+                                        ? style.primarySubtle
+                                        : (isDark
+                                              ? Colors.white12
+                                              : Colors.grey.shade200),
+                                    child: Text(
+                                      initial,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                        color: member.isSelf
+                                            ? style.primary
+                                            : (isDark
+                                                  ? Colors.white
+                                                  : RealtimeUiTokens.text),
+                                      ),
+                                    ),
+                                  ),
+                                  if (media != null || chatMember != null)
+                                    Container(
+                                      width: 9,
+                                      height: 9,
+                                      decoration: BoxDecoration(
+                                        color: Colors.green,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: isDark
+                                              ? const Color(0xFF1E293B)
+                                              : Colors.white,
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(width: 10),
+                              // Name & status details
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            name,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 13.5,
+                                              color: isDark
+                                                  ? Colors.white
+                                                  : style.text,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        if (isHost) ...[
+                                          const SizedBox(width: 5),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 5,
+                                              vertical: 1.5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              gradient: const LinearGradient(
+                                                colors: [
+                                                  Color(0xFFF59E0B),
+                                                  Color(0xFFD97706),
+                                                ],
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              strings.isZh ? '主持人' : 'Host',
+                                              style: const TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w800,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                        if (member.isSelf) ...[
+                                          const SizedBox(width: 5),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 5,
+                                              vertical: 1.5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: style.primarySubtle,
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              border: Border.all(
+                                                color: style.primaryBorder,
+                                                width: 0.6,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              strings.you,
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w700,
+                                                color: style.primary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Wrap(
+                                      spacing: 4,
+                                      runSpacing: 3,
+                                      children: [
+                                        if (media != null)
+                                          () {
+                                            final mediaParticipant = controller
+                                                .snapshot
+                                                .participants
+                                                .where(
+                                                  (p) =>
+                                                      p.id ==
+                                                      media.participantId,
+                                                )
+                                                .firstOrNull;
+                                            final isMuted = member.isSelf
+                                                ? controller.snapshot.localMuted
+                                                : (mediaParticipant?.isMuted ??
+                                                      false);
+                                            return Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 5,
+                                                    vertical: 1.5,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? Colors.white.withValues(
+                                                        alpha: 0.08,
+                                                      )
+                                                    : Colors.black.withValues(
+                                                        alpha: 0.05,
+                                                      ),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    isMuted
+                                                        ? Icons.mic_off_rounded
+                                                        : Icons.mic_rounded,
+                                                    size: 11,
+                                                    color: isMuted
+                                                        ? Colors.redAccent
+                                                        : Colors.green,
+                                                  ),
+                                                  const SizedBox(width: 3),
+                                                  Text(
+                                                    strings.mediaOnline,
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: isDark
+                                                          ? Colors.white70
+                                                          : style.textMuted,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }(),
+                                        if (chatMember != null)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 5,
+                                              vertical: 1.5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isDark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.08,
+                                                    )
+                                                  : Colors.black.withValues(
+                                                      alpha: 0.05,
+                                                    ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(
+                                                  Icons
+                                                      .chat_bubble_outline_rounded,
+                                                  size: 10,
+                                                  color: Color(0xFF0284C7),
+                                                ),
+                                                const SizedBox(width: 3),
+                                                Text(
+                                                  strings.chatOnline,
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: isDark
+                                                        ? Colors.white70
+                                                        : style.textMuted,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              // Trailing management actions
+                              if (actions.isNotEmpty)
+                                PopupMenuButton<String>(
+                                  tooltip: strings.isZh
+                                      ? '管理成员'
+                                      : 'Manage member',
+                                  icon: Icon(
+                                    Icons.more_vert_rounded,
+                                    size: 18,
+                                    color: isDark
+                                        ? Colors.white70
+                                        : style.textMuted,
+                                  ),
+                                  enabled: !controller.isPending(
+                                    RealtimeRoomUiAction.participantManagement,
+                                  ),
+                                  onSelected: (action) => _manage(
+                                    context,
+                                    controller,
+                                    action,
+                                    media?.participantId ?? '',
+                                    chatMember?.userId ?? '',
+                                    member.displayName,
+                                  ),
+                                  itemBuilder: (_) => actions,
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         );
@@ -366,6 +736,8 @@ class _ParticipantActions extends StatelessWidget {
         RealtimeRoomUiAction.participantManagement,
       ),
       onSelected: (value) async {
+        await Future<void>.delayed(Duration.zero);
+        if (!context.mounted) return;
         try {
           switch (value) {
             case 'mute':
@@ -375,16 +747,17 @@ class _ParticipantActions extends StatelessWidget {
             case 'remove':
               final approved = await showDialog<bool>(
                 context: context,
+                useRootNavigator: true,
                 builder: (ctx) => AlertDialog(
                   title: Text(strings.removeParticipant),
                   content: Text(member.displayName),
                   actions: [
                     TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
+                      onPressed: () => Navigator.of(ctx).pop(false),
                       child: Text(strings.cancel),
                     ),
                     FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
+                      onPressed: () => Navigator.of(ctx).pop(true),
                       child: Text(strings.removeMember),
                     ),
                   ],

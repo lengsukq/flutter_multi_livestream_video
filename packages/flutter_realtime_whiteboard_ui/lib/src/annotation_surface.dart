@@ -166,44 +166,20 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
   Future<void> _label(Offset offset, Size size) async {
     final canvas = widget.session.canvas;
     if (!canvas.active) return;
-    final controller = TextEditingController();
     final s = WhiteboardStrings.of(context);
-    DialogRoute<String>? route;
-    try {
-      route = DialogRoute<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(s.t('label')),
-          content: TextField(
-            controller: controller,
-            maxLength: 200,
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(s.t('cancel')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: Text(s.t('submit')),
-            ),
-          ],
-        ),
-      );
-      final text = await Navigator.of(context, rootNavigator: true).push(route);
-      if (text == null || text.isEmpty || !mounted) return;
-      final shape = AnnotationShape(
-        id: '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}',
-        tool: AnnotationTool.text,
-        points: [_point(offset, size)],
-        text: text,
-      );
-      _enqueue(() => widget.session.begin(shape, canvasId: canvas.canvasId));
-    } finally {
-      await route?.completed;
-      controller.dispose();
-    }
+    final text = await showDialog<String>(
+      context: context,
+      useRootNavigator: true,
+      builder: (ctx) => _AnnotationLabelDialog(strings: s),
+    );
+    if (text == null || text.isEmpty || !mounted) return;
+    final shape = AnnotationShape(
+      id: '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}',
+      tool: AnnotationTool.text,
+      points: [_point(offset, size)],
+      text: text,
+    );
+    _enqueue(() => widget.session.begin(shape, canvasId: canvas.canvasId));
   }
 
   @override
@@ -399,4 +375,52 @@ class AnnotationPainter extends CustomPainter {
   @override
   bool shouldRepaint(AnnotationPainter oldDelegate) =>
       !identical(shapes, oldDelegate.shapes);
+}
+
+class _AnnotationLabelDialog extends StatefulWidget {
+  const _AnnotationLabelDialog({required this.strings});
+
+  final WhiteboardStrings strings;
+
+  @override
+  State<_AnnotationLabelDialog> createState() => _AnnotationLabelDialogState();
+}
+
+class _AnnotationLabelDialogState extends State<_AnnotationLabelDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.strings;
+    return AlertDialog(
+      title: Text(s.t('label')),
+      content: TextField(
+        controller: _controller,
+        maxLength: 200,
+        autofocus: true,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(s.t('cancel')),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: Text(s.t('submit')),
+        ),
+      ],
+    );
+  }
 }

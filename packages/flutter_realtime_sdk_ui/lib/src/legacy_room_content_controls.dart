@@ -23,6 +23,7 @@ class _ContentControlsState extends State<_ContentControls> {
         caps.permissionRequired ||
         await showDialog<bool>(
               context: context,
+              useRootNavigator: true,
               builder: (ctx) => AlertDialog(
                 title: Text(zh ? '跨应用标注' : 'Draw across apps'),
                 content: Text(
@@ -32,11 +33,11 @@ class _ContentControlsState extends State<_ContentControls> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
+                    onPressed: () => Navigator.of(ctx).pop(false),
                     child: Text(zh ? '取消' : 'Cancel'),
                   ),
                   FilledButton(
-                    onPressed: () => Navigator.pop(ctx, true),
+                    onPressed: () => Navigator.of(ctx).pop(true),
                     child: Text(zh ? '打开工具' : 'Open tools'),
                   ),
                 ],
@@ -184,12 +185,13 @@ class _ContentControlsState extends State<_ContentControls> {
                     icon: const Icon(Icons.error_outline),
                     onPressed: () => showDialog<void>(
                       context: context,
+                      useRootNavigator: true,
                       builder: (ctx) => AlertDialog(
                         title: Text(zh ? '内容切换失败' : 'Content change failed'),
                         content: Text('${status.error}'),
                         actions: [
                           TextButton(
-                            onPressed: () => Navigator.pop(ctx),
+                            onPressed: () => Navigator.of(ctx).pop(),
                             child: const Text('OK'),
                           ),
                         ],

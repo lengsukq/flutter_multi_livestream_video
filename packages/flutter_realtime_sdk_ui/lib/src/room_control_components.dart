@@ -22,11 +22,13 @@ class RealtimeRoomActionButton extends StatelessWidget {
     required this.action,
     this.builder,
     this.label,
+    this.iconOnly = false,
   });
 
   final RealtimeRoomUiAction action;
   final RealtimeRoomActionButtonBuilder? builder;
   final String? label;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -126,6 +128,40 @@ class RealtimeRoomActionButton extends StatelessWidget {
         if (builder != null) {
           return builder!(context, callback, active, pending);
         }
+        if (iconOnly) {
+          final isDanger =
+              (action == RealtimeRoomUiAction.microphone && !active) ||
+              (action == RealtimeRoomUiAction.camera && !active) ||
+              action == RealtimeRoomUiAction.leave;
+          return Tooltip(
+            message: buttonLabel,
+            child: IconButton.filledTonal(
+              style: isDanger
+                  ? IconButton.styleFrom(
+                      backgroundColor: Colors.red.withValues(alpha: 0.18),
+                      foregroundColor: Colors.redAccent,
+                    )
+                  : (active
+                        ? IconButton.styleFrom(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onPrimaryContainer,
+                          )
+                        : null),
+              onPressed: callback,
+              icon: pending
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(icon),
+            ),
+          );
+        }
         return Tooltip(
           message: buttonLabel,
           child: FilledButton.tonalIcon(
@@ -183,6 +219,7 @@ class RealtimeMediaDevicePicker extends StatelessWidget {
                     if (!context.mounted) return;
                     await showDialog<void>(
                       context: context,
+                      useRootNavigator: true,
                       builder: (dialogContext) => SimpleDialog(
                         title: Text(title),
                         children: [
@@ -206,7 +243,7 @@ class RealtimeMediaDevicePicker extends StatelessWidget {
                                 try {
                                   await controller.selectMediaDevice(device);
                                   if (dialogContext.mounted) {
-                                    Navigator.pop(dialogContext);
+                                    Navigator.of(dialogContext).pop();
                                   }
                                 } catch (error) {
                                   if (dialogContext.mounted) {
@@ -237,17 +274,22 @@ class RealtimeMediaDevicePicker extends StatelessWidget {
 }
 
 class RealtimeSwitchCameraButton extends StatelessWidget {
-  const RealtimeSwitchCameraButton({super.key});
+  const RealtimeSwitchCameraButton({super.key, this.iconOnly = false});
+  final bool iconOnly;
   @override
-  Widget build(BuildContext context) =>
-      const RealtimeRoomActionButton(action: RealtimeRoomUiAction.switchCamera);
+  Widget build(BuildContext context) => RealtimeRoomActionButton(
+    action: RealtimeRoomUiAction.switchCamera,
+    iconOnly: iconOnly,
+  );
 }
 
 /// Audio output picker without owning a screen, route or SDK session.
 /// Providers may offer listing but not device selection: those entries stay
 /// visible as read-only capabilities instead of silently dispatching commands.
 class RealtimeAudioOutputButton extends StatelessWidget {
-  const RealtimeAudioOutputButton({super.key});
+  const RealtimeAudioOutputButton({super.key, this.iconOnly = false});
+
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -259,64 +301,76 @@ class RealtimeAudioOutputButton extends StatelessWidget {
           return const SizedBox.shrink();
         }
         final zh = RealtimeStrings.of(context).isZh;
+        final title = zh ? '音频输出' : 'Audio output';
+        Future<void> openDialog() async {
+          try {
+            final devices = await controller.listAudioOutputs();
+            if (!context.mounted) return;
+            await showDialog<void>(
+              context: context,
+              useRootNavigator: true,
+              builder: (dialogContext) => SimpleDialog(
+                title: Text(zh ? '音频输出设备' : 'Audio output devices'),
+                children: [
+                  if (devices.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(zh ? '没有可用设备' : 'No devices'),
+                    ),
+                  for (final device in devices)
+                    ListTile(
+                      title: Text(device.label),
+                      subtitle: controller.canSelectAudioOutput
+                          ? null
+                          : Text(zh ? '当前设备不支持切换' : 'Selection unavailable'),
+                      enabled: controller.canSelectAudioOutput,
+                      onTap: () async {
+                        try {
+                          await controller.selectAudioOutput(device);
+                          if (dialogContext.mounted) {
+                            Navigator.of(dialogContext).pop();
+                          }
+                        } catch (error) {
+                          if (dialogContext.mounted) {
+                            ScaffoldMessenger.maybeOf(
+                              dialogContext,
+                            )?.showSnackBar(
+                              SnackBar(content: Text(error.toString())),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                ],
+              ),
+            );
+          } catch (error) {
+            if (context.mounted) {
+              ScaffoldMessenger.maybeOf(
+                context,
+              )?.showSnackBar(SnackBar(content: Text(error.toString())));
+            }
+          }
+        }
+
+        if (iconOnly) {
+          return Tooltip(
+            message: title,
+            child: IconButton.filledTonal(
+              icon: const Icon(Icons.speaker_outlined),
+              onPressed: controller.isPending(RealtimeRoomUiAction.audioOutput)
+                  ? null
+                  : openDialog,
+            ),
+          );
+        }
+
         return OutlinedButton.icon(
           icon: const Icon(Icons.speaker_outlined),
-          label: Text(zh ? '音频输出' : 'Audio output'),
+          label: Text(title),
           onPressed: controller.isPending(RealtimeRoomUiAction.audioOutput)
               ? null
-              : () async {
-                  try {
-                    final devices = await controller.listAudioOutputs();
-                    if (!context.mounted) return;
-                    await showDialog<void>(
-                      context: context,
-                      builder: (dialogContext) => SimpleDialog(
-                        title: Text(zh ? '音频输出设备' : 'Audio output devices'),
-                        children: [
-                          if (devices.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Text(zh ? '没有可用设备' : 'No devices'),
-                            ),
-                          for (final device in devices)
-                            ListTile(
-                              title: Text(device.label),
-                              subtitle: controller.canSelectAudioOutput
-                                  ? null
-                                  : Text(
-                                      zh
-                                          ? '当前设备不支持切换'
-                                          : 'Selection unavailable',
-                                    ),
-                              enabled: controller.canSelectAudioOutput,
-                              onTap: () async {
-                                try {
-                                  await controller.selectAudioOutput(device);
-                                  if (dialogContext.mounted) {
-                                    Navigator.pop(dialogContext);
-                                  }
-                                } catch (error) {
-                                  if (dialogContext.mounted) {
-                                    ScaffoldMessenger.maybeOf(
-                                      dialogContext,
-                                    )?.showSnackBar(
-                                      SnackBar(content: Text(error.toString())),
-                                    );
-                                  }
-                                }
-                              },
-                            ),
-                        ],
-                      ),
-                    );
-                  } catch (error) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                        SnackBar(content: Text(error.toString())),
-                      );
-                    }
-                  }
-                },
+              : openDialog,
         );
       },
     );
@@ -329,9 +383,11 @@ class RealtimeBackgroundEffectsButton extends StatelessWidget {
   const RealtimeBackgroundEffectsButton({
     super.key,
     this.imagePresets = const [],
+    this.iconOnly = false,
   });
 
   final List<MediaBackgroundImagePreset> imagePresets;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -339,38 +395,48 @@ class RealtimeBackgroundEffectsButton extends StatelessWidget {
     if (!controller.room.backgroundCapabilities.isSupported) {
       return const SizedBox.shrink();
     }
-    return OutlinedButton.icon(
-      onPressed: () => showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (sheetContext) => StatefulBuilder(
-          builder: (sheetContext, updateSheet) => SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: BackgroundEffectSelector(
-                capabilities: controller.room.backgroundCapabilities,
-                effect: controller.room.backgroundEffect,
-                imagePresets: imagePresets,
-                busy: controller.isPending(
-                  RealtimeRoomUiAction.backgroundEffect,
-                ),
-                onChanged: (effect) async {
-                  try {
-                    await controller.setBackgroundEffect(effect);
-                    if (sheetContext.mounted) updateSheet(() {});
-                  } catch (error) {
-                    if (sheetContext.mounted) {
-                      ScaffoldMessenger.maybeOf(sheetContext)?.showSnackBar(
-                        SnackBar(content: Text(error.toString())),
-                      );
-                    }
+    void openSheet() => showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, updateSheet) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: BackgroundEffectSelector(
+              capabilities: controller.room.backgroundCapabilities,
+              effect: controller.room.backgroundEffect,
+              imagePresets: imagePresets,
+              busy: controller.isPending(RealtimeRoomUiAction.backgroundEffect),
+              onChanged: (effect) async {
+                try {
+                  await controller.setBackgroundEffect(effect);
+                  if (sheetContext.mounted) updateSheet(() {});
+                } catch (error) {
+                  if (sheetContext.mounted) {
+                    ScaffoldMessenger.maybeOf(
+                      sheetContext,
+                    )?.showSnackBar(SnackBar(content: Text(error.toString())));
                   }
-                },
-              ),
+                }
+              },
             ),
           ),
         ),
       ),
+    );
+
+    if (iconOnly) {
+      return Tooltip(
+        message: RealtimeStrings.of(context).backgroundEffects,
+        child: IconButton.filledTonal(
+          onPressed: openSheet,
+          icon: const Icon(Icons.blur_on_outlined),
+        ),
+      );
+    }
+
+    return OutlinedButton.icon(
+      onPressed: openSheet,
       icon: const Icon(Icons.blur_on_outlined),
       label: Text(RealtimeStrings.of(context).backgroundEffects),
     );
@@ -378,24 +444,33 @@ class RealtimeBackgroundEffectsButton extends StatelessWidget {
 }
 
 class RealtimeMicrophoneButton extends StatelessWidget {
-  const RealtimeMicrophoneButton({super.key});
+  const RealtimeMicrophoneButton({super.key, this.iconOnly = false});
+  final bool iconOnly;
   @override
-  Widget build(BuildContext context) =>
-      const RealtimeRoomActionButton(action: RealtimeRoomUiAction.microphone);
+  Widget build(BuildContext context) => RealtimeRoomActionButton(
+    action: RealtimeRoomUiAction.microphone,
+    iconOnly: iconOnly,
+  );
 }
 
 class RealtimeCameraButton extends StatelessWidget {
-  const RealtimeCameraButton({super.key});
+  const RealtimeCameraButton({super.key, this.iconOnly = false});
+  final bool iconOnly;
   @override
-  Widget build(BuildContext context) =>
-      const RealtimeRoomActionButton(action: RealtimeRoomUiAction.camera);
+  Widget build(BuildContext context) => RealtimeRoomActionButton(
+    action: RealtimeRoomUiAction.camera,
+    iconOnly: iconOnly,
+  );
 }
 
 class RealtimeScreenShareButton extends StatelessWidget {
-  const RealtimeScreenShareButton({super.key});
+  const RealtimeScreenShareButton({super.key, this.iconOnly = false});
+  final bool iconOnly;
   @override
-  Widget build(BuildContext context) =>
-      const RealtimeRoomActionButton(action: RealtimeRoomUiAction.screenShare);
+  Widget build(BuildContext context) => RealtimeRoomActionButton(
+    action: RealtimeRoomUiAction.screenShare,
+    iconOnly: iconOnly,
+  );
 }
 
 /// Independent leave button; caller decides confirmation and navigation.
@@ -405,6 +480,7 @@ class RealtimeLeaveButton extends StatelessWidget {
     this.onConfirm,
     this.onLeft,
     this.closeForEveryone,
+    this.iconOnly = false,
   });
 
   final Future<bool> Function(BuildContext context)? onConfirm;
@@ -412,14 +488,15 @@ class RealtimeLeaveButton extends StatelessWidget {
 
   /// Null retains the SDK default: a broadcast host with close rights ends it.
   final bool? closeForEveryone;
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) => FilledButton.icon(
-        onPressed: controller.isPending(RealtimeRoomUiAction.leave)
+      builder: (context, _) {
+        final leaveAction = controller.isPending(RealtimeRoomUiAction.leave)
             ? null
             : () async {
                 if (onConfirm != null && !await onConfirm!(context)) return;
@@ -433,10 +510,27 @@ class RealtimeLeaveButton extends StatelessWidget {
                     )?.showSnackBar(SnackBar(content: Text('$error')));
                   }
                 }
-              },
-        icon: const Icon(Icons.call_end),
-        label: Text(RealtimeStrings.of(context).leave),
-      ),
+              };
+        final label = RealtimeStrings.of(context).leave;
+        if (iconOnly) {
+          return Tooltip(
+            message: label,
+            child: IconButton.filled(
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.red.withValues(alpha: 0.88),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: leaveAction,
+              icon: const Icon(Icons.call_end),
+            ),
+          );
+        }
+        return FilledButton.icon(
+          onPressed: leaveAction,
+          icon: const Icon(Icons.call_end),
+          label: Text(label),
+        );
+      },
     );
   }
 }

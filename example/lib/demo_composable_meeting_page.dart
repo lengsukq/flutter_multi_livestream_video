@@ -223,8 +223,6 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                         ],
                       ),
                     ),
-                    if (!wide && _panel != _DemoSidePanel.closed)
-                      SizedBox(height: 240, child: _sidePanel()),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
                       child: RealtimeMeetingDock(
@@ -266,16 +264,20 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                             RealtimeDockItem(
                               icon: Icons.chat_bubble_outline_rounded,
                               label: RealtimeStrings.of(context).chat,
-                              isActive: _panel == _DemoSidePanel.chat,
-                              onPressed: () => _toggle(_DemoSidePanel.chat),
+                              isActive: wide && _panel == _DemoSidePanel.chat,
+                              onPressed: () =>
+                                  _toggle(_DemoSidePanel.chat, isWide: wide),
                               showLabel: wide,
                             ),
                           RealtimeDockItem(
                             icon: Icons.people_outline_rounded,
                             label: RealtimeStrings.of(context).participants,
-                            isActive: _panel == _DemoSidePanel.participants,
-                            onPressed: () =>
-                                _toggle(_DemoSidePanel.participants),
+                            isActive:
+                                wide && _panel == _DemoSidePanel.participants,
+                            onPressed: () => _toggle(
+                              _DemoSidePanel.participants,
+                              isWide: wide,
+                            ),
                             showLabel: wide,
                           ),
                           if (widget.room.classroom != null)
@@ -284,9 +286,12 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                             RealtimeDockItem(
                               icon: Icons.school_outlined,
                               label: RealtimeStrings.of(context).classroom,
-                              isActive: _panel == _DemoSidePanel.classroom,
-                              onPressed: () =>
-                                  _toggle(_DemoSidePanel.classroom),
+                              isActive:
+                                  wide && _panel == _DemoSidePanel.classroom,
+                              onPressed: () => _toggle(
+                                _DemoSidePanel.classroom,
+                                isWide: wide,
+                              ),
                               showLabel: wide,
                             ),
                         ],
@@ -319,12 +324,128 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
     },
   );
 
-  void _toggle(_DemoSidePanel panel) => setState(() {
-    _panel = _panel == panel ? _DemoSidePanel.closed : panel;
-  });
+  void _toggle(_DemoSidePanel panel, {required bool isWide}) {
+    if (!isWide) {
+      _openMobileSheet(panel);
+      return;
+    }
+    setState(() {
+      _panel = _panel == panel ? _DemoSidePanel.closed : panel;
+    });
+  }
+
+  void _openMobileSheet(_DemoSidePanel panel) {
+    final strings = RealtimeStrings.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => RealtimeRoomUiScope(
+        room: widget.room,
+        child: Container(
+          height: MediaQuery.of(sheetContext).size.height * 0.68,
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 24,
+                offset: const Offset(0, -6),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4.5,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(2.5),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color:
+                            (panel == _DemoSidePanel.chat
+                                    ? const Color(0xFF0284C7)
+                                    : const Color(0xFF3B82F6))
+                                .withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        switch (panel) {
+                          _DemoSidePanel.chat =>
+                            Icons.chat_bubble_outline_rounded,
+                          _DemoSidePanel.classroom => Icons.school_outlined,
+                          _ => Icons.people_outline_rounded,
+                        },
+                        size: 16,
+                        color: panel == _DemoSidePanel.chat
+                            ? const Color(0xFF0284C7)
+                            : const Color(0xFF3B82F6),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      switch (panel) {
+                        _DemoSidePanel.chat => strings.chat,
+                        _DemoSidePanel.classroom => strings.classroom,
+                        _ => strings.participants,
+                      },
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => Navigator.pop(sheetContext),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(
+                height: 1,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : const Color(0xFFE2E8F0),
+              ),
+              Expanded(
+                child: switch (panel) {
+                  _DemoSidePanel.chat => const RealtimeChatPanel(),
+                  _DemoSidePanel.classroom => RealtimeClassroomPanel(
+                    onClose: () => Navigator.pop(sheetContext),
+                  ),
+                  _ => const RealtimeManagedParticipantList(),
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _sidePanel() {
     final strings = RealtimeStrings.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_panel == _DemoSidePanel.classroom) {
       return RealtimeCard(
         margin: const EdgeInsets.all(8),
@@ -334,37 +455,89 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
         ),
       );
     }
-    return RealtimeCard(
-      margin: const EdgeInsets.all(8),
-      radius: RealtimeUiTokens.cardRadius,
+    return Container(
+      margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF1E293B).withValues(alpha: 0.95)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.12)
+              : const Color(0xFFE2E8F0),
+          width: 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 8, 8),
             child: Row(
               children: [
+                Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color:
+                        (_panel == _DemoSidePanel.chat
+                                ? const Color(0xFF0284C7)
+                                : const Color(0xFF3B82F6))
+                            .withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    switch (_panel) {
+                      _DemoSidePanel.chat => Icons.chat_bubble_outline_rounded,
+                      _DemoSidePanel.classroom => Icons.school_outlined,
+                      _ => Icons.people_outline_rounded,
+                    },
+                    size: 16,
+                    color: _panel == _DemoSidePanel.chat
+                        ? const Color(0xFF0284C7)
+                        : const Color(0xFF3B82F6),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     switch (_panel) {
                       _DemoSidePanel.chat => strings.chat,
                       _ => strings.participants,
                     },
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                   ),
                 ),
                 IconButton(
                   tooltip: strings.closePanel,
+                  visualDensity: VisualDensity.compact,
                   onPressed: () =>
                       setState(() => _panel = _DemoSidePanel.closed),
-                  icon: const Icon(Icons.close_rounded),
+                  icon: Icon(
+                    Icons.close_rounded,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1),
+          Divider(
+            height: 1,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFE2E8F0),
+          ),
           Expanded(
             child: switch (_panel) {
               _DemoSidePanel.chat => const RealtimeChatPanel(),

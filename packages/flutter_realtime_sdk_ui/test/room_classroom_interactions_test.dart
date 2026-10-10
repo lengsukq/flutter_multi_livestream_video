@@ -81,6 +81,35 @@ void main() {
     await tester.runAsync(room.dispose);
   });
 
+  testWidgets('teacher answers a question via popup menu and dialog', (
+    tester,
+  ) async {
+    final repository = _ClassroomRepository(ClassroomRole.teacher);
+    final room = await _initializedRoom(tester, repository);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(body: RealtimeClassroomQuestions()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Manage question'), findsOneWidget);
+    await tester.tap(find.byTooltip('Manage question'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Answer').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Answer question'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Here is the answer');
+    await tester.tap(find.text('Submit'));
+    await tester.pumpAndSettle();
+    expect(repository.actions, contains('question.answer'));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(room.dispose);
+  });
+
   testWidgets('independent quiz and poll list delegates answer and close', (
     tester,
   ) async {

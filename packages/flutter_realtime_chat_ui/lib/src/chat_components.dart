@@ -734,17 +734,18 @@ class ChatManagementButton extends StatelessWidget {
                           onPressed: () async {
                             final confirmed = await showDialog<bool>(
                               context: context,
-                              builder: (context) => AlertDialog(
+                              useRootNavigator: true,
+                              builder: (dialogContext) => AlertDialog(
                                 title: Text(zh ? '关闭聊天室？' : 'Close chat room?'),
                                 actions: [
                                   TextButton(
                                     onPressed: () =>
-                                        Navigator.pop(context, false),
+                                        Navigator.of(dialogContext).pop(false),
                                     child: Text(zh ? '取消' : 'Cancel'),
                                   ),
                                   FilledButton(
                                     onPressed: () =>
-                                        Navigator.pop(context, true),
+                                        Navigator.of(dialogContext).pop(true),
                                     child: Text(zh ? '关闭' : 'Close'),
                                   ),
                                 ],
@@ -832,11 +833,14 @@ class ChatMemberList extends StatelessWidget {
                 ? PopupMenuButton<String>(
                     tooltip: zh ? '管理成员' : 'Manage member',
                     onSelected: (action) async {
+                      await Future<void>.delayed(Duration.zero);
+                      if (!context.mounted) return;
                       try {
                         switch (action) {
                           case 'remove':
                             final approved = await showDialog<bool>(
                               context: context,
+                              useRootNavigator: true,
                               builder: (dialogContext) => AlertDialog(
                                 title: Text(zh ? '移除成员？' : 'Remove member?'),
                                 content: Text(
@@ -847,12 +851,12 @@ class ChatMemberList extends StatelessWidget {
                                 actions: [
                                   TextButton(
                                     onPressed: () =>
-                                        Navigator.pop(dialogContext, false),
+                                        Navigator.of(dialogContext).pop(false),
                                     child: Text(zh ? '取消' : 'Cancel'),
                                   ),
                                   FilledButton(
                                     onPressed: () =>
-                                        Navigator.pop(dialogContext, true),
+                                        Navigator.of(dialogContext).pop(true),
                                     child: Text(zh ? '移除' : 'Remove'),
                                   ),
                                 ],

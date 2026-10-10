@@ -366,6 +366,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
       leave =
           await showDialog<bool>(
             context: context,
+            useRootNavigator: true,
             barrierColor: const Color(0xFF0F172A).withValues(alpha: 0.34),
             builder: (context) => RealtimeGlassDialog(
               icon: Icons.call_end_rounded,
@@ -471,6 +472,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
     if (canCloseRoom) {
       await showDialog<void>(
         context: context,
+        useRootNavigator: true,
         builder: (ctx) => RealtimeGlassDialog(
           icon: Icons.meeting_room_rounded,
           iconColor: style.danger,
@@ -479,7 +481,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
           content: Text(strings.endMeetingForAllDesc),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: () => Navigator.of(ctx).pop(),
               child: Text(
                 strings.cancel,
                 style: TextStyle(color: style.textMuted),
@@ -487,7 +489,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
             ),
             OutlinedButton(
               onPressed: () {
-                Navigator.pop(ctx);
+                Navigator.of(ctx).pop();
                 unawaited(_leave());
               },
               style: OutlinedButton.styleFrom(
@@ -503,7 +505,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
             ),
             FilledButton(
               onPressed: () {
-                Navigator.pop(ctx);
+                Navigator.of(ctx).pop();
                 unawaited(_closeRoomForEveryone());
               },
               style: FilledButton.styleFrom(
@@ -523,6 +525,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
     } else {
       final confirmed = await showDialog<bool>(
         context: context,
+        useRootNavigator: true,
         builder: (ctx) => RealtimeGlassDialog(
           icon: Icons.meeting_room_rounded,
           iconColor: style.danger,
@@ -531,14 +534,14 @@ class _MediaRoomViewState extends State<MediaRoomView>
           content: Text(strings.leaveRoomConfirmation),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: () => Navigator.of(ctx).pop(false),
               child: Text(
                 strings.cancel,
                 style: TextStyle(color: style.textMuted),
               ),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
+              onPressed: () => Navigator.of(ctx).pop(true),
               style: FilledButton.styleFrom(
                 backgroundColor: style.danger,
                 foregroundColor: Colors.white,
@@ -564,6 +567,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
     final style = RealtimeStyle.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
+      useRootNavigator: true,
       builder: (ctx) => RealtimeGlassDialog(
         icon: Icons.stop_circle_rounded,
         iconColor: style.danger,
@@ -572,14 +576,14 @@ class _MediaRoomViewState extends State<MediaRoomView>
         content: Text(strings.endBroadcastConfirmation),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               strings.cancel,
               style: TextStyle(color: style.textMuted),
             ),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
+            onPressed: () => Navigator.of(ctx).pop(true),
             style: FilledButton.styleFrom(
               backgroundColor: style.danger,
               foregroundColor: Colors.white,

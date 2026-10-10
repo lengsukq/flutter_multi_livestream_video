@@ -142,7 +142,9 @@ class RealtimeLiveGiftBanner extends StatelessWidget {
 
 /// Like counter and send button. Shared controller prevents duplicate sends.
 class RealtimeLiveLikeButton extends StatelessWidget {
-  const RealtimeLiveLikeButton({super.key});
+  const RealtimeLiveLikeButton({super.key, this.iconOnly = false});
+
+  final bool iconOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -155,20 +157,81 @@ class RealtimeLiveLikeButton extends StatelessWidget {
       builder: (context, _) {
         final pending = controller.isPending(RealtimeRoomUiAction.liveLike);
         final likes = controller.liveState?.totalLikes ?? 0;
+        final isZh = RealtimeStrings.of(context).isZh;
+
+        Future<void> sendLike() async {
+          try {
+            await controller.sendLiveLike();
+          } catch (error) {
+            if (context.mounted) {
+              ScaffoldMessenger.maybeOf(
+                context,
+              )?.showSnackBar(SnackBar(content: Text(error.toString())));
+            }
+          }
+        }
+
+        if (iconOnly) {
+          return Tooltip(
+            message: '${isZh ? '点赞' : 'Like'} $likes',
+            child: InkWell(
+              onTap: pending ? null : sendLike,
+              borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF2D55), Color(0xFFFF5252)],
+                  ),
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.pillRadius,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF2D55).withValues(alpha: 0.35),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    pending
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.favorite_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                    if (likes > 0) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        likes > 999 ? '999+' : '$likes',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+
         return FilledButton.tonalIcon(
-          onPressed: pending
-              ? null
-              : () async {
-                  try {
-                    await controller.sendLiveLike();
-                  } catch (error) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                        SnackBar(content: Text(error.toString())),
-                      );
-                    }
-                  }
-                },
+          onPressed: pending ? null : sendLike,
           icon: pending
               ? const SizedBox(
                   width: 16,
@@ -176,9 +239,7 @@ class RealtimeLiveLikeButton extends StatelessWidget {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.favorite_rounded),
-          label: Text(
-            '${RealtimeStrings.of(context).isZh ? '点赞' : 'Like'} $likes',
-          ),
+          label: Text('${isZh ? '点赞' : 'Like'} $likes'),
         );
       },
     );

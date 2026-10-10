@@ -304,52 +304,68 @@ class _LiveGiftControlButtonState extends State<LiveGiftControlButton> {
   Widget build(BuildContext context) {
     final label = _text(context, '礼物', 'Gifts');
     final style = RealtimeStyle.of(context);
+    final buttonContent = Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: _panelOpen ? style.primarySubtle : style.surfaceSubtle,
+        borderRadius: BorderRadius.circular(
+          widget.showLabel
+              ? RealtimeUiTokens.controlRadius
+              : RealtimeUiTokens.pillRadius,
+        ),
+        border: Border.all(
+          color: _panelOpen
+              ? style.primary
+              : (style.isDark
+                    ? Colors.white.withValues(alpha: 0.16)
+                    : Colors.transparent),
+          width: 1,
+        ),
+      ),
+      child: Icon(
+        Icons.card_giftcard,
+        size: 20,
+        color: _panelOpen ? style.primary : style.text,
+      ),
+    );
+
     return Semantics(
       label: label,
       button: true,
-      child: InkWell(
-        onTap: _open,
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: _panelOpen ? style.primarySubtle : style.surfaceSubtle,
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.controlRadius,
-                  ),
-                  border: Border.all(
-                    color: _panelOpen
-                        ? style.primary
-                        : (style.isDark
-                              ? Colors.white.withValues(alpha: 0.16)
-                              : Colors.transparent),
-                    width: 1,
-                  ),
-                ),
-                child: Icon(
-                  Icons.card_giftcard,
-                  size: 20,
-                  color: _panelOpen ? style.primary : style.text,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _panelOpen ? style.primary : style.text,
-                ),
-              ),
-            ],
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          onTap: _open,
+          borderRadius: BorderRadius.circular(
+            widget.showLabel
+                ? RealtimeUiTokens.controlRadius
+                : RealtimeUiTokens.pillRadius,
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.showLabel ? 6 : 2,
+              vertical: 4,
+            ),
+            child: widget.showLabel
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      buttonContent,
+                      const SizedBox(height: 4),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _panelOpen ? style.primary : style.text,
+                        ),
+                      ),
+                    ],
+                  )
+                : buttonContent,
           ),
         ),
       ),

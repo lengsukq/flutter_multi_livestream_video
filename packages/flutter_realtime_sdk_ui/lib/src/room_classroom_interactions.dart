@@ -372,27 +372,66 @@ Future<String?> _askText(
   required String title,
   String initialValue = '',
 }) async {
-  final controller = TextEditingController(text: initialValue);
-  try {
-    return await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: TextField(controller: controller, maxLines: 3, maxLength: 500),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Submit'),
-          ),
-        ],
+  await Future<void>.delayed(Duration.zero);
+  if (!context.mounted) return null;
+  return showDialog<String>(
+    context: context,
+    useRootNavigator: true,
+    builder: (dialogContext) =>
+        _ClassroomPromptTextDialog(title: title, initialValue: initialValue),
+  );
+}
+
+class _ClassroomPromptTextDialog extends StatefulWidget {
+  const _ClassroomPromptTextDialog({
+    required this.title,
+    this.initialValue = '',
+  });
+
+  final String title;
+  final String initialValue;
+
+  @override
+  State<_ClassroomPromptTextDialog> createState() =>
+      _ClassroomPromptTextDialogState();
+}
+
+class _ClassroomPromptTextDialogState
+    extends State<_ClassroomPromptTextDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        maxLines: 3,
+        maxLength: 500,
+        autofocus: true,
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: const Text('Submit'),
+        ),
+      ],
     );
-  } finally {
-    controller.dispose();
   }
 }

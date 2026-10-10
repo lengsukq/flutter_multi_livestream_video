@@ -235,4 +235,64 @@ void main() {
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
+
+  testWidgets('teacher answers a question via showClassroomBottomSheet', (
+    tester,
+  ) async {
+    final repo = FakeClassroom(
+      ClassroomState(
+        roomCode: 'class123',
+        selfUserId: 'teacher',
+        role: ClassroomRole.teacher,
+        revision: 1,
+        students: [],
+        questions: [
+          ClassroomQuestion(
+            id: 'q1',
+            userId: 'student1',
+            displayName: 'Student One',
+            text: 'How does this work?',
+            status: ClassroomQuestionStatus.pending,
+            createdAt: DateTime.utc(2026),
+          ),
+        ],
+        stats: const ClassroomStats(onlineCount: 2, pendingQuestions: 1),
+      ),
+    );
+    final session = ClassroomSession(
+      repo,
+      pollInterval: const Duration(hours: 1),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh', 'CN'),
+        supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () =>
+                  showClassroomBottomSheet(context, classroom: session),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('问答'));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.reply_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.reply_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNWidgets(2));
+    await tester.enterText(find.byType(TextField).last, 'Answer text');
+    await tester.tap(find.text('提交'));
+    await tester.pumpAndSettle();
+    expect(repo.actions, contains('question.answer'));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await session.dispose();
+  });
 }

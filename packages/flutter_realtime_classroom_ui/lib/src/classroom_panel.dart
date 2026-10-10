@@ -86,66 +86,16 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
 
   Future<void> _answer(ClassroomQuestion question) async {
     final strings = ClassroomStrings.of(context);
-    final ctrl = TextEditingController(text: question.answer ?? '');
-    DialogRoute<String>? route;
-    try {
-      route = DialogRoute<String>(
-        context: context,
-        builder: (ctx) => RealtimeGlassDialog(
-          icon: Icons.question_answer_rounded,
-          title: Text(strings.t('answer')),
-          content: TextField(
-            controller: ctrl,
-            maxLength: 500,
-            maxLines: 3,
-            decoration: InputDecoration(
-              hintText: strings.t('answer'),
-              filled: true,
-              fillColor: RealtimeUiTokens.surfaceSubtle,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.controlRadius,
-                ),
-                borderSide: const BorderSide(color: RealtimeUiTokens.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.controlRadius,
-                ),
-                borderSide: const BorderSide(color: RealtimeUiTokens.border),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(strings.t('cancel')),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: RealtimeUiTokens.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.controlRadius,
-                  ),
-                ),
-              ),
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: Text(strings.t('submit')),
-            ),
-          ],
-        ),
-      );
-      final answer = await Navigator.of(
-        context,
-        rootNavigator: true,
-      ).push(route);
-      if (answer != null && answer.isNotEmpty) {
-        await _run(() => widget.classroom.answerQuestion(question.id, answer));
-      }
-    } finally {
-      await route?.completed;
-      ctrl.dispose();
+    final answer = await showDialog<String>(
+      context: context,
+      useRootNavigator: true,
+      builder: (ctx) => _ClassroomAnswerDialog(
+        initialValue: question.answer ?? '',
+        strings: strings,
+      ),
+    );
+    if (answer != null && answer.isNotEmpty && mounted) {
+      await _run(() => widget.classroom.answerQuestion(question.id, answer));
     }
   }
 
@@ -928,4 +878,69 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
       ),
     );
   }
+}
+
+class _ClassroomAnswerDialog extends StatefulWidget {
+  const _ClassroomAnswerDialog({
+    required this.initialValue,
+    required this.strings,
+  });
+
+  final String initialValue;
+  final ClassroomStrings strings;
+
+  @override
+  State<_ClassroomAnswerDialog> createState() => _ClassroomAnswerDialogState();
+}
+
+class _ClassroomAnswerDialogState extends State<_ClassroomAnswerDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RealtimeGlassDialog(
+    icon: Icons.question_answer_rounded,
+    title: Text(widget.strings.t('answer')),
+    content: TextField(
+      controller: _controller,
+      maxLength: 500,
+      maxLines: 3,
+      decoration: InputDecoration(
+        hintText: widget.strings.t('answer'),
+        filled: true,
+        fillColor: RealtimeUiTokens.surfaceSubtle,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+          borderSide: const BorderSide(color: RealtimeUiTokens.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+          borderSide: const BorderSide(color: RealtimeUiTokens.border),
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: Text(widget.strings.t('cancel')),
+      ),
+      FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: RealtimeUiTokens.primary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+          ),
+        ),
+        onPressed: () => Navigator.pop(context, _controller.text.trim()),
+        child: Text(widget.strings.t('submit')),
+      ),
+    ],
+  );
 }

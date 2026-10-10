@@ -20,17 +20,18 @@ extension _LegacyRoomMemberActions on _MediaRoomViewState {
     if (!retry) {
       final confirmed = await showDialog<bool>(
         context: context,
+        useRootNavigator: true,
         builder: (ctx) => RealtimeGlassDialog(
           icon: Icons.volume_off_rounded,
           title: Text(strings.muteAll),
           content: Text(strings.muteAllConfirmation),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: () => Navigator.of(ctx).pop(false),
               child: Text(strings.cancel),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
+              onPressed: () => Navigator.of(ctx).pop(true),
               child: Text(strings.muteAll),
             ),
           ],

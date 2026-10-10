@@ -54,256 +54,21 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
     }
   }
 
-  List<String> _options(String text) => text
-      .split('\n')
-      .map((value) => value.trim())
-      .where((value) => value.isNotEmpty)
-      .toList();
-
   Future<void> _publish(String kind) async {
     if (_busy || _dialogOpen) return;
     setState(() => _dialogOpen = true);
     final strings = ClassroomStrings.of(context);
-    final title = TextEditingController();
-    final body = TextEditingController();
-    final seconds = TextEditingController(text: '300');
-    final due = TextEditingController();
-    int? correct;
-    var options = <String>[];
-    Object? dialogError;
-    var publishing = false;
-    DialogRoute<void>? route;
-    final activity = kind == 'quiz' || kind == 'poll';
-    final single = kind == 'announcement' || kind == 'focus';
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
     try {
-      route = DialogRoute<void>(
+      await showDialog<void>(
         context: context,
-        builder: (ctx) => StatefulBuilder(
-          builder: (ctx, update) => AlertDialog(
-            backgroundColor: RealtimeUiTokens.surface,
-            surfaceTintColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(RealtimeUiTokens.sheetRadius),
-              side: const BorderSide(color: RealtimeUiTokens.border),
-            ),
-            title: Text(strings.t(kind)),
-            content: SizedBox(
-              width: 440,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: title,
-                      enabled: !publishing,
-                      maxLength: single ? 1000 : 120,
-                      decoration: InputDecoration(
-                        labelText: strings.t(single ? 'text' : 'title'),
-                      ),
-                    ),
-                    if (!single && kind != 'timer')
-                      TextField(
-                        controller: body,
-                        enabled: !publishing,
-                        maxLines: activity ? 5 : 3,
-                        maxLength: 2000,
-                        onChanged: activity
-                            ? (value) => update(() {
-                                final selected =
-                                    correct != null && correct! < options.length
-                                    ? options[correct!]
-                                    : null;
-                                options = _options(value);
-                                correct =
-                                    selected != null &&
-                                        options
-                                                .where((v) => v == selected)
-                                                .length ==
-                                            1
-                                    ? options.indexOf(selected)
-                                    : null;
-                                dialogError = null;
-                              })
-                            : null,
-                        decoration: InputDecoration(
-                          labelText: strings.t(
-                            activity
-                                ? 'options'
-                                : kind == 'materials'
-                                ? 'link'
-                                : 'text',
-                          ),
-                        ),
-                      ),
-                    if (kind == 'timer')
-                      TextField(
-                        controller: seconds,
-                        enabled: !publishing,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: strings.t('seconds'),
-                        ),
-                      ),
-                    if (kind == 'homework')
-                      TextField(
-                        controller: due,
-                        enabled: !publishing,
-                        decoration: const InputDecoration(
-                          labelText: 'YYYY-MM-DD (optional)',
-                        ),
-                      ),
-                    if (kind == 'quiz')
-                      DropdownButtonFormField<int>(
-                        key: ValueKey((options.join('\n'), correct)),
-                        initialValue: correct,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: strings.t('correct'),
-                        ),
-                        items: List.generate(
-                          options.length,
-                          (index) => DropdownMenuItem(
-                            value: index,
-                            child: Text(
-                              '${index + 1}. ${options[index]}',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        onChanged: publishing
-                            ? null
-                            : (value) => update(() {
-                                correct = value;
-                                dialogError = null;
-                              }),
-                      ),
-                    if (publishing) const LinearProgressIndicator(),
-                    if (dialogError != null)
-                      Text(
-                        '$dialogError',
-                        style: TextStyle(
-                          color: Theme.of(ctx).colorScheme.error,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: publishing ? null : () => Navigator.pop(ctx),
-                child: Text(strings.t('cancel')),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: RealtimeUiTokens.primary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      RealtimeUiTokens.controlRadius,
-                    ),
-                  ),
-                ),
-                onPressed: publishing
-                    ? null
-                    : () async {
-                        if (activity) {
-                          options = _options(body.text);
-                          final invalid =
-                              options.length < 2 || options.length > 8
-                              ? (zh ? '请输入 2–8 个选项。' : 'Enter 2–8 options.')
-                              : options.toSet().length != options.length
-                              ? (zh ? '选项不能重复。' : 'Options must be distinct.')
-                              : kind == 'quiz' &&
-                                    (correct == null ||
-                                        correct! >= options.length)
-                              ? (zh
-                                    ? '请选择有效的正确答案。'
-                                    : 'Select a valid correct answer.')
-                              : null;
-                          if (invalid != null) {
-                            update(() => dialogError = invalid);
-                            return;
-                          }
-                        }
-                        update(() {
-                          publishing = true;
-                          dialogError = null;
-                        });
-                        try {
-                          final session = widget.classroom;
-                          switch (kind) {
-                            case 'announcement':
-                              await session.publishAnnouncement(
-                                title.text.trim(),
-                              );
-                            case 'focus':
-                              await session.remindFocus(title.text.trim());
-                            case 'homework':
-                              final dueText = due.text.trim();
-                              final dueAt = dueText.isEmpty
-                                  ? null
-                                  : DateTime.tryParse(dueText);
-                              if (dueText.isNotEmpty && dueAt == null) {
-                                throw const FormatException('Invalid due date');
-                              }
-                              await session.publishHomework(
-                                title: title.text.trim(),
-                                instructions: body.text.trim(),
-                                dueAt: dueAt,
-                              );
-                            case 'materials':
-                              await session.shareMaterial(
-                                title: title.text.trim(),
-                                url: body.text.trim(),
-                              );
-                            case 'timer':
-                              final duration = int.tryParse(
-                                seconds.text.trim(),
-                              );
-                              if (duration == null) {
-                                throw const FormatException(
-                                  'Use a duration in seconds',
-                                );
-                              }
-                              await session.startTimer(
-                                title: title.text.trim(),
-                                duration: Duration(seconds: duration),
-                              );
-                            case 'quiz':
-                            case 'poll':
-                              await session.publishActivity(
-                                kind: kind == 'quiz'
-                                    ? ClassroomActivityKind.quiz
-                                    : ClassroomActivityKind.poll,
-                                title: title.text.trim(),
-                                options: options,
-                                correctOption: kind == 'quiz' ? correct : null,
-                              );
-                          }
-                          if (ctx.mounted) Navigator.pop(ctx);
-                        } catch (error) {
-                          if (ctx.mounted) {
-                            update(() {
-                              publishing = false;
-                              dialogError = error;
-                            });
-                          }
-                        }
-                      },
-                child: Text(strings.t('publish')),
-              ),
-            ],
-          ),
+        useRootNavigator: true,
+        builder: (ctx) => _PublishToolDialog(
+          kind: kind,
+          classroom: widget.classroom,
+          strings: strings,
         ),
       );
-      await Navigator.of(context, rootNavigator: true).push(route);
     } finally {
-      await route?.completed;
-      title.dispose();
-      body.dispose();
-      seconds.dispose();
-      due.dispose();
       if (mounted) setState(() => _dialogOpen = false);
     }
   }
@@ -593,4 +358,265 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
       ),
     ),
   );
+}
+
+class _PublishToolDialog extends StatefulWidget {
+  const _PublishToolDialog({
+    required this.kind,
+    required this.classroom,
+    required this.strings,
+  });
+
+  final String kind;
+  final ClassroomSession classroom;
+  final ClassroomStrings strings;
+
+  @override
+  State<_PublishToolDialog> createState() => _PublishToolDialogState();
+}
+
+class _PublishToolDialogState extends State<_PublishToolDialog> {
+  late final TextEditingController _title;
+  late final TextEditingController _body;
+  late final TextEditingController _seconds;
+  late final TextEditingController _due;
+  int? _correct;
+  var _options = <String>[];
+  Object? _dialogError;
+  var _publishing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController();
+    _body = TextEditingController();
+    _seconds = TextEditingController(text: '300');
+    _due = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    _seconds.dispose();
+    _due.dispose();
+    super.dispose();
+  }
+
+  List<String> _extractOptions(String text) => text
+      .split('\n')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList();
+
+  @override
+  Widget build(BuildContext context) {
+    final kind = widget.kind;
+    final strings = widget.strings;
+    final activity = kind == 'quiz' || kind == 'poll';
+    final single = kind == 'announcement' || kind == 'focus';
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+
+    return AlertDialog(
+      backgroundColor: RealtimeUiTokens.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.sheetRadius),
+        side: const BorderSide(color: RealtimeUiTokens.border),
+      ),
+      title: Text(strings.t(kind)),
+      content: SizedBox(
+        width: 440,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _title,
+                enabled: !_publishing,
+                maxLength: single ? 1000 : 120,
+                decoration: InputDecoration(
+                  labelText: strings.t(single ? 'text' : 'title'),
+                ),
+              ),
+              if (!single && kind != 'timer')
+                TextField(
+                  controller: _body,
+                  enabled: !_publishing,
+                  maxLines: activity ? 5 : 3,
+                  maxLength: 2000,
+                  onChanged: activity
+                      ? (value) => setState(() {
+                          final selected =
+                              _correct != null && _correct! < _options.length
+                              ? _options[_correct!]
+                              : null;
+                          _options = _extractOptions(value);
+                          _correct =
+                              selected != null &&
+                                  _options.where((v) => v == selected).length ==
+                                      1
+                              ? _options.indexOf(selected)
+                              : null;
+                          _dialogError = null;
+                        })
+                      : null,
+                  decoration: InputDecoration(
+                    labelText: strings.t(
+                      activity
+                          ? 'options'
+                          : kind == 'materials'
+                          ? 'link'
+                          : 'text',
+                    ),
+                  ),
+                ),
+              if (kind == 'timer')
+                TextField(
+                  controller: _seconds,
+                  enabled: !_publishing,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(labelText: strings.t('seconds')),
+                ),
+              if (kind == 'homework')
+                TextField(
+                  controller: _due,
+                  enabled: !_publishing,
+                  decoration: const InputDecoration(
+                    labelText: 'YYYY-MM-DD (optional)',
+                  ),
+                ),
+              if (kind == 'quiz')
+                DropdownButtonFormField<int>(
+                  key: ValueKey((_options.join('\n'), _correct)),
+                  initialValue: _correct,
+                  isExpanded: true,
+                  decoration: InputDecoration(labelText: strings.t('correct')),
+                  items: List.generate(
+                    _options.length,
+                    (index) => DropdownMenuItem(
+                      value: index,
+                      child: Text(
+                        '${index + 1}. ${_options[index]}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  onChanged: _publishing
+                      ? null
+                      : (value) => setState(() {
+                          _correct = value;
+                          _dialogError = null;
+                        }),
+                ),
+              if (_publishing) const LinearProgressIndicator(),
+              if (_dialogError != null)
+                Text(
+                  '$_dialogError',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _publishing ? null : () => Navigator.of(context).pop(),
+          child: Text(strings.t('cancel')),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: RealtimeUiTokens.primary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(
+                RealtimeUiTokens.controlRadius,
+              ),
+            ),
+          ),
+          onPressed: _publishing
+              ? null
+              : () async {
+                  if (activity) {
+                    _options = _extractOptions(_body.text);
+                    final invalid = _options.length < 2 || _options.length > 8
+                        ? (zh ? '请输入 2–8 个选项。' : 'Enter 2–8 options.')
+                        : _options.toSet().length != _options.length
+                        ? (zh ? '选项不能重复。' : 'Options must be distinct.')
+                        : kind == 'quiz' &&
+                              (_correct == null || _correct! >= _options.length)
+                        ? (zh
+                              ? '请选择有效的正确答案。'
+                              : 'Select a valid correct answer.')
+                        : null;
+                    if (invalid != null) {
+                      setState(() => _dialogError = invalid);
+                      return;
+                    }
+                  }
+                  setState(() {
+                    _publishing = true;
+                    _dialogError = null;
+                  });
+                  try {
+                    final session = widget.classroom;
+                    switch (kind) {
+                      case 'announcement':
+                        await session.publishAnnouncement(_title.text.trim());
+                      case 'focus':
+                        await session.remindFocus(_title.text.trim());
+                      case 'homework':
+                        final dueText = _due.text.trim();
+                        final dueAt = dueText.isEmpty
+                            ? null
+                            : DateTime.tryParse(dueText);
+                        if (dueText.isNotEmpty && dueAt == null) {
+                          throw const FormatException('Invalid due date');
+                        }
+                        await session.publishHomework(
+                          title: _title.text.trim(),
+                          instructions: _body.text.trim(),
+                          dueAt: dueAt,
+                        );
+                      case 'materials':
+                        await session.shareMaterial(
+                          title: _title.text.trim(),
+                          url: _body.text.trim(),
+                        );
+                      case 'timer':
+                        final duration = int.tryParse(_seconds.text.trim());
+                        if (duration == null) {
+                          throw const FormatException(
+                            'Use a duration in seconds',
+                          );
+                        }
+                        await session.startTimer(
+                          title: _title.text.trim(),
+                          duration: Duration(seconds: duration),
+                        );
+                      case 'quiz':
+                      case 'poll':
+                        await session.publishActivity(
+                          kind: kind == 'quiz'
+                              ? ClassroomActivityKind.quiz
+                              : ClassroomActivityKind.poll,
+                          title: _title.text.trim(),
+                          options: _options,
+                          correctOption: kind == 'quiz' ? _correct : null,
+                        );
+                    }
+                    if (context.mounted) Navigator.of(context).pop();
+                  } catch (error) {
+                    if (context.mounted) {
+                      setState(() {
+                        _publishing = false;
+                        _dialogError = error;
+                      });
+                    }
+                  }
+                },
+          child: Text(strings.t('publish')),
+        ),
+      ],
+    );
+  }
 }

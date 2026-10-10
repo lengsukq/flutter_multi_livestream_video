@@ -131,12 +131,15 @@ class RealtimeSharedContentButton extends StatelessWidget {
             if (value == 'system') {
               unawaited(
                 run(() async {
+                  await Future<void>.delayed(Duration.zero);
+                  if (!context.mounted) return;
                   if (shared.systemAnnotations.active) {
                     await shared.stopSystemAnnotations();
                     return;
                   }
                   final approved = await showDialog<bool>(
                     context: context,
+                    useRootNavigator: true,
                     builder: (dialogContext) => AlertDialog(
                       title: Text(zh ? '跨应用标注' : 'Draw across apps'),
                       content: Text(
@@ -146,11 +149,13 @@ class RealtimeSharedContentButton extends StatelessWidget {
                       ),
                       actions: [
                         TextButton(
-                          onPressed: () => Navigator.pop(dialogContext, false),
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
                           child: Text(zh ? '取消' : 'Cancel'),
                         ),
                         FilledButton(
-                          onPressed: () => Navigator.pop(dialogContext, true),
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(true),
                           child: Text(zh ? '继续' : 'Continue'),
                         ),
                       ],
