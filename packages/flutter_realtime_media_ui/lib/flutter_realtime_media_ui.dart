@@ -10,3 +10,6 @@ export 'src/realtime_style.dart';
 export 'src/realtime_ui_style.dart';
 
 export 'src/media_background_image_preset.dart';
+export 'src/background_effect_selector.dart';
+export 'src/composable_pre_join_controller.dart';
+export 'src/composable_pre_join_components.dart';

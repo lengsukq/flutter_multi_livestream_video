@@ -396,11 +396,12 @@ class _MediaPreJoinPageState extends State<MediaPreJoinPage>
         : strings.camera;
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => RealtimeGlassDialog(
+        icon: Icons.security_rounded,
         title: Text(strings.permissionHelpTitle),
         content: Text(strings.permissionBrowserHelp(label)),
         actions: [
-          TextButton(
+          RealtimeGlassButton(
             onPressed: () => Navigator.of(context).pop(),
             child: Text(strings.close),
           ),
