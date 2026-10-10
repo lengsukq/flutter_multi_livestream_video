@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_example/demo_join_screen.dart';
+import 'package:flutter_realtime_media_example/demo_composable_pre_join_page.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -137,9 +138,9 @@ Future<void> _confirmPreJoin(WidgetTester tester) async {
   // of waiting for every animation to settle.
   for (var i = 0; i < 30; i++) {
     await tester.pump(const Duration(milliseconds: 100));
-    if (find.byType(MediaPreJoinPage).evaluate().isNotEmpty) break;
+    if (find.byType(DemoComposablePreJoinPage).evaluate().isNotEmpty) break;
   }
-  expect(find.byType(MediaPreJoinPage), findsOneWidget);
+  expect(find.byType(DemoComposablePreJoinPage), findsOneWidget);
   final enter = find.text('Join meeting').evaluate().isNotEmpty
       ? find.text('Join meeting').last
       : find.text('Enter live room').last;
@@ -175,7 +176,7 @@ void main() {
       opened.complete(connection);
       await tester.pumpAndSettle();
       expect(find.text('Connected fake room'), findsOneWidget);
-      expect(find.byType(MediaPreJoinPage), findsNothing);
+      expect(find.byType(DemoComposablePreJoinPage), findsNothing);
       await tester.tap(find.text('Leave fake room'));
       await tester.pumpAndSettle();
       expect(roomModes, [MediaRoomMode.meeting]);
@@ -201,7 +202,7 @@ void main() {
       await tester.tap(find.text('Join room').last);
       await _confirmPreJoin(tester);
       await tester.pumpAndSettle();
-      expect(find.byType(MediaPreJoinPage), findsOneWidget);
+      expect(find.byType(DemoComposablePreJoinPage), findsOneWidget);
       expect(
         find.textContaining('simulated connection failure'),
         findsOneWidget,

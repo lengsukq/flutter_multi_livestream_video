@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 import 'demo_background.dart';
+import 'demo_composable_meeting_page.dart';
+import 'demo_composable_live_page.dart';
+import 'demo_composable_pre_join_page.dart';
 import 'demo_backend_diagnostics.dart';
 import 'demo_available_rooms.dart';
 import 'demo_room_directory.dart';
@@ -75,6 +78,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   String? _error;
   _JoinFormError? _formError;
   MediaRoomMode _createRoomMode = MediaRoomMode.meeting;
+  MediaRoomMode _joinRoomMode = MediaRoomMode.meeting;
 
   // Backend connection status: null = untested, true = online, false = offline
   bool? get _serverOnline => _diagnostics.online;
@@ -109,6 +113,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
 
   Future<void> _joinDiscoveredRoom(MediaRoomSummary room) async {
     _joinCodeController.text = room.roomCode;
+    _joinRoomMode = room.roomMode ?? MediaRoomMode.meeting;
     await _joinRoom(
       providerId: room.engineId ?? room.providerId,
       roomMode: room.roomMode,
@@ -271,7 +276,10 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       open: realtime.open,
       ownerCredentials: _roomOwnerCredentials,
     );
-    final role = roomMode == MediaRoomMode.broadcast
+    final targetMode = roomMode ??
+        _availableRooms.where((r) => r.roomCode == code).firstOrNull?.roomMode ??
+        _joinRoomMode;
+    final role = targetMode == MediaRoomMode.broadcast
         ? MediaRole.viewer
         : MediaRole.participant;
     final deviceId = await _deviceIdFuture;
@@ -286,7 +294,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       onEnter: (preJoinContext, settings) async {
         final connection = await flow.join(
           code: code,
-          mode: roomMode,
+          mode: targetMode,
           deviceId: deviceId,
           displayName: displayName,
         );
@@ -298,7 +306,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           preJoinContext,
           connection,
           initialMediaSettings: settings,
-          roomMode: roomMode,
+          roomMode: targetMode,
         );
       },
     );
@@ -326,29 +334,31 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       final backgroundPresets =
           await (widget.backgroundPresets?.call() ?? DemoBackground.presets);
       if (!mounted) return;
-      await MediaPreJoinPage.show(
-        context,
-        permissionRequester:
-            widget.permissionRequester ?? const DefaultMediaPermissionProbe(),
-        onEnter: onEnter,
-        runCheck: () => realtime.preJoin(
-          role: role,
-          providerId: providerId,
-          roomCode: roomCode,
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => DemoComposablePreJoinPage(
+            permissionRequester:
+                widget.permissionRequester ?? const DefaultMediaPermissionProbe(),
+            onEnter: onEnter,
+            runCheck: () => realtime.preJoin(
+              role: role,
+              providerId: providerId,
+              roomCode: roomCode,
+            ),
+            openPreview: (id, previewRole) => realtime.createLocalPreview(
+              providerId: id,
+              role: previewRole,
+            ),
+            displayName: displayName,
+            roomLabel: roomLabel,
+            imagePresets: backgroundPresets,
+            title: role == MediaRole.viewer
+                ? DemoStrings.of(context).live
+                : role == MediaRole.host
+                ? DemoStrings.of(context).startLive
+                : DemoStrings.of(context).meeting,
+          ),
         ),
-        openPreview: (providerId, previewRole) => realtime.createLocalPreview(
-          providerId: providerId,
-          role: previewRole,
-        ),
-        displayName: displayName,
-        roomLabel: roomLabel,
-        backendProviderId: _serverMediaProviderId ?? '',
-        backgroundImagePresets: backgroundPresets,
-        title: role == MediaRole.viewer
-            ? DemoStrings.of(context).live
-            : role == MediaRole.host
-            ? DemoStrings.of(context).startLive
-            : DemoStrings.of(context).meeting,
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -380,7 +390,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           );
       await Navigator.of(
         preJoinContext,
-      ).pushReplacement<void, MediaLocalPreviewSettings>(
+      ).pushReplacement<void, void>(
         MaterialPageRoute(builder: (_) => destination),
       );
     } finally {
@@ -565,7 +575,13 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       shadow: false,
       child: PopupMenuButton<ThemeMode>(
         tooltip: strings.isZh ? '外观主题' : 'Appearance theme',
-        color: style.surface,
+        color: style.surface.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+          side: BorderSide(color: style.border),
+        ),
         icon: Icon(
           switch (widget.themeMode) {
             ThemeMode.light => Icons.light_mode_rounded,
@@ -634,7 +650,13 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       shadow: false,
       child: PopupMenuButton<Locale>(
         tooltip: strings.language,
-        color: style.surface,
+        color: style.surface.withValues(alpha: 0.96),
+        surfaceTintColor: Colors.transparent,
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+          side: BorderSide(color: style.border),
+        ),
         icon: Icon(Icons.language_rounded, size: 20, color: style.text),
         onSelected: widget.onLocaleChanged,
         itemBuilder: (_) => [
@@ -684,10 +706,9 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   );
 
   void _showServerAndIdentitySheet() {
-    showModalBottomSheet<void>(
+    showRealtimeGlassBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setSheetState) {
           final style = RealtimeStyle.of(sheetContext);
@@ -696,60 +717,52 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 580),
               child: Padding(
-                padding: EdgeInsets.only(bottom: bottomInset),
-                child: RealtimeGlassSurface(
-                  radius: RealtimeUiTokens.sheetRadius,
-                  opacity: 0.94,
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
-                  child: SafeArea(
-                    top: false,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                padding: EdgeInsets.fromLTRB(18, 6, 18, 16 + bottomInset),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.tune_rounded,
-                                size: 20,
-                                color: style.primary,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  DemoStrings.of(
-                                    sheetContext,
-                                  ).serverAndIdentitySettings,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: style.text,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.close_rounded,
-                                  color: style.textMuted,
-                                ),
-                                onPressed: () =>
-                                    Navigator.of(sheetContext).pop(),
-                              ),
-                            ],
+                          Icon(
+                            Icons.tune_rounded,
+                            size: 20,
+                            color: style.primary,
                           ),
-                          const SizedBox(height: 10),
-                          _buildServerSettingsSection(setSheetState),
-                          const SizedBox(height: 12),
-                          _buildIdentitySettingsSection(setSheetState),
-                          const SizedBox(height: 16),
-                          RealtimeGlassButton(
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                            child: Text(DemoStrings.of(sheetContext).done),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              DemoStrings.of(
+                                sheetContext,
+                              ).serverAndIdentitySettings,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: style.text,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: style.textMuted,
+                            ),
+                            onPressed: () =>
+                                Navigator.of(sheetContext).pop(),
                           ),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 10),
+                      _buildServerSettingsSection(setSheetState),
+                      const SizedBox(height: 12),
+                      _buildIdentitySettingsSection(setSheetState),
+                      const SizedBox(height: 16),
+                      RealtimeGlassButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: Text(DemoStrings.of(sheetContext).done),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1065,10 +1078,49 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             builder: (context, _) {
               final tab = _roomTabs.index;
               if (tab == 0) {
+                final isLiveMode = _joinRoomMode == MediaRoomMode.broadcast;
                 return Column(
                   key: const ValueKey('join-tab-content'),
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: RealtimePill(
+                              label: DemoStrings.of(context).isZh
+                                  ? '加入会议 (参会者)'
+                                  : 'Join Meeting',
+                              icon: Icons.groups_rounded,
+                              foreground: !isLiveMode ? Colors.white : style.textMuted,
+                              background: !isLiveMode ? style.primary : style.surfaceSubtle,
+                              borderColor: !isLiveMode ? style.primary : style.border,
+                              onTap: () => setState(() => _joinRoomMode = MediaRoomMode.meeting),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: RealtimePill(
+                              label: DemoStrings.of(context).isZh
+                                  ? '观看直播 (观众)'
+                                  : 'Watch Live',
+                              icon: Icons.podcasts_rounded,
+                              foreground: isLiveMode
+                                  ? Colors.white
+                                  : (style.isDark ? const Color(0xFFFB7185) : const Color(0xFFE11D48)),
+                              background: isLiveMode
+                                  ? const Color(0xFFE11D48)
+                                  : (style.isDark ? const Color(0xFF3B1219) : const Color(0xFFFFF1F2)),
+                              borderColor: isLiveMode
+                                  ? const Color(0xFFE11D48)
+                                  : (style.isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFECDD3)),
+                              onTap: () => setState(() => _joinRoomMode = MediaRoomMode.broadcast),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     _roomForm(
                       code: _joinCodeController,
                       codeLabel: DemoStrings.of(context).roomCode,
@@ -1285,17 +1337,19 @@ class MeetingRoomPage extends StatelessWidget {
   final MediaRoomMode? roomMode;
 
   @override
-  Widget build(BuildContext context) =>
-      FutureBuilder<List<MediaBackgroundImagePreset>>(
-        future: DemoBackground.presets,
-        builder: (context, snapshot) => RealtimeRoomView(
-          room: room,
-          config: MediaRoomViewConfig(
-            showChat: true,
-            roomMode: roomMode,
-            initialMediaSettings: initialMediaSettings,
-            backgroundImagePresets: snapshot.data ?? const [],
-          ),
-        ),
+  Widget build(BuildContext context) {
+    // Both Meeting and Live layouts are now owned by the Demo. The default
+    // RealtimeRoomView remains available for quick SDK integration.
+    if (roomMode == MediaRoomMode.broadcast ||
+        room.media.role == MediaRole.viewer) {
+      return DemoComposableLivePage(
+        room: room,
+        initialSettings: initialMediaSettings,
       );
+    }
+    return DemoComposableMeetingPage(
+      room: room,
+      initialSettings: initialMediaSettings,
+    );
+  }
 }

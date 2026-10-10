@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 import 'demo_strings.dart';
+import 'demo_composable_chat_page.dart';
 
 class StandaloneChatDemoPage extends StatefulWidget {
   const StandaloneChatDemoPage({
@@ -143,12 +144,9 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
       try {
         await Navigator.of(context).push<void>(
           MaterialPageRoute(
-            builder: (_) => RealtimeChatView(
-              session: chatRoom.session,
-              moderation: chatRoom.moderation,
-              roomCode: chatRoom.roomCode,
+            builder: (_) => DemoComposableChatPage(
+              chatRoom: chatRoom,
               title: strings.standaloneChat,
-              showAppBar: true,
             ),
           ),
         );

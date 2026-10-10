@@ -290,6 +290,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_chat_ui:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_chat_ui"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_classroom_core:
     dependency: transitive
     description:
