@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -5,6 +6,27 @@ import 'support/fake_media_session.dart';
 import 'support/fake_transport.dart';
 
 void main() {
+  test(
+    'desktop permissions are unknown, never reported as missing devices',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      const probe = DefaultMediaPermissionProbe();
+      expect(
+        await probe.status(MediaPermissionKind.microphone),
+        MediaPermissionState.unknown,
+      );
+      expect(
+        await probe.status(MediaPermissionKind.camera),
+        MediaPermissionState.unknown,
+      );
+      expect(
+        await probe.request(MediaPermissionKind.camera),
+        MediaPermissionState.unknown,
+      );
+    },
+  );
+
   group('MediaClient.runPreJoinCheck', () {
     test('returns ready when required checks pass', () async {
       final factory = _ProbeFactory();

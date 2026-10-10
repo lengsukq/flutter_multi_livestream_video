@@ -57,7 +57,10 @@ class DefaultMediaPermissionProbe
 
   @override
   Future<MediaPermissionState> status(MediaPermissionKind kind) async {
-    if (!_isSupportedPlatform) return MediaPermissionState.unsupported;
+    // permission_handler does not expose a reliable desktop permission
+    // status. That is *unknown*, not proof that the device is unavailable.
+    // Desktop media adapters own actual capture and device enumeration.
+    if (!_isSupportedPlatform) return MediaPermissionState.unknown;
     try {
       return _stateFor(await _permissionFor(kind).status);
     } catch (_) {
@@ -67,7 +70,9 @@ class DefaultMediaPermissionProbe
 
   @override
   Future<MediaPermissionState> request(MediaPermissionKind kind) async {
-    if (!_isSupportedPlatform) return MediaPermissionState.unsupported;
+    // Do not misreport desktop hardware as unsupported or pretend that we
+    // granted access when no platform permission API was called.
+    if (!_isSupportedPlatform) return MediaPermissionState.unknown;
     try {
       return _stateFor(await _permissionFor(kind).request());
     } catch (_) {

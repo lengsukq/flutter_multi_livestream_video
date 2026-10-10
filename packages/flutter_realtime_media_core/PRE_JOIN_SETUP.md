@@ -31,3 +31,23 @@ GCC_PREPROCESSOR_DEFINITIONS for permission_handler_apple.
 
 The repository example app contains matching Android manifest, iOS usage
 description, and Podfile configuration.
+
+### macOS and other desktop hosts
+
+`permission_handler` does not reliably report camera/microphone TCC status on
+macOS through this project's default permission probe. For desktop targets,
+the probe returns `MediaPermissionState.unknown` (not `unsupported`), because
+an unreadable permission status is not evidence that a physical device or
+provider SDK cannot capture. Pre-Join permission checks remain advisory under
+the default recommended media requirements. Confirm real access by enabling
+the camera/microphone in the preview or by a provider capture test.
+
+macOS host applications need `NSCameraUsageDescription` and
+`NSMicrophoneUsageDescription` in their Runner Info.plist, and sandboxed apps
+need the `com.apple.security.device.camera` and
+`com.apple.security.device.audio-input` entitlements in both DebugProfile and
+Release configurations. The example app already declares these. macOS may
+show an OS permission prompt when the capture API first starts; if it was
+previously denied, review System Settings > Privacy & Security > Camera /
+Microphone for the application. Capture support ultimately depends on the
+selected provider's desktop adapter and available hardware.
