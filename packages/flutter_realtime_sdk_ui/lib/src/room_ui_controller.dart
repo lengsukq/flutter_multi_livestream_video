@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart'
+    show RoomMembersController, RoomManagedMember, RoomMediaMemberAction;
 
 /// Room actions shared by independent widgets in a host-defined layout.
 enum RealtimeRoomUiAction {
@@ -10,6 +12,7 @@ enum RealtimeRoomUiAction {
   camera,
   switchCamera,
   audioOutput,
+  device,
   screenShare,
   sendMessage,
   backgroundEffect,
@@ -81,6 +84,29 @@ class RealtimeRoomUiController extends ChangeNotifier {
     }
   }
 
+  /// Shares the same partially-successful bulk moderation service as the
+  /// legacy room. Failures are retained so a host can retry only failed IDs.
+  Future<void> muteAllParticipants({bool retryFailed = false}) async {
+    if (!canMuteAllParticipants) return;
+    final targets = retryFailed
+        ? _bulkMuteFailures.keys.toList(growable: false)
+        : _snapshot.participants
+              .where((member) => !member.isLocal)
+              .toList(growable: false);
+    if (targets.isEmpty) return;
+    await _execute(RealtimeRoomUiAction.participantManagement, () async {
+      final result = await _memberDirectory.mute(
+        room.media,
+        targets,
+        isCurrent: () => !_disposed,
+      );
+      if (_disposed || !result.completed) return;
+      _bulkMuteFailures = result.failures;
+      notifyListeners();
+      await refreshManagedMembers();
+    });
+  }
+
   Future<void> answerClassroomActivity(String activityId, int option) async {
     final classroom = room.classroom;
     if (classroom == null || classroomState?.capabilities.canUseTools != true) {
@@ -106,7 +132,11 @@ class RealtimeRoomUiController extends ChangeNotifier {
 
   Future<void> removeParticipant(String participantId) => _execute(
     RealtimeRoomUiAction.participantManagement,
-    () => room.media.removeParticipant(participantId),
+    () => _memberDirectory.manageMedia(
+      room.media,
+      participantId,
+      RoomMediaMemberAction.remove,
+    ),
   );
 
   ClassroomState? get classroomState => room.classroom?.state;
@@ -191,12 +221,20 @@ class RealtimeRoomUiController extends ChangeNotifier {
 
   Future<void> muteParticipant(String participantId) => _execute(
     RealtimeRoomUiAction.participantManagement,
-    () => room.media.muteParticipant(participantId),
+    () => _memberDirectory.manageMedia(
+      room.media,
+      participantId,
+      RoomMediaMemberAction.mute,
+    ),
   );
 
   Future<void> stopParticipantVideo(String participantId) => _execute(
     RealtimeRoomUiAction.participantManagement,
-    () => room.media.stopParticipantVideo(participantId),
+    () => _memberDirectory.manageMedia(
+      room.media,
+      participantId,
+      RoomMediaMemberAction.stopVideo,
+    ),
   );
 
   Future<void> setBackgroundEffect(MediaBackgroundEffect effect) => _execute(
@@ -205,6 +243,11 @@ class RealtimeRoomUiController extends ChangeNotifier {
   );
 
   final RealtimeRoom room;
+  final RoomMembersController _memberDirectory = RoomMembersController();
+  List<RoomManagedMember> _managedMembers = const [];
+  Map<MediaParticipant, Object> _bulkMuteFailures = const {};
+  Object? _memberLoadError;
+  bool _membersLoading = false;
   late MediaSnapshot _snapshot;
   ChatUiController? _chatUi;
   final Set<RealtimeRoomUiAction> _pending = {};
@@ -219,6 +262,99 @@ class RealtimeRoomUiController extends ChangeNotifier {
   bool _disposed = false;
 
   MediaSnapshot get snapshot => _snapshot;
+  bool get membersLoading => _membersLoading;
+  Map<MediaParticipant, Object> get bulkMuteFailures => _bulkMuteFailures;
+  bool get canMuteAllParticipants =>
+      room.media.isLogicalOwner &&
+      room.media.managementCapabilities.muteParticipant.supported &&
+      _snapshot.participants.any((member) => !member.isLocal);
+  Object? get memberLoadError => _memberLoadError;
+
+  /// Includes RTC-only and chat-only members, reconciled by logical user ID.
+  List<RoomManagedMember> get managedMembers {
+    final members = [..._managedMembers];
+    for (final participant in _snapshot.participants) {
+      if (members.any(
+        (member) => member.media?.participantId == participant.id,
+      )) {
+        continue;
+      }
+      members.add(
+        RoomManagedMember(
+          userId: 'media:${participant.id}',
+          displayName: participant.displayName.isEmpty
+              ? participant.id
+              : participant.displayName,
+          media: MediaRoomParticipantSummary(
+            participantId: participant.id,
+            displayName: participant.displayName,
+            role: participant.isLocal ? room.media.role : null,
+          ),
+          isSelf: participant.isLocal,
+        ),
+      );
+    }
+    return List.unmodifiable(members);
+  }
+
+  /// Explicit refresh avoids backend polling by every independent UI widget.
+  Future<void> refreshManagedMembers() async {
+    if (_disposed || _membersLoading) return;
+    _membersLoading = true;
+    _memberLoadError = null;
+    notifyListeners();
+    final result = await _memberDirectory.load(
+      room.media,
+      chatSession: room.chat,
+      chatModeration: room.chatModeration,
+      isCurrent: () => !_disposed,
+    );
+    if (_disposed || !result.completed) return;
+    _managedMembers = result.members;
+    _memberLoadError = result.error;
+    _membersLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> removeChatMember(String userId) async {
+    final chat = _chatUi;
+    if (chat == null ||
+        !chat.isHost ||
+        !chat.managementCapabilities.removeMember.supported) {
+      return;
+    }
+    await _execute(RealtimeRoomUiAction.participantManagement, () async {
+      await _memberDirectory.removeChatMember(
+        room.chatModeration!,
+        userId,
+        session: room.chat,
+      );
+      await chat.refreshMembers();
+      await refreshManagedMembers();
+    });
+  }
+
+  Future<void> changeParticipantRole(
+    String participantId,
+    MediaRole role,
+  ) async {
+    if (!room.media.isLogicalOwner ||
+        !room.media.managementCapabilities.changeParticipantRole.supported) {
+      return;
+    }
+    await _execute(
+      RealtimeRoomUiAction.participantManagement,
+      () => role == MediaRole.host
+          ? _memberDirectory.manageMedia(
+              room.media,
+              participantId,
+              RoomMediaMemberAction.grantHost,
+            )
+          : room.media.changeParticipantRole(participantId, role),
+    );
+    await refreshManagedMembers();
+  }
+
   List<ChatMessage> get messages => _chatUi?.messages ?? const <ChatMessage>[];
   ChatUiController? get chatUiController => _chatUi;
   void _onChatChanged() {
@@ -264,6 +400,35 @@ class RealtimeRoomUiController extends ChangeNotifier {
       _interactive != null && _snapshot.capabilities.canEnumerateAudioDevices;
   bool get canSelectAudioOutput =>
       canListAudioOutputs && _snapshot.capabilities.canSelectAudioOutput;
+
+  /// MediaDeviceController is optional: the capability flags remain the
+  /// source of truth, and unsupported providers never receive a command.
+  bool canListMediaDevices(MediaDeviceKind kind) => switch (kind) {
+    MediaDeviceKind.microphone =>
+      _snapshot.capabilities.canEnumerateMicrophones,
+    MediaDeviceKind.camera => _snapshot.capabilities.canEnumerateCameras,
+    MediaDeviceKind.audioOutput =>
+      _snapshot.capabilities.canEnumerateAudioDevices,
+  };
+
+  bool canSelectMediaDevice(MediaDeviceKind kind) => switch (kind) {
+    MediaDeviceKind.microphone => _snapshot.capabilities.canSelectMicrophone,
+    MediaDeviceKind.camera => _snapshot.capabilities.canSelectCamera,
+    MediaDeviceKind.audioOutput => _snapshot.capabilities.canSelectAudioOutput,
+  };
+
+  Future<List<MediaDevice>> listMediaDevices(MediaDeviceKind kind) async {
+    if (!canListMediaDevices(kind)) return const [];
+    return room.media.session.listMediaDevices(kinds: {kind});
+  }
+
+  Future<void> selectMediaDevice(MediaDevice device) async {
+    if (!canSelectMediaDevice(device.kind)) return;
+    await _execute(
+      RealtimeRoomUiAction.device,
+      () => room.media.session.selectMediaDevice(device),
+    );
+  }
 
   Future<List<MediaAudioDevice>> listAudioOutputs() async {
     if (!canListAudioOutputs) return const [];

@@ -114,6 +114,25 @@ subscription in `RoomChatEventsController`; permission and content-stage
 invalidation subscriptions now live in `RoomAuxiliarySubscriptions`, which
 guards against stale events when inputs change. The provider session is
 never disposed by these presentation controllers.
+
+The app may use `RealtimeManagedParticipantList` for an RTC + IM **logical
+member directory**, or the lightweight `RealtimeParticipantList` for
+RTC-only snapshot presence. `RealtimeManagedParticipantList` uses the same
+exported `RoomMembersController` / `mergeRoomMembers` as the legacy
+`MediaRoomView` panel, and does not conflate unlinked RTC participant IDs
+with chat user IDs. It refreshes the directory when mounted and on explicit
+request; it does not poll the backend. Actions are gated by the active media
+and chat moderation capabilities. SDK operations, not the Demo, handle
+removal, mute, video shutdown and role change. Switching room or chat
+sources invalidates pending member loads rather than showing old-room users.
+`RoomMembersController.manageMedia` and `removeChatMember` perform the same
+permission/target/capability checks for the legacy page and independent
+room UI. `RealtimeBulkMuteButton` is an optional host-only button using the
+same `RoomMembersController.mute` batch operation as the legacy room,
+including failure-only retry, without requiring an app-defined room page.
+The legacy page's dialogs, loading state and navigation actions now reside
+in `room_members_actions.dart`; these are presentation concerns, not
+provider SDK transport implementations.
 Legacy media grid, focused-speaker selection, and contained screen-share
 composition now live in `legacy_room_media_stage.dart`. These are still
 optional presentation implementations, not vendor-specific RTC code; modern

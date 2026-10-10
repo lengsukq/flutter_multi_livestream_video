@@ -5,6 +5,7 @@ export 'src/room_ui_controller.dart';
 export 'src/realtime_composable_template.dart';
 export 'src/room_media_components.dart';
 export 'src/room_control_components.dart';
+export 'src/meeting_dock.dart';
 export 'src/room_chat_components.dart';
 export 'src/room_classroom_components.dart';
 export 'src/room_classroom_interactions.dart';

@@ -45,6 +45,82 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('managed roster shows RTC members and IM-only members together', (
+    tester,
+  ) async {
+    final media = _FakeMediaSession(role: MediaRole.host);
+    media._emit(
+      media.snapshot.copyWith(
+        participants: const [
+          MediaParticipant(id: 'self', displayName: 'Host', isLocal: true),
+          MediaParticipant(id: 'remote', displayName: 'Video Guest'),
+        ],
+      ),
+    );
+    final chat = _HostChatSession();
+    final room = RealtimeRoom(
+      media: MediaRoomSession.direct(
+        roomCode: 'room-123',
+        participantId: 'self',
+        session: media,
+      ),
+      chat: chat,
+      productChatRoom: ChatRoomSession(
+        roomCode: 'room-123',
+        participantId: 'self',
+        userId: 'host',
+        role: ChatRole.host,
+        session: chat,
+        moderation: _RosterModeration(),
+      ),
+      renderer: const _FakeRenderer(),
+      disposeClients: () {},
+    );
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(body: RealtimeManagedParticipantList()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Video Guest'), findsOneWidget);
+    expect(find.text('Chat Member'), findsOneWidget);
+    expect(find.text('Participants (3)'), findsOneWidget);
+    expect(find.textContaining('Chat online'), findsOneWidget);
+    expect(find.byTooltip('Manage member'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('composable bulk mute retries only failed remote members', (
+    tester,
+  ) async {
+    final media = _BulkMuteMediaSession();
+    final room = _room(media);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(body: RealtimeBulkMuteButton()),
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('Mute all participants'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mute all'));
+    await tester.pumpAndSettle();
+    expect(media.muteTargets, ['a', 'b']);
+    expect(find.byTooltip('Retry failed mutes'), findsOneWidget);
+    await tester.tap(find.byTooltip('Retry failed mutes'));
+    await tester.pumpAndSettle();
+    expect(media.muteTargets, ['a', 'b', 'b']);
+    expect(find.byTooltip('Retry failed mutes'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'composable actions share room snapshots and do not own session',
     (tester) async {
@@ -210,6 +286,238 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('independent microphone/camera pickers select a device by kind', (
+    tester,
+  ) async {
+    final media = _DeviceMediaSession();
+    final room = _room(media);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(
+            body: Column(
+              children: [
+                RealtimeMediaDevicePicker(kind: MediaDeviceKind.microphone),
+                RealtimeMediaDevicePicker(kind: MediaDeviceKind.camera),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Microphone devices'));
+    await tester.pumpAndSettle();
+    expect(find.text('USB microphone'), findsOneWidget);
+    await tester.tap(find.text('USB microphone'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Camera devices'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Front camera'));
+    await tester.pumpAndSettle();
+    expect(media.selected.map((device) => device.kind), [
+      MediaDeviceKind.microphone,
+      MediaDeviceKind.camera,
+    ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('scope switches rooms without closing provider sessions', (
+    tester,
+  ) async {
+    final firstMedia = _FakeMediaSession();
+    final secondMedia = _FakeMediaSession();
+    final first = _room(firstMedia);
+    final second = _room(secondMedia);
+    addTearDown(first.dispose);
+    addTearDown(second.dispose);
+    Widget page(RealtimeRoom room) => MaterialApp(
+      home: RealtimeRoomUiScope(
+        room: room,
+        child: const Scaffold(body: RealtimeRoomInfo()),
+      ),
+    );
+    await tester.pumpWidget(page(first));
+    expect(firstMedia._snapshots.hasListener, isTrue);
+    await tester.pumpWidget(page(second));
+    await tester.pump();
+    expect(firstMedia._snapshots.hasListener, isFalse);
+    expect(firstMedia.disposeCalls, 0);
+    expect(secondMedia._snapshots.hasListener, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    expect(secondMedia._snapshots.hasListener, isFalse);
+    expect(secondMedia.disposeCalls, 0);
+  });
+
+  test('pending microphone command coalesces duplicate calls', () async {
+    final media = _DeferredMuteSession();
+    final room = _room(media);
+    addTearDown(room.dispose);
+    final controller = RealtimeRoomUiController(room);
+    final first = controller.toggleMicrophone();
+    final duplicate = controller.toggleMicrophone();
+    expect(controller.isPending(RealtimeRoomUiAction.microphone), isTrue);
+    expect(media.muteCalls, 1);
+    await duplicate;
+    media.complete();
+    await first;
+    expect(controller.isPending(RealtimeRoomUiAction.microphone), isFalse);
+    controller.dispose();
+    expect(media.disposeCalls, 0);
+  });
+}
+
+class _DeferredMuteSession extends _FakeMediaSession {
+  final Completer<void> _ready = Completer<void>();
+  void complete() => _ready.complete();
+  @override
+  Future<void> toggleMute() async {
+    muteCalls++;
+    await _ready.future;
+    _emit(snapshot.copyWith(localMuted: !snapshot.localMuted));
+  }
+}
+
+class _DeviceMediaSession extends _FakeMediaSession
+    implements MediaDeviceController {
+  _DeviceMediaSession() {
+    _emit(
+      snapshot.copyWith(
+        capabilities: snapshot.capabilities.copyWith(
+          canEnumerateMicrophones: true,
+          canSelectMicrophone: true,
+          canEnumerateCameras: true,
+          canSelectCamera: true,
+        ),
+      ),
+    );
+  }
+  final selected = <MediaDevice>[];
+  @override
+  Future<List<MediaDevice>> listMediaDevices({
+    Set<MediaDeviceKind>? kinds,
+  }) async => [
+    if (kinds?.contains(MediaDeviceKind.microphone) ?? true)
+      const MediaDevice(
+        id: 'mic-usb',
+        label: 'USB microphone',
+        kind: MediaDeviceKind.microphone,
+      ),
+    if (kinds?.contains(MediaDeviceKind.camera) ?? true)
+      const MediaDevice(
+        id: 'cam-front',
+        label: 'Front camera',
+        kind: MediaDeviceKind.camera,
+      ),
+  ];
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) async =>
+      selected.add(device);
+}
+
+class _BulkMuteMediaSession extends _FakeMediaSession
+    implements MediaRoomModeration {
+  _BulkMuteMediaSession() : super(role: MediaRole.host) {
+    _emit(
+      snapshot.copyWith(
+        capabilities: const MediaCapabilities(
+          management: MediaManagementCapabilities(
+            muteParticipant: ManagementCapability.client(),
+          ),
+        ),
+        participants: const [
+          MediaParticipant(id: 'self', displayName: 'Host', isLocal: true),
+          MediaParticipant(id: 'a', displayName: 'A'),
+          MediaParticipant(id: 'b', displayName: 'B'),
+        ],
+      ),
+    );
+  }
+  final muteTargets = <String>[];
+  bool _failBOnce = true;
+
+  @override
+  Future<void> muteParticipant(
+    String roomCode, {
+    required String requesterParticipantId,
+    required String targetParticipantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async {
+    muteTargets.add(targetParticipantId);
+    if (targetParticipantId == 'b' && _failBOnce) {
+      _failBOnce = false;
+      throw StateError('provider temporary failure');
+    }
+  }
+
+  @override
+  Future<List<MediaRoomParticipantSummary>> listParticipants(
+    String roomCode, {
+    required String requesterParticipantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async => const [];
+
+  @override
+  Future<void> removeParticipant(
+    String roomCode, {
+    required String requesterParticipantId,
+    required String targetParticipantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async {}
+
+  @override
+  Future<void> stopParticipantVideo(
+    String roomCode, {
+    required String requesterParticipantId,
+    required String targetParticipantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async {}
+
+  @override
+  Future<void> changeParticipantRole(
+    String roomCode, {
+    required String requesterParticipantId,
+    required String targetParticipantId,
+    required MediaRole role,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async {}
+
+  @override
+  Future<void> closeRoomManaged(
+    String roomCode, {
+    required String requesterParticipantId,
+    String? participantCredential,
+    String? roomOwnerCredential,
+  }) async {}
+}
+
+class _HostChatSession extends _FakeChatSession {
+  @override
+  ChatRole get role => ChatRole.host;
+}
+
+class _RosterModeration extends Fake
+    implements ChatModeration, ChatModerationCapabilitySource {
+  @override
+  ChatManagementCapabilities get moderationCapabilities =>
+      const ChatManagementCapabilities(
+        listMembers: ChatManagementCapability.backend(),
+        removeMember: ChatManagementCapability.backend(),
+      );
+  @override
+  Future<List<ChatMember>> listMembers() async => const [
+    ChatMember(userId: 'chat-member', displayName: 'Chat Member'),
+  ];
+  @override
+  Future<void> removeMember(String userId) async {}
 }
 
 RealtimeRoom _room(_FakeMediaSession media) => RealtimeRoom(

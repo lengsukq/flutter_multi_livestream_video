@@ -3,6 +3,8 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 
 import 'room_chat_components.dart';
 import 'room_classroom_components.dart';
+import 'room_classroom_interactions.dart';
+import 'room_classroom_activities.dart';
 import 'room_control_components.dart';
 import 'room_live_components.dart';
 import 'room_media_components.dart';
@@ -26,9 +28,28 @@ class RealtimeComposableRoomTemplate extends StatefulWidget {
       _RealtimeComposableRoomTemplateState();
 }
 
+enum _TemplatePanel { closed, chat, members, questions, hands, activities }
+
 class _RealtimeComposableRoomTemplateState
     extends State<RealtimeComposableRoomTemplate> {
-  bool _chatOpen = false;
+  _TemplatePanel _panel = _TemplatePanel.closed;
+
+  void _toggle(_TemplatePanel panel) =>
+      setState(() => _panel = _panel == panel ? _TemplatePanel.closed : panel);
+
+  Widget _sidebar() => switch (_panel) {
+    _TemplatePanel.chat => const RealtimeChatPanel(),
+    _TemplatePanel.members => const RealtimeManagedParticipantList(),
+    _TemplatePanel.questions => const Column(
+      children: [
+        Expanded(child: RealtimeClassroomQuestions()),
+        RealtimeClassroomQuestionComposer(),
+      ],
+    ),
+    _TemplatePanel.hands => const RealtimeClassroomHandQueue(),
+    _TemplatePanel.activities => const RealtimeClassroomActivityList(),
+    _TemplatePanel.closed => const SizedBox.shrink(),
+  };
 
   @override
   Widget build(BuildContext context) => RealtimeRoomUiScope(
@@ -46,6 +67,7 @@ class _RealtimeComposableRoomTemplateState
                   child: Row(
                     children: [
                       const Expanded(child: RealtimeRoomInfo()),
+                      if (wide) const RealtimeConnectionIndicator(),
                       if (widget.isLive) const RealtimeLiveStatus(),
                       RealtimeLeaveButton(onLeft: widget.onLeft),
                     ],
@@ -61,13 +83,13 @@ class _RealtimeComposableRoomTemplateState
                                 members: RealtimeVideoGrid(),
                               ),
                       ),
-                      if (wide && _chatOpen)
-                        const SizedBox(width: 320, child: RealtimeChatPanel()),
+                      if (wide && _panel != _TemplatePanel.closed)
+                        SizedBox(width: 320, child: _sidebar()),
                     ],
                   ),
                 ),
-                if (!wide && _chatOpen)
-                  const SizedBox(height: 210, child: RealtimeChatPanel()),
+                if (!wide && _panel != _TemplatePanel.closed)
+                  SizedBox(height: 210, child: _sidebar()),
                 Padding(
                   padding: const EdgeInsets.all(8),
                   child: Wrap(
@@ -78,6 +100,13 @@ class _RealtimeComposableRoomTemplateState
                       if (!isViewer) ...[
                         const RealtimeMicrophoneButton(),
                         const RealtimeCameraButton(),
+                        const RealtimeSwitchCameraButton(),
+                        const RealtimeMediaDevicePicker(
+                          kind: MediaDeviceKind.microphone,
+                        ),
+                        const RealtimeMediaDevicePicker(
+                          kind: MediaDeviceKind.camera,
+                        ),
                         if (widget.room.sharedContent != null)
                           const RealtimeSharedContentButton()
                         else
@@ -87,14 +116,41 @@ class _RealtimeComposableRoomTemplateState
                         const RealtimeLiveLikeButton(),
                         const RealtimeLiveGiftButton(),
                       ],
-                      if (widget.room.classroom != null)
+                      if (widget.room.classroom != null) ...[
                         const RealtimeClassroomButton(),
+                        const RealtimeRaiseHandButton(),
+                        const RealtimeClassroomFeedbackButton(),
+                        const RealtimeClassroomToolsButton(),
+                        IconButton(
+                          tooltip: 'Questions',
+                          icon: const Icon(Icons.question_answer_outlined),
+                          onPressed: () => _toggle(_TemplatePanel.questions),
+                        ),
+                        IconButton(
+                          tooltip: 'Raised hands',
+                          icon: const Icon(Icons.pan_tool_outlined),
+                          onPressed: () => _toggle(_TemplatePanel.hands),
+                        ),
+                        IconButton(
+                          tooltip: 'Polls and quizzes',
+                          icon: const Icon(Icons.quiz_outlined),
+                          onPressed: () => _toggle(_TemplatePanel.activities),
+                        ),
+                      ],
+                      IconButton(
+                        tooltip: 'Participants',
+                        icon: const Icon(Icons.people_outline),
+                        onPressed: () => _toggle(_TemplatePanel.members),
+                      ),
                       if (widget.room.chat != null)
                         IconButton(
                           tooltip: 'Chat',
-                          icon: Icon(_chatOpen ? Icons.close : Icons.chat),
-                          onPressed: () =>
-                              setState(() => _chatOpen = !_chatOpen),
+                          icon: Icon(
+                            _panel == _TemplatePanel.chat
+                                ? Icons.close
+                                : Icons.chat,
+                          ),
+                          onPressed: () => _toggle(_TemplatePanel.chat),
                         ),
                     ],
                   ),

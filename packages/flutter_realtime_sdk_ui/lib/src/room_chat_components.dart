@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart';
@@ -37,6 +39,300 @@ class RealtimeParticipantList extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// Host-only bulk mute with partial-failure retry. Layout stays app-owned.
+class RealtimeBulkMuteButton extends StatelessWidget {
+  const RealtimeBulkMuteButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = RealtimeRoomUiScope.of(context);
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        if (!controller.canMuteAllParticipants) {
+          return const SizedBox.shrink();
+        }
+        final busy = controller.isPending(
+          RealtimeRoomUiAction.participantManagement,
+        );
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Mute all participants',
+              icon: const Icon(Icons.volume_off_outlined),
+              onPressed: busy
+                  ? null
+                  : () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('Mute all participants?'),
+                          content: const Text(
+                            'Mute every other participant in this room.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, true),
+                              child: const Text('Mute all'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed != true || !context.mounted) return;
+                      await _performBulkMute(context, controller, retry: false);
+                    },
+            ),
+            if (controller.bulkMuteFailures.isNotEmpty)
+              IconButton(
+                tooltip: 'Retry failed mutes',
+                icon: const Icon(Icons.refresh_outlined),
+                onPressed: busy
+                    ? null
+                    : () => _performBulkMute(context, controller, retry: true),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _performBulkMute(
+    BuildContext context,
+    RealtimeRoomUiController controller, {
+    required bool retry,
+  }) async {
+    try {
+      await controller.muteAllParticipants(retryFailed: retry);
+      if (context.mounted && controller.bulkMuteFailures.isNotEmpty) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              '${controller.bulkMuteFailures.length} participants could not be muted.',
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
+  }
+}
+
+/// Combined RTC/IM directory, sharing the same member reconciliation as the
+/// legacy room. The app owns its placement and the list doesn't poll.
+class RealtimeManagedParticipantList extends StatefulWidget {
+  const RealtimeManagedParticipantList({super.key});
+
+  @override
+  State<RealtimeManagedParticipantList> createState() =>
+      _RealtimeManagedParticipantListState();
+}
+
+class _RealtimeManagedParticipantListState
+    extends State<RealtimeManagedParticipantList> {
+  RealtimeRoomUiController? _controller;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final current = RealtimeRoomUiScope.of(context);
+    if (identical(current, _controller)) return;
+    _controller = current;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(current, _controller)) {
+        unawaited(current.refreshManagedMembers());
+      }
+    });
+  }
+
+  Future<void> _manage(
+    BuildContext context,
+    RealtimeRoomUiController controller,
+    String action,
+    String mediaId,
+    String chatId,
+    String name,
+  ) async {
+    if (action == 'removeMedia' || action == 'removeChat') {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            action == 'removeChat'
+                ? 'Remove from chat?'
+                : 'Remove from meeting?',
+          ),
+          content: Text(name),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true || !context.mounted) return;
+    }
+    try {
+      switch (action) {
+        case 'mute':
+          await controller.muteParticipant(mediaId);
+        case 'stopVideo':
+          await controller.stopParticipantVideo(mediaId);
+        case 'removeMedia':
+          await controller.removeParticipant(mediaId);
+        case 'removeChat':
+          await controller.removeChatMember(chatId);
+        case 'host':
+          await controller.changeParticipantRole(mediaId, MediaRole.host);
+      }
+      if (action != 'removeChat' && action != 'host') {
+        await controller.refreshManagedMembers();
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = RealtimeRoomUiScope.of(context);
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final members = controller.managedMembers;
+        final capabilities = controller.room.media.managementCapabilities;
+        final mediaHost = controller.room.media.isLogicalOwner;
+        final chat = controller.chatUiController;
+        final canManageChat =
+            chat?.isHost == true &&
+            chat!.managementCapabilities.removeMember.supported;
+        return Column(
+          children: [
+            Row(
+              children: [
+                const SizedBox(width: 12),
+                Expanded(child: Text('Participants (${members.length})')),
+                const RealtimeBulkMuteButton(),
+                IconButton(
+                  tooltip: 'Refresh participants',
+                  onPressed: controller.membersLoading
+                      ? null
+                      : () => unawaited(controller.refreshManagedMembers()),
+                  icon: controller.membersLoading
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                ),
+              ],
+            ),
+            if (controller.memberLoadError != null)
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Text(
+                  controller.memberLoadError.toString(),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: members.length,
+                itemBuilder: (context, index) {
+                  final member = members[index];
+                  final media = member.media;
+                  final chatMember = member.chat;
+                  final canManageMedia =
+                      !member.isSelf && media != null && mediaHost;
+                  final canRemoveChat =
+                      !member.isSelf && chatMember != null && canManageChat;
+                  final actions = <PopupMenuEntry<String>>[
+                    if (canManageMedia &&
+                        capabilities.muteParticipant.supported)
+                      const PopupMenuItem(value: 'mute', child: Text('Mute')),
+                    if (canManageMedia &&
+                        capabilities.stopParticipantVideo.supported)
+                      const PopupMenuItem(
+                        value: 'stopVideo',
+                        child: Text('Stop video'),
+                      ),
+                    if (canManageMedia &&
+                        capabilities.changeParticipantRole.supported)
+                      const PopupMenuItem(
+                        value: 'host',
+                        child: Text('Grant host'),
+                      ),
+                    if (canManageMedia &&
+                        capabilities.removeParticipant.supported)
+                      const PopupMenuItem(
+                        value: 'removeMedia',
+                        child: Text('Remove from media'),
+                      ),
+                    if (canRemoveChat)
+                      const PopupMenuItem(
+                        value: 'removeChat',
+                        child: Text('Remove from chat'),
+                      ),
+                  ];
+                  return ListTile(
+                    key: ValueKey(member.userId),
+                    leading: const Icon(Icons.person_outline),
+                    title: Text(member.displayName),
+                    subtitle: Text(
+                      [
+                        if (media != null) 'Media online',
+                        if (chatMember != null) 'Chat online',
+                        if (member.isSelf) 'You',
+                      ].join(' · '),
+                    ),
+                    trailing: actions.isEmpty
+                        ? null
+                        : PopupMenuButton<String>(
+                            tooltip: 'Manage member',
+                            enabled: !controller.isPending(
+                              RealtimeRoomUiAction.participantManagement,
+                            ),
+                            onSelected: (action) => _manage(
+                              context,
+                              controller,
+                              action,
+                              media?.participantId ?? '',
+                              chatMember?.userId ?? '',
+                              member.displayName,
+                            ),
+                            itemBuilder: (_) => actions,
+                          ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

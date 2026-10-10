@@ -40,6 +40,12 @@ Widget? buildRoomSharedContentStage(
     screenAnnotations: withAnnotations ? shared.screenAnnotations : null,
     canAnnotateScreen:
         withAnnotations && content.canManage && track?.isLocal == true,
+    onStopSharing: content.canManage
+        ? () => shared.selectMode(SharedContentMode.members)
+        : null,
+    screenSharerName: content.screen.participantId.isNotEmpty
+        ? content.screen.participantId
+        : null,
   );
 }
 

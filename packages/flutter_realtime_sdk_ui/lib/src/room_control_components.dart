@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
 import 'room_ui_controller.dart';
@@ -46,6 +47,7 @@ class RealtimeRoomActionButton extends StatelessWidget {
           RealtimeRoomUiAction.screenShare => controller.canShareScreen,
           RealtimeRoomUiAction.switchCamera => controller.canSwitchCamera,
           RealtimeRoomUiAction.audioOutput => false,
+          RealtimeRoomUiAction.device => false,
           RealtimeRoomUiAction.leave => true,
           RealtimeRoomUiAction.sendMessage => controller.room.chat != null,
           RealtimeRoomUiAction.participantManagement => false,
@@ -66,6 +68,7 @@ class RealtimeRoomActionButton extends StatelessWidget {
                 isZh ? '切换摄像头' : 'Switch camera',
               RealtimeRoomUiAction.audioOutput =>
                 isZh ? '音频输出' : 'Audio output',
+              RealtimeRoomUiAction.device => isZh ? '设备' : 'Devices',
               RealtimeRoomUiAction.leave => isZh ? '离开会议' : 'Leave meeting',
               RealtimeRoomUiAction.sendMessage => isZh ? '发送' : 'Send',
               RealtimeRoomUiAction.participantManagement =>
@@ -83,6 +86,7 @@ class RealtimeRoomActionButton extends StatelessWidget {
             active ? Icons.stop_screen_share : Icons.screen_share,
           RealtimeRoomUiAction.switchCamera => Icons.cameraswitch,
           RealtimeRoomUiAction.audioOutput => Icons.speaker_outlined,
+          RealtimeRoomUiAction.device => Icons.devices_outlined,
           RealtimeRoomUiAction.leave => Icons.call_end,
           RealtimeRoomUiAction.sendMessage => Icons.send,
           RealtimeRoomUiAction.participantManagement =>
@@ -98,6 +102,7 @@ class RealtimeRoomActionButton extends StatelessWidget {
             RealtimeRoomUiAction.screenShare => controller.toggleScreenShare(),
             RealtimeRoomUiAction.switchCamera => controller.switchCamera(),
             RealtimeRoomUiAction.audioOutput => Future.value(),
+            RealtimeRoomUiAction.device => Future.value(),
             RealtimeRoomUiAction.leave => controller.leave(),
             RealtimeRoomUiAction.sendMessage => Future.value(),
             RealtimeRoomUiAction.participantManagement => Future.value(),
@@ -133,6 +138,97 @@ class RealtimeRoomActionButton extends StatelessWidget {
                 : Icon(icon),
             label: Text(buttonLabel),
           ),
+        );
+      },
+    );
+  }
+}
+
+/// One standalone device picker for microphone/camera/output. Providers that
+/// cannot enumerate devices show no control; selection remains read-only when
+/// an adapter can enumerate but cannot change the selected device.
+class RealtimeMediaDevicePicker extends StatelessWidget {
+  const RealtimeMediaDevicePicker({super.key, required this.kind});
+
+  final MediaDeviceKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = RealtimeRoomUiScope.of(context);
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        if (!controller.canListMediaDevices(kind)) {
+          return const SizedBox.shrink();
+        }
+        final zh = Localizations.localeOf(context).languageCode == 'zh';
+        final title = switch (kind) {
+          MediaDeviceKind.microphone => zh ? '麦克风设备' : 'Microphone devices',
+          MediaDeviceKind.camera => zh ? '摄像头设备' : 'Camera devices',
+          MediaDeviceKind.audioOutput => zh ? '音频输出设备' : 'Audio outputs',
+        };
+        return OutlinedButton.icon(
+          icon: Icon(switch (kind) {
+            MediaDeviceKind.microphone => Icons.mic_outlined,
+            MediaDeviceKind.camera => Icons.videocam_outlined,
+            MediaDeviceKind.audioOutput => Icons.speaker_outlined,
+          }),
+          label: Text(title),
+          onPressed: controller.isPending(RealtimeRoomUiAction.device)
+              ? null
+              : () async {
+                  try {
+                    final devices = await controller.listMediaDevices(kind);
+                    if (!context.mounted) return;
+                    await showDialog<void>(
+                      context: context,
+                      builder: (dialogContext) => SimpleDialog(
+                        title: Text(title),
+                        children: [
+                          if (devices.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(zh ? '没有可用设备' : 'No devices'),
+                            ),
+                          for (final device in devices)
+                            ListTile(
+                              title: Text(device.label),
+                              subtitle: controller.canSelectMediaDevice(kind)
+                                  ? null
+                                  : Text(
+                                      zh
+                                          ? '当前不支持切换设备'
+                                          : 'Selection unavailable',
+                                    ),
+                              enabled: controller.canSelectMediaDevice(kind),
+                              onTap: () async {
+                                try {
+                                  await controller.selectMediaDevice(device);
+                                  if (dialogContext.mounted) {
+                                    Navigator.pop(dialogContext);
+                                  }
+                                } catch (error) {
+                                  if (dialogContext.mounted) {
+                                    ScaffoldMessenger.maybeOf(
+                                      dialogContext,
+                                    )?.showSnackBar(
+                                      SnackBar(content: Text('$error')),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                        ],
+                      ),
+                    );
+                  } catch (error) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.maybeOf(
+                        context,
+                      )?.showSnackBar(SnackBar(content: Text('$error')));
+                    }
+                  }
+                },
         );
       },
     );
