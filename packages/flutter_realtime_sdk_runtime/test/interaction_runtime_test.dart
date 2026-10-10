@@ -29,6 +29,49 @@ class _FakeTransport implements InteractionTransport {
   Future<void> dispose() => inbox.close();
 }
 
+class _ChangingPlane implements InteractionControlPlane {
+  int revision = 1;
+  int reads = 0;
+  final Completer<void>? gate;
+  _ChangingPlane({this.gate});
+  @override
+  Future<InteractionSnapshot> snapshot() async {
+    reads++;
+    await gate?.future;
+    return InteractionSnapshot(revision: revision, state: {'count': revision});
+  }
+
+  @override
+  Future<InteractionCommandResult> execute(InteractionCommand command) async {
+    revision++;
+    return InteractionCommandResult(revision: revision);
+  }
+}
+
+class _FakeRevisions implements InteractionRevisionTransport {
+  final updates = StreamController<int>.broadcast();
+  @override
+  Stream<int> get revisions => updates.stream;
+  @override
+  Future<void> publish(int revision) async {
+    updates.add(revision);
+  }
+
+  @override
+  Future<void> dispose() => updates.close();
+}
+
+class _FakeSystemChat implements ChatSystemMessaging {
+  final messages = StreamController<String>.broadcast();
+  final sent = <String>[];
+  @override
+  Stream<String> get systemMessages => messages.stream;
+  @override
+  Future<void> sendSystemMessage(String payload) async {
+    sent.add(payload);
+  }
+}
+
 class _FakeMedia implements MediaSession, MediaDataMessenger {
   final inbound = StreamController<MediaEvent>.broadcast();
   final sent = <String>[];
@@ -85,6 +128,84 @@ InteractionFrame _frame({
 );
 
 void main() {
+  test(
+    'IM hint validates room/revision but only triggers trusted reads',
+    () async {
+      final chat = _FakeSystemChat();
+      final revisions = ChatInteractionRevisionTransport(
+        chat,
+        roomCode: 'room-1',
+      );
+      final received = <int>[];
+      final subscription = revisions.revisions.listen(received.add);
+      await revisions.publish(9);
+      expect(chat.sent, hasLength(1));
+      chat.messages.add(chat.sent.single);
+      chat.messages.add(InteractionRevisionHintCodec.encode('room-2', 100));
+      chat.messages.add(
+        '{"v":1,"type":"interaction.state.changed","roomCode":"room-1","revision":-1,"eventId":"bad","timestampMs":0}',
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(received, [9]);
+      await subscription.cancel();
+      await revisions.dispose();
+      await chat.messages.close();
+    },
+  );
+
+  test(
+    'initial snapshot, untrusted hint and stale revision recover correctly',
+    () async {
+      final plane = _ChangingPlane();
+      final hints = _FakeRevisions();
+      final session = DefaultInteractionSession(
+        roomCode: 'room-1',
+        senderId: 'self-1',
+        transport: _FakeTransport(),
+        controlPlane: plane,
+        revisionTransport: hints,
+        snapshotPollInterval: Duration.zero,
+      );
+      final snapshots = <InteractionSnapshot>[];
+      final subscription = session.snapshots.listen(snapshots.add);
+      await session.refresh();
+      expect(session.currentSnapshot?.revision, 1);
+      plane.revision = 3;
+      hints.updates.add(900000);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(session.currentSnapshot?.revision, 3);
+      expect(snapshots.map((snapshot) => snapshot.revision), [1, 3]);
+      hints.updates.add(2);
+      await Future<void>.delayed(Duration.zero);
+      expect(snapshots, hasLength(2));
+      await subscription.cancel();
+      await session.dispose();
+    },
+  );
+
+  test(
+    'concurrent authoritative refreshes share one flight and stop after disposal',
+    () async {
+      final gate = Completer<void>();
+      final plane = _ChangingPlane(gate: gate);
+      final session = DefaultInteractionSession(
+        roomCode: 'room-1',
+        senderId: 'self-1',
+        transport: _FakeTransport(),
+        controlPlane: plane,
+        snapshotPollInterval: Duration.zero,
+      );
+      final first = session.refresh();
+      final second = session.refresh();
+      expect(identical(first, second), isTrue);
+      expect(plane.reads, 1);
+      gate.complete();
+      await Future.wait([first, second]);
+      expect(plane.reads, 1);
+      await session.dispose();
+    },
+  );
+
   test('existing MediaSession Data API delivers Interaction frames', () async {
     final media = _FakeMedia();
     final session = DefaultInteractionSession(

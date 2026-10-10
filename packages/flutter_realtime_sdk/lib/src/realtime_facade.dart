@@ -17,6 +17,8 @@ class Realtime extends base.Realtime {
     String? backendUrl,
     Duration? requestTimeout,
     RealtimeTokenProvider? tokenProvider,
+    InteractionControlPlaneFactory? interactionControlPlaneFactory,
+    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
     RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
   }) {
     final configured = base.Realtime(
@@ -24,6 +26,8 @@ class Realtime extends base.Realtime {
       backendUrl: backendUrl,
       requestTimeout: requestTimeout,
       tokenProvider: tokenProvider,
+      interactionControlPlaneFactory: interactionControlPlaneFactory,
+      featurePlugins: featurePlugins,
       platformResolver: platformResolver,
     );
     return Realtime.fromSdk(
@@ -45,6 +49,8 @@ class Realtime extends base.Realtime {
     String? backendUrl,
     Duration? requestTimeout,
     RealtimeTokenProvider? tokenProvider,
+    InteractionControlPlaneFactory? interactionControlPlaneFactory,
+    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
     RealtimeClientFactory? clientFactory,
     RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
     Iterable<RealtimeProviderPlugin> additionalPlugins = const [],
@@ -55,6 +61,8 @@ class Realtime extends base.Realtime {
       backendUrl: backendUrl,
       requestTimeout: requestTimeout,
       tokenProvider: tokenProvider,
+      interactionControlPlaneFactory: interactionControlPlaneFactory,
+      featurePlugins: featurePlugins,
       clientFactory: clientFactory,
       platformResolver: platformResolver,
       additionalPlugins: additionalPlugins,

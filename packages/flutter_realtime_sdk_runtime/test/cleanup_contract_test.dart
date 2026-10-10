@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
+import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,10 +17,13 @@ void main() {
           session: _Media(),
         ),
         renderer: const _Renderer(),
-        classroom: ClassroomSession(
-          repository,
-          pollInterval: const Duration(days: 1),
-        ),
+        featurePlugins: [
+          ClassroomPreset(
+            enableForDirectRooms: true,
+            repositoryFactory: (_) => repository,
+            pollInterval: const Duration(days: 1),
+          ),
+        ],
         videoEffectsBridge: _Bridge(),
         disposeClients: () {},
       );
@@ -43,7 +47,12 @@ void main() {
           session: media,
         ),
         renderer: const _Renderer(),
-        classroom: ClassroomSession(_Repository()),
+        featurePlugins: [
+          ClassroomPreset(
+            enableForDirectRooms: true,
+            repositoryFactory: (_) => _Repository(),
+          ),
+        ],
         videoEffectsBridge: _Bridge(),
         disposeClients: () {
           clients++;
@@ -52,18 +61,9 @@ void main() {
       final first = room.dispose();
       final second = room.dispose();
       expect(identical(first, second), true);
-      await expectLater(
-        first,
-        throwsA(
-          isA<RealtimeException>()
-              .having((e) => e.code, 'code', RealtimeErrorCode.cleanupFailed)
-              .having(
-                (e) => (e.details as List<CleanupFailure>).map((f) => f.stage),
-                'stage',
-                contains('classroom'),
-              ),
-        ),
-      );
+      // The feature registry isolates teardown errors; media and clients must
+      // still be released, rather than surfacing a partial-room failure.
+      await first;
       expect(media.releases, 1);
       expect(clients, 1);
       expect(identical(room.dispose(), first), true);

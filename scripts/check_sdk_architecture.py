@@ -28,9 +28,21 @@ def closure(name):
     return result
 runtime=closure('flutter_realtime_sdk_runtime')
 assert not [n for n in runtime if n.endswith('_ui') or n.startswith('flutter_realtime_provider_') or (n.startswith('flutter_realtime_media_') and n != 'flutter_realtime_media_core')], runtime
+optional_business = {
+    'flutter_realtime_classroom_core',
+    'flutter_realtime_live_core',
+    'flutter_realtime_whiteboard_core',
+    'flutter_realtime_screen_annotation',
+    'flutter_realtime_classroom_preset',
+    'flutter_realtime_live_preset',
+}
+assert not runtime.intersection(optional_business), f'Runtime must not require optional business packages: {runtime.intersection(optional_business)}'
+for preset in ('flutter_realtime_classroom_preset', 'flutter_realtime_live_preset'):
+    assert 'flutter_realtime_sdk_runtime' in closure(preset), f'{preset} must adapt the generic runtime'
 sdk=closure('flutter_realtime_sdk')
 assert 'flutter_realtime_sdk_runtime' in sdk, 'SDK entry must retain Runtime'
 assert not [n for n in sdk if n.endswith('_ui') or n.startswith('flutter_realtime_provider_') or (n.startswith('flutter_realtime_media_') and n != 'flutter_realtime_media_core')], sdk
+assert not sdk.intersection(optional_business), f'Core SDK must not force business presets: {sdk.intersection(optional_business)}'
 assert not [n for n in graph['flutter_realtime_sdk'] if n != 'flutter_realtime_sdk_runtime'], graph['flutter_realtime_sdk']
 assert (ROOT/'packages/flutter_realtime_sdk_runtime/lib/src/members/room_members_controller.dart').exists(), 'Member management must be owned by Runtime'
 assert not any('class RoomMembersController' in src.read_text() for src in (ROOT/'packages').glob('flutter_realtime_*_ui/lib/**/*.dart')), 'UI must not reimplement Runtime member management'

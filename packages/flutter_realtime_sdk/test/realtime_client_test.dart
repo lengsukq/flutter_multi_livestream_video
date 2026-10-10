@@ -984,7 +984,7 @@ void main() {
 
   group('RealtimeClient', () {
     test(
-      'backend capabilities attach optional classroom and live sessions without vendor branches',
+      'explicitly registered presets attach only to eligible meeting and live rooms',
       () async {
         for (final mode in ['meeting', 'broadcast']) {
           final factory = FakeMediaSessionFactory();
@@ -1009,6 +1009,7 @@ void main() {
           final client = RealtimeClient(
             backendUrl: 'https://example.test',
             mediaAdapters: adapters,
+            featurePlugins: const [ClassroomPreset(), LivePreset()],
             mediaClientFactory: () => MediaClient(
               backendUrl: 'https://example.test',
               registry: adapters.registry,

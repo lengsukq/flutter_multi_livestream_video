@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
+import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
+import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _ClassRepository implements ClassroomRepository {

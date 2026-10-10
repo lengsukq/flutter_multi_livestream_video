@@ -1,5 +1,4 @@
-import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
-import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
+import 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
@@ -10,13 +9,15 @@ import 'media_adapter.dart';
 import 'realtime_room.dart';
 import 'realtime_requirements.dart';
 import 'realtime_chat_room.dart';
-import 'classroom_media_transport.dart';
-import 'classroom_chat_transport.dart';
+import 'interaction_revision_transport.dart';
+import 'realtime_feature_registry.dart';
 
 typedef RealtimeTokenProvider = Future<String?> Function();
 typedef RealtimeMediaClientFactory = MediaClient Function();
 typedef RealtimeChatClientFactory = ChatClient Function();
 typedef RealtimePublicProviderResolver = String Function(String engineId);
+typedef InteractionControlPlaneFactory =
+    InteractionControlPlane? Function(MediaRoomSession mediaRoom);
 
 /// Recommended application-level entry point for realtime rooms.
 ///
@@ -33,7 +34,10 @@ class RealtimeClient {
     RealtimeMediaClientFactory? mediaClientFactory,
     RealtimeChatClientFactory? chatClientFactory,
     RealtimePublicProviderResolver? publicProviderResolver,
+    this.interactionControlPlaneFactory,
+    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
   }) : chatRegistry = chatRegistry ?? ChatRegistry(),
+       featurePlugins = List.unmodifiable(featurePlugins),
        _tokenProvider = tokenProvider,
        _mediaClientFactory = mediaClientFactory,
        _chatClientFactory = chatClientFactory,
@@ -49,6 +53,8 @@ class RealtimeClient {
   final RealtimeMediaClientFactory? _mediaClientFactory;
   final RealtimeChatClientFactory? _chatClientFactory;
   final RealtimePublicProviderResolver? _publicProviderResolver;
+  final InteractionControlPlaneFactory? interactionControlPlaneFactory;
+  final List<RealtimeFeaturePlugin> featurePlugins;
 
   ChatClient newChatClient({ChatProvisioner? provisioner}) =>
       _chatClientFactory?.call() ??
@@ -329,84 +335,29 @@ class RealtimeClient {
       final effects =
           await effectsProbe?.call(room.providerId, room.session.role) ??
           const MediaBackgroundCapabilities.none();
-      return RealtimeRoom(
+      final resolved = RealtimeRoom(
         effectsCapabilities: effects,
         media: room,
         publicProviderId:
             _publicProviderResolver?.call(room.providerId) ?? room.providerId,
         renderer: renderer,
         chat: chat,
-        classroom:
-            backendUrl != null &&
-                room.participantCredential != null &&
-                room.backendMetadata['roomMode'] == 'meeting'
-            ? ClassroomSession(
-                HttpClassroomRepository(
-                  backendUrl: backendUrl!,
-                  roomCode: room.roomCode,
-                  participantId: room.participantId,
-                  participantCredential: room.participantCredential!,
-                  roomOwnerCredential: room.roomOwnerCredential,
-                  tokenProvider: _tokenProvider,
-                  requestTimeout: requestTimeout ?? const Duration(seconds: 10),
-                ),
-                mediaTracks: () => {
-                  for (final p in room.session.snapshot.participants)
-                    p.id: (
-                      // For remote peers, missing track information is
-                      // unknown, not proof that a device is enabled.
-                      microphoneOn: p.isLocal
-                          ? !room.session.snapshot.localMuted
-                          : p.isSpeaking
-                          ? true
-                          : p.isMuted
-                          ? false
-                          : null,
-                      cameraOn: p.isVideoEnabled
-                          ? true
-                          : p.videoTrack == null
-                          ? null
-                          : false,
-                    ),
-                },
-                chatMessages: () => chat?.messages.length ?? 0,
-                revisionTransport:
-                    classroomSignals != null && canSendChatSignals
-                    ? ClassroomChatRevisionTransport(
-                        classroomSignals,
-                        roomCode: room.roomCode,
-                      )
-                    : ClassroomMediaRevisionTransport(
-                        room.session,
-                        roomCode: room.roomCode,
-                      ),
+        featureBackendUrl: backendUrl,
+        featureTokenProvider: _tokenProvider,
+        featureRequestTimeout: requestTimeout,
+        interactionControlPlane: interactionControlPlaneFactory?.call(room),
+        featurePlugins: featurePlugins,
+        interactionRevisionTransport:
+            classroomSignals != null && canSendChatSignals
+            ? ChatInteractionRevisionTransport(
+                classroomSignals,
+                roomCode: room.roomCode,
               )
-            : null,
-        liveInteractions:
-            backendUrl != null &&
-                room.participantCredential != null &&
-                room.backendMetadata['liveInteractions'] == true
-            ? LiveInteractionSession(
-                HttpLiveInteractionRepository(
-                  backendUrl: backendUrl!,
-                  roomCode: room.roomCode,
-                  participantId: room.participantId,
-                  participantCredential: room.participantCredential!,
-                  tokenProvider: _tokenProvider,
-                  requestTimeout: requestTimeout ?? const Duration(seconds: 10),
-                ),
-                revisionTransport:
-                    classroomSignals != null && canSendChatSignals
-                    ? ClassroomChatRevisionTransport(
-                        classroomSignals,
-                        roomCode: room.roomCode,
-                        eventType: 'live.interaction.changed',
-                      )
-                    : ClassroomMediaRevisionTransport(
-                        room.session,
-                        roomCode: room.roomCode,
-                        eventType: 'live.interaction.changed',
-                      ),
+            : room.session.capabilities.canSendData &&
+                  room.session.capabilities.canReceiveData
+            ? MediaInteractionRevisionTransport(
+                room.session,
+                roomCode: room.roomCode,
               )
             : null,
         productChatRoom: productChatRoom,
@@ -416,6 +367,10 @@ class RealtimeClient {
           mediaClient.dispose();
         },
       );
+      // Sync presets attach before room creation returns. An async custom
+      // feature may still be pending: never block connecting media for it.
+      // Clients that need all async features can await room.readyFeatures().
+      return resolved;
     } catch (error, stack) {
       final cleanup = Cleanup();
       await cleanup.run('chat.product', () async {

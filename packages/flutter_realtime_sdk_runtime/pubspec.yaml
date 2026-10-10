@@ -10,10 +10,6 @@ dependencies:
     path: ../flutter_realtime_foundation
   flutter_realtime_interaction_core:
     path: ../flutter_realtime_interaction_core
-  flutter_realtime_screen_annotation:
-    path: ../flutter_realtime_screen_annotation
-  flutter_realtime_whiteboard_core:
-    path: ../flutter_realtime_whiteboard_core
   flutter:
     sdk: flutter
   flutter_realtime_media_core:
@@ -22,14 +18,22 @@ dependencies:
     path: ../flutter_realtime_chat_core
   flutter_realtime_chat_rtc:
     path: ../flutter_realtime_chat_rtc
-  flutter_realtime_live_core:
-    path: ../flutter_realtime_live_core
-  flutter_realtime_classroom_core:
-    path: ../flutter_realtime_classroom_core
   flutter_realtime_video_effects:
     path: ../flutter_realtime_video_effects
   web: ^1.1.1
 dev_dependencies:
+  flutter_realtime_screen_annotation:
+    path: ../flutter_realtime_screen_annotation
+  flutter_realtime_whiteboard_core:
+    path: ../flutter_realtime_whiteboard_core
+  flutter_realtime_classroom_core:
+    path: ../flutter_realtime_classroom_core
+  flutter_realtime_live_core:
+    path: ../flutter_realtime_live_core
+  flutter_realtime_classroom_preset:
+    path: ../flutter_realtime_classroom_preset
+  flutter_realtime_live_preset:
+    path: ../flutter_realtime_live_preset
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0

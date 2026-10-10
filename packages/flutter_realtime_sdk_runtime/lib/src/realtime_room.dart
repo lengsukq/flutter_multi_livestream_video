@@ -1,8 +1,6 @@
 import 'room_video_effects_controller.dart';
 import 'members/room_members_controller.dart';
-import 'room_annotation_coordinator.dart';
 import 'room_recording_controller.dart';
-import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
 import 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
 import 'dart:async';
 
@@ -10,16 +8,15 @@ import 'dart:async';
 
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
-import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 
 import 'realtime_error.dart';
-import 'shared_content_controller.dart';
 import 'realtime_event.dart';
 import 'realtime_room_state.dart';
 import 'realtime_moderation.dart';
 import 'interaction_runtime.dart';
+import 'realtime_feature_registry.dart';
 
 /// A fully resolved room containing media, rendering and optional chat.
 class RealtimeRoom implements MediaBackgroundEffectsController {
@@ -28,8 +25,12 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     String? publicProviderId,
     required this.renderer,
     this.chat,
-    this.classroom,
-    this.liveInteractions,
+    this.interactionControlPlane,
+    this.interactionRevisionTransport,
+    this.featureBackendUrl,
+    this.featureTokenProvider,
+    this.featureRequestTimeout,
+    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
     ChatRoomSession? productChatRoom,
     RtcDataChatSession? rtcChatRoom,
     required void Function() disposeClients,
@@ -40,6 +41,18 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
        _productChatRoom = productChatRoom,
        _rtcChatRoom = rtcChatRoom,
        _disposeClients = disposeClients {
+    features = RealtimeFeatureRegistry(
+      featurePlugins,
+      onError: (id, error, stack) => _reportFailure(
+        normalizeRealtimeException(
+          error,
+          domain: 'runtime',
+          operation: 'feature.$id',
+          providerId: providerId,
+          stackTrace: stack,
+        ),
+      ),
+    );
     _effects = RoomVideoEffectsController(
       media: media,
       effectsCapabilities: effectsCapabilities,
@@ -54,17 +67,6 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     );
     _mediaEventSubscription = media.session.events.listen(_onMediaEvent);
     _mediaStateSubscription = media.session.states.listen(_onMediaState);
-    if (classroom != null) {
-      sharedContent = SharedContentController(
-        media: media.session,
-        classroom: classroom!,
-      );
-      _annotations = RoomAnnotationCoordinator(
-        media.session,
-        classroom!,
-        _reportFailure,
-      );
-    }
     _backendErrorSubscription = media.backendErrors.listen((error) {
       if (_disposed) return;
       _eventController.add(
@@ -90,10 +92,16 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   final RoomMembersController memberDirectory = RoomMembersController();
   final ChatSession? chat;
 
-  /// Optional provider-neutral classroom SDK. Null for live/direct rooms.
-  final ClassroomSession? classroom;
-  SharedContentController? sharedContent;
-  final LiveInteractionSession? liveInteractions;
+  late final RealtimeFeatureRegistry features;
+  final String? featureBackendUrl;
+  final Future<String?> Function()? featureTokenProvider;
+  final Duration? featureRequestTimeout;
+
+  /// Optional authoritative state and permission provider supplied by host.
+  final InteractionControlPlane? interactionControlPlane;
+
+  /// Optional IM/RTC revision-only hint channel, never a command channel.
+  final InteractionRevisionTransport? interactionRevisionTransport;
   InteractionSession? _interactions;
 
   /// Optional, headless interaction channel for any Meeting/Live room.
@@ -106,6 +114,8 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
       roomCode: media.roomCode,
       senderId: media.participantId,
       transport: MediaInteractionTransport(media.session),
+      controlPlane: interactionControlPlane,
+      revisionTransport: interactionRevisionTransport,
     );
   }
 
@@ -129,6 +139,28 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   /// Failure is reported via [events] and does not disconnect healthy media.
   Future<void> initialize() => _initializeFuture ??= _initialize();
 
+  /// Waits only for room feature attachment (not its initial HTTP snapshot).
+  /// SDK callers can safely inspect classroom/live features before rendering.
+  Future<void> readyFeatures() => features.initialize(
+    RealtimeFeatureContext(
+      media: media,
+      chat: chat,
+      interactions: () => interactions,
+      backendUrl: featureBackendUrl,
+      tokenProvider: featureTokenProvider,
+      requestTimeout: featureRequestTimeout,
+      reportError: (error, stack) => _reportFailure(
+        normalizeRealtimeException(
+          error,
+          domain: 'runtime',
+          operation: 'feature',
+          providerId: providerId,
+          stackTrace: stack,
+        ),
+      ),
+    ),
+  );
+
   Future<void> _initialize() async {
     Future<void> start(String operation, Future<void> Function() action) async {
       if (_disposed) return;
@@ -149,14 +181,13 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
       }
     }
 
-    final operations = <Future<void>>[];
-    if (classroom != null) {
-      operations.add(start('classroom.start', classroom!.start));
-    }
-    if (liveInteractions != null) {
-      operations.add(start('live.start', liveInteractions!.start));
-    }
-    await Future.wait(operations);
+    // Registration runs synchronously until its first unresolved async attach.
+    // Start those ready presets immediately; a slow unrelated feature must
+    // not hold up the initial Classroom/Live authoritative snapshot.
+    final attachment = readyFeatures();
+    await start('features.start', features.startAttached);
+    if (_disposed) return;
+    await start('features.attach', () => attachment);
   }
 
   Duration cleanupTimeout = const Duration(seconds: 10);
@@ -171,7 +202,6 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     chat: chat?.capabilities,
   );
   late final RoomVideoEffectsController _effects;
-  RoomAnnotationCoordinator? _annotations;
   @override
   MediaBackgroundCapabilities get backgroundCapabilities =>
       _effects.backgroundCapabilities;
@@ -279,22 +309,14 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     // Startup may be waiting on a remote snapshot indefinitely; disposal
     // must cancel/close the auxiliary sessions without waiting for that read.
     // Late startup errors are ignored once _disposed is set.
-    await cleanup.run('annotation.coordinator', () async {
-      await _annotations?.dispose();
-    });
     await cleanup.run('recording', recording.dispose);
     await cleanup.run('video.effects', _effects.dispose);
-    await cleanup.run('sharedContent', () async {
-      await sharedContent?.dispose();
-    });
-    await cleanup.run('classroom', () async {
-      await classroom?.dispose();
-    });
-    await cleanup.run('liveInteractions', () async {
-      await liveInteractions?.dispose();
-    });
+    await cleanup.run('features', features.dispose);
     await cleanup.run('interactions', () async {
       await _interactions?.dispose();
+      // No interaction session was ever requested: still release any prepared
+      // revision adapter (which never owns the room's chat/media sessions).
+      if (_interactions == null) await interactionRevisionTransport?.dispose();
     });
     await cleanup.run('media.events', () async {
       await _mediaEventSubscription?.cancel();

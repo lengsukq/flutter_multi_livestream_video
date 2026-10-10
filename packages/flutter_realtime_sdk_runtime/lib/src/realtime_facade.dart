@@ -6,6 +6,7 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'provider_driver.dart';
 import 'realtime_client.dart';
+import 'realtime_feature_registry.dart';
 import 'realtime_connection.dart';
 import 'realtime_error.dart';
 import 'realtime_request.dart';
@@ -32,6 +33,8 @@ class Realtime {
     String? backendUrl,
     Duration? requestTimeout,
     RealtimeTokenProvider? tokenProvider,
+    InteractionControlPlaneFactory? interactionControlPlaneFactory,
+    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
     RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
   }) {
     final bundles = providers.toList();
@@ -62,6 +65,8 @@ class Realtime {
       plugins: plugins,
       driverRegistry: registry,
       tokenProvider: tokenProvider,
+      interactionControlPlaneFactory: interactionControlPlaneFactory,
+      featurePlugins: featurePlugins,
     );
     final url = backendUrl?.trim();
     return Realtime.fromSdk(

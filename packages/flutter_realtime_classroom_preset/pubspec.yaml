@@ -1,0 +1,26 @@
+name: flutter_realtime_classroom_preset
+description: Optional prebuilt classroom business interactions for Flutter Realtime SDK.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.47.0"
+dependencies:
+  flutter_realtime_sdk_runtime:
+    path: ../flutter_realtime_sdk_runtime
+  flutter_realtime_chat_core:
+    path: ../flutter_realtime_chat_core
+  flutter_realtime_classroom_core:
+    path: ../flutter_realtime_classroom_core
+  flutter_realtime_interaction_core:
+    path: ../flutter_realtime_interaction_core
+  flutter_realtime_whiteboard_core:
+    path: ../flutter_realtime_whiteboard_core
+  flutter_realtime_screen_annotation:
+    path: ../flutter_realtime_screen_annotation
+  flutter_realtime_media_core:
+    path: ../flutter_realtime_media_core
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

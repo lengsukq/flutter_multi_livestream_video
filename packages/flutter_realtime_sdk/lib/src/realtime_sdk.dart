@@ -12,6 +12,8 @@ class RealtimeSdk extends base.RealtimeSdk {
     required super.plugins,
     super.tokenProvider,
     super.clientFactory,
+    super.interactionControlPlaneFactory,
+    super.featurePlugins,
     super.driverRegistry,
     super.webAssetsLoader,
   });
@@ -21,6 +23,8 @@ class RealtimeSdk extends base.RealtimeSdk {
     Duration? requestTimeout,
     RealtimeTokenProvider? tokenProvider,
     RealtimeClientFactory? clientFactory,
+    InteractionControlPlaneFactory? interactionControlPlaneFactory,
+    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
     RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
     Iterable<RealtimeProviderPlugin> additionalPlugins = const [],
     Iterable<RealtimeProviderDriver> drivers = const [],
@@ -36,6 +40,8 @@ class RealtimeSdk extends base.RealtimeSdk {
       plugins: registry.resolvePlugins(additionalPlugins: additionalPlugins),
       tokenProvider: tokenProvider,
       clientFactory: clientFactory,
+      interactionControlPlaneFactory: interactionControlPlaneFactory,
+      featurePlugins: featurePlugins,
       driverRegistry: registry,
       webAssetsLoader: webAssetsLoader,
     );

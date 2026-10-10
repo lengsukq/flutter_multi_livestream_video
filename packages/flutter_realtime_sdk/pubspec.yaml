@@ -12,6 +12,10 @@ dependencies:
   flutter_realtime_sdk_runtime:
     path: ../flutter_realtime_sdk_runtime
 dev_dependencies:
+  flutter_realtime_classroom_preset:
+    path: ../flutter_realtime_classroom_preset
+  flutter_realtime_live_preset:
+    path: ../flutter_realtime_live_preset
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0

@@ -58,6 +58,8 @@ class DefaultInteractionSession implements InteractionSession {
     required this.senderId,
     required this.transport,
     this.controlPlane,
+    this.revisionTransport,
+    this.snapshotPollInterval = const Duration(seconds: 5),
   }) {
     _subscription = transport.frames.listen(
       _receive,
@@ -65,6 +67,23 @@ class DefaultInteractionSession implements InteractionSession {
         if (!_disposed) _errors.add(error);
       },
     );
+    if (controlPlane != null) {
+      _revisionSubscription = revisionTransport?.revisions.listen(
+        (revision) {
+          if (revision > (currentSnapshot?.revision ?? -1)) _queueRefresh();
+        },
+        onError: (Object error) {
+          if (!_disposed) _errors.add(error);
+        },
+      );
+      if (snapshotPollInterval > Duration.zero) {
+        _snapshotPoll = Timer.periodic(
+          snapshotPollInterval,
+          (_) => _queueRefresh(),
+        );
+      }
+      _queueRefresh();
+    }
   }
 
   @override
@@ -72,11 +91,19 @@ class DefaultInteractionSession implements InteractionSession {
   final String senderId;
   final InteractionTransport transport;
   final InteractionControlPlane? controlPlane;
+  final InteractionRevisionTransport? revisionTransport;
+  final Duration snapshotPollInterval;
   final _events = StreamController<InteractionEvent>.broadcast();
   final _errors = StreamController<Object>.broadcast();
+  final _snapshots = StreamController<InteractionSnapshot>.broadcast();
   final _seenIds = <String>{};
   static final _random = Random.secure();
   late final StreamSubscription<InteractionFrame> _subscription;
+  StreamSubscription<int>? _revisionSubscription;
+  Timer? _snapshotPoll;
+  Future<InteractionSnapshot>? _pendingRefresh;
+  InteractionSnapshot? _currentSnapshot;
+  bool _refreshQueued = false;
   Future<void>? _disposal;
   bool _disposed = false;
 
@@ -99,6 +126,26 @@ class DefaultInteractionSession implements InteractionSession {
 
   @override
   Stream<Object> get errors => _errors.stream;
+
+  @override
+  Stream<InteractionSnapshot> get snapshots => _snapshots.stream;
+
+  @override
+  InteractionSnapshot? get currentSnapshot => _currentSnapshot;
+
+  void _queueRefresh() {
+    if (_disposed || controlPlane == null) return;
+    if (_pendingRefresh != null) {
+      _refreshQueued = true;
+      return;
+    }
+    unawaited(
+      refresh().catchError((Object error) {
+        if (!_disposed) _errors.add(error);
+        return currentSnapshot ?? InteractionSnapshot(revision: 0, state: {});
+      }),
+    );
+  }
 
   void _receive(InteractionFrame frame) {
     if (_disposed ||
@@ -153,12 +200,34 @@ class DefaultInteractionSession implements InteractionSession {
 
   @override
   Future<InteractionSnapshot> snapshot() async {
+    return refresh();
+  }
+
+  @override
+  Future<InteractionSnapshot> refresh() {
     if (_disposed) throw StateError('Interaction session is disposed');
     final plane = controlPlane;
     if (plane == null) {
       throw UnsupportedError('No authoritative interaction control plane');
     }
-    return await plane.snapshot();
+    return _pendingRefresh ??= plane
+        .snapshot()
+        .then((next) {
+          final previous = _currentSnapshot;
+          if (!_disposed &&
+              (previous == null || next.revision > previous.revision)) {
+            _currentSnapshot = next;
+            _snapshots.add(next);
+          }
+          return _currentSnapshot ?? next;
+        })
+        .whenComplete(() {
+          _pendingRefresh = null;
+          if (_refreshQueued && !_disposed) {
+            _refreshQueued = false;
+            _queueRefresh();
+          }
+        });
   }
 
   @override
@@ -168,7 +237,9 @@ class DefaultInteractionSession implements InteractionSession {
     if (plane == null) {
       throw UnsupportedError('No authoritative interaction control plane');
     }
-    return await plane.execute(command);
+    final result = await plane.execute(command);
+    _queueRefresh();
+    return result;
   }
 
   @override
@@ -176,9 +247,13 @@ class DefaultInteractionSession implements InteractionSession {
 
   Future<void> _dispose() async {
     _disposed = true;
+    _snapshotPoll?.cancel();
+    await _revisionSubscription?.cancel();
     await _subscription.cancel();
+    await revisionTransport?.dispose();
     await transport.dispose();
     await _events.close();
     await _errors.close();
+    await _snapshots.close();
   }
 }

@@ -202,18 +202,33 @@ abstract interface class InteractionTransport {
   Future<void> dispose();
 }
 
+/// A notification that the trusted state may have advanced. Hints received
+/// over RTC or IM are never a valid command or an authoritative state change.
+abstract interface class InteractionRevisionTransport {
+  Stream<int> get revisions;
+  Future<void> publish(int revision);
+  Future<void> dispose();
+}
+
 /// UI-independent public interaction service. No provider or business types.
 abstract interface class InteractionSession {
   String get roomCode;
   InteractionCapabilities get capabilities;
   Stream<InteractionEvent> get events;
   Stream<Object> get errors;
+
+  /// Non-replaying stream; read [currentSnapshot] for a late subscriber.
+  Stream<InteractionSnapshot> get snapshots;
+  InteractionSnapshot? get currentSnapshot;
   Future<void> publish(
     String topic,
     Map<String, Object?> payload, {
     InteractionPublishOptions options = const InteractionPublishOptions(),
   });
   Future<InteractionSnapshot> snapshot();
+
+  /// Reloads authoritative state, deduplicated against concurrent reloads.
+  Future<InteractionSnapshot> refresh();
   Future<InteractionCommandResult> execute(InteractionCommand command);
   Future<void> dispose();
 }

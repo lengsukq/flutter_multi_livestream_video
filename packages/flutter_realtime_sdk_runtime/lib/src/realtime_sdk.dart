@@ -11,6 +11,7 @@ import 'provider_plugin.dart';
 import 'provider_web_assets.dart';
 import 'provider_web_session_wrapper.dart';
 import 'realtime_client.dart';
+import 'realtime_feature_registry.dart';
 import 'realtime_error.dart';
 import 'realtime_room.dart';
 import 'realtime_chat_room.dart';
@@ -30,6 +31,8 @@ class RealtimeSdk {
     required Iterable<RealtimeProviderPlugin> plugins,
     RealtimeTokenProvider? tokenProvider,
     RealtimeClientFactory? clientFactory,
+    this.interactionControlPlaneFactory,
+    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
     this.driverRegistry,
     RealtimeProviderWebAssetsLoader? webAssetsLoader,
     Future<void> Function(String providerId)? chatAssetsLoader,
@@ -43,6 +46,7 @@ class RealtimeSdk {
          ),
        ),
        _tokenProvider = tokenProvider,
+       featurePlugins = List.unmodifiable(featurePlugins),
        _clientFactory = clientFactory;
 
   final String? backendUrl;
@@ -51,6 +55,8 @@ class RealtimeSdk {
   final RealtimeDriverRegistry? driverRegistry;
   final RealtimeTokenProvider? _tokenProvider;
   final RealtimeClientFactory? _clientFactory;
+  final InteractionControlPlaneFactory? interactionControlPlaneFactory;
+  final List<RealtimeFeaturePlugin> featurePlugins;
   RealtimeRuntimePlatform get platform =>
       driverRegistry?.platform ?? resolveRealtimeRuntimePlatform();
 
@@ -167,6 +173,8 @@ class RealtimeSdk {
         chatRegistry: plugins.chat,
         tokenProvider: _tokenProvider,
         publicProviderResolver: driverRegistry?.publicProviderForEngine,
+        interactionControlPlaneFactory: interactionControlPlaneFactory,
+        featurePlugins: featurePlugins,
       );
 
   /// Lists backend-provisioned rooms without exposing a lower-level client.

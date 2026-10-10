@@ -16,36 +16,37 @@ class _FakeSystemChat implements ChatSystemMessaging {
 void main() {
   test('product Chat transport validates room and event envelope', () async {
     final chat = _FakeSystemChat();
-    final transport = ClassroomChatRevisionTransport(chat, roomCode: 'lesson1');
+    final transport = ChatInteractionRevisionTransport(
+      chat,
+      roomCode: 'lesson1',
+      eventType: 'classroom.state.changed',
+    );
     final revisions = <int>[];
     final sub = transport.revisions.listen(revisions.add);
-    final now = DateTime.now().millisecondsSinceEpoch;
     chat.controller.add(
-      ClassroomRevisionEvent(
-        roomCode: 'lesson1',
-        revision: 3,
-        eventId: 'event-3',
-        timestampMs: now,
-      ).encode(),
+      InteractionRevisionHintCodec.encode(
+        'lesson1',
+        3,
+        type: 'classroom.state.changed',
+      ),
     );
     chat.controller.add(
-      ClassroomRevisionEvent(
-        roomCode: 'other',
-        revision: 999,
-        eventId: 'event-4',
-        timestampMs: now,
-      ).encode(),
+      InteractionRevisionHintCodec.encode(
+        'other',
+        999,
+        type: 'classroom.state.changed',
+      ),
     );
     await Future<void>.delayed(Duration.zero);
     expect(revisions, [3]);
     await transport.publish(4);
     expect(chat.outbound, hasLength(1));
-    final parsed = ClassroomRevisionEvent.decode(
+    final parsed = InteractionRevisionHintCodec.decode(
       chat.outbound.single,
-      expectedRoomCode: 'lesson1',
-      nowMs: DateTime.now().millisecondsSinceEpoch,
+      roomCode: 'lesson1',
+      expectedType: 'classroom.state.changed',
     );
-    expect(parsed?.revision, 4);
+    expect(parsed, 4);
     await sub.cancel();
     await transport.dispose();
     await chat.controller.close();
@@ -54,8 +55,12 @@ void main() {
     'live hints are isolated from classroom hints on the same chat',
     () async {
       final chat = _FakeSystemChat();
-      final classroom = ClassroomChatRevisionTransport(chat, roomCode: 'room1');
-      final live = ClassroomChatRevisionTransport(
+      final classroom = ChatInteractionRevisionTransport(
+        chat,
+        roomCode: 'room1',
+        eventType: 'classroom.state.changed',
+      );
+      final live = ChatInteractionRevisionTransport(
         chat,
         roomCode: 'room1',
         eventType: 'live.interaction.changed',
@@ -66,12 +71,11 @@ void main() {
       await live.publish(2);
       chat.controller.add(chat.outbound.single);
       chat.controller.add(
-        ClassroomRevisionEvent(
-          roomCode: 'room1',
-          revision: 3,
-          eventId: 'classroom-3',
-          timestampMs: DateTime.now().millisecondsSinceEpoch,
-        ).encode(),
+        InteractionRevisionHintCodec.encode(
+          'room1',
+          3,
+          type: 'classroom.state.changed',
+        ),
       );
       await Future<void>.delayed(Duration.zero);
       expect(classroomRevisions, [3]);
