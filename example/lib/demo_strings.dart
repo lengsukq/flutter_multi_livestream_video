@@ -225,13 +225,15 @@ class DemoStrings {
   String get cloudRecording => isZh ? '云录制' : 'Cloud recording';
   String get stopCloudRecording => isZh ? '停止云录制' : 'Stop cloud recording';
   String get viewRecordingResult => isZh ? '查看录制结果' : 'View recording result';
-  String get recordingLocalPending =>
-      isZh ? '已请求本地录制，请确认授权。' : 'Local recording requested. Confirm the permission prompt.';
-  String get recordingCloudPending =>
-      isZh ? '云端录制任务已创建，停止后需要等待云端文件处理完成。'
+  String get recordingLocalPending => isZh
+      ? '已请求本地录制，请确认授权。'
+      : 'Local recording requested. Confirm the permission prompt.';
+  String get recordingCloudPending => isZh
+      ? '云端录制任务已创建，停止后需要等待云端文件处理完成。'
       : 'Cloud recording started. The file needs server-side processing after stopping.';
-  String get cloudRecordingUnsupported =>
-      isZh ? '云端录制目前仅支持 LiveKit' : 'Cloud recording currently supports LiveKit only';
+  String get cloudRecordingUnsupported => isZh
+      ? '云端录制目前仅支持 LiveKit'
+      : 'Cloud recording currently supports LiveKit only';
   String get chooseCloudRecordingLayout =>
       isZh ? '选择云端录制布局' : 'Choose a cloud recording layout';
   String get gridModePreferred => isZh ? '宫格模式（推荐）' : 'Grid (recommended)';
