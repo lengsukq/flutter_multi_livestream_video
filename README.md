@@ -69,6 +69,10 @@ For four independent integration patterns and a custom feature plugin, see
 
 See [纯功能 SDK 接入与 UI 可选指南](doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) for API, lifecycle, permissions, RTC/IM members and snippets; **no separate Headless Demo is maintained**.
 
+Local recording: [真实本地录制支持范围、Web 下载、Native 文件导出、限制与验收](doc/LOCAL_RECORDING.md). Native recording remains pending device E2E acceptance.
+
+Cloud recording V1: [LiveKit Egress 自托管云端录制、参数与 Demo MP4 导出](doc/CLOUD_RECORDING.md). The SDK controls layout, start/stop, progress and export across platforms. **No S3 integration**: self-hosted Egress writes to a shared mounted volume, and the Demo backend serves single-use authorized downloads. LiveKit Cloud hosted Egress cannot write MP4 without configured storage. Other vendors are blueprint-only.
+
 ## Architecture and behavior
 
 Runtime coordinates provider-neutral rooms. Providers own native APIs, platform support and processed-video input probes. UI packages render immutable state and delegate member operations, unread tracking and device initialization to controllers. Classroom revisions are invalidation hints; backend state remains authoritative.
