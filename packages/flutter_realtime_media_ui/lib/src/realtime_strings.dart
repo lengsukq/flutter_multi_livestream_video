@@ -148,12 +148,27 @@ class RealtimeStrings {
       ? '正在建立连接，成功后会直接进入房间。'
       : 'Connecting now. You will enter the room automatically.';
   String get connecting => isZh ? '连接中' : 'Connecting';
+  String get joining => isZh ? '正在加入' : 'Joining';
+  String get leaving => isZh ? '正在离开' : 'Leaving';
+  String get idleLabel => isZh ? '未开始' : 'Idle';
+  String get disposedLabel => isZh ? '已结束' : 'Ended';
   String get reconnecting => isZh ? '正在重新连接' : 'Reconnecting';
   String get reconnectingDetail => isZh
       ? '正在尝试恢复音视频连接，请稍候。'
       : 'Trying to restore audio and video. Please wait.';
   String get connectionFailed => isZh ? '连接失败' : 'Connection failed';
   String get ended => isZh ? '房间已结束' : 'Room ended';
+  String mediaConnectionState(MediaSessionState state) => switch (state) {
+    MediaSessionState.idle => idleLabel,
+    MediaSessionState.joining => joining,
+    MediaSessionState.connecting => connecting,
+    MediaSessionState.connected => connected,
+    MediaSessionState.reconnecting => reconnecting,
+    MediaSessionState.leaving => leaving,
+    MediaSessionState.ended => ended,
+    MediaSessionState.failed => connectionFailed,
+    MediaSessionState.disposed => disposedLabel,
+  };
   String get participants => isZh ? '成员' : 'Participants';
   String get switchCamera => isZh ? '切换摄像头' : 'Switch camera';
   String get speakerView => isZh ? '发言人' : 'Speaker';
@@ -478,6 +493,9 @@ class RealtimeStrings {
   String get closeCommentInput => isZh ? '收起评论输入' : 'Close comment input';
   String get shareScreen => screenShare;
   String get classroomFeedback => isZh ? '课堂互动反馈' : 'Classroom feedback';
+  String get classroomTools => isZh ? '课堂工具' : 'Classroom tools';
+  String get classroomToolsDescription =>
+      isZh ? '课堂工具（公告、作业、倒计时）' : 'Classroom tools (notices, homework, timer)';
   List<String> get quickReplyPhrases => isZh
       ? const ['收到 👍', '好的，明白', '赞同 💯', '稍等一下', '感谢分享!']
       : const [

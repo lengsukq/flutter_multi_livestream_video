@@ -20,6 +20,9 @@ class RealtimeRoomInfo extends StatelessWidget {
 }
 
 /// Connection status that can be placed beside the title or over the video.
+///
+/// Renders as a [RealtimePill] so it matches the surrounding glassmorphic
+/// header instead of the default Material chip, with a localized label.
 class RealtimeConnectionIndicator extends StatelessWidget {
   const RealtimeConnectionIndicator({super.key});
 
@@ -30,20 +33,44 @@ class RealtimeConnectionIndicator extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         final state = controller.snapshot.state;
+        final strings = RealtimeStrings.of(context);
+        final (foreground, background, border, dot) = switch (state) {
+          MediaSessionState.connected => (
+            const Color(0xFF059669),
+            const Color(0xFF10B981).withValues(alpha: 0.15),
+            const Color(0xFF10B981).withValues(alpha: 0.35),
+            const Color(0xFF10B981),
+          ),
+          MediaSessionState.connecting ||
+          MediaSessionState.joining ||
+          MediaSessionState.reconnecting ||
+          MediaSessionState.leaving => (
+            const Color(0xFFD97706),
+            const Color(0xFFF59E0B).withValues(alpha: 0.15),
+            const Color(0xFFF59E0B).withValues(alpha: 0.4),
+            const Color(0xFFF59E0B),
+          ),
+          MediaSessionState.failed => (
+            const Color(0xFFDC2626),
+            const Color(0xFFEF4444).withValues(alpha: 0.12),
+            const Color(0xFFEF4444).withValues(alpha: 0.4),
+            const Color(0xFFEF4444),
+          ),
+          _ => (
+            RealtimeUiTokens.textMuted,
+            RealtimeUiTokens.surfaceSubtle,
+            RealtimeUiTokens.border,
+            null,
+          ),
+        };
         return Semantics(
-          label: 'Connection: ${state.name}',
-          child: Chip(
-            label: Text(state.name),
-            avatar: Icon(
-              state == MediaSessionState.connected
-                  ? Icons.circle
-                  : Icons.info_outline,
-              size: 12,
-              color: state == MediaSessionState.connected
-                  ? Colors.green
-                  : Colors.orange,
-            ),
-            visualDensity: VisualDensity.compact,
+          label: 'Connection: ${strings.mediaConnectionState(state)}',
+          child: RealtimePill(
+            label: strings.mediaConnectionState(state),
+            leadingDotColor: dot,
+            foreground: foreground,
+            background: background,
+            borderColor: border,
           ),
         );
       },

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_classroom_ui/flutter_realtime_classroom_ui.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
+import 'meeting_dock.dart';
 import 'room_ui_controller.dart';
 
 /// Student hand-raise action that can live in any toolbar.
@@ -317,8 +318,15 @@ class RealtimeClassroomFeedbackButton extends StatelessWidget {
 }
 
 /// Exposes the existing feature-complete tools panel as an independent widget.
+///
+/// Renders as a [RealtimeDockItem] so it matches the meeting dock; pass
+/// [showLabel] when it sits inside a labeled dock, leave it off for bare
+/// icon rows such as the composable template.
 class RealtimeClassroomToolsButton extends StatelessWidget {
-  const RealtimeClassroomToolsButton({super.key});
+  const RealtimeClassroomToolsButton({super.key, this.showLabel = false});
+
+  final bool showLabel;
+
   @override
   Widget build(BuildContext context) {
     final classroom = RealtimeRoomUiScope.of(context).room.classroom;
@@ -330,10 +338,12 @@ class RealtimeClassroomToolsButton extends StatelessWidget {
         if (state?.capabilities.canUseTools != true) {
           return const SizedBox.shrink();
         }
-        final zh = RealtimeStrings.of(context).isZh;
-        return IconButton(
-          tooltip: zh ? '课堂工具（公告、作业、倒计时）' : 'Classroom tools',
-          icon: const Icon(Icons.build_outlined),
+        final strings = RealtimeStrings.of(context);
+        return RealtimeDockItem(
+          icon: Icons.build_outlined,
+          label: strings.classroomTools,
+          tooltip: strings.classroomToolsDescription,
+          showLabel: showLabel,
           onPressed: () => showModalBottomSheet<void>(
             context: context,
             isScrollControlled: true,
