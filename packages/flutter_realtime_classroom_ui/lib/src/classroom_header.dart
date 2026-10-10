@@ -62,7 +62,9 @@ extension _ClassroomHeader on _ClassroomPanelState {
                     ),
                     const SizedBox(width: 6),
                     RealtimePill(
-                      label: strings.t(s.isTeacher ? 'teacherRole' : 'studentRole'),
+                      label: strings.t(
+                        s.isTeacher ? 'teacherRole' : 'studentRole',
+                      ),
                       foreground: s.isTeacher
                           ? RealtimeUiTokens.primary
                           : RealtimeUiTokens.textMuted,

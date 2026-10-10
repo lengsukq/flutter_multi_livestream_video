@@ -22,10 +22,10 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
     final canPublish = role != MediaRole.viewer;
     final capabilities = _previewCapabilities(canPublish);
     return LiveKitLocalPreviewSession._(
-        role: role,
-        capabilities: capabilities,
-        cameraTrack: null,
-      );
+      role: role,
+      capabilities: capabilities,
+      cameraTrack: null,
+    );
   }
 
   static MediaCapabilities _previewCapabilities(bool canPublish) {

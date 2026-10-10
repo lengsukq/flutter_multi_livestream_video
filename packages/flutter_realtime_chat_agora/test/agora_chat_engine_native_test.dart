@@ -228,30 +228,62 @@ void main() {
     },
   );
 
-  test('unconfirmed native send times out without inserting a message', () async {
-    final messages = <Map<String, Object?>>[];
-    engine.sendTimeout = const Duration(milliseconds: 5);
-    await engine.connect(_info, AgoraChatEngineEvents(onMessage: messages.add));
-    await expectLater(engine.sendMessage('Unconfirmed'), throwsA(
-      isA<RealtimeException>().having((error) => error.code, 'code', RealtimeErrorCode.timeout)));
-    expect(messages, isEmpty);
-  });
+  test(
+    'unconfirmed native send times out without inserting a message',
+    () async {
+      final messages = <Map<String, Object?>>[];
+      engine.sendTimeout = const Duration(milliseconds: 5);
+      await engine.connect(
+        _info,
+        AgoraChatEngineEvents(onMessage: messages.add),
+      );
+      await expectLater(
+        engine.sendMessage('Unconfirmed'),
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.timeout,
+          ),
+        ),
+      );
+      expect(messages, isEmpty);
+    },
+  );
 
-  test('disconnect cancels a pending send and ignores its late confirmation', () async {
-    final messages = <Map<String, Object?>>[];
-    await engine.connect(_info, AgoraChatEngineEvents(onMessage: messages.add));
-    final sending = engine.sendMessage('Cancelled');
-    final cancelled = expectLater(sending, throwsA(isA<RealtimeException>()
-      .having((error) => error.code, 'code', RealtimeErrorCode.cancelled)));
-    await Future<void>.delayed(Duration.zero);
-    await engine.disconnect();
-    await cancelled;
-    await _nativeEvent('com.chat.im/chat_message', 'onMessageSuccess', {
-      'localId': client.sent!['msgId'],
-      'message': {...client.sent!, 'msgId': 'late-server-message', 'from': _info.providerUserId},
-    });
-    expect(messages, isEmpty);
-  });
+  test(
+    'disconnect cancels a pending send and ignores its late confirmation',
+    () async {
+      final messages = <Map<String, Object?>>[];
+      await engine.connect(
+        _info,
+        AgoraChatEngineEvents(onMessage: messages.add),
+      );
+      final sending = engine.sendMessage('Cancelled');
+      final cancelled = expectLater(
+        sending,
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.cancelled,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      await engine.disconnect();
+      await cancelled;
+      await _nativeEvent('com.chat.im/chat_message', 'onMessageSuccess', {
+        'localId': client.sent!['msgId'],
+        'message': {
+          ...client.sent!,
+          'msgId': 'late-server-message',
+          'from': _info.providerUserId,
+        },
+      });
+      expect(messages, isEmpty);
+    },
+  );
 
   for (final staleUser in ['provider-user-1', 'previous-user']) {
     test('clears stale login for $staleUser before reauthentication', () async {

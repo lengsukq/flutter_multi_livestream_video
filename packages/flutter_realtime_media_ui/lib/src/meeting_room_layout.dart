@@ -303,7 +303,9 @@ class _MeetingTopBar extends StatelessWidget {
                     icon: Icons.record_voice_over_rounded,
                     foreground: const Color(0xFF059669),
                     background: const Color(0xFF10B981).withValues(alpha: 0.16),
-                    borderColor: const Color(0xFF10B981).withValues(alpha: 0.35),
+                    borderColor: const Color(
+                      0xFF10B981,
+                    ).withValues(alpha: 0.35),
                   ),
                 );
               }

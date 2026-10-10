@@ -20,7 +20,10 @@ class RealtimeMediaModeration {
 }
 
 class RealtimeChatModeration
-    implements ChatModeration, ChatModerationCapabilitySource, ChatMessageDeleteAction {
+    implements
+        ChatModeration,
+        ChatModerationCapabilitySource,
+        ChatMessageDeleteAction {
   const RealtimeChatModeration(this.session, [this.controlPlane]);
   final ChatSession session;
   final ChatModeration? controlPlane;

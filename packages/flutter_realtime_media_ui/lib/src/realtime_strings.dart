@@ -359,7 +359,8 @@ class RealtimeStrings {
   String get endBroadcastConfirmation =>
       isZh ? '确定要结束本场直播吗？' : 'Are you sure you want to end this live stream?';
   String get anchorTag => isZh ? '主播' : 'Host';
-  String get waitingForHost => isZh ? '等待主播开播…' : 'Waiting for host to broadcast…';
+  String get waitingForHost =>
+      isZh ? '等待主播开播…' : 'Waiting for host to broadcast…';
   String get cameraOff => isZh ? '摄像头已关闭' : 'Camera is off';
   String get mute => isZh ? '静音' : 'Mute';
 

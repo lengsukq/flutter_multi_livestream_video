@@ -125,7 +125,9 @@ class BackgroundEffectSelector extends StatelessWidget {
               return ChoiceChip(
                 label: Text(preset.label),
                 avatar: ClipRRect(
-                  borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.compactRadius,
+                  ),
                   child: Image.memory(
                     _decoderBytes(preset.imageBytes),
                     width: 32,
