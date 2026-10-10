@@ -9,6 +9,7 @@ export 'src/meeting_dock.dart';
 export 'src/room_chat_components.dart';
 export 'src/room_classroom_components.dart';
 export 'src/room_classroom_interactions.dart';
+export 'src/classroom_event_overlay.dart';
 export 'src/room_classroom_activities.dart';
 export 'src/room_live_components.dart';
 export 'src/system_toolbar_entry.dart';

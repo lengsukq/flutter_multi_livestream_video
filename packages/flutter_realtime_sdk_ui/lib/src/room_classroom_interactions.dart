@@ -331,8 +331,9 @@ class RealtimeClassroomToolsButton extends StatelessWidget {
         if (state?.capabilities.canUseTools != true) {
           return const SizedBox.shrink();
         }
+        final zh = Localizations.localeOf(context).languageCode == 'zh';
         return IconButton(
-          tooltip: 'Classroom tools',
+          tooltip: zh ? '课堂工具（公告、作业、倒计时）' : 'Classroom tools',
           icon: const Icon(Icons.build_outlined),
           onPressed: () => showModalBottomSheet<void>(
             context: context,

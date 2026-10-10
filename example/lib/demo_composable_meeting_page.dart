@@ -275,6 +275,8 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                             showLabel: wide,
                           ),
                           if (widget.room.classroom != null)
+                            const RealtimeClassroomToolsButton(),
+                          if (widget.room.classroom != null)
                             RealtimeDockItem(
                               icon: Icons.school_outlined,
                               label: zh ? '课堂管理' : 'Classroom',
@@ -379,10 +381,24 @@ class _DemoMeetingStage extends StatelessWidget {
     final controller = RealtimeRoomUiScope.of(context);
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) => RealtimeSharedContentStage(
-        members: controller.snapshot.contentShareTrack != null
-            ? const RealtimeScreenShareStage()
-            : const RealtimeVideoGrid(),
+      builder: (context, _) => Stack(
+        fit: StackFit.expand,
+        children: [
+          RealtimeSharedContentStage(
+            members: controller.snapshot.contentShareTrack != null
+                ? const RealtimeScreenShareStage()
+                : const RealtimeVideoGrid(),
+          ),
+          if (controller.room.classroom != null)
+            Positioned(
+              top: 8,
+              left: 12,
+              right: 12,
+              child: RealtimeClassroomEventOverlay(
+                classroom: controller.room.classroom!,
+              ),
+            ),
+        ],
       ),
     );
   }

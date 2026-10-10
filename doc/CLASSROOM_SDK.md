@@ -231,6 +231,48 @@ Students see only their own attendance; teachers see student records. Stats
 separate online participants, online students and students seen this session.
 `chatMessages` is explicitly labelled as this device's cached messages.
 
+### Composable meeting notifications and shared countdown
+
+The optional `flutter_realtime_sdk_ui` package exposes
+`RealtimeClassroomEventOverlay`. Place it anywhere inside the host's meeting
+stage `Stack`, independently of the tools/participants/chat panels:
+
+```dart
+Stack(
+  children: [
+    const RealtimeVideoGrid(),
+    if (room.classroom != null)
+      Positioned(
+        top: 8,
+        left: 12,
+        right: 12,
+        child: RealtimeClassroomEventOverlay(classroom: room.classroom!),
+      ),
+  ],
+)
+```
+
+The overlay subscribes to the existing authoritative `ClassroomSession.events`
+and `.notifications` streams and renders short-lived named-action bubbles for
+hands, speaking grants, questions and classroom tool publications. It never
+replays old notifications on initial join, but renders any currently active
+timer immediately from the initial snapshot. Multiple bubbles stack briefly
+without blocking touches behind the overlay. It does not depend on the legacy
+`ClassroomControlButton` and can be used with independently placed panels.
+
+Teachers can open the existing `RealtimeClassroomToolsButton` (which displays
+`ClassroomToolsPanel`) for announcements, homework, and start/stop timer. The
+composable Meeting Demo uses both components. No new transport or cloud service
+is required: trusted HTTP classroom state and revision hints synchronize remote
+participants, with the existing polling fallback. The countdown is computed
+locally from the server-provided absolute deadline: client clock skew and hint
+delivery delay may affect second-level alignment, so this is not a guaranteed
+high-precision synchronized clock. Homework remains publication/viewing only.
+
+The SDK overlay shows recent transient events; historical notices and homework
+are available in `ClassroomToolsPanel`. A durable, searchable audit trail of
+every speaking/hand action is not part of the current backend contract.
+
 Materials accept HTTP(S) links and open via the host platform's URL launcher.
 There is no file picker, storage service, upload endpoint or document preview
 engine in the Demo. Hosts can implement `ClassroomMaterialUploader` and call
