@@ -3,7 +3,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
     show SharedContentStatus;
+import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart'
+    show ClassroomFeedbackKind;
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
+import 'room_classroom_activities.dart';
+import 'room_classroom_interactions.dart';
 import 'room_control_components.dart';
 import 'room_ui_controller.dart';
 
@@ -46,8 +50,10 @@ class RealtimeDockItem extends StatelessWidget {
     Color iconColor;
 
     if (isDanger) {
-      iconBgColor = theme.colorScheme.error;
-      iconColor = theme.colorScheme.onError;
+      iconBgColor = const Color(
+        0xFFFF3B30,
+      ).withValues(alpha: isDark ? 0.35 : 0.14);
+      iconColor = const Color(0xFFFF3B30);
     } else if (isActive) {
       iconBgColor = primaryColor.withValues(alpha: isDark ? 0.35 : 0.18);
       iconColor = primaryColor;
@@ -69,11 +75,11 @@ class RealtimeDockItem extends StatelessWidget {
               ? Text('$badgeCount', style: const TextStyle(fontSize: 9))
               : null,
           child: Container(
-            width: 38,
-            height: 38,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
               color: iconBgColor,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(13),
               border: isActive && !isDanger
                   ? Border.all(
                       color: primaryColor.withValues(alpha: 0.4),
@@ -455,6 +461,157 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
           activeColor: Colors.amber.shade700,
         );
       },
+    );
+  }
+}
+
+/// Dock raise-hand button aligned with [RealtimeDockItem] geometry and badges.
+class RealtimeDockRaiseHandButton extends StatelessWidget {
+  const RealtimeDockRaiseHandButton({super.key, this.showLabel = true});
+  final bool showLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = RealtimeRoomUiScope.of(context);
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final state = controller.classroomState;
+        if (state == null || !controller.canRaiseHand) {
+          return const SizedBox.shrink();
+        }
+        final raised = state.students.any(
+          (student) => student.userId == state.selfUserId && student.handRaised,
+        );
+        return RealtimeDockItem(
+          icon: raised ? Icons.pan_tool_rounded : Icons.pan_tool_outlined,
+          label: zh ? (raised ? '已举手' : '举手') : (raised ? 'Lower' : 'Raise'),
+          isActive: raised,
+          activeColor: Colors.amber.shade700,
+          showLabel: showLabel,
+          onPressed: controller.isPending(RealtimeRoomUiAction.classroom)
+              ? null
+              : () async {
+                  await controller.setHandRaised(!raised);
+                },
+        );
+      },
+    );
+  }
+}
+
+/// Dock feedback popup button aligned with [RealtimeDockItem] geometry.
+class RealtimeDockFeedbackButton extends StatelessWidget {
+  const RealtimeDockFeedbackButton({super.key, this.showLabel = true});
+  final bool showLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = RealtimeRoomUiScope.of(context);
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        if (controller.classroomState?.capabilities.canSendFeedback != true) {
+          return const SizedBox.shrink();
+        }
+        return PopupMenuButton<ClassroomFeedbackKind>(
+          tooltip: zh ? '课堂反馈' : 'Classroom feedback',
+          child: RealtimeDockItem(
+            icon: Icons.emoji_emotions_outlined,
+            label: zh ? '反馈' : 'React',
+            showLabel: showLabel,
+          ),
+          onSelected: (kind) => controller.sendClassroomFeedback(kind),
+          itemBuilder: (_) => [
+            for (final kind in ClassroomFeedbackKind.values)
+              PopupMenuItem(value: kind, child: Text(kind.name)),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Ready-to-use tabbed Classroom Management panel for conference sidebars or sheets.
+class RealtimeClassroomPanel extends StatefulWidget {
+  const RealtimeClassroomPanel({super.key, this.onClose});
+  final VoidCallback? onClose;
+
+  @override
+  State<RealtimeClassroomPanel> createState() => _RealtimeClassroomPanelState();
+}
+
+class _RealtimeClassroomPanelState extends State<RealtimeClassroomPanel>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController = TabController(
+    length: 4,
+    vsync: this,
+  );
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final theme = Theme.of(context);
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 10),
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                tabs: [
+                  Tab(text: zh ? '提问' : 'Questions'),
+                  Tab(text: zh ? '举手' : 'Hands'),
+                  Tab(text: zh ? '花名册' : 'Roster'),
+                  Tab(text: zh ? '测验' : 'Activities'),
+                ],
+              ),
+            ),
+            if (widget.onClose != null)
+              IconButton(
+                tooltip: zh ? '关闭面板' : 'Close panel',
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.close_rounded),
+              ),
+          ],
+        ),
+        Divider(
+          height: 1,
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: const [
+              Column(
+                children: [
+                  Expanded(child: RealtimeClassroomQuestions()),
+                  Padding(
+                    padding: EdgeInsets.all(8),
+                    child: RealtimeClassroomQuestionComposer(),
+                  ),
+                ],
+              ),
+              RealtimeClassroomHandQueue(),
+              RealtimeClassroomRoster(),
+              RealtimeClassroomActivityList(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

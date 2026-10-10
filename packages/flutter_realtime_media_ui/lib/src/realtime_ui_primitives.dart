@@ -590,3 +590,167 @@ class RealtimePill extends StatelessWidget {
     );
   }
 }
+
+/// iOS-style circular gradient avatar with initials and optional online dot.
+class RealtimeAvatar extends StatelessWidget {
+  const RealtimeAvatar({
+    super.key,
+    required this.name,
+    this.size = 38.0,
+    this.isOnline = false,
+    this.showOnlineDot = false,
+    this.fontSize,
+  });
+
+  final String name;
+  final double size;
+  final bool isOnline;
+  final bool showOnlineDot;
+  final double? fontSize;
+
+  static const _palette = [
+    [Color(0xFF0EA5E9), Color(0xFF0284C7)], // Sky
+    [Color(0xFF6366F1), Color(0xFF4F46E5)], // Indigo
+    [Color(0xFF10B981), Color(0xFF059669)], // Emerald
+    [Color(0xFFF59E0B), Color(0xFFD97706)], // Amber
+    [Color(0xFFEC4899), Color(0xFFDB2777)], // Pink
+    [Color(0xFF8B5CF6), Color(0xFF7C3AED)], // Violet
+    [Color(0xFF14B8A6), Color(0xFF0D9488)], // Teal
+    [Color(0xFFF43F5E), Color(0xFFE11D48)], // Rose
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final cleanName = name.trim();
+    final initial = cleanName.isEmpty
+        ? '?'
+        : cleanName.characters.first.toUpperCase();
+    final gradientIndex = cleanName.isEmpty
+        ? 0
+        : cleanName.codeUnits.fold(0, (a, b) => a + b) % _palette.length;
+    final colors = _palette[gradientIndex];
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: colors,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.first.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                initial,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: fontSize ?? (size * 0.42),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+          ),
+          if (showOnlineDot)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: size * 0.3,
+                height: size * 0.3,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isOnline
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFF94A3B8),
+                  border: Border.all(
+                    color: Colors.white,
+                    width: size > 32 ? 2.0 : 1.5,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Standard iOS-style surface card with subtle hairline border and soft ambient shadow.
+class RealtimeCard extends StatelessWidget {
+  const RealtimeCard({
+    super.key,
+    required this.child,
+    this.padding,
+    this.margin,
+    this.radius = 20.0,
+    this.color,
+    this.borderColor,
+    this.shadow,
+    this.clipContent = true,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final EdgeInsetsGeometry? margin;
+  final double radius;
+  final Color? color;
+  final Color? borderColor;
+  final List<BoxShadow>? shadow;
+  final bool clipContent;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final card = Container(
+      margin: margin,
+      decoration: BoxDecoration(
+        color: color ?? (isDark ? const Color(0xFF1E293B) : Colors.white),
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(
+          color:
+              borderColor ??
+              (isDark
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : Colors.black.withValues(alpha: 0.06)),
+          width: 0.8,
+        ),
+        boxShadow:
+            shadow ??
+            (isDark
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : RealtimeUiTokens.iosCardShadow),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        clipBehavior: clipContent ? Clip.antiAlias : Clip.none,
+        child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+      ),
+    );
+
+    return card;
+  }
+}
