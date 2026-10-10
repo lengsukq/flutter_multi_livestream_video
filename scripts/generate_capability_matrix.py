@@ -78,9 +78,11 @@ def generate():
             expression = ' '.join(match.group(1).split()) if match else '(not explicitly declared here; inspect factory/profile defaults)'
             lines.append(f'- `{feature}`: `{expression}`')
         lines.append('')
-    for path in [ROOT / 'packages/flutter_realtime_media_web/lib/src/provider_web_profile.dart', ROOT / 'packages/flutter_realtime_media_web/lib/src/provider_web_session_factory.dart', ROOT / 'packages/flutter_realtime_video_effects/pubspec.yaml', ROOT / 'packages/flutter_realtime_sdk/lib/src/default_driver_catalog_native.dart', ROOT / 'packages/flutter_realtime_sdk/lib/src/default_driver_catalog_web.dart']:
+    # The public SDK has no built-in all-vendor catalog. Fingerprint the
+    # lightweight entry and optional provider asset registration instead.
+    for path in [ROOT / 'packages/flutter_realtime_media_web/lib/src/provider_web_profile.dart', ROOT / 'packages/flutter_realtime_media_web/lib/src/provider_web_session_factory.dart', ROOT / 'packages/flutter_realtime_video_effects/pubspec.yaml', ROOT / 'packages/flutter_realtime_sdk/pubspec.yaml', ROOT / 'packages/flutter_realtime_sdk_runtime/lib/src/provider_web_session_wrapper.dart']:
         evidence.append((path.relative_to(ROOT).as_posix(), path.read_text()))
-    lines += ['## Source fingerprints', '', 'These fingerprints make CI reject stale declarations, including changes to the full catalog or conditional Web features.', '']
+    lines += ['## Source fingerprints', '', 'These fingerprints make CI reject stale declarations, including changes to the explicit provider registrations, SDK dependency boundary and conditional Web features.', '']
     for path, source in sorted(set(evidence)):
         lines.append(f'- `{path}`: `{hashlib.sha256(source.encode()).hexdigest()[:16]}`')
     return '\n'.join(lines) + '\n'

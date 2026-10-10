@@ -83,7 +83,7 @@ Processed-video sink in adapter source: **yes**.
 
 ## Source fingerprints
 
-These fingerprints make CI reject stale declarations, including changes to the full catalog or conditional Web features.
+These fingerprints make CI reject stale declarations, including changes to the explicit provider registrations, SDK dependency boundary and conditional Web features.
 
 - `packages/flutter_realtime_chat_agora/lib/src/agora_chat_join_info.dart`: `b582e4b16a9f1033`
 - `packages/flutter_realtime_chat_core/lib/src/model/chat_role.dart`: `9b92f5cea74f4d02`
@@ -119,6 +119,6 @@ These fingerprints make CI reject stale declarations, including changes to the f
 - `packages/flutter_realtime_provider_tencent_chat/lib/src/drivers_web.dart`: `83276f7af33054a5`
 - `packages/flutter_realtime_provider_trtc/lib/src/drivers_native.dart`: `6d53143bfb145b96`
 - `packages/flutter_realtime_provider_trtc/lib/src/drivers_web.dart`: `35ce904ba8a88aa6`
-- `packages/flutter_realtime_sdk/lib/src/default_driver_catalog_native.dart`: `572dd5d48ce8db74`
-- `packages/flutter_realtime_sdk/lib/src/default_driver_catalog_web.dart`: `572dd5d48ce8db74`
+- `packages/flutter_realtime_sdk/pubspec.yaml`: `14205eebd030dfa3`
+- `packages/flutter_realtime_sdk_runtime/lib/src/provider_web_session_wrapper.dart`: `da906bcbf530dfe3`
 - `packages/flutter_realtime_video_effects/pubspec.yaml`: `30f3580d898ed16e`

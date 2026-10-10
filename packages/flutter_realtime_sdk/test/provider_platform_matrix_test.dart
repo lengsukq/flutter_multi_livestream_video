@@ -1,8 +1,14 @@
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'support/default_driver_catalog.dart';
 
 void main() {
   final drivers = createDefaultRealtimeDrivers();
+
+  test('production entry does not register implicit providers', () {
+    final sdk = RealtimeSdk.standard();
+    expect(sdk.supportedProviderIds, isEmpty);
+  });
 
   test('every platform resolves exactly its advertised provider catalog', () {
     expect(drivers, isNotEmpty);
@@ -15,7 +21,10 @@ void main() {
         for (final driver in drivers)
           if (driver.supports(platform)) driver.publicId,
       };
-      final sdk = RealtimeSdk.standard(platformResolver: () => platform);
+      final sdk = RealtimeSdk.standard(
+        platformResolver: () => platform,
+        drivers: drivers,
+      );
       expect(sdk.supportedProviderIds.toSet(), expected, reason: platform.name);
       for (final id in registry.knownProviderIds) {
         expect(

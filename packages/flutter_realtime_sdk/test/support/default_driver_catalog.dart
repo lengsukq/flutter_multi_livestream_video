@@ -1,4 +1,5 @@
-import 'provider_driver.dart';
+// Provider inventory is test-only. The production SDK has no provider deps.
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_realtime_provider_livekit/flutter_realtime_provider_livekit.dart';
 import 'package:flutter_realtime_provider_agora/flutter_realtime_provider_agora.dart';
 import 'package:flutter_realtime_provider_trtc/flutter_realtime_provider_trtc.dart';

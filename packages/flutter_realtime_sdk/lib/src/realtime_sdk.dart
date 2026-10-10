@@ -1,9 +1,7 @@
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
     as base;
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
-    hide RealtimeSdk, Realtime, ensureRealtimeProviderWebAssets;
-import 'default_driver_catalog.dart';
-import 'provider_web_assets.dart';
+    hide RealtimeSdk, Realtime;
 export 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
     show RealtimeClientFactory;
 
@@ -15,11 +13,8 @@ class RealtimeSdk extends base.RealtimeSdk {
     super.tokenProvider,
     super.clientFactory,
     super.driverRegistry,
-    RealtimeProviderWebAssetsLoader? webAssetsLoader,
-  }) : super(
-         webAssetsLoader: webAssetsLoader ?? ensureRealtimeProviderWebAssets,
-         chatAssetsLoader: webAssetsLoader == null ? _loadSelectedChat : null,
-       );
+    super.webAssetsLoader,
+  });
 
   factory RealtimeSdk.standard({
     String? backendUrl,
@@ -28,11 +23,11 @@ class RealtimeSdk extends base.RealtimeSdk {
     RealtimeClientFactory? clientFactory,
     RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
     Iterable<RealtimeProviderPlugin> additionalPlugins = const [],
-    Iterable<RealtimeProviderDriver>? drivers,
+    Iterable<RealtimeProviderDriver> drivers = const [],
     RealtimeProviderWebAssetsLoader? webAssetsLoader,
   }) {
     final registry = RealtimeDriverRegistry(
-      drivers ?? createDefaultRealtimeDrivers(),
+      drivers,
       platformResolver: platformResolver,
     );
     return RealtimeSdk(
@@ -45,14 +40,4 @@ class RealtimeSdk extends base.RealtimeSdk {
       webAssetsLoader: webAssetsLoader,
     );
   }
-}
-
-Future<void> _loadSelectedChat(String providerId) async {
-  if (!const {'agora-chat', 'ivs-chat', 'tencent-chat'}.contains(providerId)) {
-    return;
-  }
-  await ensureRealtimeProviderWebAssets(
-    mediaProviderIds: [providerId],
-    includeProductChat: true,
-  );
 }

@@ -5,11 +5,13 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_media_session.dart';
+import 'support/default_driver_catalog.dart';
 import 'support/fake_transport.dart';
 
 void main() {

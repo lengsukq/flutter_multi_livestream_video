@@ -48,7 +48,7 @@ class Realtime extends base.Realtime {
     RealtimeClientFactory? clientFactory,
     RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
     Iterable<RealtimeProviderPlugin> additionalPlugins = const [],
-    Iterable<RealtimeProviderDriver>? drivers,
+    Iterable<RealtimeProviderDriver> drivers = const [],
     RealtimeProviderWebAssetsLoader? webAssetsLoader,
   }) {
     final sdk = RealtimeSdk.standard(

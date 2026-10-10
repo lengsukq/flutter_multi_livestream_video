@@ -28,6 +28,12 @@ def closure(name):
     return result
 runtime=closure('flutter_realtime_sdk_runtime')
 assert not [n for n in runtime if n.endswith('_ui') or n.startswith('flutter_realtime_provider_') or (n.startswith('flutter_realtime_media_') and n != 'flutter_realtime_media_core')], runtime
+sdk=closure('flutter_realtime_sdk')
+assert 'flutter_realtime_sdk_runtime' in sdk, 'SDK entry must retain Runtime'
+assert not [n for n in sdk if n.endswith('_ui') or n.startswith('flutter_realtime_provider_') or (n.startswith('flutter_realtime_media_') and n != 'flutter_realtime_media_core')], sdk
+assert not [n for n in graph['flutter_realtime_sdk'] if n != 'flutter_realtime_sdk_runtime'], graph['flutter_realtime_sdk']
+assert (ROOT/'packages/flutter_realtime_sdk_runtime/lib/src/members/room_members_controller.dart').exists(), 'Member management must be owned by Runtime'
+assert not any('class RoomMembersController' in src.read_text() for src in (ROOT/'packages').glob('flutter_realtime_*_ui/lib/**/*.dart')), 'UI must not reimplement Runtime member management'
 for name in names:
     if name.endswith('_core'):
         assert not [n for n in closure(name) if n.endswith('_ui')], name
@@ -39,4 +45,4 @@ for name in names:
         text=source.read_text()
         for match in re.finditer(r"(?:import|export) 'package:([^/]+)/src/",text):
             assert match[1] == name or source.relative_to(ROOT/'packages').as_posix() in allowed, source
-print(f'{len(names)} packages: acyclic graph, UI-free runtime, one Chime implementation, public boundaries passed')
+print(f'{len(names)} packages: acyclic graph, lean SDK, UI/provider-free Runtime, Runtime-owned members, public boundaries passed')
