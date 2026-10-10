@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_example/demo_composable_meeting_page.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -35,7 +36,16 @@ void main() {
       expect(find.byType(RealtimeRoomUiScope), findsOneWidget);
       expect(find.byType(RealtimeVideoGrid), findsOneWidget);
       final leave = tester.getRect(find.byType(RealtimeLeaveButton));
-      expect(width - leave.right, lessThanOrEqualTo(32));
+      final page = tester.getRect(find.byType(DemoComposableMeetingPage));
+      final scaffold = tester.getRect(find.byType(Scaffold).first);
+      final scope = tester.getRect(find.byType(RealtimeRoomUiScope));
+      final safe = tester.getRect(find.byType(SafeArea).first);
+      expect(
+        page.right - leave.right,
+        inInclusiveRange(0, 32),
+        reason:
+            'surface=$width, page=$page, scaffold=$scaffold, scope=$scope, safe=$safe, leave=$leave',
+      );
       expect(leave.top, lessThan(90));
       expect(tester.takeException(), isNull);
     }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 /// The Demo owns the entire Pre-Join layout and navigation.
 /// All checks, preview lifecycle and device operations live in the SDK.
@@ -65,16 +66,17 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
   Future<void> _enter(MediaLocalPreviewSettings settings) =>
       widget.onEnter(context, settings);
 
-  Widget _preview(BuildContext context) => Card(
+  Widget _preview(BuildContext context) => RealtimeCard(
+    radius: 20,
     child: Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
             aspectRatio: 16 / 9,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
               child: const ColoredBox(
                 color: Color(0xFF151E2D),
                 child: RealtimePreJoinPreview(),
@@ -88,9 +90,10 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
     ),
   );
 
-  Widget _settings(BuildContext context) => Card(
+  Widget _settings(BuildContext context) => RealtimeCard(
+    radius: 20,
     child: Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -119,6 +122,7 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
         builder: (context, _) => PopScope(
           canPop: !controller.joining,
           child: Scaffold(
+            backgroundColor: RealtimeUiTokens.background,
             body: SafeArea(
               child: Stack(
                 children: [

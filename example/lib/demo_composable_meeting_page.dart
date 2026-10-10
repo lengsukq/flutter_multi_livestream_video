@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 import 'demo_background.dart';
 import 'widgets/demo_recording_widgets.dart';
@@ -139,9 +140,12 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
         );
       }
 
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+
       return RealtimeRoomUiScope(
         room: widget.room,
         child: Scaffold(
+          backgroundColor: RealtimeUiTokens.background,
           body: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -149,26 +153,59 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                 final zh = Localizations.localeOf(context).languageCode == 'zh';
                 return Column(
                   children: [
+                    // iOS style structured navigation row
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Icon(Icons.meeting_room_outlined),
-                          const SizedBox(width: 8),
-                          const Expanded(
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: RealtimeRoomInfo(),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.1)
+                                      : Colors.black.withValues(alpha: 0.04),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.meeting_room_outlined,
+                                    size: 16,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Flexible(
+                                    child: RealtimeRoomInfo(
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                           DemoRecordingBadge(room: widget.room),
                           if (wide) ...[
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 10),
                             const RealtimeConnectionIndicator(),
                           ],
+                          const SizedBox(width: 10),
                           RealtimeLeaveButton(
                             onConfirm: _confirmLeave,
                             onLeft: _onLeft,
@@ -181,12 +218,12 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                         children: [
                           const Expanded(child: _DemoMeetingStage()),
                           if (wide && _panel != _DemoSidePanel.closed)
-                            SizedBox(width: 320, child: _sidePanel()),
+                            SizedBox(width: 330, child: _sidePanel()),
                         ],
                       ),
                     ),
                     if (!wide && _panel != _DemoSidePanel.closed)
-                      SizedBox(height: 230, child: _sidePanel()),
+                      SizedBox(height: 240, child: _sidePanel()),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
                       child: RealtimeMeetingDock(
@@ -216,9 +253,8 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                         collaborationGroup: [
                           RealtimeDockSharedContentButton(showLabel: wide),
                           if (widget.room.classroom != null) ...[
-                            const RealtimeRaiseHandButton(),
-                            const RealtimeClassroomFeedbackButton(),
-                            if (wide) const RealtimeClassroomEngagement(),
+                            RealtimeDockRaiseHandButton(showLabel: wide),
+                            RealtimeDockFeedbackButton(showLabel: wide),
                           ],
                         ],
                         panelsGroup: [
@@ -283,30 +319,44 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
 
   Widget _sidePanel() {
     if (_panel == _DemoSidePanel.classroom) {
-      return _ClassroomSidePanel(
-        onClose: () => setState(() => _panel = _DemoSidePanel.closed),
+      return RealtimeCard(
+        margin: const EdgeInsets.all(8),
+        radius: 20,
+        child: RealtimeClassroomPanel(
+          onClose: () => setState(() => _panel = _DemoSidePanel.closed),
+        ),
       );
     }
     final zh = Localizations.localeOf(context).languageCode == 'zh';
-    return Card(
+    return RealtimeCard(
       margin: const EdgeInsets.all(8),
+      radius: 20,
       child: Column(
         children: [
-          Row(
-            children: [
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(switch (_panel) {
-                  _DemoSidePanel.chat => zh ? '实时聊天' : 'Chat',
-                  _ => zh ? '参会成员' : 'Participants',
-                }, style: const TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              IconButton(
-                tooltip: zh ? '关闭面板' : 'Close panel',
-                onPressed: () => setState(() => _panel = _DemoSidePanel.closed),
-                icon: const Icon(Icons.close),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    switch (_panel) {
+                      _DemoSidePanel.chat => zh ? '实时聊天' : 'Chat',
+                      _ => zh ? '参会成员' : 'Participants',
+                    },
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: zh ? '关闭面板' : 'Close panel',
+                  onPressed: () =>
+                      setState(() => _panel = _DemoSidePanel.closed),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
           ),
           const Divider(height: 1),
           Expanded(
@@ -314,83 +364,6 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
               _DemoSidePanel.chat => const RealtimeChatPanel(),
               _ => const RealtimeManagedParticipantList(),
             },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ClassroomSidePanel extends StatefulWidget {
-  const _ClassroomSidePanel({required this.onClose});
-  final VoidCallback onClose;
-
-  @override
-  State<_ClassroomSidePanel> createState() => _ClassroomSidePanelState();
-}
-
-class _ClassroomSidePanelState extends State<_ClassroomSidePanel>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(
-    length: 4,
-    vsync: this,
-  );
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
-    return Card(
-      margin: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 10),
-                  tabs: [
-                    Tab(text: zh ? '提问' : 'Questions'),
-                    Tab(text: zh ? '举手' : 'Hands'),
-                    Tab(text: zh ? '花名册' : 'Roster'),
-                    Tab(text: zh ? '测验' : 'Activities'),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: zh ? '关闭面板' : 'Close panel',
-                onPressed: widget.onClose,
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: const [
-                Column(
-                  children: [
-                    Expanded(child: RealtimeClassroomQuestions()),
-                    Padding(
-                      padding: EdgeInsets.all(8),
-                      child: RealtimeClassroomQuestionComposer(),
-                    ),
-                  ],
-                ),
-                RealtimeClassroomHandQueue(),
-                RealtimeClassroomRoster(),
-                RealtimeClassroomActivityList(),
-              ],
-            ),
           ),
         ],
       ),
