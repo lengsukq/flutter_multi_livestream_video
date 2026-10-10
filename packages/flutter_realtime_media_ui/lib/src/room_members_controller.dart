@@ -1,4 +1,89 @@
+import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
+
+/// One logical user shown across both RTC and IM, without coupling identity
+/// merging to any particular Flutter room page.
+class RoomManagedMember {
+  const RoomManagedMember({
+    required this.userId,
+    required this.displayName,
+    this.media,
+    this.chat,
+    required this.isSelf,
+  });
+
+  final String userId;
+  final String displayName;
+  final MediaRoomParticipantSummary? media;
+  final ChatMember? chat;
+  final bool isSelf;
+}
+
+class RoomMemberLoadResult {
+  RoomMemberLoadResult({
+    required List<RoomManagedMember> members,
+    required this.completed,
+    this.error,
+  }) : members = List.unmodifiable(members);
+
+  final List<RoomManagedMember> members;
+  final bool completed;
+  final Object? error;
+}
+
+/// Merge a user's media and chat presence only when their logical user IDs
+/// match. Anonymous media IDs remain distinct from authenticated chat users.
+List<RoomManagedMember> mergeRoomMembers(
+  List<MediaRoomParticipantSummary> media,
+  List<ChatMember> chat, {
+  required String localMediaParticipantId,
+  String? localChatUserId,
+}) {
+  final mediaByKey = <String, MediaRoomParticipantSummary>{};
+  final chatByKey = <String, ChatMember>{};
+  final orderedKeys = <String>[];
+
+  String mediaKey(MediaRoomParticipantSummary item) =>
+      item.userId.trim().isNotEmpty
+      ? item.userId.trim()
+      : 'media:${item.participantId}';
+
+  for (final item in media) {
+    final key = mediaKey(item);
+    mediaByKey[key] = item;
+    if (!orderedKeys.contains(key)) orderedKeys.add(key);
+  }
+  for (final item in chat) {
+    final key = item.userId.trim();
+    if (key.isEmpty) continue;
+    chatByKey[key] = item;
+    if (!orderedKeys.contains(key)) orderedKeys.add(key);
+  }
+
+  return List.unmodifiable(
+    orderedKeys.map((key) {
+      final mediaMember = mediaByKey[key];
+      final chatMember = chatByKey[key];
+      final rawName = mediaMember?.displayName.trim().isNotEmpty == true
+          ? mediaMember!.displayName.trim()
+          : chatMember?.displayName.trim().isNotEmpty == true
+          ? chatMember!.displayName.trim()
+          : key;
+      final selfByMedia = mediaMember?.participantId == localMediaParticipantId;
+      final selfByChat =
+          localChatUserId != null &&
+          localChatUserId.isNotEmpty &&
+          chatMember?.userId == localChatUserId;
+      return RoomManagedMember(
+        userId: key,
+        displayName: rawName,
+        media: mediaMember,
+        chat: chatMember,
+        isSelf: selfByMedia || selfByChat,
+      );
+    }),
+  );
+}
 
 class RoomMuteResult {
   RoomMuteResult(Map<MediaParticipant, Object> failures, this.completed)
@@ -7,9 +92,131 @@ class RoomMuteResult {
   final bool completed;
 }
 
+/// Provider-neutral administrative commands shared by legacy and composable
+/// rooms. The backend/provider remains the authority for execution.
+enum RoomMediaMemberAction { remove, mute, stopVideo, grantHost }
+
 /// Executes member operations without retaining a widget or BuildContext.
 class RoomMembersController {
   bool _busy = false;
+
+  Future<void> manageMedia(
+    MediaRoomSession room,
+    String participantId,
+    RoomMediaMemberAction action,
+  ) async {
+    if (participantId.trim().isEmpty ||
+        participantId == room.participantId ||
+        !room.isLogicalOwner) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Only the room owner can manage another participant.',
+      );
+    }
+    final capabilities = room.managementCapabilities;
+    final available = switch (action) {
+      RoomMediaMemberAction.remove => capabilities.removeParticipant.supported,
+      RoomMediaMemberAction.mute => capabilities.muteParticipant.supported,
+      RoomMediaMemberAction.stopVideo =>
+        capabilities.stopParticipantVideo.supported,
+      RoomMediaMemberAction.grantHost =>
+        capabilities.changeParticipantRole.supported,
+    };
+    if (!available) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message: 'The current provider does not support this operation.',
+      );
+    }
+    switch (action) {
+      case RoomMediaMemberAction.remove:
+        await room.removeParticipant(participantId);
+      case RoomMediaMemberAction.mute:
+        await room.muteParticipant(participantId);
+      case RoomMediaMemberAction.stopVideo:
+        await room.stopParticipantVideo(participantId);
+      case RoomMediaMemberAction.grantHost:
+        await room.changeParticipantRole(participantId, MediaRole.host);
+    }
+  }
+
+  Future<void> removeChatMember(
+    ChatModeration moderation,
+    String userId, {
+    ChatSession? session,
+  }) async {
+    final ownUserId = session is ChatSessionIdentity
+        ? (session as ChatSessionIdentity).localUserId
+        : null;
+    if (userId.trim().isEmpty || userId == ownUserId) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Cannot remove the current chat member.',
+      );
+    }
+    final capabilities = moderation is ChatModerationCapabilitySource
+        ? (moderation as ChatModerationCapabilitySource).moderationCapabilities
+        : const ChatManagementCapabilities();
+    if (!capabilities.removeMember.supported) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message: 'The current chat provider cannot remove members.',
+      );
+    }
+    await moderation.removeMember(userId);
+  }
+
+  /// Capability-aware RTC + IM roster query, independent of widget lifecycle.
+  /// Caller checks [completed] before exposing results after a room swap.
+  Future<RoomMemberLoadResult> load(
+    MediaRoomSession room, {
+    ChatSession? chatSession,
+    ChatModeration? chatModeration,
+    required bool Function() isCurrent,
+  }) async {
+    final mediaCapabilities = room.managementCapabilities;
+    final chatCapabilities = chatModeration is ChatModerationCapabilitySource
+        ? (chatModeration as ChatModerationCapabilitySource)
+              .moderationCapabilities
+        : const ChatManagementCapabilities();
+    List<MediaRoomParticipantSummary> mediaParticipants = const [];
+    List<ChatMember> chatMembers = const [];
+    final errors = <Object>[];
+
+    if (mediaCapabilities.listParticipants.supported) {
+      try {
+        mediaParticipants = await room.listParticipants();
+      } catch (error) {
+        errors.add(error);
+      }
+    }
+    if (!isCurrent()) {
+      return RoomMemberLoadResult(members: const [], completed: false);
+    }
+    if (chatModeration != null && chatCapabilities.listMembers.supported) {
+      try {
+        chatMembers = await chatModeration.listMembers();
+      } catch (error) {
+        errors.add(error);
+      }
+    }
+    if (!isCurrent()) {
+      return RoomMemberLoadResult(members: const [], completed: false);
+    }
+    return RoomMemberLoadResult(
+      members: mergeRoomMembers(
+        mediaParticipants,
+        chatMembers,
+        localMediaParticipantId: room.participantId,
+        localChatUserId: chatSession is ChatSessionIdentity
+            ? (chatSession as ChatSessionIdentity).localUserId
+            : null,
+      ),
+      completed: true,
+      error: errors.isEmpty ? null : errors.first,
+    );
+  }
+
   Future<RoomMuteResult> mute(
     MediaRoomSession room,
     List<MediaParticipant> targets, {
@@ -27,7 +234,7 @@ class RoomMembersController {
       for (final participant in targets) {
         if (!isCurrent()) return RoomMuteResult(failures, false);
         try {
-          await room.muteParticipant(participant.id);
+          await manageMedia(room, participant.id, RoomMediaMemberAction.mute);
         } catch (error, stack) {
           failures[participant] = normalizeRealtimeException(
             error,

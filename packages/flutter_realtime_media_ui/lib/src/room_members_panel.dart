@@ -279,10 +279,12 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             danger: true,
                                             onPressed: () =>
                                                 _runMemberManagement(
-                                                  () => widget.room
-                                                      .removeParticipant(
-                                                        media.participantId,
-                                                      ),
+                                                  () => _members.manageMedia(
+                                                    widget.room,
+                                                    media.participantId,
+                                                    RoomMediaMemberAction
+                                                        .remove,
+                                                  ),
                                                 ),
                                           ),
                                         if (canMuteMedia)
@@ -291,10 +293,11 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             icon: Icons.mic_off_outlined,
                                             onPressed: () =>
                                                 _runMemberManagement(
-                                                  () => widget.room
-                                                      .muteParticipant(
-                                                        media.participantId,
-                                                      ),
+                                                  () => _members.manageMedia(
+                                                    widget.room,
+                                                    media.participantId,
+                                                    RoomMediaMemberAction.mute,
+                                                  ),
                                                 ),
                                           ),
                                         if (canStopVideo)
@@ -303,10 +306,12 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             icon: Icons.videocam_off_outlined,
                                             onPressed: () =>
                                                 _runMemberManagement(
-                                                  () => widget.room
-                                                      .stopParticipantVideo(
-                                                        media.participantId,
-                                                      ),
+                                                  () => _members.manageMedia(
+                                                    widget.room,
+                                                    media.participantId,
+                                                    RoomMediaMemberAction
+                                                        .stopVideo,
+                                                  ),
                                                 ),
                                           ),
                                         if (canGrantHost)
@@ -315,11 +320,12 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             icon: Icons.shield_outlined,
                                             onPressed: () =>
                                                 _runMemberManagement(
-                                                  () => widget.room
-                                                      .changeParticipantRole(
-                                                        media.participantId,
-                                                        MediaRole.host,
-                                                      ),
+                                                  () => _members.manageMedia(
+                                                    widget.room,
+                                                    media.participantId,
+                                                    RoomMediaMemberAction
+                                                        .grantHost,
+                                                  ),
                                                 ),
                                           ),
                                         if (canRemoveChat)
@@ -329,9 +335,12 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             danger: true,
                                             onPressed: () =>
                                                 _runMemberManagement(
-                                                  () => chatModeration
-                                                      .removeMember(
+                                                  () =>
+                                                      _members.removeChatMember(
+                                                        chatModeration,
                                                         chat.userId,
+                                                        session:
+                                                            widget.chatSession,
                                                       ),
                                                 ),
                                           ),
@@ -382,77 +391,12 @@ extension _RoomMembersRendering on _MediaRoomViewState {
   }
 }
 
-class _ManagedRoomMember {
-  const _ManagedRoomMember({
-    required this.userId,
-    required this.displayName,
-    this.media,
-    this.chat,
-    required this.isSelf,
-  });
+typedef _ManagedRoomMember = RoomManagedMember;
 
-  final String userId;
-  final String displayName;
-  final MediaRoomParticipantSummary? media;
-  final ChatMember? chat;
-  final bool isSelf;
-
+extension _RoomManagedMemberLabels on RoomManagedMember {
   String roleLabel(RealtimeStrings strings) {
     final mediaRole = media?.role?.wireName;
     final chatRole = chat?.role.name;
     return strings.roleLabel(mediaRole ?? chatRole ?? 'participant');
   }
-}
-
-List<_ManagedRoomMember> _mergeManagedMembers(
-  List<MediaRoomParticipantSummary> media,
-  List<ChatMember> chat, {
-  required String localMediaParticipantId,
-  String? localChatUserId,
-}) {
-  final mediaByKey = <String, MediaRoomParticipantSummary>{};
-  final chatByKey = <String, ChatMember>{};
-  final orderedKeys = <String>[];
-
-  String mediaKey(MediaRoomParticipantSummary item) =>
-      item.userId.trim().isNotEmpty
-      ? item.userId.trim()
-      : 'media:${item.participantId}';
-
-  for (final item in media) {
-    final key = mediaKey(item);
-    mediaByKey[key] = item;
-    if (!orderedKeys.contains(key)) orderedKeys.add(key);
-  }
-  for (final item in chat) {
-    final key = item.userId.trim();
-    if (key.isEmpty) continue;
-    chatByKey[key] = item;
-    if (!orderedKeys.contains(key)) orderedKeys.add(key);
-  }
-
-  return orderedKeys
-      .map((key) {
-        final mediaMember = mediaByKey[key];
-        final chatMember = chatByKey[key];
-        final rawName = mediaMember?.displayName.trim().isNotEmpty == true
-            ? mediaMember!.displayName.trim()
-            : chatMember?.displayName.trim().isNotEmpty == true
-            ? chatMember!.displayName.trim()
-            : key;
-        final selfByMedia =
-            mediaMember?.participantId == localMediaParticipantId;
-        final selfByChat =
-            localChatUserId != null &&
-            localChatUserId.isNotEmpty &&
-            chatMember?.userId == localChatUserId;
-        return _ManagedRoomMember(
-          userId: key,
-          displayName: rawName,
-          media: mediaMember,
-          chat: chatMember,
-          isSelf: selfByMedia || selfByChat,
-        );
-      })
-      .toList(growable: false);
 }
