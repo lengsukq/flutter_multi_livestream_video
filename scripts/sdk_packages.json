@@ -32,6 +32,7 @@
   "flutter_realtime_provider_livekit",
   "flutter_realtime_provider_tencent_chat",
   "flutter_realtime_provider_trtc",
+  "flutter_realtime_recorder_native",
   "flutter_realtime_screen_annotation",
   "flutter_realtime_sdk",
   "flutter_realtime_sdk_runtime",

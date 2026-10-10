@@ -20,6 +20,8 @@ dependencies:
     sdk: flutter
   flutter_realtime_sdk:
     path: ../packages/flutter_realtime_sdk
+  flutter_realtime_recorder_native:
+    path: ../packages/flutter_realtime_recorder_native
   flutter_realtime_classroom_preset:
     path: ../packages/flutter_realtime_classroom_preset
   flutter_realtime_live_preset:
@@ -48,6 +50,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
   shared_preferences: ^2.5.3
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   integration_test:
