@@ -217,6 +217,16 @@ Provider 专属接口。未支持的操作应返回有类型的错误，不能�
 
 ## 教学工具与直播互动
 
+> **2026-10-10 架构更新：** 此处列的是已经具备的业务能力，
+> 不代表所有应用默认加载。普通 `flutter_realtime_sdk` /
+> `flutter_realtime_sdk_runtime` 不再强制依赖课堂、直播礼物或白板。
+> 需显式注册 `flutter_realtime_classroom_preset` 的 `ClassroomPreset`
+> 或 `flutter_realtime_live_preset` 的 `LivePreset`；
+> 主 SDK 也可仅使用 `room.interactions` 实现自己的瞬时互动。
+> 详见 [四种接入方式](doc/INTERACTION_PRESET_GUIDE.zh-CN.md)。
+> 下方平台能力及历史构建状态仍按 **2026-10-08** 记录，
+> 不代表本次重新完成了真实设备验收。
+
 以下为 **2026-10-08 当前工作区快照**，包含未提交实现，不表示已发布版本。
 功能属于 SDK 的供应商无关层；参考后端确认身份与状态，Demo 通过通用组件演示。
 

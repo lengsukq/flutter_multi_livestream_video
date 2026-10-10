@@ -119,6 +119,6 @@ These fingerprints make CI reject stale declarations, including changes to the e
 - `packages/flutter_realtime_provider_tencent_chat/lib/src/drivers_web.dart`: `83276f7af33054a5`
 - `packages/flutter_realtime_provider_trtc/lib/src/drivers_native.dart`: `6d53143bfb145b96`
 - `packages/flutter_realtime_provider_trtc/lib/src/drivers_web.dart`: `35ce904ba8a88aa6`
-- `packages/flutter_realtime_sdk/pubspec.yaml`: `14205eebd030dfa3`
+- `packages/flutter_realtime_sdk/pubspec.yaml`: `a815f8e7eca7cae6`
 - `packages/flutter_realtime_sdk_runtime/lib/src/provider_web_session_wrapper.dart`: `da906bcbf530dfe3`
 - `packages/flutter_realtime_video_effects/pubspec.yaml`: `30f3580d898ed16e`

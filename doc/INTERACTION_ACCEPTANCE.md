@@ -1,5 +1,40 @@
 # Interaction delivery and acceptance — 2026-10-08
 
+## Updated package/UI verification — 2026-10-10
+
+The optional Classroom and Live presets are now independent packages.
+`RealtimeRoom` no longer hard-imports their business cores, whiteboard or
+screen-annotation controllers. Demo explicitly selects both presets and adds
+a `demo.reaction.wave` interaction built only on generic `room.interactions`.
+Existing Classroom/Live behavior remains in the respective SDK preset packages;
+the Demo owns only composition and event presentation.
+
+| Local verification, current worktree | Result |
+| --- | --- |
+| Runtime `flutter test --no-pub` | 45 passed |
+| Public SDK `realtime_client_test.dart` | 54 passed |
+| SDK UI `flutter test --no-pub` | 19 passed |
+| Demo `flutter test --no-pub` (including custom wave and connection E2E) | 16 passed |
+| Reference backend `npm run check` | TypeScript check + 74 passed |
+| `flutter analyze --no-pub`: Runtime, SDK, SDK UI, Demo and optional presets | Passed |
+| Demo `flutter build web --release --no-pub` | Passed (standard JavaScript Web, 2026-10-10) |
+| WebAssembly readiness dry run | Tencent Chat native FFI warnings; not accepted for Wasm |
+| Demo `flutter build apk --debug --no-pub` | Passed (Android Debug APK, 2026-10-10) |
+| Android Kotlin plugin migration | Legacy KGP warning for `flutter_webrtc` / `livekit_client`; future Flutter compatibility still pending |
+| Demo `python3 scripts/build_flutter_macos.py --release --no-pub` | Passed (macOS Release .app, 2026-10-10) |
+| macOS SwiftPM migration | Warnings for provider plugins still using CocoaPods; not equivalent to completed SwiftPM migration |
+| Demo `flutter build ios --release --no-codesign --no-pub` | Passed (iOS unsigned device Release .app, 2026-10-10) |
+| iOS SwiftPM / device installation | Several Provider plugins still use CocoaPods; no code signing or physical device installation in this run |
+| `scripts/check_sdk_architecture.py` (40-package dependency graph) | Passed; no mandatory business presets |
+| Real RTC/IM on two devices, remote media pixels and Windows native build | Not verified in this run |
+
+These are **separate suite sizes, not an aggregate release test count**; the
+Runtime suite imports optional presets as development dependencies. Widget
+tests and reference-backend tests use fakes or mock media, not production
+provider credentials. All work is in the current uncommitted worktree, not a
+published SDK release. The remainder of this document retains historical
+2026-10-08 delivery evidence and caveats.
+
 ## Status snapshot and reading guide
 
 This record describes the 2026-10-08 working tree, including uncommitted

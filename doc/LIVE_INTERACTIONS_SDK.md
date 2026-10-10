@@ -4,21 +4,34 @@
 
 `flutter_realtime_live_core` contains immutable gift/catalog/state types,
 `LiveInteractionRepository`, `LiveRevisionTransport`, and `LiveInteractionSession`.
+`flutter_realtime_live_preset` is an **optional**, UI-free business adapter
+registering the existing Live session with `RealtimeFeatureRegistry`.
 `flutter_realtime_live_ui` provides `LiveGiftPanel` and `LiveGiftOverlay`.
 Neither package imports a media or Chat vendor SDK.
 
-The common SDK attaches `room.liveInteractions` only when the provisioned room
-advertises `liveInteractions: true`. The reference server advertises this for
+The host must explicitly register `LivePreset()` in `featurePlugins`, and
+the provisioned room must advertise `liveInteractions: true`. The reference server advertises this for
 Broadcast rooms. `RealtimeRoomView` renders the gift entry and incoming-event
 animation on both hosts and viewers. In the live bottom bar the gift button
 opens the gift panel in one tap via `MediaRoomView.liveGiftPanelOpener`
 (`showLiveGiftsBottomSheet`); the extra-controls sheet remains only as a
 fallback when no opener is injected (e.g. plain `MediaRoomView` users). `showLiveInteractions: false` suppresses
 this optional UI. Session lifecycle and errors remain accessible to custom UI.
-Applications can construct a session with their own repository and pass it to
-`RealtimeRoom`; direct credentials do not silently create a reference backend.
+Applications can inject `LivePreset(repositoryFactory: ...)` for their own
+trusted store; direct credentials do not silently create a reference backend.
+For custom direct rooms without backend metadata, opt in via
+`enableForDirectRooms: true` together with `repositoryFactory`.
 
 ```dart
+import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
+
+final realtime = Realtime(
+  providers: myProviders,
+  backendUrl: backendUrl,
+  featurePlugins: const [LivePreset()],
+);
+final connection = await realtime.open(request);
+final room = connection.mediaRoom!;
 final gifts = room.liveInteractions;
 if (gifts != null) {
   await gifts.start();

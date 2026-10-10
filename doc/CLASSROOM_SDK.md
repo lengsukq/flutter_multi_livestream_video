@@ -9,20 +9,31 @@ The independent packages are:
   optional revision transport.
 - flutter_realtime_classroom_ui: teacher/student panels and an optional
   floating classroom entry point.
-- flutter_realtime_sdk_runtime: attaches a ClassroomSession to RealtimeRoom for
-  backend-provisioned Meeting rooms, choosing a product IM system-hint
-  transport when available or RTC Data when not.
+- flutter_realtime_classroom_preset: explicit, opt-in `ClassroomPreset` backed
+  by the existing `ClassroomSession` and reference HTTP repository. It owns
+  the previously SDK-owned whiteboard, shared-content and annotation adapters.
+- flutter_realtime_sdk_runtime: **does not import Classroom Core**. Its generic
+  Feature Registry attaches only the business plugins selected by the host.
 
-The example app has no classroom-specific API integration. It uses the generic
-RealtimeRoomView, whose optional classroom entry appears when room.classroom
-is available. The Demo is an SDK integration test, not a home for business logic.
+The Demo explicitly registers `ClassroomPreset` and composes existing SDK UI
+components in its own meeting layout. It contains no duplicate classroom
+business logic; hosts may omit the preset and use a plain meeting.
 
 ## Usage
 
-Create or join a Meeting using Realtime.standard and open(RealtimeRequest).
-Then use the SDK's optional ClassroomSession:
+Create or join a Meeting using `Realtime` with an explicitly selected
+`ClassroomPreset`; import its optional package to access the extension getter.
+Then use the SDK's ClassroomSession:
 
 ~~~dart
+import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
+
+final realtime = Realtime(
+  providers: myProviders,
+  backendUrl: backendUrl,
+  featurePlugins: const [ClassroomPreset()],
+);
+final connection = await realtime.open(request);
 final room = connection.mediaRoom!;
 final classroom = room.classroom;
 if (classroom != null) {
@@ -51,6 +62,9 @@ if (classroom != null) {
 
 Developers may supply their own ClassroomRepository and ClassroomRevisionTransport
 to ClassroomSession if their backend does not use the reference HTTP contract.
+For direct provider rooms, set `ClassroomPreset(enableForDirectRooms: true,
+repositoryFactory: (context) => myRepository)`; no Demo-specific code or
+mandatory example backend is required.
 
 ## Reference control-plane protocol
 

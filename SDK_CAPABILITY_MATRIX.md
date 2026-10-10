@@ -286,6 +286,15 @@ severity supplied by Core.
 
 ## Teaching tools and Live interactions
 
+> **Architecture update (2026-10-10):** These business features are optional,
+> not part of the base `flutter_realtime_sdk` or Runtime dependency graph.
+> Hosts explicitly register `ClassroomPreset` from
+> `flutter_realtime_classroom_preset` or `LivePreset` from
+> `flutter_realtime_live_preset`. Custom transient interactions can use
+> `room.interactions` with no preset or SDK UI at all. The platform/build
+> evidence below remains a **2026-10-08 snapshot** and does not certify new
+> real-device acceptance for every vendor.
+
 This is a **2026-10-08 working-tree snapshot**, including uncommitted
 implementation, not a published-release claim. Features live in the
 provider-neutral SDK; the reference backend authorizes state/actions and the

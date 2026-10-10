@@ -79,11 +79,104 @@ Targeted events and unreliable delivery fail if unsupported by the provider.
 
 `InteractionControlPlane` is intentionally separate: until a trusted
 application backend is injected, `execute` and `snapshot` report the
-unsupported operation. The current room default does *not* automatically
-expose a command backend, supply IM fallback or synchronize shared state.
-Those integrations, plus pluggable prebuilt feature registration, remain
-subsequent plan steps. Existing classroom and live modules continue to run on
-their original trusted repositories in the meantime.
+unsupported operation. Applications may pass an
+`interactionControlPlaneFactory: (mediaRoom) => ...` when constructing
+`RealtimeSdk`, `RealtimeSdk.standard`, `Realtime`, or `Realtime.standard`.
+Each room then receives its own trusted backend instance; business authority
+stays server-side. A present control plane enables:
+
+- `interactions.currentSnapshot` plus non-replaying `snapshots` updates;
+- `interactions.refresh()` to fetch authoritative state; initial and periodic
+  refresh also recover missed hints;
+- validated product IM revision hints when supported, otherwise RTC Data
+  hints when supported; neither hint supplies authenticated user identity nor
+  authorizes a command;
+- monotonic snapshot revisions and single-flight refreshes.
+
+The host can also register independently managed features:
+
+```dart
+// Registration on RealtimeSdk(...) / RealtimeSdk.standard(...) /
+// Realtime(...) / Realtime.standard(...):
+featurePlugins: [MyCustomFeaturePlugin()],
+
+// After opening the room and awaiting room.initialize():
+final feature = room.features.get<MyCustomFeature>('myapp.custom');
+```
+
+Feature plugins implement `RealtimeFeaturePlugin` and receive
+`RealtimeFeatureContext` with media, chat and the lazy Interaction session.
+They are only attached when registered, errors remain isolated, and cleanup
+runs in reverse registration order without depending on Flutter UI.
+
+## Opt-in prebuilt features (Classroom and Live)
+
+The existing business functionality is **not moved to the Demo or reimplemented**.
+Classroom and Live are separate **optional SDK packages**, rather than
+dependencies of the generic SDK runtime:
+
+- `flutter_realtime_classroom_preset` provides `ClassroomPreset`, typed
+  `RealtimeRoomClassroomExtension`, the existing classroom business session,
+  whiteboard, content share and annotation adapters.
+- `flutter_realtime_live_preset` provides `LivePreset`, typed
+  `RealtimeRoomLiveExtension`, existing like/gift sessions and their repository.
+
+Applications explicitly import the desired package(s):
+
+```dart
+import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
+import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
+
+final realtime = Realtime(
+  providers: createMyProviders(),
+  backendUrl: myBackendUrl,
+  featurePlugins: const [
+    ClassroomPreset(),
+    LivePreset(),
+  ],
+);
+final connection = await realtime.open(request);
+final room = connection.mediaRoom!;
+await room.readyFeatures(); // preset availability is safe to inspect
+final classroom = room.classroom;       // null without an eligible preset
+final live = room.liveInteractions;     // null without an eligible preset
+```
+
+The simplified Demo explicitly depends on and registers both plugins. Integrators omitting
+`featurePlugins` never instantiate these sessions, even if room metadata says
+the backend supports classroom or gifts. The existing `room.classroom` and
+`room.liveInteractions` accessors are **extension getters from the corresponding
+optional package**, rather than members of `RealtimeRoom` itself. This keeps
+generic Runtime free of business type imports while allowing existing UI
+components to use the same names. The original HTTP
+repositories and the existing IM/RTC revision adapters are reused, and each
+preset also accepts an optional host-provided `repositoryFactory`. The
+Classroom preset is eligible for backend meeting rooms; Live requires the
+`liveInteractions` room metadata flag. Applications using direct provider
+credentials can explicitly set `enableForDirectRooms: true` and inject a
+trusted `repositoryFactory` for either feature. Disabled/ineligible presets do not
+allocate repositories. The feature registry handles teardown even if a
+plugin fails or finishes attaching after the room has been disposed.
+
+### Core dependency boundary and remaining acceptance
+
+`flutter_realtime_sdk_runtime/pubspec.yaml` now keeps business-specific
+`classroom_core`, `live_core`, `whiteboard_core` and
+`screen_annotation` out of its production dependencies. Its development
+tests may still import the optional presets and those cores as dev
+dependencies. `flutter_realtime_sdk` also does not declare a runtime
+dependency on the presets. Optional `flutter_realtime_sdk_ui` currently
+depends on both presets because it supplies both domain component sets;
+further UI-only splitting remains a separate planned refinement.
+
+**Still to verify:** real dual-client delivery and state recovery across each
+provider/platform, complete Demo widget E2E and cross-platform build checks.
+The current unrelated Media UI worktree contains unresolved references to
+`RealtimeUiTokens` / `RealtimeStrings` and must be reconciled before those
+widget/build tests can be accepted. Product Chat is *not* a general
+authenticated interaction event transport here: it carries revision hints,
+while transient events stay RTC-Data-only until an identity-aware IM adapter
+is available.
 
 ### Existing worktree
 

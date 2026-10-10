@@ -8,6 +8,9 @@ Provider-neutral Flutter SDK for meetings, live media, product chat, classroom t
 | --- | --- |
 | `flutter_realtime_sdk` | Lightweight public facade; production dependency is only Runtime. No UI or vendor is registered implicitly |
 | `flutter_realtime_sdk_runtime` | Provider-neutral `Realtime`, `RealtimeRoom`, room member/mutation and lifecycle contracts |
+| `flutter_realtime_interaction_core` | Business-neutral typed events, revision snapshots, authoritative commands, and transport contracts |
+| `flutter_realtime_classroom_preset` | Optional classroom business feature, shared content, whiteboard and annotation adapters (no UI required) |
+| `flutter_realtime_live_preset` | Optional likes, gifts and event history (no UI required) |
 | `flutter_realtime_sdk_ui` | Optional room, classroom, live and whiteboard UI |
 | `flutter_realtime_foundation` | Pure Dart errors, HTTP execution, cleanup and protocol validation |
 | Domain Core packages | Independently composable Media, Chat, Classroom, Live and Whiteboard contracts |
@@ -49,6 +52,20 @@ final realtime = Realtime(providers: [createLivekitProvider()]);
 ```
 
 Add `flutter_realtime_sdk_ui` explicitly to use optional room buttons, video grids, chat panels and templates. The existing Demo is **only** an example of composing those widgets; it registers its own providers in `example/lib/demo_provider_catalog.dart`. The SDK itself has no default provider catalog. Advanced `Realtime.standard(drivers: ...)` also requires explicit drivers; for Web prefer Provider bundles so their JS assets are loaded lazily.
+
+Classroom and Live business behavior are **not** loaded by default, even if
+backend room metadata advertises support. Import the corresponding optional
+preset package and pass `featurePlugins: const [ClassroomPreset(), LivePreset()]`
+to the SDK's `Realtime` factory. The existing `room.classroom`,
+`room.sharedContent` and `room.liveInteractions` getters are typed **extensions
+from the optional packages**. The Demo elects to register both presets and
+retains the existing business implementations. It also implements its own
+`demo.reaction.wave` event and notification UI directly on the generic
+`room.interactions` API; no new SDK business method is needed.
+
+See [Interaction architecture and opt-in feature registration](doc/INTERACTION_ARCHITECTURE.md).
+For four independent integration patterns and a custom feature plugin, see
+[Headless / Preset / Interaction 接入指南](doc/INTERACTION_PRESET_GUIDE.zh-CN.md).
 
 See [纯功能 SDK 接入与 UI 可选指南](doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) for API, lifecycle, permissions, RTC/IM members and snippets; **no separate Headless Demo is maintained**.
 
