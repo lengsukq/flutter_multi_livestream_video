@@ -116,14 +116,35 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           Expanded(
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: ClipRect(
-                  child: AnnotationSurface(
-                    key: ValueKey(state.canvas.canvasId),
-                    session: widget.session,
-                    background: const ColoredBox(color: Colors.white),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 28,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: AnnotationSurface(
+                        key: ValueKey(state.canvas.canvasId),
+                        session: widget.session,
+                        background: const ColoredBox(color: Colors.white),
+                      ),
+                    ),
                   ),
                 ),
               ),

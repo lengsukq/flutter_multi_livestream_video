@@ -230,11 +230,13 @@ class SharedContentStageBar extends StatelessWidget {
               // Stop sharing action
               if (onStop != null) ...[
                 const SizedBox(width: 6),
-                IconButton.filled(
+                IconButton.filledTonal(
                   iconSize: 18,
                   style: IconButton.styleFrom(
-                    backgroundColor: theme.colorScheme.error,
-                    foregroundColor: theme.colorScheme.onError,
+                    backgroundColor: const Color(
+                      0xFFFF3B30,
+                    ).withValues(alpha: isDark ? 0.25 : 0.12),
+                    foregroundColor: const Color(0xFFFF3B30),
                   ),
                   padding: const EdgeInsets.all(6),
                   constraints: const BoxConstraints(

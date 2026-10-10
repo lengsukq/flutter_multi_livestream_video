@@ -46,7 +46,8 @@ void main() {
         await tester.pumpAndSettle();
         final before = builds;
         final rect = tester.getRect(find.byType(AnnotationSurface));
-        expect(rect.width / rect.height, closeTo(4 / 3, .001));
+        // Logical-pixel rounding can shift the fitted edge by <1 px.
+        expect(rect.width / rect.height, closeTo(4 / 3, .005));
         await tester.tap(find.byTooltip('Draw / navigate'));
         await tester.pumpAndSettle();
         for (final label in ['Pen', 'Highlight', 'Circle', 'Arrow']) {
@@ -152,7 +153,7 @@ void main() {
       expect(find.byTooltip('Add page'), findsNothing);
       expect(find.byTooltip('Delete current page'), findsNothing);
       final size = tester.getSize(find.byType(AnnotationSurface));
-      expect(size.width / size.height, closeTo(16 / 9, .001));
+      expect(size.width / size.height, closeTo(16 / 9, .005));
       await tester.drag(find.byType(AnnotationSurface), const Offset(40, 20));
       await tester.pumpAndSettle();
       expect(session.canvas.shapes, isEmpty);

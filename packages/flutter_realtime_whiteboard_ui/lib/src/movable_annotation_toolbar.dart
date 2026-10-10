@@ -7,7 +7,7 @@ class MovableAnnotationToolbar extends StatefulWidget {
     super.key,
     required this.child,
     this.constrainToCanvas = false,
-    this.startAtTop = false,
+    this.startAtTop = true,
   });
   final Widget child;
   final bool constrainToCanvas;
