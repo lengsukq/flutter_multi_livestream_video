@@ -6,8 +6,8 @@
 
 本项目是**前端 Flutter 实时互动 SDK**，而非围绕 Demo 定制的应用。业务 App 按统一请求创建或加入会议、直播、独立聊天；它不需要识别 Android/iOS/Web/macOS/Windows 的供应商具体实现。服务器提供可信的房间、身份与短期凭证控制面；音视频由选定供应商的客户端 SDK 承载，并不经过 Demo Server 转发。
 
-- **完整接入**：`flutter_realtime_sdk` 提供 `Realtime.standard()`、内置 Provider Catalog 以及现成 UI。
-- **按需接入**：`flutter_realtime_sdk_runtime` 与所选 Provider Bundle 组合，UI 可选，详情见 [轻量化接入](LIGHTWEIGHT_SDK.md)。
+- **统一轻量入口**：`flutter_realtime_sdk` 只依赖 Runtime，应用显式注册 Provider Bundle，不自动引入 UI 或所有厂商。
+- **可选 UI**：`flutter_realtime_sdk_ui` 由 Demo 或业务 App 额外引入，详情见 [纯功能与 UI 可选接入](SDK_RUNTIME_INTEGRATION.zh-CN.md)。
 - **三种体验**：`RealtimeExperience.meeting`、`live`、`chat`；媒体与产品级 IM 是两条独立能力链路。
 - **能力驱动**：具体控制按钮依赖 `MediaCapabilities`、`ChatCapabilities` 和后端可信管理能力；不能根据供应商名称推断是否支持。
 - **无旧版包袱**：当前只有仓库 Demo 是正式接入样例，本轮不保留已移除的旧 Pre-Join Dialog 或旧 base/Lite API。
@@ -16,8 +16,8 @@
 
 ```text
 ┌────────────────── 业务 App / example/ ──────────────────────┐
-│  Realtime.standard() / RealtimeRequest / RealtimeConnection │
-│  MediaPreJoinPage → RealtimeRoomView（或自定义 UI）            │
+│  Realtime(providers: ...) / RealtimeRequest / Connection    │
+│  Demo 自由组合 SDK UI Widgets（或使用纯 Runtime 自定义 UI）   │
 └────────────────────────────┬────────────────────────────────┘
                              │ 公共 SDK API
 ┌────────────────────────────▼────────────────────────────────┐
@@ -44,8 +44,12 @@
 
 ```dart
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_provider_livekit/flutter_realtime_provider_livekit.dart';
 
-final realtime = Realtime.standard(backendUrl: 'http://YOUR_LAN_IP:3000');
+final realtime = Realtime(
+  backendUrl: 'http://YOUR_LAN_IP:3000',
+  providers: [createLivekitProvider()],
+);
 final connection = await realtime.open(
   RealtimeRequest.create(
     type: RealtimeExperience.meeting,
@@ -54,7 +58,7 @@ final connection = await realtime.open(
 );
 
 // connection.mediaRoom 是解析后的 SDK RealtimeRoom。
-// 可将它传入 RealtimeRoomView(room: connection.mediaRoom!)。
+// 应用可独立使用 Runtime，或选择性引入 flutter_realtime_sdk_ui 组件。
 // 页面离开 / 会话结束时由连接所有者调用：
 await connection.dispose();
 ```

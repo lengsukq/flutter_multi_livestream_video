@@ -1,13 +1,15 @@
 # Realtime Media example
 
 This is the repository's single Flutter demo app and a usage sample for the
-public `flutter_realtime_sdk` package. It creates the simplified
-`Realtime.standard()` facade for room listing,
+public `flutter_realtime_sdk` package. It constructs
+`Realtime(providers: createDemoProviders())` for room listing,
 diagnostics, create/join, Pre-Join, Meeting/Live, and standalone Chat. All
-connection flows go through `Realtime.open(RealtimeRequest)`. It does not
-register adapters or branch on the current platform. The
+connection flows go through `Realtime.open(RealtimeRequest)`. The Demo
+explicitly registers optional Provider bundles in
+`lib/demo_provider_catalog.dart` (not in SDK). It does not
+branch on the current platform. The
 `demo-server` may select the provider for newly-created rooms and returns
-short-lived join information; the SDK routes that provider to its built-in
+short-lived join information; the SDK routes that provider to a registered
 driver and reports unsupported capabilities explicitly.
 
 ## Demo module map (P1)
@@ -22,7 +24,7 @@ and saves logical owner credentials for rejoin. None of these modules
 imports an individual vendor media implementation.
 
 The room lifecycle is create/join/discover → `Realtime.preJoin` →
-`MediaPreJoinPage.show` → `Realtime.open(RealtimeRequest)` → room
+`DemoComposablePreJoinPage` → `Realtime.open(RealtimeRequest)` → room
 route → `RealtimeConnection.dispose()`. A failed entry remains in Pre-Join
 for retry; a connected room that cannot be handed to a route must be
 disposed. The `initialMediaSettings` returned by preparation must be
@@ -30,8 +32,9 @@ carried into the room UI so camera, microphone and video background choices
 apply before publish.
 
 Below 600px, the homepage uses a compact top header instead of the large
-desktop hero. Meeting/Live room layout comes from SDK UI, not a Demo-specific
-widget tree. `MediaRole.host` is not a reliable substitute for an explicit
+desktop hero. Meeting/Live/Chat/Pre-Join pages are Demo-owned arrangements
+of reusable SDK UI widgets, not fixed full-page SDK templates.
+`MediaRole.host` is not a reliable substitute for an explicit
 meeting/live mode: passing `MediaRoomMode.broadcast` is important for
 livestream hosts. See the [Chinese P1 architecture and integration guide](../doc/P1_ARCHITECTURE_AND_INTEGRATION.zh-CN.md)
 for the module graph and tested versus pending features.

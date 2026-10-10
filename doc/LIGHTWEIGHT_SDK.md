@@ -1,10 +1,12 @@
 # Lightweight provider composition / 轻量接入
 
-`flutter_realtime_sdk` provides the all-provider convenience entry point.
+`flutter_realtime_sdk` is the lightweight facade (production dependency:
+`flutter_realtime_sdk_runtime` only), with **no implicit provider or UI**.
 `flutter_realtime_sdk_runtime` owns provider-neutral request, connection, room,
 event, error and registry contracts; full-package exports point to those same
 types rather than duplicate models. `Realtime(providers: …)` requires explicit bundles.
-Runtime has no built-in UI dependency. Add flutter_realtime_sdk_ui explicitly when using the ready-to-use views; effects remain a platform controller dependency.
+Runtime has no built-in UI or vendor dependency. Add `flutter_realtime_sdk_ui`
+explicitly for widgets, and register only Provider bundles the app needs.
 
 | Optional package | Registration function | Public provider |
 | --- | --- | --- |
@@ -33,10 +35,11 @@ the base. Agora, IVS and Tencent Chat use separate runtime bundles; effects load
 from the effects package only when a processed source/device preview needs them.
 All files are locally packaged; hosts do not need CDN tags.
 
-Build the two examples and run `python3 scripts/check_lite_artifacts.py` to verify
-both their dependency graphs and actual Web artifacts. Compare byte counts for
-the same release target; a lightweight sample and the full Demo have different UI
-and should not be treated as a controlled startup-latency benchmark.
+The existing `example/` Demo demonstrates freely arranging optional UI
+components. No separate Headless example project is required or maintained;
+read `doc/SDK_RUNTIME_INTEGRATION.zh-CN.md` for UI-free integration snippets.
+Use the architecture check and compare equivalent Release outputs before
+making claims about actual APK/IPA/Web size reductions.
 
 简体中文：运行入口显式注册供应商，App 不写平台分支。运行层不依赖现成 UI，按需加入 SDK UI。缓存上限影响本地显示历史，
 不删除服务端消息；跨供应商历史分页与真实连麦仍是后续独立功能。

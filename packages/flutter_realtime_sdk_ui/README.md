@@ -5,6 +5,13 @@ Scaffold, route, breakpoint, panel and overlay**. Components use one
 `RealtimeRoomUiController` through `RealtimeRoomUiScope` and never import
 a provider implementation.
 
+Add `flutter_realtime_sdk_ui` separately from the lightweight
+`flutter_realtime_sdk` and the chosen Provider bundle(s). RTC/IM roster,
+batch moderation, and Classroom/Live start/dispose belong to
+`RealtimeRoom.memberDirectory` and Runtime lifecycle; mounting UI does not
+start or stop business sessions. The repository Demo is for quick UI assembly,
+not an additional implementation of SDK operations.
+
 ```dart
 RealtimeRoomUiScope(
   room: room,

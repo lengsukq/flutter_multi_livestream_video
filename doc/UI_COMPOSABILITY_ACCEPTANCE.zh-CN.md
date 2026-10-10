@@ -14,7 +14,7 @@ flutter_realtime_sdk_ui                (可选聚合：Room、Live、Chat、Clas
        ↑
 App / Demo (Scaffold / Row / Column / Stack / Navigator / Breakpoints)
 
-flutter_realtime_sdk                  (便捷聚合全部已注册 Provider；非轻量入口)
+flutter_realtime_sdk                  (轻量公开入口，仅依赖 Runtime)
 ```
 
 使用 `flutter_realtime_chat_ui` 不需要引入会议/直播及原生 RTC SDK；无 UI 的工程直接引用 Runtime 和需要的 Driver；真正的移动/桌面包体必须以各自的 Release 构建测量，而非凭源码行数推断。
@@ -25,7 +25,7 @@ flutter_realtime_sdk                  (便捷聚合全部已注册 Provider；�
 - `RealtimeRoomUiController.leave()` 会退出/销毁底层 room，应用负责路由导航。
 - `RealtimePreJoinController` 由应用创建、`initialize()`，页面销毁时由应用 `dispose()`；重试/进入房间释放预览由 Controller 管理。
 - `ChatUiController` 只拥有 UI 订阅，不拥有 `ChatSession`。同一 `RealtimeRoomUiScope` 中的列表与输入框共享 Chat UI controller。
-- 成员权限以 `MediaRoomSession.managementCapabilities` 和 `ChatManagementCapabilities` 为准，`RoomMembersController` 执行验证；UI 不签发 Token，不独立裁决是否有管理权限。
+- 成员权限以 `MediaRoomSession.managementCapabilities` 和 `ChatManagementCapabilities` 为准；`RoomMembersController` 已迁移至 Runtime，UI 只展示结果、处理 pending/error；UI 不签发 Token，不独立裁决权限。
 
 ## 2. 两种可运行的组织方式
 
@@ -82,7 +82,7 @@ RealtimeRoomUiScope(
 | 房间 | `RealtimeRoomInfo`、`RealtimeConnectionIndicator`、`RealtimeVideoTile`、`RealtimeVideoGrid`、`RealtimeScreenShareStage`、`RealtimeSharedContentStage` | MediaSnapshot、SharedContentState |
 | 媒体控制 | `RealtimeMicrophoneButton`、`RealtimeCameraButton`、`RealtimeSwitchCameraButton`、`RealtimeScreenShareButton`、`RealtimeLeaveButton`、`RealtimeBackgroundEffectsButton` | UI Controller + MediaCapabilities + Video Effects |
 | 设备 | `RealtimeMediaDevicePicker`（microphone / camera / audioOutput）、`RealtimeAudioOutputButton` | MediaDeviceController，可选能力、失败原样报告 |
-| 成员管理 | `RealtimeParticipantList`（RTC-only）、`RealtimeManagedParticipantList`（RTC+IM）、`RealtimeBulkMuteButton` | RoomMembersController：统一逻辑 userId、主持人权限、静音失败重试 |
+| 成员管理 | `RealtimeParticipantList`（RTC-only）、`RealtimeManagedParticipantList`（RTC+IM）、`RealtimeBulkMuteButton` | Runtime `RealtimeRoom.memberDirectory`：统一逻辑 userId、主持人权限、静音失败重试 |
 | 聊天 | `ChatUiScope`、`ChatSearchField`、`ChatMessageList`、`ChatComposer`、`ChatMemberList`、`ChatManagementButton`、`ChatDefaultPage`；会议组合的 `RealtimeChatPanel` | ChatUiController / ChatModeration / IM |
 | 直播 | `RealtimeLiveVideoStage`、`RealtimeLiveLikeButton`、`RealtimeLiveGiftButton`、`RealtimeLiveStatus` | LiveInteractionSession |
 | 课堂 | `RealtimeRaiseHandButton`、`RealtimeClassroomHandQueue`、`RealtimeClassroomRoster`、`RealtimeClassroomQuestions`、`RealtimeClassroomQuestionComposer`、`RealtimeClassroomFeedbackButton`、`RealtimeClassroomToolsButton`、`RealtimeClassroomActivityList`、`RealtimeClassroomEngagement` | ClassroomSession + authoritative classroom snapshot |

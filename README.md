@@ -6,8 +6,8 @@ Provider-neutral Flutter SDK for meetings, live media, product chat, classroom t
 
 | Package | Use |
 | --- | --- |
-| `flutter_realtime_sdk` | All bundled providers and ready-to-use UI; `Realtime.standard()` |
-| `flutter_realtime_sdk_runtime` | Explicit provider composition; `Realtime(providers: …)` without built-in UI dependencies |
+| `flutter_realtime_sdk` | Lightweight public facade; production dependency is only Runtime. No UI or vendor is registered implicitly |
+| `flutter_realtime_sdk_runtime` | Provider-neutral `Realtime`, `RealtimeRoom`, room member/mutation and lifecycle contracts |
 | `flutter_realtime_sdk_ui` | Optional room, classroom, live and whiteboard UI |
 | `flutter_realtime_foundation` | Pure Dart errors, HTTP execution, cleanup and protocol validation |
 | Domain Core packages | Independently composable Media, Chat, Classroom, Live and Whiteboard contracts |
@@ -15,8 +15,12 @@ Provider-neutral Flutter SDK for meetings, live media, product chat, classroom t
 
 ```dart
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_provider_livekit/flutter_realtime_provider_livekit.dart';
 
-final realtime = Realtime.standard(backendUrl: 'http://localhost:3000');
+final realtime = Realtime(
+  backendUrl: 'http://localhost:3000',
+  providers: [createLivekitProvider()],
+);
 ```
 
 Create and join use a provider-neutral request on every platform:
@@ -28,12 +32,12 @@ final connection = await realtime.open(
     user: const RealtimeUser(id: 'user-1', name: 'Alice'),
   ),
 );
-// Keep connection.mediaRoom! alive while its RealtimeRoomView is visible.
-// Dispose the connection when the owning room route exits, not immediately.
+// RealtimeRoom/ChatSession are SDK-owned; the host chooses whether to display
+// any SDK UI components. Dispose on explicit leave, not on UI unmount.
 await connection.dispose();
 ```
 
-Use `RealtimeRequest.join(type: ..., roomCode: ..., user: ...)` for an existing room, `RealtimeExperience.live` for broadcasts, and `RealtimeExperience.chat` for standalone IM. Call `MediaPreJoinPage.show` with `Realtime.preJoin` and `createLocalPreview` before opening a media room if you need device checks and preview.
+Use `RealtimeRequest.join(type: ..., roomCode: ..., user: ...)` for an existing room, `RealtimeExperience.live` for broadcasts, and `RealtimeExperience.chat` for standalone IM. Use `Realtime.preJoin` and `createLocalPreview` directly for custom checks, or optionally add the SDK UI package for built-in controls.
 
 For explicit composition, import the runtime and selected bundle:
 
@@ -44,7 +48,9 @@ import 'package:flutter_realtime_provider_livekit/flutter_realtime_provider_live
 final realtime = Realtime(providers: [createLivekitProvider()]);
 ```
 
-Add the SDK UI separately when using the runtime with the ready-to-use views. Existing base/Lite and legacy standalone Chime client APIs were removed during the quality refactor; this repository is the source of the current Demo and package APIs.
+Add `flutter_realtime_sdk_ui` explicitly to use optional room buttons, video grids, chat panels and templates. The existing Demo is **only** an example of composing those widgets; it registers its own providers in `example/lib/demo_provider_catalog.dart`. The SDK itself has no default provider catalog. Advanced `Realtime.standard(drivers: ...)` also requires explicit drivers; for Web prefer Provider bundles so their JS assets are loaded lazily.
+
+See [纯功能 SDK 接入与 UI 可选指南](doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) for API, lifecycle, permissions, RTC/IM members and snippets; **no separate Headless Demo is maintained**.
 
 ## Architecture and behavior
 

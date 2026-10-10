@@ -4,9 +4,9 @@ The SDK quality refactor allows API changes and migrates the Demo alongside the 
 
 ## Dependencies
 
-Foundation is pure Dart. Domain cores depend on foundation and other required domain contracts. Runtime depends on cores and platform/processed-video controllers, with no bundled provider or built-in UI dependency. Provider bundles depend on runtime contracts and their adapters. SDK UI assembles domain views over runtime. The full SDK adds standard provider registration and SDK UI.
+Foundation is pure Dart. Domain cores depend on foundation and other required domain contracts. Runtime depends on cores and platform/processed-video controllers, with no bundled provider or built-in UI dependency. Provider bundles depend on runtime contracts and their adapters. SDK UI assembles domain views over runtime. The public `flutter_realtime_sdk` now depends only on Runtime; UI and Provider bundles are chosen by the host.
 
-`Realtime(providers: …)` explicitly composes bundles; `Realtime.standard()` selects the full catalog. The connection, room, event and failure types are shared through the runtime's public library. Media and product Chat remain independently composable.
+`Realtime(providers: …)` explicitly composes bundles; `Realtime.standard(drivers: …)` is an advanced explicit-driver option and does not select a built-in catalog. The connection, room, event and failure types are shared through the runtime's public library. Media and product Chat remain independently composable. Classroom/Live auxiliary sessions start in Runtime independent of UI mounting.
 
 ## Resource ownership
 
