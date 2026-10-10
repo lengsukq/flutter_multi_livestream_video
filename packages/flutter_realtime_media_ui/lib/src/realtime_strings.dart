@@ -213,6 +213,44 @@ class RealtimeStrings {
   String get microphonePermission => isZh ? '麦克风权限' : 'Microphone permission';
   String get cameraPermission => isZh ? '摄像头权限' : 'Camera permission';
   String get requestPermission => isZh ? '获取权限' : 'Grant access';
+  String get requiredLabel => isZh ? '必需' : 'Required';
+  String permissionStateLabel(MediaPermissionState state) => switch (state) {
+    MediaPermissionState.granted => isZh ? '已授权' : 'Allowed',
+    MediaPermissionState.denied => isZh ? '未授权' : 'Not allowed',
+    MediaPermissionState.permanentlyDenied => isZh ? '已阻止' : 'Blocked',
+    MediaPermissionState.restricted => isZh ? '受限制' : 'Restricted',
+    MediaPermissionState.unsupported => isZh ? '无法检测' : 'Cannot check',
+    _ => isZh ? '待检测' : 'Not checked',
+  };
+
+  /// SDK checks contain provider-authored diagnostic strings. Display
+  /// localized user-facing summaries instead of mixing raw English diagnostics
+  /// into an otherwise Chinese Pre-Join page.
+  String preJoinCheckDescription(MediaPreJoinCheck check) {
+    final name = switch (check.type) {
+      MediaPreJoinCheckType.backend => isZh ? '后端连接' : 'Backend connection',
+      MediaPreJoinCheckType.provider => isZh ? '服务商适配' : 'Provider support',
+      MediaPreJoinCheckType.microphonePermission => microphonePermission,
+      MediaPreJoinCheckType.cameraPermission => cameraPermission,
+      MediaPreJoinCheckType.microphoneDevice => microphoneDevice,
+      MediaPreJoinCheckType.cameraDevice => cameraDevice,
+      MediaPreJoinCheckType.network => isZh ? '网络连通性' : 'Network connectivity',
+      MediaPreJoinCheckType.providerNetwork =>
+        isZh ? '服务商网络探测' : 'Provider network probe',
+    };
+    final state = switch (check.status) {
+      MediaPreJoinStatus.passed => isZh ? '正常' : 'Ready',
+      MediaPreJoinStatus.failed => isZh ? '检测失败' : 'Check failed',
+      MediaPreJoinStatus.unsupported =>
+        isZh
+            ? '此平台无法提前验证，不代表设备不可用'
+            : 'Cannot pre-check on this platform; device may still work',
+      MediaPreJoinStatus.unknown =>
+        isZh ? '暂无法确认，仍可尝试加入' : 'Not confirmed yet; you can still try joining',
+    };
+    return '$name · $state';
+  }
+
   String get openAppSettings => isZh ? '前往系统设置' : 'Open app settings';
   String get browserPermissionSettings => isZh ? '查看浏览器设置' : 'Browser settings';
   String get permissionHelpTitle =>

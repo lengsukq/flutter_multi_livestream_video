@@ -6,6 +6,7 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'background_effect_selector.dart';
 import 'composable_pre_join_controller.dart';
 import 'media_background_image_preset.dart';
+import 'realtime_strings.dart';
 
 /// Shares one Pre-Join controller across freely arranged child widgets.
 class RealtimePreJoinScope extends InheritedWidget {
@@ -68,6 +69,7 @@ class RealtimePreJoinCheckList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimePreJoinScope.of(context);
+    final strings = RealtimeStrings.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -86,25 +88,40 @@ class RealtimePreJoinCheckList extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final check in checks)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  check.passed
-                      ? Icons.check_circle_outline
-                      : check.isBlocking
-                      ? Icons.error_outline
-                      : Icons.info_outline,
-                  color: check.passed
-                      ? Colors.green
-                      : check.isBlocking
-                      ? Theme.of(context).colorScheme.error
-                      : Colors.orange,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Row(
+                  children: [
+                    Icon(
+                      check.passed
+                          ? Icons.check_circle_rounded
+                          : check.isBlocking
+                          ? Icons.error_rounded
+                          : Icons.info_outline_rounded,
+                      size: 18,
+                      color: check.passed
+                          ? Theme.of(context).colorScheme.tertiary
+                          : check.isBlocking
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        strings.preJoinCheckDescription(check),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    if (check.isBlocking)
+                      Text(
+                        strings.requiredLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                  ],
                 ),
-                title: Text(check.message),
-                subtitle: check.isBlocking
-                    ? const Text('Required to continue')
-                    : null,
               ),
           ],
         );
@@ -182,7 +199,17 @@ class RealtimePreJoinDevicePicker extends StatelessWidget {
         return DropdownButtonFormField<MediaDevice>(
           key: ValueKey((kind, initial?.id)),
           initialValue: initial,
-          decoration: InputDecoration(labelText: kind.name),
+          decoration: InputDecoration(
+            labelText: switch (kind) {
+              MediaDeviceKind.microphone => RealtimeStrings.of(
+                context,
+              ).microphone,
+              MediaDeviceKind.camera => RealtimeStrings.of(context).camera,
+              MediaDeviceKind.audioOutput => RealtimeStrings.of(
+                context,
+              ).speaker,
+            },
+          ),
           items: [
             for (final device in devices)
               DropdownMenuItem(value: device, child: Text(device.label)),
@@ -239,6 +266,7 @@ class RealtimePreJoinPermissions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimePreJoinScope.of(context);
+    final strings = RealtimeStrings.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -252,27 +280,34 @@ class RealtimePreJoinPermissions extends StatelessWidget {
             for (final kind in MediaPermissionKind.values)
               if (kind == MediaPermissionKind.microphone ||
                   kind == MediaPermissionKind.camera)
-                ActionChip(
-                  avatar: Icon(
-                    controller.permissions[kind] == MediaPermissionState.granted
-                        ? Icons.check
-                        : Icons.lock_outline,
-                    size: 18,
+                if (controller.permissions[kind] !=
+                        MediaPermissionState.unknown ||
+                    (Theme.of(context).platform != TargetPlatform.macOS &&
+                        Theme.of(context).platform != TargetPlatform.windows &&
+                        Theme.of(context).platform != TargetPlatform.linux))
+                  ActionChip(
+                    avatar: Icon(
+                      controller.permissions[kind] ==
+                              MediaPermissionState.granted
+                          ? Icons.check
+                          : Icons.lock_outline,
+                      size: 18,
+                    ),
+                    label: Text(
+                      '${kind == MediaPermissionKind.microphone ? strings.microphone : strings.camera}: '
+                      '${strings.permissionStateLabel(controller.permissions[kind] ?? MediaPermissionState.unknown)}',
+                    ),
+                    onPressed: controller.busy
+                        ? null
+                        : () {
+                            if (controller.permissions[kind] ==
+                                MediaPermissionState.permanentlyDenied) {
+                              unawaited(controller.openAppSettings());
+                            } else {
+                              unawaited(controller.requestPermission(kind));
+                            }
+                          },
                   ),
-                  label: Text(
-                    '${kind.name}: ${controller.permissions[kind]?.name ?? 'unknown'}',
-                  ),
-                  onPressed: controller.busy
-                      ? null
-                      : () {
-                          if (controller.permissions[kind] ==
-                              MediaPermissionState.permanentlyDenied) {
-                            unawaited(controller.openAppSettings());
-                          } else {
-                            unawaited(controller.requestPermission(kind));
-                          }
-                        },
-                ),
           ],
         );
       },
