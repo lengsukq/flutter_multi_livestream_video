@@ -556,9 +556,7 @@ class _MeetingBottomDock extends StatelessWidget {
             if (snapshot.localMuted &&
                 host.view.canEnableMicrophone?.call() == false) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('请先举手，等待允许发言 / Await speaker permission'),
-                ),
+                SnackBar(content: Text(strings.awaitPermissionToSpeak)),
               );
               return;
             }

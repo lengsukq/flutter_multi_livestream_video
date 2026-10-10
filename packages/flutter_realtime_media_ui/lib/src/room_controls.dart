@@ -30,9 +30,7 @@ extension _RoomControlRendering on _MediaRoomViewState {
             if (value.localMuted &&
                 widget.canEnableMicrophone?.call() == false) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('请先举手，等待教师允许发言 / Await teacher permission'),
-                ),
+                SnackBar(content: Text(strings.awaitPermissionToSpeak)),
               );
               return;
             }

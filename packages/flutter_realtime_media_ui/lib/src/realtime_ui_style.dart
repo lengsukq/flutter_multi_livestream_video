@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
@@ -12,41 +13,53 @@ part 'realtime_ui_cards_dialogs.dart';
 
 /// Shared visual language for the built-in Realtime SDK surfaces.
 ///
-/// Keep provider-specific UI out of this layer. Meeting, Live, Attached Chat,
-/// Standalone Chat, and Demo lobbies all consume the same tokens and surfaces.
+/// Designed to align with Apple Human Interface Guidelines:
+/// - Crisp, subtle outlines and squircle curvature
+/// - iOS diffuse soft elevation shadows
+/// - Frosted glass layer materials
 abstract final class RealtimeUiTokens {
-  static const background = Color(0xFFF2F4F7);
+  static const background = Color(0xFFF2F2F7);
   static const surface = Color(0xFFFFFFFF);
-  static const surfaceSubtle = Color(0xFFF8FAFC);
+  static const surfaceSubtle = Color(0xFFF8F8FA);
   static const border = Color(0xFFE5E7EB);
-  static const borderStrong = Color(0xFFCBD5E1);
+  static const borderStrong = Color(0xFFD1D5DB);
   static const borderGlass = Color(0xF0FFFFFF);
   static const text = Color(0xFF0F172A);
   static const textMuted = Color(0xFF64748B);
 
-  static const primary = Color(0xFF4F46E5);
-  static const primaryAccent = Color(0xFF6366F1);
-  static const primarySubtle = Color(0xFFEEF2FF);
-  static const primaryBorder = Color(0xFFC7D2FE);
-  static const success = Color(0xFF10B981);
-  static const successSubtle = Color(0xFFECFDF5);
-  static const successBorder = Color(0xFFA7F3D0);
-  static const warning = Color(0xFFF59E0B);
-  static const warningSubtle = Color(0xFFFFFBEB);
-  static const danger = Color(0xFFEF4444);
-  static const dangerSubtle = Color(0xFFFEF2F2);
-  static const dangerBorder = Color(0xFFFECDD3);
+  // Apple System Colors
+  static const iosBlue = Color(0xFF007AFF);
+  static const iosGreen = Color(0xFF34C759);
+  static const iosRed = Color(0xFFFF3B30);
+  static const iosOrange = Color(0xFFFF9500);
+  static const iosIndigo = Color(0xFF5856D6);
+  static const iosTeal = Color(0xFF30B0C7);
+  static const iosGray = Color(0xFF8E8E93);
+  static const iosLightGray = Color(0xFFE5E5EA);
 
-  /// Unified large border radius hierarchy across the entire SDK.
-  static const sheetRadius = 30.0;
-  static const dockRadius = 24.0;
-  static const cardRadius = 20.0;
-  static const controlRadius = 14.0;
-  static const compactRadius = 12.0;
+  static const primary = Color(0xFF007AFF);
+  static const primaryAccent = Color(0xFF5856D6);
+  static const primarySubtle = Color(0xFFEBF5FF);
+  static const primaryBorder = Color(0xFFB9DBFE);
+  static const success = Color(0xFF34C759);
+  static const successSubtle = Color(0xFFEAF9EE);
+  static const successBorder = Color(0xFFA6EBB5);
+  static const warning = Color(0xFFFF9500);
+  static const warningSubtle = Color(0xFFFFF7EB);
+  static const danger = Color(0xFFFF3B30);
+  static const dangerSubtle = Color(0xFFFEECEC);
+  static const dangerBorder = Color(0xFFFECACA);
+
+  /// Unified Apple HIG border radius hierarchy across the entire SDK.
+  static const sheetRadius = 28.0;
+  static const dockRadius = 26.0;
+  static const cardRadius = 16.0;
+  static const controlRadius = 12.0;
+  static const compactRadius = 10.0;
   static const pillRadius = 999.0;
 
-  static const blur = 18.0;
-  static const subtleBlur = 10.0;
+  static const blur = 20.0;
+  static const subtleBlur = 12.0;
 
   static const pagePadding = 16.0;
   static const sectionGap = 16.0;

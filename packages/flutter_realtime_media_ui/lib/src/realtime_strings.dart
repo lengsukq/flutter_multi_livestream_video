@@ -7,9 +7,31 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 ///
 /// The SDK does not own a global locale. It follows the host application's
 /// locale and can be wired into [MaterialApp] through [localizationsDelegates]
-/// and [supportedLocales].
+/// Scope widget allowing host applications or Demo to override SDK UI strings.
+class RealtimeStringsScope extends InheritedWidget {
+  const RealtimeStringsScope({
+    super.key,
+    required this.strings,
+    required super.child,
+  });
+
+  final RealtimeStrings strings;
+
+  @override
+  bool updateShouldNotify(RealtimeStringsScope oldWidget) =>
+      strings != oldWidget.strings;
+}
+
+/// Lightweight localization surface for the built-in SDK UI.
+///
+/// By default, the SDK presents standard English UI copy and does not impose
+/// a global localization bundle. Host applications or Demo can wire in custom
+/// strings using [RealtimeStringsScope] or standard [localizationsDelegates].
 class RealtimeStrings {
-  const RealtimeStrings._(this.locale);
+  const RealtimeStrings([this.locale = const Locale('en')]);
+
+  const RealtimeStrings.en() : this(const Locale('en'));
+  const RealtimeStrings.zh() : this(const Locale('zh', 'CN'));
 
   final Locale locale;
 
@@ -26,9 +48,13 @@ class RealtimeStrings {
 
   static const delegate = _RealtimeStringsDelegate();
 
-  static RealtimeStrings of(BuildContext context) =>
-      Localizations.of<RealtimeStrings>(context, RealtimeStrings) ??
-      RealtimeStrings._(Localizations.localeOf(context));
+  static RealtimeStrings of(BuildContext context) {
+    final scoped = context
+        .dependOnInheritedWidgetOfExactType<RealtimeStringsScope>();
+    if (scoped != null) return scoped.strings;
+    return Localizations.of<RealtimeStrings>(context, RealtimeStrings) ??
+        RealtimeStrings(Localizations.localeOf(context));
+  }
 
   String get chat => isZh ? '聊天' : 'Chat';
   String get standaloneChat => isZh ? '独立聊天' : 'Standalone Chat';
@@ -414,6 +440,53 @@ class RealtimeStrings {
   String get quickCreateRoom => isZh ? '快捷建房' : 'Create';
   String get joinByCode => isZh ? '号码加入' : 'Join by code';
   String get delivered => isZh ? '已发送' : 'Sent';
+
+  // --- Dock & Classroom & PreJoin Additions ---
+  String get flipCamera => isZh ? '翻转' : 'Flip';
+  String get backgroundEffects => isZh ? '背景' : 'Effects';
+  String get micOn => isZh ? '麦克风' : 'Mic on';
+  String get muted => isZh ? '已静音' : 'Muted';
+  String get camOn => isZh ? '摄像头' : 'Cam on';
+  String get camOff => isZh ? '已关视频' : 'Cam off';
+  String get shareContent => isZh ? '共享内容' : 'Share content';
+  String get chooseContentToShare =>
+      isZh ? '选择共享内容' : 'Choose content to share';
+  String get whiteboard => isZh ? '白板演示' : 'Whiteboard';
+  String get whiteboardDescription =>
+      isZh ? '打开多人协同互动白板与课件' : 'Open collaborative interactive whiteboard';
+  String get shareScreenDescription =>
+      isZh ? '共享电脑或手机屏幕给所有参会者' : 'Share your display with all participants';
+  String get stopSharing => isZh ? '停止共享' : 'Stop share';
+  String get classroom => isZh ? '课堂管理' : 'Classroom';
+  String get classroomActivities => isZh ? '测验' : 'Activities';
+  String get classroomQuestions => isZh ? '提问' : 'Questions';
+  String get classroomHands => isZh ? '举手' : 'Hands';
+  String get classroomRoster => isZh ? '花名册' : 'Roster';
+  String get noActivitiesYet => isZh ? '暂无活动' : 'No activities yet';
+  String get activitiesUnavailable =>
+      isZh ? '活动功能暂不可用' : 'Activities unavailable';
+  String get closePanel => isZh ? '关闭面板' : 'Close panel';
+  String get systemReady => isZh ? '系统已就绪，可随时加入' : 'All systems ready';
+  String get checkAttention => isZh ? '部分检测需要关注' : 'Some checks need attention';
+  String get diagnosticDetails => isZh ? '设备与网络检测详情' : 'Diagnostic details';
+  String get audioAndVideo => isZh ? '音视频设备' : 'Audio & Video';
+  String get deviceSettingsHint =>
+      isZh ? '进入房间前，可自由开启麦克风与摄像头' : 'Configure audio and video before entering';
+  String get awaitPermissionToSpeak =>
+      isZh ? '请先举手，等待允许发言' : 'Raise hand and await permission to speak';
+  String get giftFeatureEnabled => isZh ? '送礼物功能已开启' : 'Gift feature enabled';
+  String get closeCommentInput => isZh ? '收起评论输入' : 'Close comment input';
+  String get shareScreen => screenShare;
+  String get classroomFeedback => isZh ? '课堂互动反馈' : 'Classroom feedback';
+  List<String> get quickReplyPhrases => isZh
+      ? const ['收到 👍', '好的，明白', '赞同 💯', '稍等一下', '感谢分享!']
+      : const [
+          'Received 👍',
+          'Got it, thanks',
+          'Agreed 💯',
+          'One moment',
+          'Thanks for sharing!',
+        ];
 }
 
 class _RealtimeStringsDelegate extends LocalizationsDelegate<RealtimeStrings> {
@@ -425,7 +498,7 @@ class _RealtimeStringsDelegate extends LocalizationsDelegate<RealtimeStrings> {
 
   @override
   Future<RealtimeStrings> load(Locale locale) =>
-      SynchronousFuture<RealtimeStrings>(RealtimeStrings._(locale));
+      SynchronousFuture<RealtimeStrings>(RealtimeStrings(locale));
 
   @override
   bool shouldReload(_RealtimeStringsDelegate old) => false;

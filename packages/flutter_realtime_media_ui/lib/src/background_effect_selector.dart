@@ -39,107 +39,186 @@ class BackgroundEffectSelector extends StatelessWidget {
       children: [
         Text(
           strings.virtualBackground,
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            letterSpacing: -0.2,
+          ),
         ),
         const SizedBox(height: 8),
-        SegmentedButton<MediaBackgroundEffectType>(
-          segments: [
-            ButtonSegment(
-              value: MediaBackgroundEffectType.none,
-              icon: const Icon(Icons.block_rounded, size: 17),
-              label: Text(strings.noVirtualBackground),
+        RealtimeCupertinoSegmentedBar<MediaBackgroundEffectType>(
+          groupValue: effect.type,
+          onValueChanged: (val) {
+            if (busy) return;
+            onChanged(switch (val) {
+              MediaBackgroundEffectType.none =>
+                const MediaBackgroundEffect.none(),
+              MediaBackgroundEffectType.blur =>
+                const MediaBackgroundEffect.blur(),
+              MediaBackgroundEffectType.replaceImage =>
+                MediaBackgroundEffect.replaceImage(
+                  imageBytes: availableImage ?? Uint8List(0),
+                ),
+            });
+          },
+          children: {
+            MediaBackgroundEffectType.none: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Text(
+                strings.noVirtualBackground,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
             if (capabilities.canBlur)
-              ButtonSegment(
-                value: MediaBackgroundEffectType.blur,
-                icon: const Icon(Icons.blur_on_rounded, size: 17),
-                label: Text(strings.backgroundBlur),
-              ),
-            if (capabilities.canReplaceImage && availableImage != null)
-              ButtonSegment(
-                value: MediaBackgroundEffectType.replaceImage,
-                icon: const Icon(Icons.image_outlined, size: 17),
-                label: Text(strings.backgroundImage),
-              ),
-          ],
-          selected: {effect.type},
-          onSelectionChanged: busy
-              ? null
-              : (values) {
-                  onChanged(switch (values.first) {
-                    MediaBackgroundEffectType.none =>
-                      const MediaBackgroundEffect.none(),
-                    MediaBackgroundEffectType.blur =>
-                      const MediaBackgroundEffect.blur(),
-                    MediaBackgroundEffectType.replaceImage =>
-                      MediaBackgroundEffect.replaceImage(
-                        imageBytes: availableImage!,
-                      ),
-                  });
-                },
-        ),
-        if (effect.type == MediaBackgroundEffectType.blur) ...[
-          const SizedBox(height: 8),
-          DropdownButtonFormField<MediaBackgroundBlurStrength>(
-            key: ValueKey(effect.blurStrength),
-            initialValue: effect.blurStrength,
-            decoration: InputDecoration(labelText: strings.blurStrength),
-            items: MediaBackgroundBlurStrength.values
-                .map(
-                  (strength) => DropdownMenuItem(
-                    value: strength,
-                    child: Text(strings.backgroundBlurStrength(strength)),
-                  ),
-                )
-                .toList(),
-            onChanged: busy
-                ? null
-                : (strength) {
-                    if (strength != null) {
-                      onChanged(
-                        MediaBackgroundEffect.blur(blurStrength: strength),
-                      );
-                    }
-                  },
-          ),
-        ],
-        if (effect.type == MediaBackgroundEffectType.replaceImage) ...[
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-            child: Image.memory(
-              _decoderBytes(effect.imageBytes!),
-              height: 100,
-              fit: BoxFit.cover,
-              errorBuilder: (_, error, stack) =>
-                  Text(strings.invalidBackgroundImage),
-            ),
-          ),
-        ],
-        if (capabilities.canReplaceImage && imagePresets.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: imagePresets.map((preset) {
-              return ChoiceChip(
-                label: Text(preset.label),
-                avatar: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.compactRadius,
-                  ),
-                  child: Image.memory(
-                    _decoderBytes(preset.imageBytes),
-                    width: 32,
-                    height: 24,
-                    cacheWidth: 120,
-                    fit: BoxFit.cover,
+              MediaBackgroundEffectType.blur: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  strings.backgroundBlur,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                selected: effect == preset.effect,
-                onSelected: busy ? null : (_) => onChanged(preset.effect),
-              );
-            }).toList(),
+              ),
+            if (capabilities.canReplaceImage && availableImage != null)
+              MediaBackgroundEffectType.replaceImage: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  strings.backgroundImage,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+          },
+        ),
+        if (effect.type == MediaBackgroundEffectType.blur) ...[
+          const SizedBox(height: 10),
+          RealtimeCupertinoSegmentedBar<MediaBackgroundBlurStrength>(
+            groupValue: effect.blurStrength,
+            onValueChanged: (val) {
+              if (!busy) {
+                onChanged(MediaBackgroundEffect.blur(blurStrength: val));
+              }
+            },
+            children: {
+              for (final strength in MediaBackgroundBlurStrength.values)
+                strength: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
+                  ),
+                  child: Text(
+                    strings.backgroundBlurStrength(strength),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+            },
+          ),
+        ],
+        if (effect.type == MediaBackgroundEffectType.replaceImage &&
+            capabilities.canReplaceImage &&
+            imagePresets.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 72,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: imagePresets.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final preset = imagePresets[index];
+                final isSelected = effect == preset.effect;
+                return GestureDetector(
+                  onTap: busy ? null : () => onChanged(preset.effect),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 76,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? RealtimeUiTokens.iosBlue
+                            : Colors.black.withValues(alpha: 0.08),
+                        width: isSelected ? 2.0 : 1.0,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: RealtimeUiTokens.iosBlue.withValues(
+                                  alpha: 0.25,
+                                ),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.memory(
+                            _decoderBytes(preset.imageBytes),
+                            fit: BoxFit.cover,
+                          ),
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: 0.65),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 4,
+                            right: 4,
+                            bottom: 4,
+                            child: Text(
+                              preset.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (isSelected)
+                            const Positioned(
+                              top: 4,
+                              right: 4,
+                              child: CircleAvatar(
+                                radius: 8,
+                                backgroundColor: RealtimeUiTokens.iosBlue,
+                                child: Icon(
+                                  Icons.check,
+                                  size: 11,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
         if (busy) ...[

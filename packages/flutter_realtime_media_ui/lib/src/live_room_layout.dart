@@ -936,7 +936,7 @@ class _LiveInPlaceChatInputState extends State<_LiveInPlaceChatInput> {
               },
             ),
             IconButton(
-              tooltip: strings.isZh ? '收起评论输入' : 'Close comment input',
+              tooltip: strings.closeCommentInput,
               icon: Icon(
                 Icons.close_rounded,
                 color: isDark ? Colors.white70 : style.textMuted,

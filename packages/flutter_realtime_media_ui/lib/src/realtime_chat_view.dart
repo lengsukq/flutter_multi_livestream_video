@@ -52,7 +52,6 @@ class _RealtimeChatViewState extends State<RealtimeChatView>
   bool _showEmojiDrawer = false;
 
   static const _quickEmojis = ['👍', '❤️', '👏', '🎉', '🔥', '🚀', '💯', '😂'];
-  static const _quickReplies = ['收到 👍', '好的，明白', '赞同 💯', '稍等一下', '感谢分享!'];
   static const _drawerEmojis = [
     '👍',
     '❤️',

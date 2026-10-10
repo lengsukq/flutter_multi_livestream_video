@@ -7,6 +7,7 @@ import 'background_effect_selector.dart';
 import 'composable_pre_join_controller.dart';
 import 'media_background_image_preset.dart';
 import 'realtime_strings.dart';
+import 'realtime_ui_style.dart';
 
 /// Shares one Pre-Join controller across freely arranged child widgets.
 class RealtimePreJoinScope extends InheritedWidget {
@@ -130,6 +131,125 @@ class RealtimePreJoinCheckList extends StatelessWidget {
   }
 }
 
+/// iOS-style expandable Readiness Card summarizing pre-join checks.
+class RealtimePreJoinReadinessCard extends StatefulWidget {
+  const RealtimePreJoinReadinessCard({
+    super.key,
+    this.initiallyExpanded = false,
+  });
+
+  final bool initiallyExpanded;
+
+  @override
+  State<RealtimePreJoinReadinessCard> createState() =>
+      _RealtimePreJoinReadinessCardState();
+}
+
+class _RealtimePreJoinReadinessCardState
+    extends State<RealtimePreJoinReadinessCard> {
+  late bool _expanded = widget.initiallyExpanded;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = RealtimePreJoinScope.of(context);
+    final strings = RealtimeStrings.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final result = controller.result;
+        final checks = result?.checks ?? const <MediaPreJoinCheck>[];
+        final isReady = result?.isReady ?? false;
+        final hasBlocking = checks.any((c) => !c.passed && c.isBlocking);
+
+        final statusColor = isReady
+            ? RealtimeUiTokens.iosGreen
+            : hasBlocking
+            ? RealtimeUiTokens.danger
+            : RealtimeUiTokens.warning;
+
+        return RealtimeCard(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isReady
+                            ? Icons.check_circle_rounded
+                            : hasBlocking
+                            ? Icons.error_rounded
+                            : Icons.info_rounded,
+                        size: 17,
+                        color: statusColor,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        isReady
+                            ? strings.systemReady
+                            : hasBlocking
+                            ? strings.resolveBlockingIssues
+                            : strings.checkAttention,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${checks.where((c) => c.passed).length}/${checks.length}',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: RealtimeUiTokens.textMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      _expanded
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.keyboard_arrow_down_rounded,
+                      size: 18,
+                      color: RealtimeUiTokens.textMuted,
+                    ),
+                  ],
+                ),
+              ),
+              if (_expanded) ...[
+                const SizedBox(height: 10),
+                Divider(
+                  height: 1,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.black.withValues(alpha: 0.06),
+                ),
+                const SizedBox(height: 10),
+                const RealtimePreJoinCheckList(),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// Mic/camera capture switches independent of any toolbar or route.
 class RealtimePreJoinMediaControls extends StatelessWidget {
   const RealtimePreJoinMediaControls({super.key});
@@ -137,6 +257,7 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimePreJoinScope.of(context);
+    final strings = RealtimeStrings.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -144,27 +265,55 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
         if (preview == null || controller.result?.role == MediaRole.viewer) {
           return const SizedBox.shrink();
         }
-        final zh = Localizations.localeOf(context).languageCode == 'zh';
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(zh ? '麦克风' : 'Microphone'),
+            RealtimeCupertinoSwitchRow(
+              title: Text(strings.microphone),
+              leading: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: RealtimeUiTokens.iosBlue.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.mic_rounded,
+                  size: 16,
+                  color: RealtimeUiTokens.iosBlue,
+                ),
+              ),
               value: preview.settings.microphoneEnabled,
-              onChanged: controller.busy
-                  ? null
-                  : (enabled) =>
-                        unawaited(controller.setMicrophoneEnabled(enabled)),
+              enabled: !controller.busy,
+              onChanged: (enabled) =>
+                  unawaited(controller.setMicrophoneEnabled(enabled)),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(zh ? '摄像头' : 'Camera'),
+            Divider(
+              height: 1,
+              indent: 54,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06),
+            ),
+            RealtimeCupertinoSwitchRow(
+              title: Text(strings.camera),
+              leading: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: RealtimeUiTokens.iosTeal.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.videocam_rounded,
+                  size: 16,
+                  color: RealtimeUiTokens.iosTeal,
+                ),
+              ),
               value: preview.settings.cameraEnabled,
-              onChanged: controller.busy
-                  ? null
-                  : (enabled) =>
-                        unawaited(controller.setCameraEnabled(enabled)),
+              enabled: !controller.busy,
+              onChanged: (enabled) =>
+                  unawaited(controller.setCameraEnabled(enabled)),
             ),
           ],
         );
@@ -180,6 +329,7 @@ class RealtimePreJoinDevicePicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimePreJoinScope.of(context);
+    final strings = RealtimeStrings.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -196,31 +346,41 @@ class RealtimePreJoinDevicePicker extends StatelessWidget {
         final initial = devices
             .where((device) => device.id == selected?.id)
             .firstOrNull;
-        return DropdownButtonFormField<MediaDevice>(
-          key: ValueKey((kind, initial?.id)),
-          initialValue: initial,
-          decoration: InputDecoration(
-            labelText: switch (kind) {
-              MediaDeviceKind.microphone => RealtimeStrings.of(
-                context,
-              ).microphone,
-              MediaDeviceKind.camera => RealtimeStrings.of(context).camera,
-              MediaDeviceKind.audioOutput => RealtimeStrings.of(
-                context,
-              ).speaker,
-            },
+
+        final label = switch (kind) {
+          MediaDeviceKind.microphone => strings.microphone,
+          MediaDeviceKind.camera => strings.camera,
+          MediaDeviceKind.audioOutput => strings.speaker,
+        };
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: DropdownButtonFormField<MediaDevice>(
+            key: ValueKey((kind, initial?.id)),
+            initialValue: initial,
+            decoration: InputDecoration(
+              isDense: true,
+              labelText: label,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+            items: [
+              for (final device in devices)
+                DropdownMenuItem(value: device, child: Text(device.label)),
+            ],
+            onChanged: controller.busy
+                ? null
+                : (device) {
+                    if (device != null) {
+                      unawaited(controller.selectDevice(device));
+                    }
+                  },
           ),
-          items: [
-            for (final device in devices)
-              DropdownMenuItem(value: device, child: Text(device.label)),
-          ],
-          onChanged: controller.busy
-              ? null
-              : (device) {
-                  if (device != null) {
-                    unawaited(controller.selectDevice(device));
-                  }
-                },
         );
       },
     );
@@ -343,9 +503,9 @@ class RealtimePreJoinJoinButton extends StatelessWidget {
             : const Icon(Icons.login_rounded),
         label: Text(
           label ??
-              (Localizations.localeOf(context).languageCode == 'zh'
-                  ? (controller.joining ? '进入中…' : '进入房间')
-                  : (controller.joining ? 'Joining…' : 'Join room')),
+              (controller.joining
+                  ? RealtimeStrings.of(context).enteringRoom
+                  : RealtimeStrings.of(context).join),
         ),
       ),
     );

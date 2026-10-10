@@ -83,10 +83,10 @@ mixin _LegacyChatActions on State<RealtimeChatView> {
               height: 28,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: _RealtimeChatViewState._quickReplies.length,
+                itemCount: strings.quickReplyPhrases.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 6),
                 itemBuilder: (context, index) {
-                  final reply = _RealtimeChatViewState._quickReplies[index];
+                  final reply = strings.quickReplyPhrases[index];
                   return InkWell(
                     borderRadius: BorderRadius.circular(14),
                     onTap: enabled

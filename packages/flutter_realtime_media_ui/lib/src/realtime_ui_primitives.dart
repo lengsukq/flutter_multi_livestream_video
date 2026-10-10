@@ -754,3 +754,338 @@ class RealtimeCard extends StatelessWidget {
     return card;
   }
 }
+
+/// iOS-style sliding segmented control with smooth haptic-ready tabs.
+class RealtimeCupertinoSegmentedBar<T extends Object> extends StatelessWidget {
+  const RealtimeCupertinoSegmentedBar({
+    super.key,
+    required this.children,
+    required this.groupValue,
+    required this.onValueChanged,
+    this.backgroundColor,
+    this.thumbColor,
+    this.padding = const EdgeInsets.all(4),
+  });
+
+  final Map<T, Widget> children;
+  final T? groupValue;
+  final ValueChanged<T> onValueChanged;
+  final Color? backgroundColor;
+  final Color? thumbColor;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color:
+            backgroundColor ??
+            (isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.05)),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+      ),
+      child: CupertinoSlidingSegmentedControl<T>(
+        children: children,
+        groupValue: groupValue,
+        onValueChanged: (val) {
+          if (val != null) onValueChanged(val);
+        },
+        backgroundColor: Colors.transparent,
+        thumbColor:
+            thumbColor ?? (isDark ? const Color(0xFF2C3240) : Colors.white),
+      ),
+    );
+  }
+}
+
+/// An iOS-style settings row with rounded leading icon, title, subtitle, and CupertinoSwitch.
+class RealtimeCupertinoSwitchRow extends StatelessWidget {
+  const RealtimeCupertinoSwitchRow({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.leading,
+    required this.value,
+    this.onChanged,
+    this.enabled = true,
+  });
+
+  final Widget title;
+  final Widget? subtitle;
+  final Widget? leading;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 12)],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DefaultTextStyle(
+                  style:
+                      theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ) ??
+                      const TextStyle(fontWeight: FontWeight.w600),
+                  child: title,
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  DefaultTextStyle(
+                    style:
+                        theme.textTheme.bodySmall?.copyWith(
+                          color: RealtimeUiTokens.textMuted,
+                          fontSize: 12,
+                        ) ??
+                        const TextStyle(
+                          fontSize: 12,
+                          color: RealtimeUiTokens.textMuted,
+                        ),
+                    child: subtitle!,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          CupertinoSwitch(
+            value: value,
+            activeTrackColor: RealtimeUiTokens.iosGreen,
+            onChanged: enabled ? onChanged : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// iOS HIG empty state with a tinted SF-style rounded icon and clean typography.
+class RealtimeEmptyState extends StatelessWidget {
+  const RealtimeEmptyState({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.action,
+    this.iconColor,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Widget? action;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final primary = iconColor ?? RealtimeUiTokens.iosBlue;
+
+    return Center(
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: primary.withValues(alpha: isDark ? 0.20 : 0.10),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(icon, size: 28, color: primary),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+              ),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 280),
+                child: Text(
+                  subtitle!,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: RealtimeUiTokens.textMuted,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ],
+            if (action != null) ...[const SizedBox(height: 14), action!],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// iOS Inset Group container organizing list items into an elegant rounded card.
+class RealtimeInsetGroup extends StatelessWidget {
+  const RealtimeInsetGroup({
+    super.key,
+    required this.children,
+    this.margin,
+    this.header,
+    this.footer,
+  });
+
+  final List<Widget> children;
+  final EdgeInsetsGeometry? margin;
+  final String? header;
+  final String? footer;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Padding(
+      padding: margin ?? EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (header != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+              child: Text(
+                header!.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: RealtimeUiTokens.textMuted,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ),
+          RealtimeCard(
+            padding: EdgeInsets.zero,
+            radius: RealtimeUiTokens.cardRadius,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0)
+                    Divider(
+                      height: 1,
+                      indent: 14,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.black.withValues(alpha: 0.06),
+                    ),
+                  children[i],
+                ],
+              ],
+            ),
+          ),
+          if (footer != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+              child: Text(
+                footer!,
+                style: const TextStyle(
+                  fontSize: 11.5,
+                  color: RealtimeUiTokens.textMuted,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact floating pill tag with iOS frosted backdrop blur.
+class RealtimeFloatingPill extends StatelessWidget {
+  const RealtimeFloatingPill({
+    super.key,
+    required this.label,
+    this.icon,
+    this.iconColor,
+    this.backgroundColor,
+    this.textColor = Colors.white,
+    this.onTap,
+  });
+
+  final String label;
+  final IconData? icon;
+  final Color? iconColor;
+  final Color? backgroundColor;
+  final Color textColor;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget pill = ClipRRect(
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: backgroundColor ?? Colors.black.withValues(alpha: 0.65),
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.15),
+              width: 0.6,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 13, color: iconColor ?? textColor),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (onTap != null) {
+      pill = GestureDetector(onTap: onTap, child: pill);
+    }
+    return pill;
+  }
+}

@@ -669,7 +669,7 @@ class _MediaRoomViewState extends State<MediaRoomView>
       final strings = RealtimeStrings.of(context);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('${strings.sendGift}功能已开启')));
+      ).showSnackBar(SnackBar(content: Text(strings.giftFeatureEnabled)));
     }
   }
 

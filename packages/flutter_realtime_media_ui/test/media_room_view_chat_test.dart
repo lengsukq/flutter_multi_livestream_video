@@ -825,7 +825,7 @@ void main() {
       await tester.pump();
       await tester.tap(find.byTooltip('Unmute').first);
       await tester.pump();
-      expect(find.textContaining('等待允许发言'), findsOneWidget);
+      expect(find.textContaining('permission'), findsOneWidget);
       expect(fixture.media.mutedCalls, isEmpty);
       await tester.pumpWidget(const SizedBox.shrink());
       await fixture.dispose();

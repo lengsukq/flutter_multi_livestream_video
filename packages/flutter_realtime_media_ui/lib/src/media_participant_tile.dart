@@ -128,48 +128,65 @@ class MediaParticipantTile extends StatelessWidget {
               ),
             Positioned(
               left: 10,
-              right: 10,
               bottom: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: style.surface.withValues(
-                    alpha: style.isDark ? 0.85 : 0.92,
-                  ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 240),
+                child: ClipRRect(
                   borderRadius: BorderRadius.circular(
                     RealtimeUiTokens.pillRadius,
                   ),
-                  border: Border.all(color: style.border),
-                  boxShadow: style.cardShadow,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '$name${participant.isLocal ? strings.youSuffix : ''}',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: style.text,
-                        ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(
+                        RealtimeUiTokens.pillRadius,
                       ),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        width: 0.6,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    Icon(
-                      participant.isMuted
-                          ? Icons.mic_off_rounded
-                          : Icons.mic_rounded,
-                      size: 15,
-                      color: participant.isMuted
-                          ? style.danger
-                          : speaking
-                          ? const Color(0xFF10B981)
-                          : style.textMuted,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '$name${participant.isLocal ? strings.youSuffix : ''}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          participant.isMuted
+                              ? Icons.mic_off_rounded
+                              : Icons.mic_rounded,
+                          size: 13,
+                          color: participant.isMuted
+                              ? const Color(0xFFFF453A)
+                              : speaking
+                              ? const Color(0xFF30D158)
+                              : Colors.white70,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
