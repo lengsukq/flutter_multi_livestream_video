@@ -20,7 +20,7 @@ class RealtimeMediaModeration {
 }
 
 class RealtimeChatModeration
-    implements ChatModeration, ChatModerationCapabilitySource {
+    implements ChatModeration, ChatModerationCapabilitySource, ChatMessageDeleteAction {
   const RealtimeChatModeration(this.session, [this.controlPlane]);
   final ChatSession session;
   final ChatModeration? controlPlane;
@@ -75,6 +75,7 @@ class RealtimeChatModeration
     );
   }
 
+  @override
   Future<void> deleteMessage(String messageId) async {
     final capability = capabilities.deleteMessage;
     if (!capability.supported) return _unsupported('delete message');

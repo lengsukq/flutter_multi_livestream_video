@@ -17,6 +17,12 @@ class ChatMember {
   final bool banned;
 }
 
+/// Optional control-plane-aware message deletion. A composite implementation
+/// may need to coordinate client and backend deletion exactly once.
+abstract interface class ChatMessageDeleteAction {
+  Future<void> deleteMessage(String messageId);
+}
+
 /// Provider-neutral chat governance. Attached and standalone chat share this
 /// contract; the execution mechanism is described by ChatCapabilities.
 abstract interface class ChatModeration {
