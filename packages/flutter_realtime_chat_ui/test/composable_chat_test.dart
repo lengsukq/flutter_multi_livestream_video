@@ -1,11 +1,48 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'empty chat and connection state follow the host Chinese locale',
+    (tester) async {
+      final session = _FakeChatSession();
+      addTearDown(session.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('zh'),
+          supportedLocales: const [Locale('zh'), Locale('en')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: ChatUiScope(
+            session: session,
+            child: const Scaffold(
+              body: Column(
+                children: [
+                  ChatConnectionIndicator(),
+                  Expanded(child: ChatMessageList()),
+                  ChatComposer(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('开始一段对话'), findsOneWidget);
+      expect(find.text('已连接'), findsOneWidget);
+      expect(find.byTooltip('发送消息'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   test('search, reply, send and UI disposal share one ChatSession', () async {
     final session = _FakeChatSession();
     final controller = ChatUiController(session);

@@ -85,16 +85,41 @@ class ChatConnectionIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = ChatUiScope.of(context);
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
     return ListenableBuilder(
       listenable: controller,
-      builder: (_, _) => Chip(
-        avatar: Icon(
-          controller.state.isConnected ? Icons.circle : Icons.circle_outlined,
-          color: controller.state.isConnected ? Colors.green : Colors.orange,
-          size: 12,
+      builder: (_, _) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: controller.state.isConnected
+              ? const Color(0xFFECFDF5)
+              : Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(999),
         ),
-        label: Text(controller.state.name),
-        visualDensity: VisualDensity.compact,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.circle,
+              size: 9,
+              color: controller.state.isConnected
+                  ? const Color(0xFF10B981)
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 7),
+            Text(
+              switch (controller.state.name) {
+                'connected' => zh ? '已连接' : 'Connected',
+                'connecting' => zh ? '连接中' : 'Connecting',
+                'reconnecting' => zh ? '重连中' : 'Reconnecting',
+                'disconnected' => zh ? '已断开' : 'Disconnected',
+                'failed' => zh ? '连接失败' : 'Failed',
+                _ => controller.state.name,
+              },
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -221,9 +246,52 @@ class ChatMessageList extends StatelessWidget {
             : null;
         final capabilities = controller.managementCapabilities;
 
+        if (messages.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.09),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Icon(
+                      Icons.forum_outlined,
+                      size: 30,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    zh ? '开始一段对话' : 'Your conversation starts here',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    zh
+                        ? '发送消息，或者邀请其他人加入聊天室'
+                        : 'Send a message or invite someone to join this room',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
         return ListView.builder(
           reverse: true,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
           itemCount: messages.length,
           itemBuilder: (context, index) {
             final message = messages[messages.length - index - 1];
@@ -584,7 +652,7 @@ class _ChatComposerState extends State<ChatComposer> {
                 ),
                 const SizedBox(width: 6),
                 IconButton(
-                  tooltip: 'Send message',
+                  tooltip: zh ? '发送消息' : 'Send message',
                   onPressed:
                       controller.canSend &&
                           _hasText &&
@@ -629,11 +697,12 @@ class ChatManagementButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = ChatUiScope.of(context);
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
     if (!controller.isHost || controller.moderation == null) {
       return const SizedBox.shrink();
     }
     return IconButton(
-      tooltip: 'Manage chat',
+      tooltip: zh ? '管理聊天室' : 'Manage chat',
       icon: const Icon(Icons.admin_panel_settings_outlined),
       onPressed: () async {
         try {
@@ -651,7 +720,7 @@ class ChatManagementButton extends StatelessWidget {
                   height: 420,
                   child: Column(
                     children: [
-                      const ListTile(title: Text('Chat management')),
+                      ListTile(title: Text(zh ? '聊天室管理' : 'Chat management')),
                       const Expanded(child: ChatMemberList()),
                       if (controller.managementCapabilities.closeRoom.supported)
                         TextButton.icon(
@@ -659,17 +728,17 @@ class ChatManagementButton extends StatelessWidget {
                             final confirmed = await showDialog<bool>(
                               context: context,
                               builder: (context) => AlertDialog(
-                                title: const Text('Close chat room?'),
+                                title: Text(zh ? '关闭聊天室？' : 'Close chat room?'),
                                 actions: [
                                   TextButton(
                                     onPressed: () =>
                                         Navigator.pop(context, false),
-                                    child: const Text('Cancel'),
+                                    child: Text(zh ? '取消' : 'Cancel'),
                                   ),
                                   FilledButton(
                                     onPressed: () =>
                                         Navigator.pop(context, true),
-                                    child: const Text('Close'),
+                                    child: Text(zh ? '关闭' : 'Close'),
                                   ),
                                 ],
                               ),
@@ -690,7 +759,7 @@ class ChatManagementButton extends StatelessWidget {
                             }
                           },
                           icon: const Icon(Icons.block),
-                          label: const Text('Close room'),
+                          label: Text(zh ? '关闭聊天室' : 'Close room'),
                         ),
                     ],
                   ),
@@ -715,6 +784,7 @@ class ChatMemberList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = ChatUiScope.of(context);
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) => ListView.builder(
@@ -740,14 +810,20 @@ class ChatMemberList extends StatelessWidget {
             ),
             subtitle: Text(
               [
-                member.role.name,
-                if (member.muted) 'muted',
-                if (member.banned) 'banned',
+                zh
+                    ? switch (member.role) {
+                        ChatRole.host => '房主',
+                        ChatRole.participant => '参与者',
+                        _ => '成员',
+                      }
+                    : member.role.name,
+                if (member.muted) (zh ? '已禁言' : 'muted'),
+                if (member.banned) (zh ? '已封禁' : 'banned'),
               ].join(' · '),
             ),
             trailing: hasActions
                 ? PopupMenuButton<String>(
-                    tooltip: 'Manage member',
+                    tooltip: zh ? '管理成员' : 'Manage member',
                     onSelected: (action) async {
                       try {
                         switch (action) {
@@ -755,7 +831,7 @@ class ChatMemberList extends StatelessWidget {
                             final approved = await showDialog<bool>(
                               context: context,
                               builder: (dialogContext) => AlertDialog(
-                                title: const Text('Remove member?'),
+                                title: Text(zh ? '移除成员？' : 'Remove member?'),
                                 content: Text(
                                   member.displayName.isEmpty
                                       ? member.userId
@@ -765,12 +841,12 @@ class ChatMemberList extends StatelessWidget {
                                   TextButton(
                                     onPressed: () =>
                                         Navigator.pop(dialogContext, false),
-                                    child: const Text('Cancel'),
+                                    child: Text(zh ? '取消' : 'Cancel'),
                                   ),
                                   FilledButton(
                                     onPressed: () =>
                                         Navigator.pop(dialogContext, true),
-                                    child: const Text('Remove'),
+                                    child: Text(zh ? '移除' : 'Remove'),
                                   ),
                                 ],
                               ),
@@ -804,25 +880,33 @@ class ChatMemberList extends StatelessWidget {
                     },
                     itemBuilder: (context) => [
                       if (capabilities.removeMember.supported)
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'remove',
-                          child: Text('Remove member'),
+                          child: Text(zh ? '移除成员' : 'Remove member'),
                         ),
                       if (capabilities.muteMember.supported)
                         PopupMenuItem(
                           value: 'mute',
-                          child: Text(member.muted ? 'Unmute' : 'Mute'),
+                          child: Text(
+                            member.muted
+                                ? (zh ? '解除禁言' : 'Unmute')
+                                : (zh ? '禁言' : 'Mute'),
+                          ),
                         ),
                       if (capabilities.banMember.supported)
                         PopupMenuItem(
                           value: 'ban',
-                          child: Text(member.banned ? 'Unban' : 'Ban'),
+                          child: Text(
+                            member.banned
+                                ? (zh ? '解除封禁' : 'Unban')
+                                : (zh ? '封禁' : 'Ban'),
+                          ),
                         ),
                       if (capabilities.manageRoles.supported &&
                           member.role != ChatRole.participant)
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'role',
-                          child: Text('Make participant'),
+                          child: Text(zh ? '设为参与者' : 'Make participant'),
                         ),
                     ],
                   )
@@ -838,10 +922,23 @@ class ChatMemberList extends StatelessWidget {
 class ChatPanel extends StatelessWidget {
   const ChatPanel({super.key});
   @override
-  Widget build(BuildContext context) => const Column(
+  Widget build(BuildContext context) => Column(
     children: [
-      Expanded(child: ChatMessageList()),
-      Padding(padding: EdgeInsets.all(8), child: ChatComposer()),
+      const Expanded(child: ChatMessageList()),
+      Container(
+        padding: const EdgeInsets.fromLTRB(14, 11, 14, 14),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border(
+            top: BorderSide(
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+            ),
+          ),
+        ),
+        child: const ChatComposer(),
+      ),
     ],
   );
 }
@@ -851,13 +948,21 @@ class ChatRoomCodeCopy extends StatelessWidget {
   final String roomCode;
   @override
   Widget build(BuildContext context) => IconButton(
-    tooltip: 'Copy room code',
+    tooltip: Localizations.localeOf(context).languageCode == 'zh'
+        ? '复制房间码'
+        : 'Copy room code',
     icon: const Icon(Icons.copy_outlined),
     onPressed: () {
       unawaited(Clipboard.setData(ClipboardData(text: roomCode)));
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(const SnackBar(content: Text('Room code copied')));
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            Localizations.localeOf(context).languageCode == 'zh'
+                ? '房间码已复制'
+                : 'Room code copied',
+          ),
+        ),
+      );
     },
   );
 }
