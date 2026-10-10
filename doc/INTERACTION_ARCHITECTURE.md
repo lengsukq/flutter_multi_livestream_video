@@ -44,6 +44,47 @@ features**, not as rewritten Demo-only logic.
 - P2: security checks, two-client/late-join recovery, provider capabilities,
   complete docs and platform verification.
 
+## P0 implementation: headless transient events
+
+The new `flutter_realtime_interaction_core` Dart package contains the
+transport-agnostic contracts, event codec, capabilities, and control-plane
+types. The SDK runtime provides `DefaultInteractionSession` and
+`MediaInteractionTransport` built on the existing `MediaSession.sendData`
+path. All RTC interaction envelopes use the reserved
+`realtime.interaction.v1` topic, independently of ordinary chat.
+
+```dart
+// An existing connected RealtimeRoom; does not require classroom, gifting or
+// an SDK UI package.
+final interactions = room.interactions;
+if (interactions.capabilities.canSubscribe) {
+  final subscription = interactions.events.listen((event) {
+    if (event.topic == 'myapp.poll.vote') {
+      // Application decides presentation and business interpretation.
+    }
+  });
+  // Cancel subscription on application teardown.
+}
+if (interactions.capabilities.canPublish) {
+  await interactions.publish('myapp.poll.vote', {'choice': 'A'});
+}
+```
+
+This is **transient best-effort transport**, not reliable storage, a trusted
+poll tally or a guarantee of exactly-once delivery. Recipients validate room,
+transport sender, topic, target and bounded event IDs. A short in-memory
+deduplication window rejects repeats, but it is not a persistent event log.
+Targeted events and unreliable delivery fail if unsupported by the provider.
+`room.interactions` is initialized lazily and disposed with the room.
+
+`InteractionControlPlane` is intentionally separate: until a trusted
+application backend is injected, `execute` and `snapshot` report the
+unsupported operation. The current room default does *not* automatically
+expose a command backend, supply IM fallback or synchronize shared state.
+Those integrations, plus pluggable prebuilt feature registration, remain
+subsequent plan steps. Existing classroom and live modules continue to run on
+their original trusted repositories in the meantime.
+
 ### Existing worktree
 
 At plan start, the worktree already contains unrelated uncommitted Demo,

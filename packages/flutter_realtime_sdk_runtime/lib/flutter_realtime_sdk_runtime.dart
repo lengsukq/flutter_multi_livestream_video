@@ -3,6 +3,7 @@ library;
 export 'package:flutter_realtime_screen_annotation/flutter_realtime_screen_annotation.dart';
 
 export 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+export 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
 export 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
 export 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 export 'src/media_adapter.dart';
@@ -16,6 +17,7 @@ export 'src/realtime_error.dart';
 export 'src/realtime_event.dart';
 export 'src/realtime_facade.dart';
 export 'src/realtime_room.dart';
+export 'src/interaction_runtime.dart';
 export 'src/members/room_members_controller.dart';
 export 'src/room_recording_controller.dart';
 export 'src/classroom_media_transport.dart';

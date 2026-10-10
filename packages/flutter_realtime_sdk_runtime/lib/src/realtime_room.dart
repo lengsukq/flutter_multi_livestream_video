@@ -3,6 +3,7 @@ import 'members/room_members_controller.dart';
 import 'room_annotation_coordinator.dart';
 import 'room_recording_controller.dart';
 import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
+import 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
 import 'dart:async';
 
 // ignore_for_file: prefer_initializing_formals
@@ -18,6 +19,7 @@ import 'shared_content_controller.dart';
 import 'realtime_event.dart';
 import 'realtime_room_state.dart';
 import 'realtime_moderation.dart';
+import 'interaction_runtime.dart';
 
 /// A fully resolved room containing media, rendering and optional chat.
 class RealtimeRoom implements MediaBackgroundEffectsController {
@@ -92,6 +94,21 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   final ClassroomSession? classroom;
   SharedContentController? sharedContent;
   final LiveInteractionSession? liveInteractions;
+  InteractionSession? _interactions;
+
+  /// Optional, headless interaction channel for any Meeting/Live room.
+  ///
+  /// Lazily created to avoid extra subscriptions for applications which only
+  /// use media and chat. Does not enable classroom or live business features.
+  InteractionSession get interactions {
+    if (_disposed) throw StateError('Room has been disposed');
+    return _interactions ??= DefaultInteractionSession(
+      roomCode: media.roomCode,
+      senderId: media.participantId,
+      transport: MediaInteractionTransport(media.session),
+    );
+  }
+
   final ChatRoomSession? _productChatRoom;
   final RtcDataChatSession? _rtcChatRoom;
   final void Function() _disposeClients;
@@ -275,6 +292,9 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     });
     await cleanup.run('liveInteractions', () async {
       await liveInteractions?.dispose();
+    });
+    await cleanup.run('interactions', () async {
+      await _interactions?.dispose();
     });
     await cleanup.run('media.events', () async {
       await _mediaEventSubscription?.cancel();
