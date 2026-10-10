@@ -22,27 +22,30 @@ void main() {
     },
   );
 
-  test('preview owner shares native release and disallows early rebind', () async {
-    final gate = Completer<void>();
-    final old = _DelayedDisposePreview(gate.future);
-    final owner = PreJoinPreviewOwner();
-    owner.bind(old, onFailure: (_) {});
-    final first = owner.release();
-    final second = owner.release();
-    expect(identical(first, second), isTrue);
-    expect(old.disposeCalls, 1);
-    expect(
-      () => owner.bind(_FakeLocalPreview(), onFailure: (_) {}),
-      throwsStateError,
-    );
-    gate.complete();
-    await Future.wait([first, second]);
-    final replacement = _FakeLocalPreview();
-    owner.bind(replacement, onFailure: (_) {});
-    await owner.release();
-    expect(old.disposeCalls, 1);
-    expect(replacement.disposeCalls, 1);
-  });
+  test(
+    'preview owner shares native release and disallows early rebind',
+    () async {
+      final gate = Completer<void>();
+      final old = _DelayedDisposePreview(gate.future);
+      final owner = PreJoinPreviewOwner();
+      owner.bind(old, onFailure: (_) {});
+      final first = owner.release();
+      final second = owner.release();
+      expect(identical(first, second), isTrue);
+      expect(old.disposeCalls, 1);
+      expect(
+        () => owner.bind(_FakeLocalPreview(), onFailure: (_) {}),
+        throwsStateError,
+      );
+      gate.complete();
+      await Future.wait([first, second]);
+      final replacement = _FakeLocalPreview();
+      owner.bind(replacement, onFailure: (_) {});
+      await owner.release();
+      expect(old.disposeCalls, 1);
+      expect(replacement.disposeCalls, 1);
+    },
+  );
 
   testWidgets(
     'duplicate Pre-Join enters and forced route removal do not create late navigation',
@@ -68,7 +71,9 @@ void main() {
                     preJoinRoute = ModalRoute.of(pageContext);
                     await gate.future;
                     if (!pageContext.mounted) return;
-                    Navigator.of(pageContext).pushReplacement<void, MediaLocalPreviewSettings>(
+                    Navigator.of(
+                      pageContext,
+                    ).pushReplacement<void, MediaLocalPreviewSettings>(
                       MaterialPageRoute(
                         builder: (_) => const Scaffold(body: Text('Late room')),
                       ),

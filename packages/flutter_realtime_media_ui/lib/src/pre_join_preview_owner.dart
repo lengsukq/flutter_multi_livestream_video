@@ -42,10 +42,12 @@ class PreJoinPreviewOwner {
     _releaseFuture = releasing;
     // Concurrent callers must observe the same release completion before a
     // replacement preview can be bound; failures still reach their caller.
-    unawaited(releasing.then<void>(
-      (_) => _releaseFuture = null,
-      onError: (Object _, StackTrace __) => _releaseFuture = null,
-    ));
+    unawaited(
+      releasing.then<void>(
+        (_) => _releaseFuture = null,
+        onError: (Object _, StackTrace __) => _releaseFuture = null,
+      ),
+    );
     return releasing;
   }
 

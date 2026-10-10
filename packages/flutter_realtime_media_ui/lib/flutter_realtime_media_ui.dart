@@ -13,3 +13,11 @@ export 'src/media_background_image_preset.dart';
 export 'src/background_effect_selector.dart';
 export 'src/composable_pre_join_controller.dart';
 export 'src/composable_pre_join_components.dart';
+export 'src/composable_pre_join_template.dart';
+export 'src/room_members_controller.dart'
+    show
+        RoomManagedMember,
+        RoomMemberLoadResult,
+        RoomMembersController,
+        RoomMediaMemberAction,
+        mergeRoomMembers;

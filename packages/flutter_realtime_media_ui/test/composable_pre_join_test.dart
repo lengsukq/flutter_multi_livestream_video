@@ -106,6 +106,35 @@ void main() {
     }
     await tester.binding.setSurfaceSize(null);
   });
+
+  testWidgets('default Pre-Join template composes public pieces responsively', (
+    tester,
+  ) async {
+    final controller = RealtimePreJoinController(
+      runCheck: () async => _check(),
+      openPreview: (_, _) async => null,
+      permissionRequester: const _PermissionRequester(),
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    for (final width in [390.0, 768.0, 1280.0]) {
+      await tester.binding.setSurfaceSize(Size(width, 780));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RealtimeComposablePreJoinTemplate(
+            controller: controller,
+            onEnter: (_) async {},
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(RealtimePreJoinPreview), findsOneWidget);
+      expect(find.byType(RealtimePreJoinCheckList), findsOneWidget);
+      expect(find.byType(RealtimePreJoinJoinButton), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+    await tester.binding.setSurfaceSize(null);
+  });
 }
 
 MediaPreJoinResult _check({
