@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
+import 'demo_provider_catalog.dart';
 import 'demo_background.dart';
 import 'demo_composable_meeting_page.dart';
 import 'demo_composable_live_page.dart';
@@ -25,7 +27,7 @@ const String _defaultBackendUrl = String.fromEnvironment(
 );
 const String _appToken = String.fromEnvironment('MEDIA_APP_TOKEN');
 
-/// Optional test seam; production uses the full SDK with its built-in drivers.
+/// Optional test seam; Demo registers its desired providers explicitly.
 typedef DemoRealtimeFactory = Realtime Function(String backendUrl);
 typedef DemoRoomPageFactory =
     Widget Function(
@@ -318,7 +320,8 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
 
   Realtime _newRealtime() =>
       widget.realtimeFactory?.call(_server) ??
-      Realtime.standard(
+      Realtime(
+        providers: createDemoProviders(),
         backendUrl: _server,
         tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
       );

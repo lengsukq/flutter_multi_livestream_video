@@ -20,6 +20,25 @@ dependencies:
     sdk: flutter
   flutter_realtime_sdk:
     path: ../packages/flutter_realtime_sdk
+  flutter_realtime_sdk_ui:
+    path: ../packages/flutter_realtime_sdk_ui
+  # Optional providers registered explicitly by this UI-composition Demo.
+  flutter_realtime_provider_livekit:
+    path: ../packages/flutter_realtime_provider_livekit
+  flutter_realtime_provider_agora:
+    path: ../packages/flutter_realtime_provider_agora
+  flutter_realtime_provider_trtc:
+    path: ../packages/flutter_realtime_provider_trtc
+  flutter_realtime_provider_artc:
+    path: ../packages/flutter_realtime_provider_artc
+  flutter_realtime_provider_aws:
+    path: ../packages/flutter_realtime_provider_aws
+  flutter_realtime_provider_agora_chat:
+    path: ../packages/flutter_realtime_provider_agora_chat
+  flutter_realtime_provider_ivs_chat:
+    path: ../packages/flutter_realtime_provider_ivs_chat
+  flutter_realtime_provider_tencent_chat:
+    path: ../packages/flutter_realtime_provider_tencent_chat
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

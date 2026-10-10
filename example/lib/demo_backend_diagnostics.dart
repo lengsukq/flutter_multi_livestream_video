@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 /// Observed state of the Demo backend. No Flutter widget owns the request.
 class DemoBackendDiagnostics extends ChangeNotifier {

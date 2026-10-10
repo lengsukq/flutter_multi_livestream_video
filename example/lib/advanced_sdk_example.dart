@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 /// Advanced API example for applications that need direct [RealtimeSdk]
 /// orchestration rather than the simplified [Realtime] facade.

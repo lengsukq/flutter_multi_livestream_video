@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 /// Original generated images bundled locally with the demo.
 class DemoBackground {

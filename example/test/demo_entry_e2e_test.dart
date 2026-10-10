@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_example/demo_join_screen.dart';
 import 'package:flutter_realtime_media_example/demo_composable_pre_join_page.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
