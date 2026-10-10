@@ -168,7 +168,20 @@ void main() {
       await tester.tap(find.text('Create meeting').last);
       await _confirmPreJoin(tester);
 
-      expect(find.text('Entering room…'), findsOneWidget);
+      // The in-place loading overlay and its disabled join action may both
+      // render the same status label. What matters is that navigation has not
+      // occurred while the connection is pending.
+      expect(find.text('Entering room…'), findsWidgets);
+      final blockingOverlays = find.ancestor(
+        of: find.text('Entering room…').last,
+        matching: find.byType(AbsorbPointer),
+      );
+      expect(
+        blockingOverlays.evaluate().any(
+          (element) => (element.widget as AbsorbPointer).absorbing,
+        ),
+        isTrue,
+      );
       expect(find.text('Connected fake room'), findsNothing);
       expect(fake.opened, hasLength(1));
       expect(fake.opened.single.experience, RealtimeExperience.meeting);

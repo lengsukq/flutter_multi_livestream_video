@@ -77,13 +77,13 @@ void main() {
       );
       expect(find.byType(RealtimePreJoinPreview), findsNothing);
       expect(find.byType(RealtimePreJoinJoinButton), findsOneWidget);
-      expect(find.text('Checks complete. Ready to join'), findsOneWidget);
-      await tester.ensureVisible(find.text('Device and network checks'));
-      if (find
-          .byType(RealtimePreJoinCheckList, skipOffstage: false)
-          .evaluate()
-          .isEmpty) {
-        await tester.tap(find.text('Device and network checks'));
+      expect(find.text('All systems ready'), findsOneWidget);
+      expect(find.byType(RealtimePreJoinReadinessCard), findsOneWidget);
+      // The page survives surface-size changes; its expansion state may
+      // persist between viewport iterations.
+      if (find.byType(RealtimePreJoinCheckList).evaluate().isEmpty) {
+        await tester.ensureVisible(find.text('All systems ready'));
+        await tester.tap(find.text('All systems ready'));
         await tester.pumpAndSettle();
       }
       expect(

@@ -91,7 +91,7 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
           Row(
             children: [
               RealtimePill(
-                label: strings.isZh ? '全部' : 'All',
+                label: strings.allFilter,
                 foreground: _filter == null ? Colors.white : style.textMuted,
                 background: _filter == null
                     ? style.primary

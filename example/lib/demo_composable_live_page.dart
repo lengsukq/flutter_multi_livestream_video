@@ -57,31 +57,27 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
   });
 
   Future<bool> _confirmLeave(BuildContext context) async {
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RealtimeStrings.of(context);
     final host =
         widget.room.media.role == MediaRole.host &&
         widget.room.media.managementCapabilities.closeRoom.supported;
     return await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: Text(
-              host ? (zh ? '结束直播' : 'End live') : (zh ? '离开直播' : 'Leave live'),
-            ),
+            title: Text(host ? strings.endLive : strings.leaveRoomTitle),
             content: Text(
               host
-                  ? (zh
-                        ? '结束直播将关闭房间，确定继续吗？'
-                        : 'End this live room for everyone?')
-                  : (zh ? '确定离开当前直播吗？' : 'Leave this live room?'),
+                  ? strings.endLiveConfirmation
+                  : strings.leaveRoomConfirmation,
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text(zh ? '取消' : 'Cancel'),
+                child: Text(strings.cancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: Text(zh ? '确定' : 'Confirm'),
+                child: Text(host ? strings.endLive : strings.leave),
               ),
             ],
           ),
@@ -89,33 +85,47 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
         false;
   }
 
-  Widget _panel() => Card(
-    margin: const EdgeInsets.all(8),
-    child: Column(
-      children: [
-        Row(
-          children: [
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                _sidePanel == _LiveSidePanel.chat ? 'Chat' : 'Participants',
-              ),
+  Widget _panel() {
+    final strings = RealtimeStrings.of(context);
+    return RealtimeCard(
+      margin: const EdgeInsets.all(8),
+      radius: RealtimeUiTokens.cardRadius,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _sidePanel == _LiveSidePanel.chat
+                        ? strings.chat
+                        : strings.participants,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: strings.closePanel,
+                  onPressed: () =>
+                      setState(() => _sidePanel = _LiveSidePanel.none),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
             ),
-            IconButton(
-              tooltip: 'Close',
-              onPressed: () => setState(() => _sidePanel = _LiveSidePanel.none),
-              icon: const Icon(Icons.close),
-            ),
-          ],
-        ),
-        Expanded(
-          child: _sidePanel == _LiveSidePanel.chat
-              ? const RealtimeChatPanel()
-              : const RealtimeManagedParticipantList(),
-        ),
-      ],
-    ),
-  );
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: _sidePanel == _LiveSidePanel.chat
+                ? const RealtimeChatPanel()
+                : const RealtimeManagedParticipantList(),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => FutureBuilder<void>(
@@ -217,42 +227,49 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                       SizedBox(height: 220, child: _panel()),
                     Padding(
                       padding: const EdgeInsets.all(8),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          if (!wide) const RealtimeLiveStatus(),
-                          if (isHost) ...[
-                            const RealtimeMicrophoneButton(),
-                            const RealtimeCameraButton(),
-                            const RealtimeSwitchCameraButton(),
-                            const RealtimeAudioOutputButton(),
-                            const RealtimeScreenShareButton(),
-                            DemoRecordingButton(room: widget.room),
-                            FutureBuilder<List<MediaBackgroundImagePreset>>(
-                              future: _presets,
-                              builder: (context, snapshot) =>
-                                  RealtimeBackgroundEffectsButton(
-                                    imagePresets: snapshot.data ?? const [],
-                                  ),
+                      child: RealtimeGlassSurface(
+                        radius: RealtimeUiTokens.pillRadius,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (!wide) const RealtimeLiveStatus(),
+                            if (isHost) ...[
+                              const RealtimeMicrophoneButton(),
+                              const RealtimeCameraButton(),
+                              const RealtimeSwitchCameraButton(),
+                              const RealtimeAudioOutputButton(),
+                              const RealtimeScreenShareButton(),
+                              DemoRecordingButton(room: widget.room),
+                              FutureBuilder<List<MediaBackgroundImagePreset>>(
+                                future: _presets,
+                                builder: (context, snapshot) =>
+                                    RealtimeBackgroundEffectsButton(
+                                      imagePresets: snapshot.data ?? const [],
+                                    ),
+                              ),
+                            ],
+                            const RealtimeLiveLikeButton(),
+                            const RealtimeLiveGiftButton(),
+                            if (widget.room.chat != null)
+                              IconButton(
+                                tooltip: RealtimeStrings.of(context).chat,
+                                icon: const Icon(Icons.chat_bubble_outline),
+                                onPressed: () => _toggle(_LiveSidePanel.chat),
+                              ),
+                            IconButton(
+                              tooltip: RealtimeStrings.of(context).participants,
+                              icon: const Icon(Icons.people_outline),
+                              onPressed: () => _toggle(_LiveSidePanel.members),
                             ),
                           ],
-                          const RealtimeLiveLikeButton(),
-                          const RealtimeLiveGiftButton(),
-                          if (widget.room.chat != null)
-                            IconButton(
-                              tooltip: 'Chat',
-                              icon: const Icon(Icons.chat_bubble_outline),
-                              onPressed: () => _toggle(_LiveSidePanel.chat),
-                            ),
-                          IconButton(
-                            tooltip: 'Participants',
-                            icon: const Icon(Icons.people_outline),
-                            onPressed: () => _toggle(_LiveSidePanel.members),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ],

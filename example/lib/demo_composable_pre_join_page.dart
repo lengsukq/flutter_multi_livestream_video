@@ -68,10 +68,10 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
       widget.onEnter(context, settings);
 
   Widget _preview(BuildContext context) {
-    final strings = DemoStrings.of(context);
+    final strings = RealtimeStrings.of(context);
     final theme = Theme.of(context);
     return RealtimeGlassSurface(
-      radius: 24,
+      radius: RealtimeUiTokens.cardRadius,
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,7 +82,9 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  strings.cameraPreview,
+                  strings.cameraPreviewUnavailable.isEmpty
+                      ? 'Camera Preview'
+                      : DemoStrings.of(context).cameraPreview,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -94,83 +96,35 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
           AspectRatio(
             aspectRatio: 16 / 9,
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
               child: ColoredBox(
                 color: const Color(0xFF151E2D),
                 child: controller.result?.role == MediaRole.viewer
                     ? _PreviewExplanation(
                         icon: Icons.visibility_outlined,
-                        label: strings.viewerPreviewHelp,
+                        label: DemoStrings.of(context).viewerPreviewHelp,
                       )
                     : RealtimePreJoinPreview(
                         placeholder: _PreviewExplanation(
                           icon: Icons.videocam_off_outlined,
-                          label: strings.previewDisabledHelp,
+                          label: DemoStrings.of(context).previewDisabledHelp,
                         ),
                       ),
               ),
             ),
           ),
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: controller.result?.isReady == true
-                  ? const Color(0xFFECFDF5)
-                  : theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  controller.result?.isReady == true
-                      ? Icons.check_circle_rounded
-                      : Icons.info_outline_rounded,
-                  size: 18,
-                  color: controller.result?.isReady == true
-                      ? const Color(0xFF059669)
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    controller.loading
-                        ? strings.checking
-                        : controller.result?.isReady == true
-                        ? strings.readyToJoin
-                        : strings.checkAttention,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 6),
-          Material(
-            color: Colors.transparent,
-            child: ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: const EdgeInsets.only(bottom: 4),
-              dense: true,
-              title: Text(
-                strings.diagnosticDetails,
-                style: theme.textTheme.bodyMedium,
-              ),
-              children: const [RealtimePreJoinCheckList()],
-            ),
-          ),
+          const RealtimePreJoinReadinessCard(),
         ],
       ),
     );
   }
 
   Widget _settings(BuildContext context) {
-    final strings = DemoStrings.of(context);
+    final strings = RealtimeStrings.of(context);
     final theme = Theme.of(context);
     return RealtimeGlassSurface(
-      radius: 24,
+      radius: RealtimeUiTokens.cardRadius,
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -181,7 +135,7 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
-                  strings.deviceSettings,
+                  strings.audioAndVideo,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -189,23 +143,29 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             strings.deviceSettingsHint,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 10),
-          const RealtimePreJoinPermissions(),
-          const RealtimePreJoinMediaControls(),
-          const SizedBox(height: 8),
-          const RealtimePreJoinDevicePicker(kind: MediaDeviceKind.microphone),
-          const SizedBox(height: 8),
-          const RealtimePreJoinDevicePicker(kind: MediaDeviceKind.camera),
-          const SizedBox(height: 8),
-          const RealtimePreJoinDevicePicker(kind: MediaDeviceKind.audioOutput),
+          const SizedBox(height: 14),
+          RealtimeInsetGroup(
+            children: const [
+              RealtimePreJoinPermissions(),
+              RealtimePreJoinMediaControls(),
+            ],
+          ),
           const SizedBox(height: 12),
+          RealtimeInsetGroup(
+            children: const [
+              RealtimePreJoinDevicePicker(kind: MediaDeviceKind.microphone),
+              RealtimePreJoinDevicePicker(kind: MediaDeviceKind.camera),
+              RealtimePreJoinDevicePicker(kind: MediaDeviceKind.audioOutput),
+            ],
+          ),
+          const SizedBox(height: 14),
           RealtimePreJoinBackgroundSelector(imagePresets: widget.imagePresets),
         ],
       ),
@@ -214,7 +174,6 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
 
   @override
   Widget build(BuildContext context) {
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
     final strings = DemoStrings.of(context);
     return RealtimePreJoinScope(
       controller: controller,
@@ -367,16 +326,20 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
                                       : () =>
                                             unawaited(controller.initialize()),
                                   icon: const Icon(Icons.refresh),
-                                  label: Text(zh ? '重新检测' : 'Check again'),
+                                  label: Text(
+                                    RealtimeStrings.of(context).runAgain,
+                                  ),
                                 ),
                                 RealtimePreJoinJoinButton(
                                   onEnter: _enter,
                                   label: controller.joining
-                                      ? (zh ? '加入中…' : 'Joining…')
+                                      ? RealtimeStrings.of(context).enteringRoom
                                       : controller.result?.role ==
                                             MediaRole.viewer
-                                      ? (zh ? '观看直播' : 'Enter live room')
-                                      : (zh ? '加入会议' : 'Join meeting'),
+                                      ? RealtimeStrings.of(
+                                          context,
+                                        ).enterLiveRoom
+                                      : RealtimeStrings.of(context).joinMeeting,
                                 ),
                               ],
                             ),
@@ -397,7 +360,9 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
                                 children: [
                                   const CircularProgressIndicator(),
                                   const SizedBox(height: 12),
-                                  Text(zh ? '正在进入房间…' : 'Entering room…'),
+                                  Text(
+                                    RealtimeStrings.of(context).enteringRoom,
+                                  ),
                                 ],
                               ),
                             ),

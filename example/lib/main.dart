@@ -82,6 +82,16 @@ class _ChimeExampleAppState extends State<ChimeExampleApp> {
       theme: RealtimeUiTheme.light(),
       darkTheme: RealtimeUiTheme.dark(),
       themeMode: _themeMode,
+      builder: (context, child) {
+        final currentLocale = _locale ?? Localizations.localeOf(context);
+        final isZh = currentLocale.languageCode.toLowerCase() == 'zh';
+        return RealtimeStringsScope(
+          strings: isZh
+              ? const RealtimeStrings.zh()
+              : const RealtimeStrings.en(),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: JoinScreen(
         onLocaleChanged: _setLocale,
         themeMode: _themeMode,

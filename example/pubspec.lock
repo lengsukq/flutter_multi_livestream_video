@@ -304,6 +304,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_classroom_preset:
+    dependency: "direct main"
+    description:
+      path: "../packages/flutter_realtime_classroom_preset"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_classroom_ui:
     dependency: transitive
     description:
@@ -329,6 +336,13 @@ packages:
     dependency: transitive
     description:
       path: "../packages/flutter_realtime_live_core"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_live_preset:
+    dependency: "direct main"
+    description:
+      path: "../packages/flutter_realtime_live_preset"
       relative: true
     source: path
     version: "0.1.0"

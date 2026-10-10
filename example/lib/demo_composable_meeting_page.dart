@@ -1,3 +1,4 @@
+import 'demo_custom_interaction.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -54,20 +55,20 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   }
 
   Future<bool> _confirmLeave(BuildContext context) async {
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final strings = RealtimeStrings.of(context);
     return await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: Text(zh ? '离开会议' : 'Leave meeting'),
-            content: Text(zh ? '确定离开当前房间吗？' : 'Leave this room?'),
+            title: Text(strings.leaveRoomTitle),
+            content: Text(strings.leaveRoomConfirmation),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
-                child: Text(zh ? '取消' : 'Cancel'),
+                child: Text(strings.cancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, true),
-                child: Text(zh ? '离开' : 'Leave'),
+                child: Text(strings.leave),
               ),
             ],
           ),
@@ -80,7 +81,8 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   }
 
   Future<void> _openEffects(BuildContext context) async {
-    final presets = await DemoBackground.presets;
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final presets = await DemoBackground.loadPresets(isZh: zh);
     if (!context.mounted) return;
     final controller = RealtimeRoomUiScope.of(context);
     await showModalBottomSheet<void>(
@@ -150,7 +152,6 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 760;
-                final zh = Localizations.localeOf(context).languageCode == 'zh';
                 return Column(
                   children: [
                     // iOS style structured navigation row
@@ -236,7 +237,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                             builder: (context, onPressed, active, pending) =>
                                 RealtimeDockItem(
                                   icon: Icons.cameraswitch_rounded,
-                                  label: zh ? '翻转' : 'Flip',
+                                  label: RealtimeStrings.of(context).flipCamera,
                                   isLoading: pending,
                                   onPressed: onPressed,
                                   showLabel: wide,
@@ -244,7 +245,9 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                           ),
                           RealtimeDockItem(
                             icon: Icons.blur_on_rounded,
-                            label: zh ? '背景' : 'Effects',
+                            label: RealtimeStrings.of(
+                              context,
+                            ).backgroundEffects,
                             onPressed: () => _openEffects(context),
                             showLabel: wide,
                           ),
@@ -252,6 +255,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                         ],
                         collaborationGroup: [
                           RealtimeDockSharedContentButton(showLabel: wide),
+                          DemoWaveAction(room: widget.room, showLabel: wide),
                           if (widget.room.classroom != null) ...[
                             RealtimeDockRaiseHandButton(showLabel: wide),
                             RealtimeDockFeedbackButton(showLabel: wide),
@@ -261,14 +265,14 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                           if (widget.room.chat != null)
                             RealtimeDockItem(
                               icon: Icons.chat_bubble_outline_rounded,
-                              label: zh ? '聊天' : 'Chat',
+                              label: RealtimeStrings.of(context).chat,
                               isActive: _panel == _DemoSidePanel.chat,
                               onPressed: () => _toggle(_DemoSidePanel.chat),
                               showLabel: wide,
                             ),
                           RealtimeDockItem(
                             icon: Icons.people_outline_rounded,
-                            label: zh ? '成员' : 'Members',
+                            label: RealtimeStrings.of(context).participants,
                             isActive: _panel == _DemoSidePanel.participants,
                             onPressed: () =>
                                 _toggle(_DemoSidePanel.participants),
@@ -279,7 +283,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                           if (widget.room.classroom != null)
                             RealtimeDockItem(
                               icon: Icons.school_outlined,
-                              label: zh ? '课堂管理' : 'Classroom',
+                              label: RealtimeStrings.of(context).classroom,
                               isActive: _panel == _DemoSidePanel.classroom,
                               onPressed: () =>
                                   _toggle(_DemoSidePanel.classroom),
@@ -288,7 +292,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                         ],
                         exitAction: RealtimeDockItem(
                           icon: Icons.call_end_rounded,
-                          label: zh ? '离开' : 'Leave',
+                          label: RealtimeStrings.of(context).leave,
                           isDanger: true,
                           onPressed: () async {
                             if (await _confirmLeave(context)) {
@@ -320,19 +324,19 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   });
 
   Widget _sidePanel() {
+    final strings = RealtimeStrings.of(context);
     if (_panel == _DemoSidePanel.classroom) {
       return RealtimeCard(
         margin: const EdgeInsets.all(8),
-        radius: 20,
+        radius: RealtimeUiTokens.cardRadius,
         child: RealtimeClassroomPanel(
           onClose: () => setState(() => _panel = _DemoSidePanel.closed),
         ),
       );
     }
-    final zh = Localizations.localeOf(context).languageCode == 'zh';
     return RealtimeCard(
       margin: const EdgeInsets.all(8),
-      radius: 20,
+      radius: RealtimeUiTokens.cardRadius,
       child: Column(
         children: [
           Padding(
@@ -342,8 +346,8 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                 Expanded(
                   child: Text(
                     switch (_panel) {
-                      _DemoSidePanel.chat => zh ? '实时聊天' : 'Chat',
-                      _ => zh ? '参会成员' : 'Participants',
+                      _DemoSidePanel.chat => strings.chat,
+                      _ => strings.participants,
                     },
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
@@ -352,7 +356,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                   ),
                 ),
                 IconButton(
-                  tooltip: zh ? '关闭面板' : 'Close panel',
+                  tooltip: strings.closePanel,
                   onPressed: () =>
                       setState(() => _panel = _DemoSidePanel.closed),
                   icon: const Icon(Icons.close_rounded),
@@ -398,6 +402,7 @@ class _DemoMeetingStage extends StatelessWidget {
                 classroom: controller.room.classroom!,
               ),
             ),
+          DemoWaveOverlay(room: controller.room),
         ],
       ),
     );

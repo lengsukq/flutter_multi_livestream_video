@@ -3,16 +3,18 @@ import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 /// Original generated images bundled locally with the demo.
 class DemoBackground {
-  static final Future<List<MediaBackgroundImagePreset>> presets = Future.wait(
-    const <(String, String)>[
-      ('office', '办公室'),
-      ('library', '书房'),
-      ('meeting-room', '会议室'),
-      ('living-room', '客厅'),
-      ('cafe', '咖啡馆'),
-      ('garden', '花园'),
-      ('mountains', '山水'),
-      ('studio', '简洁蓝色'),
+  static Future<List<MediaBackgroundImagePreset>> loadPresets({
+    bool isZh = true,
+  }) => Future.wait(
+    [
+      ('office', isZh ? '办公室' : 'Office'),
+      ('library', isZh ? '书房' : 'Library'),
+      ('meeting-room', isZh ? '会议室' : 'Meeting Room'),
+      ('living-room', isZh ? '客厅' : 'Living Room'),
+      ('cafe', isZh ? '咖啡馆' : 'Cafe'),
+      ('garden', isZh ? '花园' : 'Garden'),
+      ('mountains', isZh ? '山水' : 'Mountains'),
+      ('studio', isZh ? '简洁蓝色' : 'Studio'),
     ].map((entry) async {
       final data = await rootBundle.load(
         'assets/backgrounds/${entry.$1}-preset.png',
@@ -27,4 +29,6 @@ class DemoBackground {
       );
     }),
   );
+
+  static Future<List<MediaBackgroundImagePreset>> get presets => loadPresets();
 }

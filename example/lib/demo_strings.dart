@@ -206,4 +206,18 @@ class DemoStrings {
   String roomSummary(String mode, String provider, int attendees) => isZh
       ? '$mode · $provider · $attendees 人在线'
       : '$mode · $provider · $attendees online';
+
+  String get allFilter => isZh ? '全部' : 'All';
+  String get joinMeetingParticipant => isZh ? '加入会议 (参会者)' : 'Join Meeting';
+  String get watchLiveViewer => isZh ? '观看直播 (观众)' : 'Watch Live';
+  String get liveBannerDescription => isZh
+      ? '高清互动直播 · 悬浮弹幕流 · 实时飘心点赞 · 清屏沉浸模式'
+      : 'Interactive livestream · Floating danmaku · Flying heart likes · Clean screen';
+  String get meetingBannerDescription => isZh
+      ? '多人协作会议 · 宫格与演讲者布局 · 屏幕共享 · 全员静音管理'
+      : 'Multi-party meeting · Grid & Speaker layouts · Screen sharing · Host controls';
+  String get appearanceTheme => isZh ? '外观主题' : 'Appearance theme';
+  String get themeLight => isZh ? '简白浅色 (默认)' : 'Light (Default)';
+  String get themeDark => isZh ? '质感深色' : 'Dark';
+  String get themeSystem => isZh ? '跟随系统' : 'System';
 }

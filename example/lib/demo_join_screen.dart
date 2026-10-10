@@ -324,6 +324,9 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
         providers: createDemoProviders(),
         backendUrl: _server,
         tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
+        // Demo elects to showcase prebuilt business features. SDK consumers
+        // omitting this list get plain Meeting/Live/Chat and Interaction.
+        featurePlugins: const [ClassroomPreset(), LivePreset()],
       );
 
   Future<void> _runPreJoin(
@@ -571,14 +574,14 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildThemeMenu() {
-    final strings = RealtimeStrings.of(context);
+    final strings = DemoStrings.of(context);
     final style = RealtimeStyle.of(context);
     return RealtimeGlassSurface(
       radius: RealtimeUiTokens.pillRadius,
       opacity: 0.80,
       shadow: false,
       child: PopupMenuButton<ThemeMode>(
-        tooltip: strings.isZh ? '外观主题' : 'Appearance theme',
+        tooltip: strings.appearanceTheme,
         color: style.surface.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
         elevation: 6,
@@ -603,10 +606,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
               children: [
                 Icon(Icons.light_mode_rounded, size: 18, color: style.text),
                 const SizedBox(width: 8),
-                Text(
-                  strings.isZh ? '简白浅色 (默认)' : 'Light (Default)',
-                  style: TextStyle(color: style.text),
-                ),
+                Text(strings.themeLight, style: TextStyle(color: style.text)),
               ],
             ),
           ),
@@ -616,10 +616,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
               children: [
                 Icon(Icons.dark_mode_rounded, size: 18, color: style.text),
                 const SizedBox(width: 8),
-                Text(
-                  strings.isZh ? '质感深色' : 'Dark',
-                  style: TextStyle(color: style.text),
-                ),
+                Text(strings.themeDark, style: TextStyle(color: style.text)),
               ],
             ),
           ),
@@ -633,10 +630,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                   color: style.text,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  strings.isZh ? '跟随系统' : 'System',
-                  style: TextStyle(color: style.text),
-                ),
+                Text(strings.themeSystem, style: TextStyle(color: style.text)),
               ],
             ),
           ),
@@ -1092,9 +1086,9 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                         children: [
                           Expanded(
                             child: RealtimePill(
-                              label: DemoStrings.of(context).isZh
-                                  ? '加入会议 (参会者)'
-                                  : 'Join Meeting',
+                              label: DemoStrings.of(
+                                context,
+                              ).joinMeetingParticipant,
                               icon: Icons.groups_rounded,
                               foreground: !isLiveMode
                                   ? Colors.white
@@ -1113,9 +1107,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                           const SizedBox(width: 8),
                           Expanded(
                             child: RealtimePill(
-                              label: DemoStrings.of(context).isZh
-                                  ? '观看直播 (观众)'
-                                  : 'Watch Live',
+                              label: DemoStrings.of(context).watchLiveViewer,
                               icon: Icons.podcasts_rounded,
                               foreground: isLiveMode
                                   ? Colors.white
@@ -1196,12 +1188,10 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                         Expanded(
                           child: Text(
                             live
-                                ? (DemoStrings.of(context).isZh
-                                      ? '高清互动直播 · 悬浮弹幕流 · 实时飘心点赞 · 清屏沉浸模式'
-                                      : 'Interactive livestream · Floating danmaku · Flying heart likes · Clean screen')
-                                : (DemoStrings.of(context).isZh
-                                      ? '多人协作会议 · 宫格与演讲者布局 · 屏幕共享 · 全员静音管理'
-                                      : 'Multi-party meeting · Grid & Speaker layouts · Screen sharing · Host controls'),
+                                ? DemoStrings.of(context).liveBannerDescription
+                                : DemoStrings.of(
+                                    context,
+                                  ).meetingBannerDescription,
                             style: TextStyle(
                               fontSize: 12,
                               color: live
