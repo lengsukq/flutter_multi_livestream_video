@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
-/// Demo owns the Standalone Chat page, while the lightweight chat_ui package
-/// owns transport subscription, search/reply/send and member actions.
+import 'demo_strings.dart';
+
+/// Demo owns the layout; the SDK owns ChatSession and composable chat widgets.
 class DemoComposableChatPage extends StatelessWidget {
   const DemoComposableChatPage({
     super.key,
@@ -16,111 +17,140 @@ class DemoComposableChatPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final strings = DemoStrings.of(context);
     final theme = Theme.of(context);
-
     return ChatUiScope(
       session: chatRoom.session,
       moderation: chatRoom.moderation,
       child: Scaffold(
-        backgroundColor: RealtimeUiTokens.background,
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 900;
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1000),
-                  child: Column(
-                    children: [
-                      // iOS style header bar
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 16, 6),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              tooltip: 'Back',
-                              onPressed: () => Navigator.maybePop(context),
-                              icon: const Icon(
-                                Icons.arrow_back_ios_new_rounded,
-                                size: 20,
-                              ),
+        backgroundColor: Colors.transparent,
+        body: RealtimeAmbientBackground(
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 600;
+                final padding = compact ? 12.0 : 24.0;
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1100),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(padding, 12, padding, 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          RealtimeGlassSurface(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: compact ? 10 : 18,
+                              vertical: compact ? 10 : 14,
                             ),
-                            const SizedBox(width: 4),
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary.withValues(
-                                  alpha: 0.12,
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  tooltip: strings.back,
+                                  onPressed: () => Navigator.maybePop(context),
+                                  icon: const Icon(Icons.arrow_back_rounded),
                                 ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                Icons.forum_rounded,
-                                size: 20,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: -0.3,
-                                    ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    gradient: RealtimeUiTokens.primaryGradient,
+                                    borderRadius: BorderRadius.circular(15),
                                   ),
-                                  Text(
-                                    chatRoom.roomCode,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
+                                  child: const Icon(
+                                    Icons.forum_rounded,
+                                    color: Colors.white,
+                                    size: 23,
                                   ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title == 'Chat'
+                                            ? (strings.isZh
+                                                  ? '独立聊天'
+                                                  : 'Standalone Chat')
+                                            : title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${strings.roomCode} · ${chatRoom.roomCode}',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (!compact) ...[
+                                  const ChatConnectionIndicator(),
+                                  const SizedBox(width: 8),
                                 ],
-                              ),
+                                ChatRoomCodeCopy(roomCode: chatRoom.roomCode),
+                                const ChatManagementButton(),
+                              ],
                             ),
-                            if (wide) const ChatConnectionIndicator(),
-                            const SizedBox(width: 4),
-                            ChatRoomCodeCopy(roomCode: chatRoom.roomCode),
-                            const ChatManagementButton(),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-                        child: Row(
-                          children: [
-                            const Expanded(child: ChatSearchField()),
-                            if (!wide) ...[
-                              const SizedBox(width: 8),
-                              const ChatConnectionIndicator(),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                          child: RealtimeCard(
-                            radius: 20,
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: const ChatPanel(),
                           ),
-                        ),
+                          SizedBox(height: compact ? 12 : 18),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.chat_bubble_outline_rounded,
+                                  size: 19,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    strings.conversation,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                                if (compact) const ChatConnectionIndicator(),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          RealtimeGlassSurface(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: const ChatSearchField(),
+                          ),
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: RealtimeCard(
+                              radius: 24,
+                              padding: EdgeInsets.zero,
+                              child: const ChatPanel(),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),

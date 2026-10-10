@@ -86,6 +86,26 @@ class DemoStrings {
   String get optionalRoomCode => isZh ? '房间码（可选）' : 'Room code (optional)';
   String get roomCodeHelp => isZh ? '4–12 位字母或数字' : '4–12 letters or digits';
   String get joinRoom => isZh ? '加入房间' : 'Join room';
+  String get back => isZh ? '返回' : 'Back';
+  String get conversation => isZh ? '聊天消息' : 'Conversation';
+  String get preJoinTitle => isZh ? '入会前准备' : 'Ready to join';
+  String get cameraPreview => isZh ? '画面预览' : 'Video preview';
+  String get viewerPreviewHelp => isZh
+      ? '作为观众，无需开启摄像头和麦克风'
+      : 'As a viewer, no camera or microphone is needed';
+  String get previewDisabledHelp => isZh
+      ? '摄像头默认关闭，可在设备设置中开启预览'
+      : 'Camera is off by default. Enable it in audio & video settings';
+  String get deviceSettings => isZh ? '音视频设备' : 'Audio & video';
+  String get deviceSettingsHint => isZh
+      ? '进入房间前，可自由开启麦克风与摄像头。'
+      : 'Choose your microphone and camera before entering.';
+  String get diagnosticDetails =>
+      isZh ? '设备和网络检测详情' : 'Device and network checks';
+  String get readyToJoin =>
+      isZh ? '检查完成，可以进入房间' : 'Checks complete. Ready to join';
+  String get checkAttention =>
+      isZh ? '检测尚未完成，查看详情' : 'Some checks need attention';
   String get createAndJoin => isZh ? '创建并加入' : 'Create and join';
   String get random => isZh ? '随机生成' : 'Random';
   String get optionalDisplayName =>

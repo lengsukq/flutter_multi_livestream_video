@@ -71,9 +71,25 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byType(RealtimePreJoinPreview), findsOneWidget);
+      expect(
+        find.text('As a viewer, no camera or microphone is needed'),
+        findsOneWidget,
+      );
+      expect(find.byType(RealtimePreJoinPreview), findsNothing);
       expect(find.byType(RealtimePreJoinJoinButton), findsOneWidget);
-      expect(find.text('Ready'), findsOneWidget);
+      expect(find.text('Checks complete. Ready to join'), findsOneWidget);
+      await tester.ensureVisible(find.text('Device and network checks'));
+      if (find
+          .byType(RealtimePreJoinCheckList, skipOffstage: false)
+          .evaluate()
+          .isEmpty) {
+        await tester.tap(find.text('Device and network checks'));
+        await tester.pumpAndSettle();
+      }
+      expect(
+        find.byType(RealtimePreJoinCheckList, skipOffstage: false),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     }
     await tester.binding.setSurfaceSize(null);
