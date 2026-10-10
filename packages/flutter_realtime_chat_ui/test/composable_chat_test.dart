@@ -7,6 +7,26 @@ import 'package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('empty chat fits a short embedded meeting panel', (tester) async {
+    final session = _FakeChatSession();
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatUiScope(
+          session: session,
+          child: const Scaffold(
+            body: Center(
+              child: SizedBox(width: 300, height: 75, child: ChatMessageList()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(ChatMessageList), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'empty chat and connection state follow the host Chinese locale',
     (tester) async {

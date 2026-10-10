@@ -248,43 +248,50 @@ class ChatMessageList extends StatelessWidget {
 
         if (messages.isEmpty) {
           return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.09),
-                      borderRadius: BorderRadius.circular(20),
+            // The same component is used in narrow meeting side-panels.
+            // Scrolling the empty state avoids a RenderFlex overflow when
+            // the available height is smaller than the illustration.
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.09,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Icon(
+                        Icons.forum_outlined,
+                        size: 30,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
-                    child: Icon(
-                      Icons.forum_outlined,
-                      size: 30,
-                      color: theme.colorScheme.primary,
+                    const SizedBox(height: 16),
+                    Text(
+                      zh ? '开始一段对话' : 'Your conversation starts here',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    zh ? '开始一段对话' : 'Your conversation starts here',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(height: 6),
+                    Text(
+                      zh
+                          ? '发送消息，或者邀请其他人加入聊天室'
+                          : 'Send a message or invite someone to join this room',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    zh
-                        ? '发送消息，或者邀请其他人加入聊天室'
-                        : 'Send a message or invite someone to join this room',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
