@@ -276,8 +276,12 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       open: realtime.open,
       ownerCredentials: _roomOwnerCredentials,
     );
-    final targetMode = roomMode ??
-        _availableRooms.where((r) => r.roomCode == code).firstOrNull?.roomMode ??
+    final targetMode =
+        roomMode ??
+        _availableRooms
+            .where((r) => r.roomCode == code)
+            .firstOrNull
+            ?.roomMode ??
         _joinRoomMode;
     final role = targetMode == MediaRoomMode.broadcast
         ? MediaRole.viewer
@@ -338,17 +342,16 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (_) => DemoComposablePreJoinPage(
             permissionRequester:
-                widget.permissionRequester ?? const DefaultMediaPermissionProbe(),
+                widget.permissionRequester ??
+                const DefaultMediaPermissionProbe(),
             onEnter: onEnter,
             runCheck: () => realtime.preJoin(
               role: role,
               providerId: providerId,
               roomCode: roomCode,
             ),
-            openPreview: (id, previewRole) => realtime.createLocalPreview(
-              providerId: id,
-              role: previewRole,
-            ),
+            openPreview: (id, previewRole) =>
+                realtime.createLocalPreview(providerId: id, role: previewRole),
             displayName: displayName,
             roomLabel: roomLabel,
             imagePresets: backgroundPresets,
@@ -388,9 +391,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             initialMediaSettings: initialMediaSettings,
             roomMode: roomMode,
           );
-      await Navigator.of(
-        preJoinContext,
-      ).pushReplacement<void, void>(
+      await Navigator.of(preJoinContext).pushReplacement<void, void>(
         MaterialPageRoute(builder: (_) => destination),
       );
     } finally {
@@ -748,8 +749,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                               Icons.close_rounded,
                               color: style.textMuted,
                             ),
-                            onPressed: () =>
-                                Navigator.of(sheetContext).pop(),
+                            onPressed: () => Navigator.of(sheetContext).pop(),
                           ),
                         ],
                       ),
@@ -1093,10 +1093,18 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                                   ? '加入会议 (参会者)'
                                   : 'Join Meeting',
                               icon: Icons.groups_rounded,
-                              foreground: !isLiveMode ? Colors.white : style.textMuted,
-                              background: !isLiveMode ? style.primary : style.surfaceSubtle,
-                              borderColor: !isLiveMode ? style.primary : style.border,
-                              onTap: () => setState(() => _joinRoomMode = MediaRoomMode.meeting),
+                              foreground: !isLiveMode
+                                  ? Colors.white
+                                  : style.textMuted,
+                              background: !isLiveMode
+                                  ? style.primary
+                                  : style.surfaceSubtle,
+                              borderColor: !isLiveMode
+                                  ? style.primary
+                                  : style.border,
+                              onTap: () => setState(
+                                () => _joinRoomMode = MediaRoomMode.meeting,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -1108,14 +1116,22 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                               icon: Icons.podcasts_rounded,
                               foreground: isLiveMode
                                   ? Colors.white
-                                  : (style.isDark ? const Color(0xFFFB7185) : const Color(0xFFE11D48)),
+                                  : (style.isDark
+                                        ? const Color(0xFFFB7185)
+                                        : const Color(0xFFE11D48)),
                               background: isLiveMode
                                   ? const Color(0xFFE11D48)
-                                  : (style.isDark ? const Color(0xFF3B1219) : const Color(0xFFFFF1F2)),
+                                  : (style.isDark
+                                        ? const Color(0xFF3B1219)
+                                        : const Color(0xFFFFF1F2)),
                               borderColor: isLiveMode
                                   ? const Color(0xFFE11D48)
-                                  : (style.isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFECDD3)),
-                              onTap: () => setState(() => _joinRoomMode = MediaRoomMode.broadcast),
+                                  : (style.isDark
+                                        ? const Color(0xFF7F1D1D)
+                                        : const Color(0xFFFECDD3)),
+                              onTap: () => setState(
+                                () => _joinRoomMode = MediaRoomMode.broadcast,
+                              ),
                             ),
                           ),
                         ],

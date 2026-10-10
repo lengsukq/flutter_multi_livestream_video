@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 import 'demo_background.dart';
+import 'widgets/demo_recording_widgets.dart';
 
 /// A broadcast UI assembled entirely by the consuming app.
 /// No SDK room template chooses where controls, chat or gifts appear.
@@ -109,7 +110,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
         Expanded(
           child: _sidePanel == _LiveSidePanel.chat
               ? const RealtimeChatPanel()
-              : const RealtimeParticipantList(),
+              : const RealtimeManagedParticipantList(),
         ),
       ],
     ),
@@ -160,6 +161,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                               child: RealtimeRoomInfo(),
                             ),
                           ),
+                          DemoRecordingBadge(room: widget.room),
                           if (wide) const RealtimeLiveStatus(),
                           const SizedBox(width: 8),
                           RealtimeLeaveButton(
@@ -227,6 +229,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                             const RealtimeSwitchCameraButton(),
                             const RealtimeAudioOutputButton(),
                             const RealtimeScreenShareButton(),
+                            DemoRecordingButton(room: widget.room),
                             FutureBuilder<List<MediaBackgroundImagePreset>>(
                               future: _presets,
                               builder: (context, snapshot) =>

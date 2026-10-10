@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 import 'demo_background.dart';
+import 'widgets/demo_recording_widgets.dart';
 
 /// Demo-owned layout: the SDK supplies only stateful functional widgets.
 ///
@@ -24,15 +25,7 @@ class DemoComposableMeetingPage extends StatefulWidget {
       _DemoComposableMeetingPageState();
 }
 
-enum _DemoSidePanel {
-  closed,
-  chat,
-  participants,
-  questions,
-  hands,
-  roster,
-  activities,
-}
+enum _DemoSidePanel { closed, chat, participants, classroom }
 
 class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   late Future<void> _videoEffectsReady;
@@ -85,6 +78,41 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
     if (Navigator.canPop(context)) Navigator.pop(context);
   }
 
+  Future<void> _openEffects(BuildContext context) async {
+    final presets = await DemoBackground.presets;
+    if (!context.mounted) return;
+    final controller = RealtimeRoomUiScope.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, updateSheet) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: BackgroundEffectSelector(
+              capabilities: controller.room.backgroundCapabilities,
+              effect: controller.room.backgroundEffect,
+              imagePresets: presets,
+              busy: controller.isPending(RealtimeRoomUiAction.backgroundEffect),
+              onChanged: (effect) async {
+                try {
+                  await controller.setBackgroundEffect(effect);
+                  if (sheetContext.mounted) updateSheet(() {});
+                } catch (error) {
+                  if (sheetContext.mounted) {
+                    ScaffoldMessenger.maybeOf(
+                      sheetContext,
+                    )?.showSnackBar(SnackBar(content: Text(error.toString())));
+                  }
+                }
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => FutureBuilder<void>(
     future: _videoEffectsReady,
@@ -118,6 +146,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final wide = constraints.maxWidth >= 760;
+                final zh = Localizations.localeOf(context).languageCode == 'zh';
                 return Column(
                   children: [
                     Padding(
@@ -135,6 +164,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                               child: RealtimeRoomInfo(),
                             ),
                           ),
+                          DemoRecordingBadge(room: widget.room),
                           if (wide) ...[
                             const SizedBox(width: 12),
                             const RealtimeConnectionIndicator(),
@@ -151,76 +181,90 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                         children: [
                           const Expanded(child: _DemoMeetingStage()),
                           if (wide && _panel != _DemoSidePanel.closed)
-                            SizedBox(width: 310, child: _sidePanel()),
+                            SizedBox(width: 320, child: _sidePanel()),
                         ],
                       ),
                     ),
                     if (!wide && _panel != _DemoSidePanel.closed)
-                      SizedBox(height: 220, child: _sidePanel()),
+                      SizedBox(height: 230, child: _sidePanel()),
                     Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Wrap(
-                        alignment: WrapAlignment.center,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          const RealtimeMicrophoneButton(),
-                          const RealtimeCameraButton(),
-                          const RealtimeSwitchCameraButton(),
-                          const RealtimeAudioOutputButton(),
-                          FutureBuilder<List<MediaBackgroundImagePreset>>(
-                            future: DemoBackground.presets,
-                            builder: (context, snapshot) =>
-                                RealtimeBackgroundEffectsButton(
-                                  imagePresets: snapshot.data ?? const [],
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                      child: RealtimeMeetingDock(
+                        showLabels: wide,
+                        mediaGroup: [
+                          RealtimeDockMicrophoneButton(showLabel: wide),
+                          RealtimeDockCameraButton(showLabel: wide),
+                          RealtimeRoomActionButton(
+                            action: RealtimeRoomUiAction.switchCamera,
+                            builder: (context, onPressed, active, pending) =>
+                                RealtimeDockItem(
+                                  icon: Icons.cameraswitch_rounded,
+                                  label: zh ? '翻转' : 'Flip',
+                                  isLoading: pending,
+                                  onPressed: onPressed,
+                                  showLabel: wide,
                                 ),
                           ),
-                          if (widget.room.sharedContent == null)
-                            const RealtimeScreenShareButton(),
+                          RealtimeDockItem(
+                            icon: Icons.blur_on_rounded,
+                            label: zh ? '背景' : 'Effects',
+                            onPressed: () => _openEffects(context),
+                            showLabel: wide,
+                          ),
+                          DemoRecordingButton(room: widget.room),
+                        ],
+                        collaborationGroup: [
+                          RealtimeDockSharedContentButton(showLabel: wide),
                           if (widget.room.classroom != null) ...[
-                            const RealtimeClassroomButton(),
                             const RealtimeRaiseHandButton(),
                             const RealtimeClassroomFeedbackButton(),
-                            const RealtimeClassroomToolsButton(),
                             if (wide) const RealtimeClassroomEngagement(),
-                            const RealtimeSharedContentButton(),
-                            IconButton(
-                              tooltip: 'Classroom questions',
-                              icon: const Icon(Icons.question_answer_outlined),
-                              onPressed: () =>
-                                  _toggle(_DemoSidePanel.questions),
-                            ),
-                            IconButton(
-                              tooltip: 'Raised hands',
-                              icon: const Icon(Icons.pan_tool_alt_outlined),
-                              onPressed: () => _toggle(_DemoSidePanel.hands),
-                            ),
-                            IconButton(
-                              tooltip: 'Classroom roster',
-                              icon: const Icon(Icons.school_outlined),
-                              onPressed: () => _toggle(_DemoSidePanel.roster),
-                            ),
-                            IconButton(
-                              tooltip: 'Classroom activities',
-                              icon: const Icon(Icons.quiz_outlined),
-                              onPressed: () =>
-                                  _toggle(_DemoSidePanel.activities),
-                            ),
                           ],
+                        ],
+                        panelsGroup: [
                           if (widget.room.chat != null)
-                            IconButton(
-                              tooltip: 'Chat',
-                              icon: const Icon(Icons.chat_bubble_outline),
+                            RealtimeDockItem(
+                              icon: Icons.chat_bubble_outline_rounded,
+                              label: zh ? '聊天' : 'Chat',
+                              isActive: _panel == _DemoSidePanel.chat,
                               onPressed: () => _toggle(_DemoSidePanel.chat),
+                              showLabel: wide,
                             ),
-                          IconButton(
-                            tooltip: 'Participants',
-                            icon: const Icon(Icons.people_outline),
+                          RealtimeDockItem(
+                            icon: Icons.people_outline_rounded,
+                            label: zh ? '成员' : 'Members',
+                            isActive: _panel == _DemoSidePanel.participants,
                             onPressed: () =>
                                 _toggle(_DemoSidePanel.participants),
+                            showLabel: wide,
                           ),
+                          if (widget.room.classroom != null)
+                            RealtimeDockItem(
+                              icon: Icons.school_outlined,
+                              label: zh ? '课堂管理' : 'Classroom',
+                              isActive: _panel == _DemoSidePanel.classroom,
+                              onPressed: () =>
+                                  _toggle(_DemoSidePanel.classroom),
+                              showLabel: wide,
+                            ),
                         ],
+                        exitAction: RealtimeDockItem(
+                          icon: Icons.call_end_rounded,
+                          label: zh ? '离开' : 'Leave',
+                          isDanger: true,
+                          onPressed: () async {
+                            if (await _confirmLeave(context)) {
+                              if (context.mounted) {
+                                final controller = RealtimeRoomUiScope.of(
+                                  context,
+                                );
+                                await controller.leave();
+                                _onLeft();
+                              }
+                            }
+                          },
+                          showLabel: wide,
+                        ),
                       ),
                     ),
                   ],
@@ -237,51 +281,121 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
     _panel = _panel == panel ? _DemoSidePanel.closed : panel;
   });
 
-  Widget _sidePanel() => Card(
-    margin: const EdgeInsets.all(8),
-    child: Column(
-      children: [
-        Row(
-          children: [
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(switch (_panel) {
-                _DemoSidePanel.chat => 'Chat',
-                _DemoSidePanel.questions => 'Questions',
-                _DemoSidePanel.hands => 'Raised hands',
-                _DemoSidePanel.roster => 'Classroom roster',
-                _DemoSidePanel.activities => 'Polls and quizzes',
-                _ => 'Participants',
-              }),
-            ),
-            IconButton(
-              tooltip: 'Close panel',
-              onPressed: () => setState(() => _panel = _DemoSidePanel.closed),
-              icon: const Icon(Icons.close),
-            ),
-          ],
-        ),
-        Expanded(
-          child: switch (_panel) {
-            _DemoSidePanel.chat => const RealtimeChatPanel(),
-            _DemoSidePanel.questions => const Column(
-              children: [
-                Expanded(child: RealtimeClassroomQuestions()),
-                Padding(
-                  padding: EdgeInsets.all(8),
-                  child: RealtimeClassroomQuestionComposer(),
+  Widget _sidePanel() {
+    if (_panel == _DemoSidePanel.classroom) {
+      return _ClassroomSidePanel(
+        onClose: () => setState(() => _panel = _DemoSidePanel.closed),
+      );
+    }
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    return Card(
+      margin: const EdgeInsets.all(8),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(switch (_panel) {
+                  _DemoSidePanel.chat => zh ? '实时聊天' : 'Chat',
+                  _ => zh ? '参会成员' : 'Participants',
+                }, style: const TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              IconButton(
+                tooltip: zh ? '关闭面板' : 'Close panel',
+                onPressed: () => setState(() => _panel = _DemoSidePanel.closed),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: switch (_panel) {
+              _DemoSidePanel.chat => const RealtimeChatPanel(),
+              _ => const RealtimeManagedParticipantList(),
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClassroomSidePanel extends StatefulWidget {
+  const _ClassroomSidePanel({required this.onClose});
+  final VoidCallback onClose;
+
+  @override
+  State<_ClassroomSidePanel> createState() => _ClassroomSidePanelState();
+}
+
+class _ClassroomSidePanelState extends State<_ClassroomSidePanel>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController = TabController(
+    length: 4,
+    vsync: this,
+  );
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+    return Card(
+      margin: const EdgeInsets.all(8),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 10),
+                  tabs: [
+                    Tab(text: zh ? '提问' : 'Questions'),
+                    Tab(text: zh ? '举手' : 'Hands'),
+                    Tab(text: zh ? '花名册' : 'Roster'),
+                    Tab(text: zh ? '测验' : 'Activities'),
+                  ],
                 ),
+              ),
+              IconButton(
+                tooltip: zh ? '关闭面板' : 'Close panel',
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: const [
+                Column(
+                  children: [
+                    Expanded(child: RealtimeClassroomQuestions()),
+                    Padding(
+                      padding: EdgeInsets.all(8),
+                      child: RealtimeClassroomQuestionComposer(),
+                    ),
+                  ],
+                ),
+                RealtimeClassroomHandQueue(),
+                RealtimeClassroomRoster(),
+                RealtimeClassroomActivityList(),
               ],
             ),
-            _DemoSidePanel.hands => const RealtimeClassroomHandQueue(),
-            _DemoSidePanel.roster => const RealtimeClassroomRoster(),
-            _DemoSidePanel.activities => const RealtimeClassroomActivityList(),
-            _ => const RealtimeParticipantList(),
-          },
-        ),
-      ],
-    ),
-  );
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _DemoMeetingStage extends StatelessWidget {

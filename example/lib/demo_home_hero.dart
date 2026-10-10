@@ -149,7 +149,10 @@ class DemoHomeHero extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: style.primarySubtle,
                   borderRadius: BorderRadius.circular(
