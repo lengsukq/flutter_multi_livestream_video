@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
 import 'room_ui_controller.dart';
 
@@ -22,12 +23,11 @@ class RealtimeParticipantList extends StatelessWidget {
           final member = controller.snapshot.participants[index];
           return ListTile(
             key: ValueKey(member.id),
-            leading: CircleAvatar(
-              child: Text(
-                member.displayName.isEmpty
-                    ? '?'
-                    : member.displayName.characters.first.toUpperCase(),
-              ),
+            leading: RealtimeAvatar(
+              name: member.displayName,
+              size: 36,
+              isOnline: true,
+              showOnlineDot: true,
             ),
             title: Text(member.displayName),
             subtitle: member.isLocal ? const Text('You') : null,
@@ -300,7 +300,12 @@ class _RealtimeManagedParticipantListState
                   ];
                   return ListTile(
                     key: ValueKey(member.userId),
-                    leading: const Icon(Icons.person_outline),
+                    leading: RealtimeAvatar(
+                      name: member.displayName,
+                      size: 36,
+                      isOnline: media != null || chatMember != null,
+                      showOnlineDot: true,
+                    ),
                     title: Text(member.displayName),
                     subtitle: Text(
                       [

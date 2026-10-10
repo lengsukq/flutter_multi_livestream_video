@@ -94,6 +94,7 @@ void main() {
     await tester.pump();
     expect(find.textContaining('↪ User'), findsOneWidget);
     await tester.enterText(find.byType(TextField).last, 'reply text');
+    await tester.pump(); // The composer enables Send on the next UI frame.
     await tester.tap(find.byTooltip('Send message'));
     await tester.pump();
     expect(session.sent, hasLength(1));

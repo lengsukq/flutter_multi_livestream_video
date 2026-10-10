@@ -105,15 +105,96 @@ class ChatSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = ChatUiScope.of(context);
-    return TextField(
-      onChanged: controller.setSearch,
-      decoration: InputDecoration(
-        isDense: true,
-        prefixIcon: const Icon(Icons.search),
-        hintText: Localizations.localeOf(context).languageCode == 'zh'
-            ? '搜索消息'
-            : 'Search messages',
-        border: const OutlineInputBorder(),
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+
+    return Container(
+      height: 38,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.04),
+          width: 0.8,
+        ),
+      ),
+      child: TextField(
+        onChanged: controller.setSearch,
+        style: const TextStyle(fontSize: 14),
+        textAlignVertical: TextAlignVertical.center,
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 19,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          hintText: zh ? '搜索消息' : 'Search messages',
+          hintStyle: TextStyle(
+            fontSize: 13.5,
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+          ),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+        ),
+      ),
+    );
+  }
+}
+
+/// Helper for iOS-style colorful initials avatar
+class _ChatAvatar extends StatelessWidget {
+  const _ChatAvatar({required this.name, this.size = 30.0});
+  final String name;
+  final double size;
+
+  static const _palette = [
+    [Color(0xFF0EA5E9), Color(0xFF0284C7)],
+    [Color(0xFF6366F1), Color(0xFF4F46E5)],
+    [Color(0xFF10B981), Color(0xFF059669)],
+    [Color(0xFFF59E0B), Color(0xFFD97706)],
+    [Color(0xFFEC4899), Color(0xFFDB2777)],
+    [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+    [Color(0xFF14B8A6), Color(0xFF0D9488)],
+    [Color(0xFFF43F5E), Color(0xFFE11D48)],
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final clean = name.trim();
+    final initial = clean.isEmpty ? '?' : clean.characters.first.toUpperCase();
+    final colorIdx = clean.isEmpty
+        ? 0
+        : clean.codeUnits.fold(0, (a, b) => a + b) % _palette.length;
+    final colors = _palette[colorIdx];
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: colors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: size * 0.44,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }
@@ -127,6 +208,10 @@ class ChatMessageList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = ChatUiScope.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -135,8 +220,10 @@ class ChatMessageList extends StatelessWidget {
             ? (controller.session as ChatSessionIdentity).localUserId
             : null;
         final capabilities = controller.managementCapabilities;
+
         return ListView.builder(
           reverse: true,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           itemCount: messages.length,
           itemBuilder: (context, index) {
             final message = messages[messages.length - index - 1];
@@ -149,54 +236,187 @@ class ChatMessageList extends StatelessWidget {
                 controller.isHost &&
                 !own &&
                 capabilities.removeMember.supported;
-            return ListTile(
-              key: ValueKey(message.id),
-              dense: true,
-              title: Text(
-                message.displayName.isNotEmpty
-                    ? message.displayName
-                    : message.userId,
-              ),
-              subtitle: Text(message.message),
-              onTap: onMessageTap == null
-                  ? () => controller.selectReply(message)
-                  : () => onMessageTap!(message),
-              trailing: PopupMenuButton<String>(
-                tooltip: 'Message actions',
-                onSelected: (action) async {
-                  try {
-                    switch (action) {
-                      case 'reply':
-                        controller.selectReply(message);
-                      case 'delete':
-                        await controller.deleteMessage(message);
-                      case 'remove':
-                        await controller.removeMember(message.userId);
-                    }
-                  } catch (error) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                        SnackBar(content: Text(error.toString())),
-                      );
-                    }
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    value: 'reply',
-                    child: Text(
-                      Localizations.localeOf(context).languageCode == 'zh'
-                          ? '回复'
-                          : 'Reply',
+
+            final senderName = message.displayName.isNotEmpty
+                ? message.displayName
+                : message.userId;
+
+            // Action popover
+            void showActions() {
+              unawaited(
+                showModalBottomSheet<void>(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  builder: (sheetContext) => SafeArea(
+                    child: Container(
+                      margin: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.reply_rounded),
+                            title: Text(zh ? '回复消息' : 'Reply'),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              controller.selectReply(message);
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(Icons.copy_rounded),
+                            title: Text(zh ? '复制内容' : 'Copy'),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              unawaited(
+                                Clipboard.setData(
+                                  ClipboardData(text: message.message),
+                                ),
+                              );
+                              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    zh ? '已复制消息' : 'Message copied',
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          if (canDelete)
+                            ListTile(
+                              leading: Icon(
+                                Icons.delete_outline_rounded,
+                                color: theme.colorScheme.error,
+                              ),
+                              title: Text(
+                                zh ? '删除消息' : 'Delete',
+                                style: TextStyle(
+                                  color: theme.colorScheme.error,
+                                ),
+                              ),
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                unawaited(controller.deleteMessage(message));
+                              },
+                            ),
+                          if (canRemove)
+                            ListTile(
+                              leading: Icon(
+                                Icons.person_remove_outlined,
+                                color: theme.colorScheme.error,
+                              ),
+                              title: Text(
+                                zh ? '移出成员' : 'Remove user',
+                                style: TextStyle(
+                                  color: theme.colorScheme.error,
+                                ),
+                              ),
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                unawaited(
+                                  controller.removeMember(message.userId),
+                                );
+                              },
+                            ),
+                          const SizedBox(height: 6),
+                        ],
+                      ),
                     ),
                   ),
-                  if (canDelete)
-                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                  if (canRemove)
-                    const PopupMenuItem(
-                      value: 'remove',
-                      child: Text('Remove user'),
+                ),
+              );
+            }
+
+            final bubbleBgColor = own
+                ? theme.colorScheme.primary
+                : (isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE9E9EB));
+            final bubbleTextColor = own
+                ? Colors.white
+                : (isDark ? Colors.white : const Color(0xFF0F172A));
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: own
+                    ? MainAxisAlignment.end
+                    : MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (!own) ...[
+                    _ChatAvatar(name: senderName, size: 30),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: own
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      children: [
+                        if (!own)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4, bottom: 2),
+                            child: Text(
+                              senderName,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: onMessageTap == null
+                              ? () => controller.selectReply(message)
+                              : () => onMessageTap!(message),
+                          onLongPress: showActions,
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 420),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 9,
+                            ),
+                            decoration: BoxDecoration(
+                              color: bubbleBgColor,
+                              borderRadius: BorderRadius.only(
+                                topLeft: const Radius.circular(18),
+                                topRight: const Radius.circular(18),
+                                bottomLeft: Radius.circular(own ? 18 : 4),
+                                bottomRight: Radius.circular(own ? 4 : 18),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.04),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  message.message,
+                                  style: TextStyle(
+                                    color: bubbleTextColor,
+                                    fontSize: 14,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                  ),
                 ],
               ),
             );
@@ -217,6 +437,17 @@ class ChatComposer extends StatefulWidget {
 
 class _ChatComposerState extends State<ChatComposer> {
   final _text = TextEditingController();
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _text.addListener(() {
+      final has = _text.text.trim().isNotEmpty;
+      if (has != _hasText) setState(() => _hasText = has);
+    });
+  }
+
   @override
   void dispose() {
     _text.dispose();
@@ -241,58 +472,150 @@ class _ChatComposerState extends State<ChatComposer> {
   @override
   Widget build(BuildContext context) {
     final controller = ChatUiScope.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final zh = Localizations.localeOf(context).languageCode == 'zh';
+
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // iOS style floating reply quote banner
           if (controller.replyTo case final reply?)
-            ListTile(
-              dense: true,
-              title: Text(
-                '↪ ${reply.displayName.isEmpty ? reply.userId : reply.displayName}',
-              ),
-              subtitle: Text(
-                reply.message,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: IconButton(
-                tooltip: 'Cancel reply',
-                onPressed: () => controller.selectReply(null),
-                icon: const Icon(Icons.close),
-              ),
-            ),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _text,
-                  enabled: controller.canSend,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => unawaited(_send(controller)),
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    hintText: widget.hintText ?? 'Message',
-                  ),
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: (isDark
+                    ? const Color(0xFF2C2C2E)
+                    : const Color(0xFFF1F5F9)),
+                borderRadius: BorderRadius.circular(12),
+                border: Border(
+                  left: BorderSide(color: theme.colorScheme.primary, width: 3),
                 ),
               ),
-              IconButton(
-                tooltip: 'Send message',
-                onPressed:
-                    controller.canSend &&
-                        !controller.isPending(ChatUiAction.send)
-                    ? () => unawaited(_send(controller))
-                    : null,
-                icon: controller.isPending(ChatUiAction.send)
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '↪ ${reply.displayName.isEmpty ? reply.userId : reply.displayName}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        Text(
+                          reply.message,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    iconSize: 18,
+                    padding: const EdgeInsets.all(4),
+                    constraints: const BoxConstraints(
+                      minWidth: 26,
+                      minHeight: 26,
+                    ),
+                    tooltip: zh ? '取消回复' : 'Cancel reply',
+                    onPressed: () => controller.selectReply(null),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
-            ],
+            ),
+
+          // iOS style pill input capsule
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.black.withValues(alpha: 0.08),
+                width: 0.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _text,
+                    enabled: controller.canSend,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => unawaited(_send(controller)),
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      hintText: widget.hintText ?? (zh ? '发消息...' : 'Message'),
+                      hintStyle: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.6,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'Send message',
+                  onPressed:
+                      controller.canSend &&
+                          _hasText &&
+                          !controller.isPending(ChatUiAction.send)
+                      ? () => unawaited(_send(controller))
+                      : null,
+                  style: IconButton.styleFrom(
+                    backgroundColor: _hasText
+                        ? theme.colorScheme.primary
+                        : Colors.transparent,
+                    foregroundColor: _hasText
+                        ? Colors.white
+                        : theme.colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.4,
+                          ),
+                    padding: const EdgeInsets.all(7),
+                    minimumSize: const Size(32, 32),
+                  ),
+                  icon: controller.isPending(ChatUiAction.send)
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: theme.colorScheme.primary,
+                          ),
+                        )
+                      : const Icon(Icons.arrow_upward_rounded, size: 18),
+                ),
+              ],
+            ),
           ),
         ],
       ),
