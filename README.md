@@ -77,6 +77,11 @@ python3 scripts/build_flutter_macos.py --release --no-pub
 
 See [SDK architecture and error handling](doc/SDK_CODE_QUALITY.md), [provider integration](doc/PROVIDER_ADAPTER_GUIDE.md), [lightweight composition](doc/LIGHTWEIGHT_SDK.md), [capability matrix](SDK_CAPABILITY_MATRIX.zh-CN.md) and [acceptance boundaries](doc/INTERACTION_ACCEPTANCE.md).
 
+For independent room controls, optional composed default pages, chat-only UI,
+Pre-Join scope ownership, RTC+IM member controls, package dependency direction,
+and explicit build/E2E acceptance limits, see the
+[UI 组件化接入与验收说明](doc/UI_COMPOSABILITY_ACCEPTANCE.zh-CN.md).
+
 **P1 中文接入与架构文档：** [SDK Quick Start、Meeting/Live、Pre-Join、Demo/Server 模块与验收边界](doc/P1_ARCHITECTURE_AND_INTEGRATION.zh-CN.md)。同时参考 [变更前测试基线](doc/P1_CLEAN_CODE_BASELINE.md)、[内置 Media UI](packages/flutter_realtime_media_ui/README.md)、[Demo](example/README.md) 和 [Demo Server](demo-server/README.md)。
 
 ## Acceptance
