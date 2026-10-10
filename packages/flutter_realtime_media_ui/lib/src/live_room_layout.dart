@@ -180,7 +180,7 @@ class LiveRoomViewLayout extends StatelessWidget {
             // 8. Bottom-Left Floating Danmaku Stream
             Positioned(
               left: 14,
-              bottom: 84,
+              bottom: 84 + MediaQuery.viewInsetsOf(context).bottom,
               width: math.min(320.0, constraints.maxWidth * 0.72),
               child: _LiveFloatingDanmakuFeed(host: host),
             ),
@@ -192,12 +192,17 @@ class LiveRoomViewLayout extends StatelessWidget {
               bottom: 0,
               child: SafeArea(
                 top: false,
-                child: RoomRegion(
-                  revision: host.controlRevision,
-                  builder: (_) => _LiveBottomControls(
-                    host: host,
-                    snapshot: snapshot,
-                    isHost: isHost,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.viewInsetsOf(context).bottom,
+                  ),
+                  child: RoomRegion(
+                    revision: host.controlRevision,
+                    builder: (_) => _LiveBottomControls(
+                      host: host,
+                      snapshot: snapshot,
+                      isHost: isHost,
+                    ),
                   ),
                 ),
               ),
@@ -428,7 +433,9 @@ class _LiveFloatingDanmakuFeed extends StatelessWidget {
                   color: isDark
                       ? Colors.black.withValues(alpha: 0.55)
                       : Colors.white.withValues(alpha: 0.88),
-                  borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.controlRadius,
+                  ),
                   border: Border.all(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.12)
@@ -548,8 +555,6 @@ class _LiveBottomControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = RealtimeStrings.of(context);
-    final style = RealtimeStyle.of(context);
-    final isDark = style.isDark;
     final interactive = host.session is InteractiveMediaSession
         ? host.session as InteractiveMediaSession
         : null;
@@ -559,73 +564,16 @@ class _LiveBottomControls extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          if (inputOpen) _LiveInlineChatInput(host: host, chat: chatSession),
-          if (inputOpen) const SizedBox(height: 8),
-          Row(
-            children: [
-              // "Say something..." input capsule trigger
-              Expanded(
-                child: InkWell(
-                  onTap: inputOpen
-                      ? host.hideLiveChatInput
-                      : host.showLiveChatInputSheet,
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.pillRadius,
-                  ),
-                  child: Container(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.black.withValues(alpha: 0.52)
-                          : style.surface.withValues(alpha: 0.94),
-                      borderRadius: BorderRadius.circular(
-                        RealtimeUiTokens.pillRadius,
-                      ),
-                      border: Border.all(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.20)
-                            : style.border,
-                        width: 1,
-                      ),
-                      boxShadow: isDark
-                          ? null
-                          : [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 16,
-                          color: isDark ? Colors.white70 : style.textMuted,
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            strings.sendComment,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark ? Colors.white60 : style.textMuted,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
+          // Single in-place chat input (no second popup input box)
+          Expanded(
+            child: _LiveInPlaceChatInput(
+              host: host,
+              chat: chatSession,
+              inputOpen: inputOpen,
+            ),
+          ),
           const SizedBox(width: 8),
 
           if (isHost && interactive != null && caps.canPublishAudio) ...[
@@ -657,9 +605,7 @@ class _LiveBottomControls extends StatelessWidget {
               danger: !snapshot.localVideoEnabled,
               active: snapshot.localVideoEnabled,
               onPressed: () => host.runAction(
-                () => interactive.setVideoEnabled(
-                  !snapshot.localVideoEnabled,
-                ),
+                () => interactive.setVideoEnabled(!snapshot.localVideoEnabled),
               ),
             ),
             const SizedBox(width: 8),
@@ -685,10 +631,7 @@ class _LiveBottomControls extends StatelessWidget {
           // Host tool: Virtual Background / Beauty
           if (isHost &&
               caps.canPublishVideo &&
-              host
-                  .backgroundEffects
-                  .backgroundCapabilities
-                  .isSupported) ...[
+              host.backgroundEffects.backgroundCapabilities.isSupported) ...[
             RealtimeGlassIconButton(
               tooltip: strings.virtualBackground,
               icon: Icons.auto_fix_high_rounded,
@@ -735,9 +678,7 @@ class _LiveBottomControls extends StatelessWidget {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(
-                          0xFFFF2D55,
-                        ).withValues(alpha: 0.40),
+                        color: const Color(0xFFFF2D55).withValues(alpha: 0.40),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
@@ -769,29 +710,31 @@ class _LiveBottomControls extends StatelessWidget {
             ),
           ],
         ],
-        ),
-        ],
       ),
     );
-}
+  }
 }
 
-/// Inline live chat input rendered directly above the bottom dock.
+/// In-place live chat input directly embedded into the bottom dock.
 ///
-/// Replaces the previous second bottom sheet: tapping the "Say something…"
-/// capsule expands this editor in place, so the keyboard no longer lifts a
-/// separate sheet that feels like a redundant extra dialog.
-class _LiveInlineChatInput extends StatefulWidget {
-  const _LiveInlineChatInput({required this.host, required this.chat});
+/// Avoids evoking a redundant second input box or floating popup.
+/// Users type and send directly inside this bottom capsule slot.
+class _LiveInPlaceChatInput extends StatefulWidget {
+  const _LiveInPlaceChatInput({
+    required this.host,
+    this.chat,
+    required this.inputOpen,
+  });
 
   final MediaRoomLayoutHost host;
-  final ChatSession chat;
+  final ChatSession? chat;
+  final bool inputOpen;
 
   @override
-  State<_LiveInlineChatInput> createState() => _LiveInlineChatInputState();
+  State<_LiveInPlaceChatInput> createState() => _LiveInPlaceChatInputState();
 }
 
-class _LiveInlineChatInputState extends State<_LiveInlineChatInput> {
+class _LiveInPlaceChatInputState extends State<_LiveInPlaceChatInput> {
   late final TextEditingController _controller = TextEditingController();
   late final FocusNode _focusNode = FocusNode();
   bool _sending = false;
@@ -799,9 +742,23 @@ class _LiveInlineChatInputState extends State<_LiveInlineChatInput> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
-    });
+    if (widget.inputOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusNode.requestFocus();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _LiveInPlaceChatInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.inputOpen && !oldWidget.inputOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusNode.requestFocus();
+      });
+    } else if (!widget.inputOpen && oldWidget.inputOpen) {
+      _focusNode.unfocus();
+    }
   }
 
   @override
@@ -812,15 +769,14 @@ class _LiveInlineChatInputState extends State<_LiveInlineChatInput> {
   }
 
   Future<void> _send() async {
+    final chat = widget.chat;
     final trimmed = _controller.text.trim();
-    if (trimmed.isEmpty || _sending) return;
+    if (chat == null || trimmed.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
-      await widget.chat.sendMessage(trimmed);
+      await chat.sendMessage(trimmed);
       if (!mounted) return;
       _controller.clear();
-      // Keep the input expanded so follow-up messages don't require
-      // reopening; the capsule tap collapses it.
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -831,70 +787,167 @@ class _LiveInlineChatInputState extends State<_LiveInlineChatInput> {
     final strings = RealtimeStrings.of(context);
     final style = RealtimeStyle.of(context);
     final isDark = style.isDark;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.black.withValues(alpha: 0.72)
-            : style.surface.withValues(alpha: 0.96),
+
+    if (!widget.inputOpen) {
+      // Inactive capsule in the dock
+      return InkWell(
+        onTap: widget.host.showLiveChatInputSheet,
         borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
-        border: Border.all(
-          color: isDark ? Colors.white.withValues(alpha: 0.20) : style.border,
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              style: TextStyle(
-                color: isDark ? Colors.white : style.text,
-                fontSize: 14,
-              ),
-              decoration: InputDecoration(
-                hintText: strings.sendComment,
-                hintStyle: TextStyle(
-                  color: isDark ? Colors.white60 : style.textMuted,
-                ),
-                filled: true,
-                fillColor: isDark
-                    ? Colors.white.withValues(alpha: 0.10)
-                    : style.surfaceSubtle,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _send(),
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.52)
+                : style.surface.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.20)
+                  : style.border,
+              width: 1,
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton.filled(
-            tooltip: strings.sendComment,
-            onPressed: _sending ? null : _send,
-            icon: _sending
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
+            boxShadow: isDark
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                  )
-                : const Icon(Icons.send_rounded, size: 18),
-            style: IconButton.styleFrom(
-              backgroundColor: style.primary,
-              foregroundColor: Colors.white,
-            ),
+                  ],
           ),
-        ],
+          child: Row(
+            children: [
+              Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 16,
+                color: isDark ? Colors.white70 : style.textMuted,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  strings.sendComment,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white60 : style.textMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Active in-place text input in the dock: NO SECOND INPUT BOX!
+    return InkWell(
+      onTap: widget.host.hideLiveChatInput,
+      borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.fromLTRB(10, 0, 4, 0),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.black.withValues(alpha: 0.76)
+              : style.surface.withValues(alpha: 0.98),
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+          border: Border.all(
+            color: isDark
+                ? style.primary.withValues(alpha: 0.8)
+                : style.primaryBorder,
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: style.primary.withValues(alpha: 0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.chat_bubble_rounded, size: 16, color: style.primary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                style: TextStyle(
+                  color: isDark ? Colors.white : style.text,
+                  fontSize: 13.5,
+                ),
+                decoration: InputDecoration(
+                  hintText: strings.sendComment,
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.white60 : style.textMuted,
+                    fontSize: 13,
+                  ),
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _send(),
+              ),
+            ),
+            const SizedBox(width: 4),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _controller,
+              builder: (context, value, _) {
+                final hasText = value.text.trim().isNotEmpty;
+                return SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: IconButton(
+                    tooltip: strings.sendComment,
+                    padding: EdgeInsets.zero,
+                    onPressed: (_sending || !hasText) ? null : _send,
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(
+                            Icons.send_rounded,
+                            size: 16,
+                            color: hasText
+                                ? Colors.white
+                                : (isDark ? Colors.white38 : style.textMuted),
+                          ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: hasText
+                          ? style.primary
+                          : (isDark ? Colors.white10 : style.surfaceSubtle),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                );
+              },
+            ),
+            IconButton(
+              tooltip: strings.isZh ? '收起评论输入' : 'Close comment input',
+              icon: Icon(
+                Icons.close_rounded,
+                color: isDark ? Colors.white70 : style.textMuted,
+                size: 17,
+              ),
+              onPressed: widget.host.hideLiveChatInput,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              padding: EdgeInsets.zero,
+            ),
+          ],
+        ),
       ),
     );
   }

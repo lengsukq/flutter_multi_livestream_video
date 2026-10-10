@@ -288,13 +288,33 @@ class _MeetingTopBar extends StatelessWidget {
             const SizedBox(width: 10),
             _MeetingDurationTimer(isDark: style.isDark),
             const SizedBox(width: 10),
-            RealtimePill(
-              label: strings.encryptedMeeting,
-              icon: Icons.lock_rounded,
-              foreground: const Color(0xFF059669),
-              background: const Color(0xFF10B981).withValues(alpha: 0.15),
-              borderColor: const Color(0xFF10B981).withValues(alpha: 0.3),
-            ),
+            () {
+              final activeSpeaker = snapshot.participants
+                  .where((p) => p.isSpeaking)
+                  .firstOrNull;
+              if (activeSpeaker != null) {
+                final speakerName = activeSpeaker.displayName.isEmpty
+                    ? strings.participant
+                    : activeSpeaker.displayName;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: RealtimePill(
+                    label: speakerName,
+                    icon: Icons.record_voice_over_rounded,
+                    foreground: const Color(0xFF059669),
+                    background: const Color(0xFF10B981).withValues(alpha: 0.16),
+                    borderColor: const Color(0xFF10B981).withValues(alpha: 0.35),
+                  ),
+                );
+              }
+              return RealtimePill(
+                label: strings.encryptedMeeting,
+                icon: Icons.lock_rounded,
+                foreground: const Color(0xFF059669),
+                background: const Color(0xFF10B981).withValues(alpha: 0.15),
+                borderColor: const Color(0xFF10B981).withValues(alpha: 0.3),
+              );
+            }(),
           ],
 
           // Provider Badge if configured
@@ -307,7 +327,9 @@ class _MeetingTopBar extends StatelessWidget {
           if (!compact) ...[
             PopupMenuButton<MediaRoomLayoutMode>(
               tooltip: strings.layoutMode,
-              color: style.surface,
+              color: style.surface.withValues(alpha: 0.96),
+              elevation: 6,
+              surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(
                   RealtimeUiTokens.controlRadius,

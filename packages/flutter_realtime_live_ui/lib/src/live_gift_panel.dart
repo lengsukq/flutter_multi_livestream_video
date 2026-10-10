@@ -259,17 +259,9 @@ class _LiveGiftOverlayState extends State<LiveGiftOverlay> {
 Future<void> showLiveGiftsBottomSheet(
   BuildContext context, {
   required LiveInteractionSession session,
-}) => showModalBottomSheet<void>(
+}) => showRealtimeGlassBottomSheet<void>(
   context: context,
   isScrollControlled: true,
-  useSafeArea: true,
-  backgroundColor: RealtimeUiTokens.surface,
-  barrierColor: Colors.black54,
-  shape: const RoundedRectangleBorder(
-    borderRadius: BorderRadius.vertical(
-      top: Radius.circular(RealtimeUiTokens.sheetRadius),
-    ),
-  ),
   builder: (context) => SizedBox(
     height: MediaQuery.sizeOf(context).height * .72,
     child: Center(
