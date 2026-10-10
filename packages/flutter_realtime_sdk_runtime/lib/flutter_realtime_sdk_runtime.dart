@@ -19,6 +19,7 @@ export 'src/interaction_revision_transport.dart';
 export 'src/realtime_feature_registry.dart';
 export 'src/members/room_members_controller.dart';
 export 'src/room_recording_controller.dart';
+export 'src/http_cloud_recording_session.dart';
 export 'src/realtime_moderation.dart';
 export 'src/realtime_request.dart';
 export 'src/realtime_room_state.dart';

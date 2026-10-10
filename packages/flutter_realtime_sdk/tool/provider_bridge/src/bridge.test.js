@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 
-async function createChimeHarness() {
+async function createChimeHarness(browserGlobals = {}) {
   const calls = [];
   const events = [];
   let observer;
@@ -101,8 +101,10 @@ async function createChimeHarness() {
   const context = vm.createContext({
     console,
     TextDecoder,
+    Blob,
     setInterval: () => 1,
     clearInterval: () => {},
+    ...browserGlobals,
     __flutterMediaProviderOnEvent: (sessionId, serializedEvent) => {
       events.push({ sessionId, event: JSON.parse(serializedEvent) });
     },
@@ -191,6 +193,78 @@ test('Chime bridge uses the current 3.32 media input APIs', async () => {
   assert.ok(calls.includes('unsubscribePresence'));
   assert.ok(calls.includes('unsubscribeData'));
   assert.ok(calls.includes('destroyDeviceController'));
+});
+
+test('Web local recording encodes captured media and downloads a real Blob', async () => {
+  const calls = [];
+  const tracks = [
+    { kind: 'video', addEventListener() {}, stop() { calls.push('stopVideo'); } },
+    { kind: 'audio', addEventListener() {}, stop() { calls.push('stopAudio'); } },
+  ];
+  class FakeRecorder {
+    static isTypeSupported(value) { return value === 'video/webm'; }
+    constructor(stream, options) {
+      this.stream = stream;
+      this.mimeType = options.mimeType;
+      this.state = 'inactive';
+    }
+    start() { this.state = 'recording'; }
+    stop() {
+      this.state = 'inactive';
+      this.ondataavailable({data: new Blob([Uint8Array.from([26, 69, 223, 163, 159])])});
+      this.onstop();
+    }
+  }
+  const anchor = {
+    style: {},
+    click() { calls.push('download'); },
+    remove() {},
+  };
+  const {bridge} = await createChimeHarness({
+    MediaRecorder: FakeRecorder,
+    navigator: {
+      mediaDevices: {
+        getDisplayMedia: async ({video, audio}) => {
+          assert.equal(video, true);
+          assert.equal(audio, true);
+          return {
+            getTracks: () => tracks,
+            getVideoTracks: () => tracks.filter((track) => track.kind === 'video'),
+            getAudioTracks: () => tracks.filter((track) => track.kind === 'audio'),
+          };
+        },
+      },
+    },
+    URL: {
+      createObjectURL() { calls.push('objectUrl'); return 'blob:recording-1'; },
+      revokeObjectURL() { calls.push('revoke'); },
+    },
+    document: {
+      createElement: () => anchor,
+      body: {appendChild() {}},
+    },
+  });
+  await bridge.create('chime', 'recording-session', JSON.stringify(chimePayload));
+  await bridge.join('chime', 'recording-session');
+
+  const start = JSON.parse(await bridge.command(
+    'chime', 'recording-session', 'startLocalRecording',
+    JSON.stringify({streamType: 'both', containerFormat: 'mp4'}),
+  ));
+  assert.equal(start.mimeType, 'video/webm');
+  const result = JSON.parse(await bridge.command(
+    'chime', 'recording-session', 'stopLocalRecording', '{}',
+  ));
+  assert.equal(result.mimeType, 'video/webm');
+  assert.ok(result.fileName.endsWith('.webm'));
+  assert.equal(result.fileSizeBytes, 5);
+  assert.equal(result.hasAudio, true);
+  bridge.downloadRecording('chime', 'recording-session', result.downloadId);
+  assert.ok(calls.includes('download'));
+  await bridge.dispose('chime', 'recording-session');
+  assert.ok(calls.includes('revoke'));
+  assert.ok(calls.includes('stopVideo'));
+  assert.ok(calls.includes('stopAudio'));
 });
 
 test('Chime bridge sends and receives normalized data messages', async () => {

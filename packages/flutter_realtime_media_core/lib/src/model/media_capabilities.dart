@@ -31,8 +31,12 @@ class MediaCapabilities {
     this.canListParticipants = false,
     this.canRemoveParticipants = false,
     this.canCloseRoom = false,
-    this.canRecordLocal = true,
-    this.canRecordCloud = true,
+    this.canRecordLocal = false,
+    this.canRecordLocalVideo = false,
+    this.canRecordLocalAudio = false,
+    this.canRecordMixedAudio = false,
+    this.canRecordScreen = false,
+    this.canRecordCloud = false,
     this.management,
     this.maxVideoSubscriptions,
   });
@@ -99,6 +103,18 @@ class MediaCapabilities {
   final bool canRemoveParticipants;
   final bool canCloseRoom;
   final bool canRecordLocal;
+
+  /// The recorder has a video encoding path; not evidence of RTC mixed media.
+  final bool canRecordLocalVideo;
+
+  /// A verified local audio capture path is available for this session.
+  final bool canRecordLocalAudio;
+
+  /// Supports combining multiple RTC speakers into a recorded audio stream.
+  final bool canRecordMixedAudio;
+
+  /// Can record display/tab/window content with the user's permission.
+  final bool canRecordScreen;
   final bool canRecordCloud;
   final MediaManagementCapabilities? management;
 
@@ -144,6 +160,10 @@ class MediaCapabilities {
     bool? canRemoveParticipants,
     bool? canCloseRoom,
     bool? canRecordLocal,
+    bool? canRecordLocalVideo,
+    bool? canRecordLocalAudio,
+    bool? canRecordMixedAudio,
+    bool? canRecordScreen,
     bool? canRecordCloud,
     MediaManagementCapabilities? management,
     int? maxVideoSubscriptions,
@@ -175,6 +195,10 @@ class MediaCapabilities {
     canRemoveParticipants: canRemoveParticipants ?? this.canRemoveParticipants,
     canCloseRoom: canCloseRoom ?? this.canCloseRoom,
     canRecordLocal: canRecordLocal ?? this.canRecordLocal,
+    canRecordLocalVideo: canRecordLocalVideo ?? this.canRecordLocalVideo,
+    canRecordLocalAudio: canRecordLocalAudio ?? this.canRecordLocalAudio,
+    canRecordMixedAudio: canRecordMixedAudio ?? this.canRecordMixedAudio,
+    canRecordScreen: canRecordScreen ?? this.canRecordScreen,
     canRecordCloud: canRecordCloud ?? this.canRecordCloud,
     management: management ?? this.management,
     maxVideoSubscriptions: maxVideoSubscriptions ?? this.maxVideoSubscriptions,

@@ -124,6 +124,9 @@ class RecordingResult {
   const RecordingResult({
     required this.mode,
     this.localFilePath,
+    this.downloadId,
+    this.fileName,
+    this.mimeType,
     this.recordingId,
     this.duration = Duration.zero,
     this.fileSizeBytes = 0,
@@ -135,6 +138,11 @@ class RecordingResult {
 
   /// The absolute path where the local file was saved (for [RecordingMode.local]).
   final String? localFilePath;
+
+  /// Browser-only opaque artifact identifier, available after stop.
+  final String? downloadId;
+  final String? fileName;
+  final String? mimeType;
 
   /// Provider cloud recording task id (for [RecordingMode.cloud]).
   final String? recordingId;
@@ -152,6 +160,9 @@ class RecordingResult {
     'mode': mode.name,
     if (localFilePath != null) 'localFilePath': localFilePath,
     if (recordingId != null) 'recordingId': recordingId,
+    if (downloadId != null) 'downloadId': downloadId,
+    if (fileName != null) 'fileName': fileName,
+    if (mimeType != null) 'mimeType': mimeType,
     'durationSeconds': duration.inSeconds,
     'fileSizeBytes': fileSizeBytes,
     if (metadata.isNotEmpty) 'metadata': metadata,

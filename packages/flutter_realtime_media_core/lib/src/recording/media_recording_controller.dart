@@ -27,6 +27,22 @@ abstract interface class MediaRecordingController {
   /// Stops the active recording session and finishes writing/sealing files.
   Future<RecordingResult?> stopRecording();
 
+  /// Check server-side cloud recording status, including asynchronous
+  /// finalization after StopEgress. Does not imply a file is ready.
+  Future<RecordingResult> queryCloudRecording();
+
+  /// A short-lived HTTPS URL available only after cloud recording completes.
+  Future<Uri> cloudRecordingDownloadUrl();
+
+  /// Initiates a browser download for an already completed local recording.
+  /// Must be invoked synchronously from a user action on Web.
+  /// Native platforms can use [RecordingResult.localFilePath] instead.
+  void downloadRecording(RecordingResult result);
+
+  /// Ask an installed native recorder to export a finished recording outside
+  /// its sandbox. Requires a recorder implementing MediaRecordingArtifactExporter.
+  Future<String> exportRecording(RecordingResult result);
+
   /// Generates a structured [CloudRecordingDescriptor] containing official
   /// vendor API endpoints, HTTP headers, and request body payloads for the
   /// active provider and room.

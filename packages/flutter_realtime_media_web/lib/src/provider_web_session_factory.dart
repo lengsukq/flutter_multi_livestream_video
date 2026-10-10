@@ -373,6 +373,13 @@ MediaCapabilities _capabilitiesFor(ProviderWebProfile profile, MediaRole role) {
   final canManageParticipants =
       role == MediaRole.host && profile.canManageParticipants;
   return MediaCapabilities(
+    canRecordLocal:
+        _browserSupportsScreenShare && _browserSupportsMediaRecorder,
+    canRecordLocalVideo:
+        _browserSupportsScreenShare && _browserSupportsMediaRecorder,
+    canRecordScreen:
+        _browserSupportsScreenShare && _browserSupportsMediaRecorder,
+    canRecordCloud: false,
     canPublishAudio: !isViewer,
     canPublishVideo: !isViewer,
     canBlurBackground:
@@ -405,6 +412,14 @@ bool get _browserSupportsDeviceEnumeration =>
 
 bool get _browserSupportsScreenShare =>
     _hasBrowserMediaDeviceMethod('getDisplayMedia');
+
+bool get _browserSupportsMediaRecorder {
+  try {
+    return (web.window as JSObject).hasProperty('MediaRecorder'.toJS).toDart;
+  } catch (_) {
+    return false;
+  }
+}
 
 bool get _browserSupportsVideoEffects {
   try {
@@ -514,6 +529,7 @@ class ProviderWebBroadcastViewerSession extends ProviderWebSessionBase
 abstract class ProviderWebSessionBase
     implements
         MediaSession,
+        MediaLocalRecordingSession,
         MediaDeviceController,
         MediaStatsProvider,
         MediaDataMessenger {
@@ -657,6 +673,80 @@ abstract class ProviderWebSessionBase
 
   @override
   Stream<MediaConnectionStats> get stats => _statsController.stream;
+
+  @override
+  Future<RecordingResult> startLocalRecording(RecordingOptions options) async {
+    _ensureActive();
+    _requireCapability(capabilities.canRecordLocal, 'local recording');
+    if (options.localFilePath != null) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message:
+            'Browsers download recording files; localFilePath is not supported.',
+        providerId: providerId,
+      );
+    }
+    final json =
+        jsonDecode(
+              await ProviderWebBridge.command(
+                providerId,
+                sessionId,
+                'startLocalRecording',
+                {
+                  'streamType': options.streamType.name,
+                  'containerFormat': options.containerFormat.name,
+                },
+              ),
+            )
+            as Map<String, dynamic>;
+    return RecordingResult(
+      mode: RecordingMode.local,
+      mimeType: json['mimeType'] as String?,
+      metadata: {
+        'captureMethod': 'user-selected-display-media',
+        'audioCaptureRequested':
+            options.streamType != RecordingStreamType.videoOnly,
+      },
+    );
+  }
+
+  @override
+  Future<RecordingResult> stopLocalRecording() async {
+    final json =
+        jsonDecode(
+              await ProviderWebBridge.command(
+                providerId,
+                sessionId,
+                'stopLocalRecording',
+              ),
+            )
+            as Map<String, dynamic>;
+    return RecordingResult(
+      mode: RecordingMode.local,
+      downloadId: json['downloadId'] as String?,
+      fileName: json['fileName'] as String?,
+      mimeType: json['mimeType'] as String?,
+      duration: Duration(milliseconds: (json['durationMs'] as num).round()),
+      fileSizeBytes: (json['fileSizeBytes'] as num).round(),
+      metadata: {
+        'hasVideo': json['hasVideo'] == true,
+        'hasAudio': json['hasAudio'] == true,
+        'captureMethod': 'user-selected-display-media',
+      },
+    );
+  }
+
+  @override
+  void downloadLocalRecording(RecordingResult result) {
+    if (result.downloadId == null) {
+      throw ArgumentError('Recording has no downloadable browser artifact.');
+    }
+    ProviderWebBridge.downloadRecording(
+      providerId,
+      sessionId,
+      result.downloadId!,
+    );
+  }
 
   @override
   Future<void> join(MediaJoinInfo joinInfo) {

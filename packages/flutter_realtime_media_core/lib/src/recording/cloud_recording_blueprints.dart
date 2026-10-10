@@ -299,16 +299,14 @@ class CloudRecordingBlueprints {
 
     final basePayload = <String, dynamic>{
       'room_name': roomCode,
-      'layout': livekitLayout,
-      'file_outputs': [
+      'template': {'layout': livekitLayout},
+      'preset': 'H264_720P_30',
+      'outputs': [
         {
-          'filepath':
-              'recordings/$roomCode-{time}.${options.containerFormat.name}',
-          's3': {
-            'access_key': 'YOUR_S3_KEY',
-            'secret': 'YOUR_S3_SECRET',
-            'region': 'us-east-1',
-            'bucket': 'your-livekit-recordings',
+          'file': {
+            'file_type': 'MP4',
+            // Resolved by the recording backend, never by the SDK client.
+            'filepath': '<SERVER_MANAGED_LOCAL_EGRESS_OUTPUT_PATH>',
           },
         },
       ],
@@ -320,7 +318,11 @@ class CloudRecordingBlueprints {
       providerId: 'livekit',
       action: action,
       endpoint:
-          'https://{livekit-host}/twirp/livekit.Egress/StartRoomCompositeEgress',
+          'https://{livekit-host}/twirp/livekit.Egress/${switch (action) {
+            'stop' => 'StopEgress',
+            'query' => 'ListEgress',
+            _ => 'StartEgress',
+          }}',
       httpMethod: 'POST',
       suggestedHeaders: const {
         'Content-Type': 'application/json',
@@ -328,7 +330,8 @@ class CloudRecordingBlueprints {
       },
       payload: basePayload,
       documentationUrl: 'https://docs.livekit.io/server/egress/',
-      description: 'LiveKit Server Egress API (StartRoomCompositeEgress)',
+      description:
+          'Self-hosted LiveKit Egress local file output (server-managed shared directory; no S3)',
     );
   }
 

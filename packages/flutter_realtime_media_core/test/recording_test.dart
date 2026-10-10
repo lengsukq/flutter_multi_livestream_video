@@ -2,6 +2,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 void main() {
+  test(
+    'recording capabilities are opt-in and distinguish video, audio, mixing',
+    () {
+      const defaultCapabilities = MediaCapabilities.meeting();
+      expect(defaultCapabilities.canRecordLocal, false);
+      expect(defaultCapabilities.canRecordLocalVideo, false);
+      expect(defaultCapabilities.canRecordLocalAudio, false);
+      expect(defaultCapabilities.canRecordMixedAudio, false);
+      expect(defaultCapabilities.canRecordScreen, false);
+
+      final displayCapture = defaultCapabilities.copyWith(
+        canRecordLocal: true,
+        canRecordLocalVideo: true,
+        canRecordScreen: true,
+      );
+      expect(displayCapture.canRecordLocal, true);
+      expect(displayCapture.canRecordLocalVideo, true);
+      expect(displayCapture.canRecordScreen, true);
+      expect(displayCapture.canRecordLocalAudio, false);
+      expect(displayCapture.canRecordMixedAudio, false);
+    },
+  );
   group('RecordingOptions & CloudRecordingDescriptor', () {
     test('RecordingOptions default values and factory helpers', () {
       final local = RecordingOptions.local(localFilePath: '/tmp/test.mp4');
@@ -139,9 +161,9 @@ void main() {
       );
 
       expect(descriptor.providerId, 'livekit');
-      expect(descriptor.endpoint, contains('StartRoomCompositeEgress'));
+      expect(descriptor.endpoint, contains('StartEgress'));
       expect(descriptor.payload['room_name'], 'livekit_room');
-      expect(descriptor.payload['layout'], 'grid');
+      expect(descriptor.payload['template']['layout'], 'grid');
       expect(descriptor.payload['customEgressOption'], true);
     });
 

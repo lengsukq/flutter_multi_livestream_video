@@ -3,6 +3,7 @@ import 'members/room_members_controller.dart';
 import 'room_recording_controller.dart';
 import 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
 import 'dart:async';
+import 'http_cloud_recording_session.dart';
 
 // ignore_for_file: prefer_initializing_formals
 
@@ -37,10 +38,12 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     VideoEffectsBridge? videoEffectsBridge,
     MediaBackgroundCapabilities effectsCapabilities =
         const MediaBackgroundCapabilities.none(),
+    MediaLocalRecordingSession? localRecordingDriver,
   }) : publicProviderId = publicProviderId ?? media.providerId,
        _productChatRoom = productChatRoom,
        _rtcChatRoom = rtcChatRoom,
-       _disposeClients = disposeClients {
+       _disposeClients = disposeClients,
+       _localRecordingDriver = localRecordingDriver {
     features = RealtimeFeatureRegistry(
       featurePlugins,
       onError: (id, error, stack) => _reportFailure(
@@ -63,6 +66,17 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     recording = RoomRecordingController(
       media: media,
       providerId: providerId,
+      localRecordingDriver: _localRecordingDriver,
+      cloudRecordingSession: featureBackendUrl == null
+          ? null
+          : HttpCloudRecordingSession(
+              backendUrl: featureBackendUrl!,
+              roomCode: media.roomCode,
+              participantId: media.participantId,
+              participantCredential: media.participantCredential,
+              roomOwnerCredential: media.roomOwnerCredential,
+              tokenProvider: featureTokenProvider,
+            ),
       onFailure: _reportFailure,
     );
     _mediaEventSubscription = media.session.events.listen(_onMediaEvent);
@@ -85,6 +99,7 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   }
 
   final MediaRoomSession media;
+  final MediaLocalRecordingSession? _localRecordingDriver;
   final String publicProviderId;
   final MediaTrackRenderer renderer;
 
@@ -198,7 +213,13 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   bool get usesProductChat => _productChatRoom != null;
   bool get usesRtcDataChat => _rtcChatRoom != null;
   RealtimeRoomCapabilities get capabilities => RealtimeRoomCapabilities(
-    media: media.session.capabilities,
+    media: _localRecordingDriver == null
+        ? media.session.capabilities
+        : media.session.capabilities.copyWith(
+            canRecordLocal: true,
+            canRecordLocalVideo: true,
+            canRecordScreen: true,
+          ),
     chat: chat?.capabilities,
   );
   late final RoomVideoEffectsController _effects;
@@ -249,6 +270,22 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
 
   /// Stops the active recording session and finishes writing files.
   Future<RecordingResult?> stopRecording() => recording.stopRecording();
+
+  /// Queries real cloud recording finalization state after stop.
+  Future<RecordingResult> queryCloudRecording() =>
+      recording.queryCloudRecording();
+
+  /// Returns a short-lived signed download URL once the recording is complete.
+  Future<Uri> cloudRecordingDownloadUrl() =>
+      recording.cloudRecordingDownloadUrl();
+
+  /// Download an encoded browser recording. Call directly from a button tap.
+  void downloadRecording(RecordingResult result) =>
+      recording.downloadRecording(result);
+
+  /// Export a finalized native recording into a user-selected/public location.
+  Future<String> exportRecording(RecordingResult result) =>
+      recording.exportRecording(result);
 
   /// Generates a structured [CloudRecordingDescriptor] containing official
   /// vendor API endpoints, HTTP headers, and request body payloads.

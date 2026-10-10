@@ -34,6 +34,7 @@ class Realtime {
     Duration? requestTimeout,
     RealtimeTokenProvider? tokenProvider,
     InteractionControlPlaneFactory? interactionControlPlaneFactory,
+    RealtimeLocalRecordingDriverFactory? localRecordingDriverFactory,
     Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
     RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
   }) {
@@ -66,6 +67,7 @@ class Realtime {
       driverRegistry: registry,
       tokenProvider: tokenProvider,
       interactionControlPlaneFactory: interactionControlPlaneFactory,
+      localRecordingDriverFactory: localRecordingDriverFactory,
       featurePlugins: featurePlugins,
     );
     final url = backendUrl?.trim();

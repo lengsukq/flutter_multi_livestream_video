@@ -178,6 +178,7 @@
 
   async function leave(session) {
     if (!session.joined) return;
+    if (session.recording) await stopLocalRecording(session);
     stopStats(session);
     await session.driver.leave();
     session.processedTrack?.stop?.();
@@ -195,6 +196,10 @@
     try {
       await leave(session);
     } finally {
+      for (const artifact of session.recordings?.values() || []) {
+        if (artifact.objectUrl) URL.revokeObjectURL(artifact.objectUrl);
+      }
+      session.recordings?.clear();
       stopStats(session);
       if (session.driver.dispose) await session.driver.dispose();
       sessions.delete(session.id);
@@ -230,6 +235,8 @@
       throw new Error(`Cannot run ${name} while the session is not connected.`);
     }
     args ||= {};
+    if (name === 'startLocalRecording') return JSON.stringify(await startLocalRecording(session, args));
+    if (name === 'stopLocalRecording') return JSON.stringify(await stopLocalRecording(session));
     if (session.role === 'viewer' && ['attachProcessedVideoSource', 'setProcessedVideoEffect'].includes(name)) {
       throw new Error('Viewers cannot process or publish camera video.');
     }
@@ -313,6 +320,110 @@
 
   function getTrackAttachment(session, trackId) {
     return session.attachments.get(String(trackId));
+  }
+
+  // Cross-provider Web V1 captures only the explicitly user-selected browser
+  // tab/window/screen. Browser tab audio is optional and browser-dependent.
+  // It does not claim access to every provider's raw remote audio track.
+  async function startLocalRecording(session, options) {
+    if (session.recording) throw new Error('A local recording is already running.');
+    if (typeof global.MediaRecorder !== 'function' ||
+        !global.navigator?.mediaDevices?.getDisplayMedia) {
+      throw new Error('Local browser recording is unsupported.');
+    }
+    if (options.streamType === 'audioOnly') {
+      throw new Error('Audio-only display capture is not supported by this recorder.');
+    }
+    const recordingMimeCandidates = options.containerFormat === 'mp4'
+      ? ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+      : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+    const mimeType = recordingMimeCandidates.find((value) => MediaRecorder.isTypeSupported?.(value));
+    if (!mimeType) throw new Error('No browser video recording MIME type is supported.');
+
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: options.streamType !== 'videoOnly',
+    });
+    try {
+      if (!stream.getVideoTracks().length) throw new Error('Screen capture has no video track.');
+      const recorder = new MediaRecorder(stream, {mimeType});
+      const chunks = [];
+      const startedAt = Date.now();
+      let settleResolve;
+      let settleReject;
+      const finished = new Promise((resolve, reject) => {
+        settleResolve = resolve;
+        settleReject = reject;
+      });
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size) chunks.push(event.data);
+      };
+      recorder.onerror = (event) => settleReject(event.error || new Error('Browser recorder failed.'));
+      recorder.onstop = () => {
+        const actualMime = recorder.mimeType || mimeType;
+        const blob = new Blob(chunks, {type: actualMime});
+        if (blob.size === 0) {
+          settleReject(new Error('Browser recording has no encoded media.'));
+          return;
+        }
+        const isMp4 = actualMime.includes('mp4');
+        const id = `recording-${session.id}-${startedAt}`;
+        const safeRoom = String(session.payload.roomCode || 'room').replace(/[^a-z0-9_-]/gi, '_');
+        const fileName = `${safeRoom}-${startedAt}.${isMp4 ? 'mp4' : 'webm'}`;
+        session.recordings ||= new Map();
+        for (const previous of session.recordings.values()) {
+          if (previous.objectUrl) URL.revokeObjectURL(previous.objectUrl);
+        }
+        session.recordings.clear();
+        session.recordings.set(id, {blob, fileName});
+        settleResolve({
+          downloadId: id,
+          fileName,
+          mimeType: actualMime,
+          fileSizeBytes: blob.size,
+          durationMs: Date.now() - startedAt,
+          hasVideo: true,
+          hasAudio: stream.getAudioTracks().length > 0,
+        });
+      };
+      session.recording = {stream, recorder, finished};
+      for (const track of stream.getTracks()) {
+        track.addEventListener?.('ended', () => {
+          if (recorder.state === 'recording') recorder.stop();
+        }, {once: true});
+      }
+      recorder.start(1000);
+      return {mimeType: recorder.mimeType || mimeType};
+    } catch (error) {
+      for (const track of stream.getTracks()) track.stop();
+      session.recording = null;
+      throw error;
+    }
+  }
+
+  async function stopLocalRecording(session) {
+    const current = session.recording;
+    if (!current) throw new Error('No active browser recording.');
+    if (current.recorder.state !== 'inactive') current.recorder.stop();
+    try {
+      return await current.finished;
+    } finally {
+      for (const track of current.stream.getTracks()) track.stop();
+      if (session.recording === current) session.recording = null;
+    }
+  }
+
+  function downloadRecording(session, downloadId) {
+    const artifact = session.recordings?.get(downloadId);
+    if (!artifact) throw new Error('Recording artifact is no longer available.');
+    if (!artifact.objectUrl) artifact.objectUrl = URL.createObjectURL(artifact.blob);
+    const anchor = document.createElement('a');
+    anchor.href = artifact.objectUrl;
+    anchor.download = artifact.fileName;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    try { anchor.click(); }
+    finally { anchor.remove(); }
   }
 
   const bridge = {
@@ -418,6 +529,10 @@
         },
       };
       sessions.set(previewId, preview);
+    },
+
+    downloadRecording(providerId, sessionId, downloadId) {
+      downloadRecording(requireSession(providerId, sessionId), String(downloadId));
     },
 
     async create(providerId, sessionId, serializedPayload) {
