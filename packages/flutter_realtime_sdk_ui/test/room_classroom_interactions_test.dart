@@ -110,6 +110,134 @@ void main() {
     await tester.runAsync(room.dispose);
   });
 
+  testWidgets('tools button renders dock item with label when enabled', (
+    tester,
+  ) async {
+    final repository = _ClassroomRepository(
+      ClassroomRole.teacher,
+      withActivity: true,
+    );
+    final room = await _initializedRoom(tester, repository);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(
+            body: RealtimeClassroomToolsButton(showLabel: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RealtimeDockItem), findsOneWidget);
+    expect(find.byIcon(Icons.build_outlined), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(room.dispose);
+  });
+
+  testWidgets(
+    'teacher empty questions prompt for student questions and hides composer',
+    (tester) async {
+      final repository = _ClassroomRepository(
+        ClassroomRole.teacher,
+        withQuestions: false,
+      );
+      final room = await _initializedRoom(tester, repository);
+      addTearDown(room.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('zh', 'CN'),
+          supportedLocales: RealtimeStrings.supportedLocales,
+          localizationsDelegates: RealtimeStrings.localizationsDelegates,
+          home: RealtimeRoomUiScope(
+            room: room,
+            child: const Scaffold(
+              body: Column(
+                children: [
+                  Expanded(child: RealtimeClassroomQuestions()),
+                  RealtimeClassroomQuestionComposer(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('暂无课堂提问'), findsOneWidget);
+      expect(find.text('学生提问后将在此展示，可直接在此解答'), findsOneWidget);
+      expect(find.text('输入问题后点击发送，向老师请教'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(room.dispose);
+    },
+  );
+
+  testWidgets(
+    'student empty questions prompt to ask teacher and shows composer',
+    (tester) async {
+      final repository = _ClassroomRepository(
+        ClassroomRole.student,
+        withQuestions: false,
+      );
+      final room = await _initializedRoom(tester, repository);
+      addTearDown(room.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('zh', 'CN'),
+          supportedLocales: RealtimeStrings.supportedLocales,
+          localizationsDelegates: RealtimeStrings.localizationsDelegates,
+          home: RealtimeRoomUiScope(
+            room: room,
+            child: const Scaffold(
+              body: Column(
+                children: [
+                  Expanded(child: RealtimeClassroomQuestions()),
+                  RealtimeClassroomQuestionComposer(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('暂无课堂提问'), findsOneWidget);
+      expect(find.text('输入问题后点击发送，向老师请教'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(room.dispose);
+    },
+  );
+
+  testWidgets('classroom panel with showHeader false still displays TabBar', (
+    tester,
+  ) async {
+    final repository = _ClassroomRepository(ClassroomRole.teacher);
+    final room = await _initializedRoom(tester, repository);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh', 'CN'),
+        supportedLocales: RealtimeStrings.supportedLocales,
+        localizationsDelegates: RealtimeStrings.localizationsDelegates,
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(
+            body: RealtimeClassroomPanel(showHeader: false),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(TabBar), findsOneWidget);
+    expect(find.text('提问'), findsOneWidget);
+    expect(find.text('举手'), findsOneWidget);
+    expect(find.text('花名册'), findsOneWidget);
+    expect(find.text('测验'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(room.dispose);
+  });
+
   testWidgets('independent quiz and poll list delegates answer and close', (
     tester,
   ) async {
@@ -219,10 +347,14 @@ class _MediaSession extends Fake implements MediaSession {
 }
 
 class _ClassroomRepository implements ClassroomRepository {
-  _ClassroomRepository(this.role, {this.withActivity = false})
-    : raised = role == ClassroomRole.teacher;
+  _ClassroomRepository(
+    this.role, {
+    this.withActivity = false,
+    this.withQuestions = true,
+  }) : raised = role == ClassroomRole.teacher;
   final ClassroomRole role;
   final bool withActivity;
+  final bool withQuestions;
   final actions = <String>[];
   bool raised;
   bool speaking = false;
@@ -244,16 +376,18 @@ class _ClassroomRepository implements ClassroomRepository {
         canSpeak: speaking,
       ),
     ],
-    questions: [
-      ClassroomQuestion(
-        id: 'question-1',
-        userId: 'student',
-        displayName: 'Student',
-        text: 'Previous question',
-        status: ClassroomQuestionStatus.pending,
-        createdAt: DateTime(2026),
-      ),
-    ],
+    questions: withQuestions
+        ? [
+            ClassroomQuestion(
+              id: 'question-1',
+              userId: 'student',
+              displayName: 'Student',
+              text: 'Previous question',
+              status: ClassroomQuestionStatus.pending,
+              createdAt: DateTime(2026),
+            ),
+          ]
+        : const [],
     stats: const ClassroomStats(),
     tools: withActivity
         ? ClassroomToolsState(

@@ -495,6 +495,7 @@ class RealtimeDockFeedbackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
     final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -502,16 +503,34 @@ class RealtimeDockFeedbackButton extends StatelessWidget {
           return const SizedBox.shrink();
         }
         return PopupMenuButton<ClassroomFeedbackKind>(
-          tooltip: strings.isZh ? '课堂反馈' : 'Classroom feedback',
+          tooltip: strings.classroomFeedback,
+          color: style.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: style.border),
+          ),
           child: RealtimeDockItem(
             icon: Icons.emoji_emotions_outlined,
-            label: strings.isZh ? '课堂反馈' : 'Classroom feedback',
+            label: strings.classroomFeedback,
             showLabel: showLabel,
           ),
           onSelected: (kind) => controller.sendClassroomFeedback(kind),
           itemBuilder: (_) => [
             for (final kind in ClassroomFeedbackKind.values)
-              PopupMenuItem(value: kind, child: Text(kind.name)),
+              PopupMenuItem(
+                value: kind,
+                child: Text(
+                  strings.isZh
+                      ? switch (kind) {
+                          ClassroomFeedbackKind.understood => '听懂了 👍',
+                          ClassroomFeedbackKind.great => '太棒了 🔥',
+                          ClassroomFeedbackKind.idea => '有想法 💡',
+                          ClassroomFeedbackKind.question => '没听懂 ❓',
+                          ClassroomFeedbackKind.clap => '鼓掌 👏',
+                        }
+                      : kind.name,
+                ),
+              ),
           ],
         );
       },
@@ -519,10 +538,540 @@ class RealtimeDockFeedbackButton extends StatelessWidget {
   }
 }
 
+/// Action callback definition for custom reactions inside [RealtimeDockReactionsButton].
+class RealtimeDockReactionAction {
+  const RealtimeDockReactionAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+}
+
+/// Consolidated reactions button for [RealtimeMeetingDock].
+///
+/// Merges quick emoji feedback (understood, great, idea, question, clap),
+/// raise hand toggle (with active orange status indicator), and optional custom
+/// interactions such as waving into a single clean popup menu.
+class RealtimeDockReactionsButton extends StatelessWidget {
+  const RealtimeDockReactionsButton({
+    super.key,
+    this.showLabel = true,
+    this.onWave,
+    this.extraActions = const [],
+  });
+
+  final bool showLabel;
+  final VoidCallback? onWave;
+  final List<RealtimeDockReactionAction> extraActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = RealtimeRoomUiScope.maybeOf(context);
+    final strings = RealtimeStrings.of(context);
+
+    Widget buildContent(ClassroomState? state) {
+      final raised =
+          state != null &&
+          state.students.any(
+            (s) => s.userId == state.selfUserId && s.handRaised,
+          );
+      final canRaise = controller?.canRaiseHand ?? false;
+      final canFeedback = state?.capabilities.canSendFeedback == true;
+
+      void openMenu() {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
+        unawaited(
+          showModalBottomSheet<void>(
+            context: context,
+            backgroundColor: Colors.transparent,
+            builder: (sheetContext) => SafeArea(
+              child: Container(
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white12
+                        : theme.colorScheme.outlineVariant.withValues(
+                            alpha: 0.5,
+                          ),
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 20,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: isDark
+                      ? const Color(0xFF1E2533)
+                      : theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                        child: Row(
+                          children: [
+                            Text(
+                              strings.reactions,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.close_rounded, size: 20),
+                              onPressed: () => Navigator.pop(sheetContext),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1),
+                      if (canFeedback) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              for (final kind in ClassroomFeedbackKind.values)
+                                _ReactionEmojiButton(
+                                  emoji: switch (kind) {
+                                    ClassroomFeedbackKind.understood => '👍',
+                                    ClassroomFeedbackKind.great => '🔥',
+                                    ClassroomFeedbackKind.idea => '💡',
+                                    ClassroomFeedbackKind.question => '❓',
+                                    ClassroomFeedbackKind.clap => '👏',
+                                  },
+                                  label: strings.isZh
+                                      ? switch (kind) {
+                                          ClassroomFeedbackKind.understood =>
+                                            '听懂了',
+                                          ClassroomFeedbackKind.great => '太棒了',
+                                          ClassroomFeedbackKind.idea => '有想法',
+                                          ClassroomFeedbackKind.question =>
+                                            '没听懂',
+                                          ClassroomFeedbackKind.clap => '鼓掌',
+                                        }
+                                      : kind.name,
+                                  onTap: () {
+                                    Navigator.pop(sheetContext);
+                                    if (controller != null) {
+                                      unawaited(
+                                        controller.sendClassroomFeedback(kind),
+                                      );
+                                    }
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1),
+                      ],
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            if (canRaise)
+                              Expanded(
+                                child: FilledButton.tonalIcon(
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    backgroundColor: raised
+                                        ? RealtimeUiTokens.iosOrange.withValues(
+                                            alpha: 0.2,
+                                          )
+                                        : null,
+                                    foregroundColor: raised
+                                        ? RealtimeUiTokens.iosOrange
+                                        : null,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  icon: Icon(
+                                    raised
+                                        ? Icons.pan_tool_rounded
+                                        : Icons.pan_tool_outlined,
+                                    size: 20,
+                                    color: raised
+                                        ? RealtimeUiTokens.iosOrange
+                                        : null,
+                                  ),
+                                  label: Text(
+                                    raised
+                                        ? strings.lowerHand
+                                        : strings.raiseHand,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(sheetContext);
+                                    if (controller != null) {
+                                      unawaited(
+                                        controller.setHandRaised(!raised),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                            if (canRaise && onWave != null)
+                              const SizedBox(width: 12),
+                            if (onWave != null)
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.waving_hand_outlined,
+                                    size: 20,
+                                  ),
+                                  label: Text(
+                                    strings.wave,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  onPressed: () {
+                                    Navigator.pop(sheetContext);
+                                    onWave!();
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (extraActions.isNotEmpty) ...[
+                        const Divider(height: 1),
+                        for (final action in extraActions)
+                          ListTile(
+                            leading: Icon(action.icon),
+                            title: Text(action.label),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              action.onTap();
+                            },
+                          ),
+                      ],
+                      const SizedBox(height: 6),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      return RealtimeDockItem(
+        icon: raised ? Icons.pan_tool_rounded : Icons.add_reaction_outlined,
+        label: raised ? strings.handRaised : strings.reactions,
+        isActive: raised,
+        activeColor: RealtimeUiTokens.iosOrange,
+        showLabel: showLabel,
+        onPressed: openMenu,
+      );
+    }
+
+    if (controller != null) {
+      return ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) => buildContent(controller.classroomState),
+      );
+    }
+
+    return buildContent(null);
+  }
+}
+
+class _ReactionEmojiButton extends StatelessWidget {
+  const _ReactionEmojiButton({
+    required this.emoji,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String emoji;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: (isDark ? Colors.white : Colors.black).withValues(
+                  alpha: 0.06,
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Text(emoji, style: const TextStyle(fontSize: 22)),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// An item presented inside [RealtimeDockMoreButton]'s menu.
+class RealtimeDockMoreItem {
+  const RealtimeDockMoreItem({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    required this.onTap,
+    this.isActive = false,
+    this.isDanger = false,
+    this.badgeText,
+    this.showBadgeDot = false,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+  final bool isActive;
+  final bool isDanger;
+  final String? badgeText;
+  final bool showBadgeDot;
+  final bool enabled;
+}
+
+/// Dock "More" button consolidating secondary media controls and tools
+/// (flip camera, background effects, recording, teacher tools, etc.).
+class RealtimeDockMoreButton extends StatelessWidget {
+  const RealtimeDockMoreButton({
+    super.key,
+    this.items = const [],
+    this.children = const [],
+    this.showLabel = true,
+    this.hasActiveBadge = false,
+  });
+
+  final List<RealtimeDockMoreItem> items;
+  final List<Widget> children;
+  final bool showLabel;
+  final bool hasActiveBadge;
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = RealtimeStrings.of(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    void openMenu() {
+      unawaited(
+        showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: Colors.transparent,
+          builder: (sheetContext) => SafeArea(
+            child: Container(
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white12
+                      : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 20,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: isDark
+                    ? const Color(0xFF1E2533)
+                    : theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(20),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                      child: Row(
+                        children: [
+                          Text(
+                            strings.more,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.close_rounded, size: 20),
+                            onPressed: () => Navigator.pop(sheetContext),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        children: [
+                          for (var i = 0; i < items.length; i++) ...[
+                            Builder(
+                              builder: (context) {
+                                final item = items[i];
+                                final itemColor = item.isDanger
+                                    ? const Color(0xFFFF3B30)
+                                    : (item.isActive
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.onSurface);
+                                return ListTile(
+                                  enabled: item.enabled,
+                                  leading: Badge(
+                                    isLabelVisible:
+                                        item.showBadgeDot ||
+                                        (item.badgeText != null &&
+                                            item.badgeText!.isNotEmpty),
+                                    label: item.badgeText != null
+                                        ? Text(item.badgeText!)
+                                        : null,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            (item.isDanger
+                                                    ? const Color(0xFFFF3B30)
+                                                    : (item.isActive
+                                                          ? theme
+                                                                .colorScheme
+                                                                .primary
+                                                          : (isDark
+                                                                ? Colors.white
+                                                                : Colors
+                                                                      .black)))
+                                                .withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Icon(
+                                        item.icon,
+                                        color: itemColor,
+                                        size: 22,
+                                      ),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    item.title,
+                                    style: TextStyle(
+                                      color: itemColor,
+                                      fontWeight: item.isActive || item.isDanger
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
+                                    ),
+                                  ),
+                                  subtitle: item.subtitle != null
+                                      ? Text(
+                                          item.subtitle!,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                        )
+                                      : null,
+                                  onTap: () {
+                                    Navigator.pop(sheetContext);
+                                    item.onTap();
+                                  },
+                                );
+                              },
+                            ),
+                            if (i < items.length - 1 || children.isNotEmpty)
+                              const Divider(height: 1, indent: 56),
+                          ],
+                          ...children,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return RealtimeDockItem(
+      icon: Icons.more_horiz_rounded,
+      label: strings.more,
+      showBadgeDot: hasActiveBadge,
+      showLabel: showLabel,
+      onPressed: (items.isEmpty && children.isEmpty) ? null : openMenu,
+    );
+  }
+}
+
 /// Ready-to-use tabbed Classroom Management panel for conference sidebars or sheets.
 class RealtimeClassroomPanel extends StatefulWidget {
-  const RealtimeClassroomPanel({super.key, this.onClose});
+  const RealtimeClassroomPanel({
+    super.key,
+    this.onClose,
+    this.showHeader = true,
+  });
   final VoidCallback? onClose;
+  final bool showHeader;
 
   @override
   State<RealtimeClassroomPanel> createState() => _RealtimeClassroomPanelState();
@@ -545,7 +1094,8 @@ class _RealtimeClassroomPanelState extends State<RealtimeClassroomPanel>
   Widget build(BuildContext context) {
     final strings = RealtimeStrings.of(context);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final style = RealtimeStyle.of(context);
+    final controller = RealtimeRoomUiScope.of(context);
 
     return Column(
       children: [
@@ -557,56 +1107,120 @@ class _RealtimeClassroomPanelState extends State<RealtimeClassroomPanel>
                 child: Container(
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.black.withValues(alpha: 0.05),
+                    color: style.surfaceSubtle,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: style.border),
                   ),
-                  child: TabBar(
-                    controller: _tabController,
-                    dividerColor: Colors.transparent,
-                    indicatorSize: TabBarIndicatorSize.tab,
-                    indicator: BoxDecoration(
-                      color: isDark ? const Color(0xFF2C3240) : Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 4,
-                          offset: Offset(0, 1),
+                  child: ListenableBuilder(
+                    listenable: controller,
+                    builder: (context, _) {
+                      final state = controller.classroomState;
+                      final pendingQ = state?.stats.pendingQuestions ?? 0;
+                      final raisedHands = state?.stats.handsRaised ?? 0;
+
+                      return TabBar(
+                        controller: _tabController,
+                        dividerColor: Colors.transparent,
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        indicator: BoxDecoration(
+                          color: style.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.06),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    labelColor: theme.colorScheme.onSurface,
-                    unselectedLabelColor: RealtimeUiTokens.textMuted,
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-                    labelStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    unselectedLabelStyle: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    tabs: [
-                      Tab(text: strings.classroomQuestions),
-                      Tab(text: strings.classroomHands),
-                      Tab(text: strings.classroomRoster),
-                      Tab(text: strings.classroomActivities),
-                    ],
+                        labelColor: style.primary,
+                        unselectedLabelColor: style.textMuted,
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        labelStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        unselectedLabelStyle: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        tabs: [
+                          Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(strings.classroomQuestions),
+                                if (pendingQ > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: style.primary,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '$pendingQ',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Tab(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(strings.classroomHands),
+                                if (raisedHands > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: RealtimeUiTokens.iosOrange,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '$raisedHands',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Tab(text: strings.classroomRoster),
+                          Tab(text: strings.classroomActivities),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
-              if (widget.onClose != null) ...[
+              if (widget.showHeader && widget.onClose != null) ...[
                 const SizedBox(width: 6),
                 IconButton(
                   tooltip: strings.closePanel,
                   onPressed: widget.onClose,
                   iconSize: 18,
                   style: IconButton.styleFrom(
-                    backgroundColor: isDark
-                        ? Colors.white.withValues(alpha: 0.10)
-                        : Colors.black.withValues(alpha: 0.06),
+                    backgroundColor: style.surfaceSubtle,
                     padding: const EdgeInsets.all(6),
                     minimumSize: const Size(28, 28),
                   ),
@@ -623,19 +1237,27 @@ class _RealtimeClassroomPanelState extends State<RealtimeClassroomPanel>
         Expanded(
           child: TabBarView(
             controller: _tabController,
-            children: const [
+            children: [
               Column(
                 children: [
-                  Expanded(child: RealtimeClassroomQuestions()),
-                  Padding(
-                    padding: EdgeInsets.all(8),
-                    child: RealtimeClassroomQuestionComposer(),
+                  const Expanded(child: RealtimeClassroomQuestions()),
+                  ListenableBuilder(
+                    listenable: controller,
+                    builder: (context, _) {
+                      if (!controller.canAskQuestion) {
+                        return const SizedBox.shrink();
+                      }
+                      return const Padding(
+                        padding: EdgeInsets.fromLTRB(10, 4, 10, 10),
+                        child: RealtimeClassroomQuestionComposer(),
+                      );
+                    },
                   ),
                 ],
               ),
-              RealtimeClassroomHandQueue(),
-              RealtimeClassroomRoster(),
-              RealtimeClassroomActivityList(),
+              const RealtimeClassroomHandQueue(),
+              const RealtimeClassroomRoster(),
+              const RealtimeClassroomActivityList(),
             ],
           ),
         ),

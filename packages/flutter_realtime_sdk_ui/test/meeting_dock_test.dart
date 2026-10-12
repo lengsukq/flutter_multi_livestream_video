@@ -70,4 +70,78 @@ void main() {
       expect(leaveTapped, true);
     },
   );
+
+  testWidgets('RealtimeDockMoreButton opens sheet and executes action', (
+    tester,
+  ) async {
+    var flipped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh', 'CN'),
+        supportedLocales: RealtimeStrings.supportedLocales,
+        localizationsDelegates: RealtimeStrings.localizationsDelegates,
+        home: Scaffold(
+          body: RealtimeDockMoreButton(
+            showLabel: true,
+            hasActiveBadge: true,
+            items: [
+              RealtimeDockMoreItem(
+                icon: Icons.cameraswitch_rounded,
+                title: '翻转摄像头',
+                subtitle: '切换前后置',
+                onTap: () => flipped = true,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('更多'), findsOneWidget);
+    await tester.tap(find.text('更多'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('翻转摄像头'), findsOneWidget);
+    expect(find.text('切换前后置'), findsOneWidget);
+
+    await tester.tap(find.text('翻转摄像头'));
+    await tester.pumpAndSettle();
+
+    expect(flipped, true);
+    expect(find.text('切换前后置'), findsNothing);
+  });
+
+  testWidgets('RealtimeDockReactionsButton opens sheet and triggers wave', (
+    tester,
+  ) async {
+    var waveTriggered = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh', 'CN'),
+        supportedLocales: RealtimeStrings.supportedLocales,
+        localizationsDelegates: RealtimeStrings.localizationsDelegates,
+        home: Scaffold(
+          body: RealtimeDockReactionsButton(
+            showLabel: true,
+            onWave: () => waveTriggered = true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('互动'), findsOneWidget);
+    await tester.tap(find.text('互动'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('挥手'), findsOneWidget);
+    await tester.tap(find.text('挥手'));
+    await tester.pumpAndSettle();
+
+    expect(waveTriggered, true);
+    expect(find.text('挥手'), findsNothing);
+  });
 }

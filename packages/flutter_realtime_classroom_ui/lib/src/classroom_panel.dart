@@ -571,31 +571,14 @@ Future<void> showClassroomBottomSheet(
   BuildContext context, {
   required ClassroomSession classroom,
   int initialTab = 0,
-}) => showModalBottomSheet<void>(
+}) => showRealtimeGlassBottomSheet<void>(
   context: context,
-  useSafeArea: true,
   isScrollControlled: true,
-  backgroundColor: Colors.transparent,
-  barrierColor: Colors.black54,
   builder: (ctx) => Center(
     child: ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 880),
-      child: Container(
+      child: SizedBox(
         height: MediaQuery.sizeOf(ctx).height * 0.84,
-        decoration: const BoxDecoration(
-          color: RealtimeUiTokens.surface,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(RealtimeUiTokens.sheetRadius),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x330F172A),
-              blurRadius: 36,
-              offset: Offset(0, -8),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
         child: ClassroomPanel(
           classroom: classroom,
           showCloseButton: true,

@@ -324,6 +324,60 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('connection indicator renders localized status pill', (
+    tester,
+  ) async {
+    final media = _FakeMediaSession();
+    final room = _room(media);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(body: RealtimeConnectionIndicator()),
+        ),
+      ),
+    );
+    await tester.pump();
+    // Default fake session is connected; the pill must not use raw enum names.
+    expect(find.text('Connected'), findsOneWidget);
+    expect(find.byType(Chip), findsNothing);
+    expect(find.byType(RealtimePill), findsOneWidget);
+
+    media._emit(media.snapshot.copyWith(state: MediaSessionState.reconnecting));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Reconnecting'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('connection indicator localizes status in Chinese', (
+    tester,
+  ) async {
+    final media = _FakeMediaSession();
+    final room = _room(media);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('zh', 'CN'),
+        supportedLocales: RealtimeStrings.supportedLocales,
+        localizationsDelegates: RealtimeStrings.localizationsDelegates,
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(body: RealtimeConnectionIndicator()),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('已连接'), findsOneWidget);
+
+    media._emit(media.snapshot.copyWith(state: MediaSessionState.reconnecting));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('正在重新连接'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('scope switches rooms without closing provider sessions', (
     tester,
   ) async {
@@ -576,6 +630,7 @@ class _FakeMediaSession extends InteractiveMediaSession {
   void _emit(MediaSnapshot snapshot) {
     _snapshot = snapshot;
     _snapshots.add(snapshot);
+    _states.add(snapshot.state);
   }
 
   @override

@@ -511,6 +511,12 @@ class RealtimeRoomUiScope extends StatefulWidget {
     return scope!.controller;
   }
 
+  static RealtimeRoomUiController? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<_RealtimeRoomUiInherited>()
+        ?.controller;
+  }
+
   @override
   State<RealtimeRoomUiScope> createState() => _RealtimeRoomUiScopeState();
 }

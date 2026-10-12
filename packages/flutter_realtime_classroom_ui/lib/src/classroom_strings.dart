@@ -125,6 +125,15 @@ class ClassroomStrings {
     'activeSpeakers': 'Active Speakers',
     'emptyHandsDesc':
         'Student hand-raising requests will show up here in real time.',
+    'quickTools': 'Interactive Tools',
+    'activeTimer': 'Active Timer',
+    'remaining': 'Remaining',
+    'inProgress': 'Active',
+    'accuracy': 'Accuracy',
+    'emptyToolsDesc':
+        'Announcements, quizzes, polls, homework, and materials will appear here.',
+    'attendanceDesc': 'Online duration and attendance records.',
+    'studentAnswers': 'Student Responses',
   };
   static const _zh = <String, String>{
     'onlineStudents': '在线学生',
@@ -238,6 +247,14 @@ class ClassroomStrings {
     'goToQa': '去提问',
     'activeSpeakers': '当前连麦中',
     'emptyHandsDesc': '学生在课堂中举手后，申请将在此实时出现。',
+    'quickTools': '快捷互动工具',
+    'activeTimer': '课堂计时器',
+    'remaining': '剩余时间',
+    'inProgress': '进行中',
+    'accuracy': '正确率',
+    'emptyToolsDesc': '老师发布的课堂公告、测验、投票、作业和教学资料将在此实时显示。',
+    'attendanceDesc': '课堂在线时长与签到考勤明细。',
+    'studentAnswers': '学生作答明细',
   };
   String t(String key) => (chinese ? _zh : _en)[key] ?? _en[key] ?? key;
 }
