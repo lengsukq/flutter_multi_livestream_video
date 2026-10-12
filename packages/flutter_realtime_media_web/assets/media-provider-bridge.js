@@ -237,8 +237,10 @@
     args ||= {};
     if (name === 'startLocalRecording') return JSON.stringify(await startLocalRecording(session, args));
     if (name === 'stopLocalRecording') return JSON.stringify(await stopLocalRecording(session));
-    if (session.role === 'viewer' && ['attachProcessedVideoSource', 'setProcessedVideoEffect'].includes(name)) {
-      throw new Error('Viewers cannot process or publish camera video.');
+    if (session.role === 'viewer' && [
+      'attachProcessedVideoSource', 'setProcessedVideoEffect', 'setScreenShareEnabled',
+    ].includes(name)) {
+      throw new Error('Viewers cannot publish camera or screen video.');
     }
     if (name === 'attachProcessedVideoSource' && session.providerId !== 'agora') {
       const sourceId = String(args.sourceId || '');
@@ -802,9 +804,18 @@
         }
         if (name === 'setScreenShareEnabled') {
           if (args.enabled && !localTracks.screen) {
+            // Ask for browser consent *before* disrupting a healthy camera
+            // stream. Cancelling the picker must leave camera publish intact.
+            const screen = await AgoraRTC.createScreenVideoTrack({ encoderConfig: '1080p_1' }, 'disable');
             await unpublishCameraIfNeeded();
-            localTracks.screen = await AgoraRTC.createScreenVideoTrack({ encoderConfig: '1080p_1' }, 'disable');
-            await client.publish(localTracks.screen);
+            try {
+              await client.publish(screen);
+              localTracks.screen = screen;
+            } catch (error) {
+              screen.close();
+              await publishCameraIfNeeded();
+              throw error;
+            }
             addVideoTrack(session, { id: 'agora:screen:local', participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: { track: localTracks.screen } });
             localTracks.screen.on('track-ended', () => this.command('setScreenShareEnabled', { enabled: false }).catch(() => {}));
           } else if (!args.enabled && localTracks.screen) {
@@ -960,11 +971,11 @@
           return;
         }
         if (name === 'setScreenShareEnabled') {
-          if (args.enabled) {
+          if (args.enabled && !session.screenTrack) {
             await trtc.startLocalScreen({ publish: true });
             session.screenTrack = trtc.getVideoTrack({ streamType: sdk.TYPE.STREAM_TYPE_SUB });
             if (session.screenTrack) addVideoTrack(session, { id: `trtc:screen:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: session.screenTrack });
-          } else {
+          } else if (!args.enabled && session.screenTrack) {
             await trtc.stopLocalScreen();
             session.screenTrack = null;
             removeVideoTrack(session, `trtc:screen:${session.localParticipantId}`);
@@ -1034,10 +1045,17 @@
     engine.on('remoteUserOffLineNotify', (uid) => removeParticipant(session, uid));
     engine.on('remoteTrackAvailableNotify', (uid, audioTracks, videoTracks) => {
       const id = `artc:video:${uid}`;
-      if (videoTracks) {
+      const screenId = `artc:screen:${uid}`;
+      if (videoTracks & cameraTrack) {
         remoteVideo.set(id, { uid, track: cameraTrack });
         addVideoTrack(session, { id, participantId: uid, native: { uid, track: cameraTrack } });
       } else removeVideoTrack(session, id);
+      if (videoTracks & screenTrack) {
+        addVideoTrack(session, {
+          id: screenId, participantId: uid, isScreenShare: true,
+          native: { uid, track: screenTrack },
+        });
+      } else removeVideoTrack(session, screenId);
     });
     engine.on('error', (error) => reportError(session, error));
     session.driver = {
@@ -1074,8 +1092,18 @@
           return;
         }
         if (name === 'setScreenShareEnabled') {
-          if (args.enabled) { await engine.startPreviewScreen(); await engine.publishLocalScreenShareStream(true); addVideoTrack(session, { id: `artc:screen:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: { uid: session.localParticipantId, track: screenTrack } }); }
-          else { await engine.publishLocalScreenShareStream(false); await engine.stopPreviewScreen(); removeVideoTrack(session, `artc:screen:${session.localParticipantId}`); }
+          if (args.enabled && !session.screenTrack) {
+            await engine.startPreviewScreen();
+            try { await engine.publishLocalScreenShareStream(true); }
+            catch (error) { await engine.stopPreviewScreen(); throw error; }
+            session.screenTrack = {uid: session.localParticipantId, track: screenTrack};
+            addVideoTrack(session, { id: `artc:screen:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: session.screenTrack });
+          } else if (!args.enabled && session.screenTrack) {
+            await engine.publishLocalScreenShareStream(false);
+            await engine.stopPreviewScreen();
+            session.screenTrack = null;
+            removeVideoTrack(session, `artc:screen:${session.localParticipantId}`);
+          }
           return;
         }
         if (name === 'switchCamera') {
@@ -1222,19 +1250,29 @@
           return;
         }
         if (name === 'setScreenShareEnabled') {
-          if (args.enabled) {
+          if (args.enabled && !session.screenTrack) {
             const media = await navigator.mediaDevices.getDisplayMedia({ video: true });
             const track = media.getVideoTracks()[0];
-            const localStream = new sdk.LocalStageStream(track);
+            if (!track) throw new Error('Browser screen capture provided no video track.');
+            let localStream;
+            try { localStream = new sdk.LocalStageStream(track); }
+            catch (error) { track.stop(); throw error; }
             localStreams.push(localStream);
             session.screenTrack = localStream;
-            stage.refreshStrategy();
+            try { stage.refreshStrategy(); }
+            catch (error) {
+              localStreams.splice(localStreams.indexOf(localStream), 1);
+              session.screenTrack = null;
+              track.stop();
+              throw error;
+            }
             addVideoTrack(session, { id: `ivs:screen:${track.id}`, participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: localStream });
             track.addEventListener('ended', () => this.command('setScreenShareEnabled', { enabled: false }).catch(() => {}), { once: true });
           } else if (session.screenTrack) {
             const track = session.screenTrack.mediaStreamTrack;
             track.stop();
-            localStreams.splice(localStreams.indexOf(session.screenTrack), 1);
+            const index = localStreams.indexOf(session.screenTrack);
+            if (index >= 0) localStreams.splice(index, 1);
             removeVideoTrack(session, [...session.tracks.values()].find((item) => item.native === session.screenTrack)?.id);
             session.screenTrack = null;
             stage.refreshStrategy();

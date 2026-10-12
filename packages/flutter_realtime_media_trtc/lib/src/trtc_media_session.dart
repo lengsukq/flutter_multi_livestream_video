@@ -36,7 +36,9 @@ MediaCapabilities _publisherCapabilities(MediaRole role) => MediaCapabilities(
   canScreenShare:
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS),
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows),
   canSendData: true,
   canReceiveData: true,
   canSubscribeVideo: true,

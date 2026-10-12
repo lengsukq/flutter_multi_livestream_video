@@ -155,7 +155,7 @@ void main() {
       expect(participant.capabilities.canBlurBackground, isTrue);
       expect(participant.capabilities.canReplaceBackgroundImage, isTrue);
       expect(participant.capabilities.canSwitchCamera, isTrue);
-      expect(participant.capabilities.canScreenShare, isFalse);
+      expect(participant.capabilities.canScreenShare, isTrue);
       expect(participant.capabilities.canSendData, isTrue);
       expect(participant.capabilities.canReceiveData, isTrue);
       expect(participant.capabilities.canReportNetworkStats, isTrue);
@@ -240,23 +240,41 @@ void main() {
         ),
       );
       await session.dispose();
-    });
-
-    test('screen sharing is explicitly deferred', () async {
-      final session = AgoraHostSession();
-      expect(session.capabilities.canScreenShare, isFalse);
-      expect(
-        () => session.setScreenShareEnabled(true),
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final android = AgoraHostSession();
+      expect(android.capabilities.canScreenShare, isTrue);
+      await expectLater(
+        android.setScreenShareEnabled(true),
         throwsA(
           isA<RealtimeException>().having(
             (error) => error.code,
             'code',
-            RealtimeErrorCode.unsupportedFeature,
+            RealtimeErrorCode.invalidState,
           ),
         ),
       );
-      await session.dispose();
+      await android.dispose();
     });
+
+    test(
+      'native screen-share capability matches available capture implementations',
+      () async {
+        debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+        final session = AgoraHostSession();
+        expect(session.capabilities.canScreenShare, isFalse);
+        expect(
+          () => session.setScreenShareEnabled(true),
+          throwsA(
+            isA<RealtimeException>().having(
+              (error) => error.code,
+              'code',
+              RealtimeErrorCode.unsupportedFeature,
+            ),
+          ),
+        );
+        await session.dispose();
+      },
+    );
 
     test('dispose is idempotent before native engine creation', () async {
       final session = AgoraViewerSession();

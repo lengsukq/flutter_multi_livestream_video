@@ -41,7 +41,13 @@ class AgoraTrackRenderer extends MediaTrackRenderer {
       return agora.AgoraVideoView(
         controller: agora.VideoViewController(
           rtcEngine: track.engine,
-          canvas: agora.VideoCanvas(uid: 0, renderMode: renderMode),
+          canvas: agora.VideoCanvas(
+            uid: 0,
+            renderMode: renderMode,
+            sourceType: track.isScreenShare
+                ? agora.VideoSourceType.videoSourceScreen
+                : agora.VideoSourceType.videoSourceCamera,
+          ),
         ),
       );
     }

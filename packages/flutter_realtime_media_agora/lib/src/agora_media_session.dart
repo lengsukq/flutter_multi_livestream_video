@@ -47,7 +47,9 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
         (defaultTargetPlatform == TargetPlatform.android ||
             defaultTargetPlatform == TargetPlatform.macOS),
     canSwitchCamera: canSwitchCamera,
-    canScreenShare: false,
+    // Android MediaProjection capture is supported by this native SDK.
+    // Other platforms still require verified source picker/broadcast adapters.
+    canScreenShare: !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
     canSendData: true,
     canReceiveData: true,
     canSubscribeVideo: true,
@@ -181,6 +183,8 @@ abstract class _AgoraMediaSession
   int? _activeSpeakerUid;
   bool _localMuted = true;
   bool _localVideoEnabled = false;
+  bool _localScreenShareEnabled = false;
+  MediaVideoTrack? _localScreenTrack;
   bool _disposed = false;
   bool _joinCancelled = false;
   Duration cleanupTimeout = const Duration(seconds: 10);
@@ -266,6 +270,8 @@ abstract class _AgoraMediaSession
     _joinInfo = rawJoinInfo;
     _localMuted = true;
     _localVideoEnabled = false;
+    _localScreenShareEnabled = false;
+    _localScreenTrack = null;
     _cameraPosition = MediaCameraPosition.front;
     _participants.clear();
     _messages.clear();
@@ -350,12 +356,18 @@ abstract class _AgoraMediaSession
     autoSubscribeVideo: true,
     publishMicrophoneTrack: _canPublish && !_localMuted,
     publishCameraTrack:
-        _canPublish && _localVideoEnabled && _processedSink.source == null,
+        _canPublish &&
+        _localVideoEnabled &&
+        !_localScreenShareEnabled &&
+        _processedSink.source == null,
     publishCustomVideoTrack:
-        _canPublish && _localVideoEnabled && _processedSink.source != null,
+        _canPublish &&
+        _localVideoEnabled &&
+        !_localScreenShareEnabled &&
+        _processedSink.source != null,
     customVideoTrackId: _customVideoTrackId,
     publishScreenCaptureAudio: false,
-    publishScreenCaptureVideo: false,
+    publishScreenCaptureVideo: _canPublish && _localScreenShareEnabled,
     enableAudioRecordingOrPlayout: true,
   );
 
@@ -547,6 +559,40 @@ abstract class _AgoraMediaSession
           },
       onLocalVideoStateChanged: (source, state, reason) {
         if (state == agora.LocalVideoStreamState.localVideoStreamStateFailed) {
+          if (source == agora.VideoSourceType.videoSourceScreen &&
+              _localScreenShareEnabled) {
+            final track = _localScreenTrack;
+            _localScreenShareEnabled = false;
+            _localScreenTrack = null;
+            if (track != null) {
+              _emit(
+                MediaTrackUnpublished(
+                  trackId: track.id,
+                  participantId: track.participantId,
+                  wasScreenShare: true,
+                ),
+              );
+            }
+            _refreshSnapshot();
+            final engine = _engine;
+            if (engine != null) {
+              unawaited(() async {
+                try {
+                  await engine.stopScreenCapture();
+                  if (!_disposed && !_joinCancelled) {
+                    await _updatePublishOptions();
+                  }
+                } catch (error) {
+                  _reportFailure(
+                    _mapError(
+                      error,
+                      'Unable to stop failed Agora screen capture.',
+                    ),
+                  );
+                }
+              }());
+            }
+          }
           _reportFailure(
             RealtimeException(
               code: RealtimeErrorCode.providerError,
@@ -798,12 +844,68 @@ abstract class _AgoraMediaSession
     }
   }
 
-  Future<void> setScreenShareEnabledInternal(bool enabled) {
-    throw const RealtimeException(
-      code: RealtimeErrorCode.unsupportedFeature,
-      message: 'Agora screen sharing is deferred in this SDK version.',
-      providerId: _agoraProviderId,
-    );
+  Future<void> setScreenShareEnabledInternal(bool enabled) async {
+    if (!capabilities.canScreenShare) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message:
+            'Agora native screen sharing is currently available only on Android. '
+            'Other native platforms require a verified capture-source adapter.',
+        providerId: _agoraProviderId,
+      );
+    }
+    _ensurePublisherActive('screen sharing');
+    if (_localScreenShareEnabled == enabled) return;
+    final engine = _requireEngine();
+    try {
+      if (enabled) {
+        await engine.startScreenCapture(
+          const agora.ScreenCaptureParameters2(
+            captureVideo: true,
+            captureAudio: false,
+          ),
+        );
+        _localScreenShareEnabled = true;
+        try {
+          await _updatePublishOptions();
+        } catch (_) {
+          _localScreenShareEnabled = false;
+          await engine.stopScreenCapture();
+          rethrow;
+        }
+        final uid = _localUid;
+        if (uid != null) {
+          final track = AgoraMediaVideoTrack(
+            engine: engine,
+            channelId: _joinInfo!.channelName,
+            uid: uid,
+            local: true,
+            screenShare: true,
+          );
+          _localScreenTrack = track;
+          _emit(MediaTrackPublished(track));
+        }
+      } else {
+        await engine.stopScreenCapture();
+        _localScreenShareEnabled = false;
+        final track = _localScreenTrack;
+        _localScreenTrack = null;
+        if (track != null) {
+          _emit(
+            MediaTrackUnpublished(
+              trackId: track.id,
+              participantId: track.participantId,
+              wasScreenShare: true,
+            ),
+          );
+        }
+        await _updatePublishOptions();
+      }
+      _refreshSnapshot();
+    } catch (error) {
+      _refreshSnapshot();
+      throw _mapError(error, 'Unable to change Agora screen-share state.');
+    }
   }
 
   Future<List<MediaAudioDevice>> listAudioDevicesInternal() {
@@ -1026,6 +1128,9 @@ abstract class _AgoraMediaSession
     final engine = _engine;
     final handler = _eventHandler;
     final customTrackId = _customVideoTrackId;
+    final hadScreenCapture = _localScreenShareEnabled;
+    _localScreenShareEnabled = false;
+    _localScreenTrack = null;
     _engine = null;
     _eventHandler = null;
     _customVideoTrackId = null;
@@ -1034,6 +1139,9 @@ abstract class _AgoraMediaSession
     final cleanup = Cleanup(timeout: cleanupTimeout);
     await cleanup.run('processed.input', _processedSink.detach);
     if (engine != null) {
+      if (hadScreenCapture) {
+        await cleanup.run('engine.stopScreenCapture', engine.stopScreenCapture);
+      }
       if (handler != null) {
         await cleanup.run(
           'engine.events',
@@ -1134,6 +1242,9 @@ abstract class _AgoraMediaSession
       clearLocalParticipantId: _localUid == null,
       localMuted: _localMuted,
       localVideoEnabled: _localVideoEnabled,
+      localScreenShareEnabled: _localScreenShareEnabled,
+      contentShareTrack: _localScreenTrack,
+      clearContentShareTrack: _localScreenTrack == null,
       capabilities: _capabilities,
       lastError: error,
       clearLastError: clearLastError,

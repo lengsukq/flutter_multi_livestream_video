@@ -1101,6 +1101,9 @@ abstract class ProviderWebSessionBase
     final contentShareTrack = nextTracks.values
         .where((track) => track.isScreenShare)
         .firstOrNull;
+    final localScreenShareEnabled = nextTracks.values.any(
+      (track) => track.isScreenShare && track.isLocal,
+    );
     final previousParticipants = {
       for (final item in _snapshot.participants) item.id: item,
     };
@@ -1145,6 +1148,7 @@ abstract class ProviderWebSessionBase
             localParticipantId == null || localParticipantId.isEmpty,
         localMuted: localMuted is bool ? localMuted : null,
         localVideoEnabled: localVideoEnabled is bool ? localVideoEnabled : null,
+        localScreenShareEnabled: localScreenShareEnabled,
         contentShareTrack: contentShareTrack,
         clearContentShareTrack: contentShareTrack == null,
       ),

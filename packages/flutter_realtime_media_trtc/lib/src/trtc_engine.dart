@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform, kIsWeb;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:tencent_rtc_sdk/trtc_cloud.dart';
 import 'package:tencent_rtc_sdk/trtc_cloud_def.dart';
@@ -305,6 +307,47 @@ class _NativeTrtcEngine implements TrtcEngine {
 
   @override
   void startScreenCapture() {
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows)) {
+      // Desktop TRTC requires an explicit source selection before starting
+      // the substream. The main display is the default for this first version;
+      // source picking can later be provided via an optional SDK controller.
+      final sources = _cloud!
+          .getScreenCaptureSources(
+            TRTCSize(width: 120, height: 72),
+            TRTCSize(width: 24, height: 24),
+          )
+          ?.sourceList;
+      if (sources == null || sources.isEmpty) {
+        throw const RealtimeException(
+          code: RealtimeErrorCode.unsupportedFeature,
+          providerId: 'trtc',
+          message:
+              'TRTC cannot find a shareable desktop display. '
+              'Check screen recording permissions and the native SDK.',
+        );
+      }
+      final displays = sources.where(
+        (source) => source.type == TRTCScreenCaptureSourceType.screen,
+      );
+      if (displays.isEmpty) {
+        throw const RealtimeException(
+          code: RealtimeErrorCode.unsupportedFeature,
+          providerId: 'trtc',
+          message: 'TRTC did not report any desktop display to share.',
+        );
+      }
+      final preferred = displays.where((source) => source.isMainScreen);
+      _cloud!.selectScreenCaptureTarget(
+        preferred.isNotEmpty ? preferred.first : displays.first,
+        TRTCRect(),
+        TRTCScreenCaptureProperty(
+          enableCaptureMouse: true,
+          enableHighLight: false,
+        ),
+      );
+    }
     final param = TRTCVideoEncParam(
       videoResolution: TRTCVideoResolution.res_1280_720,
       videoResolutionMode: TRTCVideoResolutionMode.landscape,

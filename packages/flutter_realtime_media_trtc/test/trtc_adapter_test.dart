@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_trtc/flutter_realtime_media_trtc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +27,7 @@ Map<String, dynamic> joinPayload({
 
 void main() {
   const factory = TrtcSessionFactory();
+  tearDown(() => debugDefaultTargetPlatformOverride = null);
 
   group('TRTC join information', () {
     test('parses credentials and maps role to a room scene', () {
@@ -78,6 +80,37 @@ void main() {
   });
 
   group('role surfaces and capabilities', () {
+    test(
+      'screen capture capability follows native desktop and mobile hosts only',
+      () async {
+        for (final platform in <TargetPlatform>[
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+          TargetPlatform.macOS,
+          TargetPlatform.windows,
+        ]) {
+          debugDefaultTargetPlatformOverride = platform;
+          final host = factory.createSession(
+            TrtcJoinInfo.fromJson(joinPayload(role: 'host')),
+          );
+          final viewer = factory.createSession(
+            TrtcJoinInfo.fromJson(joinPayload(role: 'viewer')),
+          );
+          expect(
+            host.capabilities.canScreenShare,
+            isTrue,
+            reason: 'platform: $platform',
+          );
+          expect(
+            viewer.capabilities.canScreenShare,
+            isFalse,
+            reason: 'viewer $platform',
+          );
+          await host.dispose();
+          await viewer.dispose();
+        }
+      },
+    );
     test('factory creates publishable participant and host sessions', () {
       final participant = factory.createSession(
         TrtcJoinInfo.fromJson(joinPayload()),

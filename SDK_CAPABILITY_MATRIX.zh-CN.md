@@ -292,11 +292,12 @@ AWS Live 已取消强制绑定 IVS Chat。媒体与产品 Chat 自由组合，�
 | Meeting 供应商 | 桌面 Web | Android | iOS | macOS |
 | --- | :---: | :---: | :---: | :---: |
 | LiveKit | ✅ 浏览器能力允许时 | ✅ | △ 当前使用应用内采集 | ✅ 需屏幕录制权限 |
-| TRTC | ✅ 浏览器能力允许时 | ✅ | △ 已调用原生 SDK，完整链路待实机验收 | ❌ 当前 Adapter 未开放 |
-| Agora | ✅ 浏览器能力允许时 | ❌ | ❌ | ❌ |
+| TRTC | ✅ 浏览器能力允许时 | ✅ | △ 已调用原生 SDK，完整链路待实机验收 | △ 本轮补主屏选取与辅路，待实机 |
+| Agora | △ 浏览器共享发布已接，远端独立轨道待完善 | △ 本轮补原生 MediaProjection，共享远端识别待验收 | ❌ ReplayKit 广播扩展未接 | ❌ 桌面采集源选择未接 |
 | ARTC | ✅ 浏览器能力允许时 | ❌ | ❌ | ❌ |
 | AWS Chime | ✅ 浏览器能力允许时 | ❌ | ❌ | ❌ |
 
+详细的五平台 × 六引擎缺口、验证边界和本轮改动见 [屏幕共享实现矩阵](doc/SCREEN_SHARING_PROVIDER_STATUS.md)。
 这里的 Web 指桌面浏览器；移动浏览器不能从桌面 Web 支持推断可发起共享。
 LiveKit iOS 当前设置 `useiOSBroadcastExtension: false`，不能将应用内采集
 描述为跨应用整屏共享。接收共享/标注也不意味着同平台可以发起共享。

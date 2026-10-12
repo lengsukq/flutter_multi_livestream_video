@@ -391,6 +391,14 @@ async function createIvsHarness() {
     async enumerateDevices() {
       return [];
     },
+    async getDisplayMedia() {
+      calls.push('getDisplayMedia');
+      const video = track('video', 'screen-1');
+      return {
+        getVideoTracks: () => [video],
+        getTracks: () => [video],
+      };
+    },
   };
 
   const context = vm.createContext({
@@ -501,9 +509,37 @@ test('IVS viewer never requests local media or publishes', async () => {
   await bridge.create('ivs', 'stage-viewer', JSON.stringify(payload));
   assert.equal(getStage().strategy.shouldPublishParticipant(), false);
   await bridge.join('ivs', 'stage-viewer');
+  await assert.rejects(
+    bridge.command('ivs', 'stage-viewer', 'setScreenShareEnabled', JSON.stringify({enabled: true})),
+    /Viewers cannot publish/,
+  );
   assert.equal(calls.some((call) => call.startsWith('getUserMedia:')), false);
   assert.ok(calls.includes('stage.join'));
   await bridge.dispose('ivs', 'stage-viewer');
+});
+
+test('IVS browser sharing reports the track, ignores duplicate starts and releases on stop', async () => {
+  const {bridge, calls, events} = await createIvsHarness();
+  const payload = {
+    participantId: 'host-screen', role: 'host',
+    ivs: {token: 'publisher-token', capabilities: ['PUBLISH', 'SUBSCRIBE']},
+  };
+  await bridge.create('ivs', 'stage-screen', JSON.stringify(payload));
+  await bridge.join('ivs', 'stage-screen');
+  const command = (enabled) => bridge.command(
+    'ivs', 'stage-screen', 'setScreenShareEnabled', JSON.stringify({enabled}),
+  );
+  await command(true);
+  await command(true);
+  assert.equal(calls.filter(c => c === 'getDisplayMedia').length, 1);
+  assert.ok(events.some(({event}) =>
+    event.type === 'snapshot' && event.tracks?.some(t => t.isScreenShare && t.isLocal)));
+  await command(false);
+  assert.ok(calls.includes('stop:screen-1'));
+  const finalSnapshot = events.filter(({event}) => event.type === 'snapshot').at(-1)?.event;
+  assert.ok(finalSnapshot);
+  assert.ok(finalSnapshot.tracks.every(t => !t.isScreenShare));
+  await bridge.dispose('ivs', 'stage-screen');
 });
 
 async function createAgoraHarness() {
@@ -813,6 +849,44 @@ test('Agora Web camera selection stays inside the SDK processor pipeline', async
   );
 
   await bridge.dispose('agora', 'agora-2');
+});
+
+test('Agora screen-picker cancellation does not unpublish the existing camera', async () => {
+  const {bridge, context, calls} = await createAgoraHarness();
+  await bridge.create('agora', 'agora-cancel-screen', JSON.stringify(agoraPayload));
+  await bridge.join('agora', 'agora-cancel-screen');
+  await bridge.command('agora', 'agora-cancel-screen', 'setVideoEnabled', JSON.stringify({enabled: true}));
+  const priorUnpublish = calls.filter(c => c.startsWith('unpublish:')).length;
+  context.AgoraRTC.createScreenVideoTrack = async () => {
+    throw new Error('The user cancelled choosing a screen.');
+  };
+  await assert.rejects(bridge.command(
+    'agora', 'agora-cancel-screen', 'setScreenShareEnabled', JSON.stringify({enabled: true}),
+  ), /cancelled/);
+  assert.equal(calls.filter(c => c.startsWith('unpublish:')).length, priorUnpublish);
+  await bridge.dispose('agora', 'agora-cancel-screen');
+});
+
+test('Agora screen share switches camera video back on after stop', async () => {
+  const {bridge, context, calls, events} = await createAgoraHarness();
+  await bridge.create('agora', 'agora-screen', JSON.stringify(agoraPayload));
+  await bridge.join('agora', 'agora-screen');
+  await bridge.command('agora', 'agora-screen', 'setVideoEnabled', JSON.stringify({enabled: true}));
+  const hooks = new Map();
+  context.AgoraRTC.createScreenVideoTrack = async () => ({
+    id: 'test-screen', close() {calls.push('screen.close');},
+    on(name, handler) {hooks.set(name, handler);},
+  });
+  await bridge.command('agora', 'agora-screen', 'setScreenShareEnabled', JSON.stringify({enabled: true}));
+  assert.ok(calls.includes('publish:test-screen'));
+  assert.ok(events.some(({event}) => event.type === 'snapshot' &&
+    event.tracks?.some(t => t.isScreenShare && t.isLocal)));
+  assert.equal(typeof hooks.get('track-ended'), 'function');
+  await bridge.command('agora', 'agora-screen', 'setScreenShareEnabled', JSON.stringify({enabled: false}));
+  assert.ok(calls.includes('screen.close'));
+  assert.ok(calls.includes('unpublish:test-screen'));
+  assert.equal(calls.filter(c => c === 'publish:agora-custom-video').length, 2);
+  await bridge.dispose('agora', 'agora-screen');
 });
 
 test('Pre-Join bridge creates no capture until camera is explicitly enabled', async () => {

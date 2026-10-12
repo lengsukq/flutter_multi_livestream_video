@@ -9,6 +9,7 @@ class AgoraMediaVideoTrack extends MediaVideoTrack {
     required this.channelId,
     required this.uid,
     required this.local,
+    this.screenShare = false,
     this.processedSource,
     this.frameWidth = 0,
     this.frameHeight = 0,
@@ -19,11 +20,12 @@ class AgoraMediaVideoTrack extends MediaVideoTrack {
   final String channelId;
   final int uid;
   final bool local;
+  final bool screenShare;
   final int frameWidth;
   final int frameHeight;
 
   @override
-  String get id => 'agora:$channelId:$uid:camera';
+  String get id => 'agora:$channelId:$uid:${screenShare ? 'screen' : 'camera'}';
 
   @override
   String get participantId => uid.toString();
@@ -32,7 +34,7 @@ class AgoraMediaVideoTrack extends MediaVideoTrack {
   bool get isLocal => local;
 
   @override
-  bool get isScreenShare => false;
+  bool get isScreenShare => screenShare;
 
   @override
   int get width => frameWidth;
