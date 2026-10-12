@@ -69,7 +69,7 @@ For four independent integration patterns and a custom feature plugin, see
 
 See [纯功能 SDK 接入与 UI 可选指南](doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) for API, lifecycle, permissions, RTC/IM members and snippets; **no separate Headless Demo is maintained**.
 
-Cloud recording: [供应商托管的 Agora、LiveKit Cloud、TRTC VOD、Alibaba ARTC、AWS Chime 与 AWS IVS+MediaConvert 云录制/MP4 下载](doc/CLOUD_RECORDING.md). The Flutter SDK owns only provider-neutral start/stop/status/download methods; Demo Server calls vendor APIs and streams completed cloud files to users. **No Linux recording workers, local Java Recording SDK or server-side media encoding.** Buckets may be left blank until recording is enabled. IVS native HLS output is converted to MP4 by AWS MediaConvert (additional cloud configuration needed). End-to-end recording with real vendor credentials and storage remains to be tested.
+Cloud recording: [供应商托管的 Agora、LiveKit Cloud、TRTC VOD、Alibaba ARTC、AWS Chime 与 AWS IVS+MediaConvert 云录制/MP4 下载](doc/CLOUD_RECORDING.md). The Flutter SDK owns only provider-neutral start/stop/status/download methods; Demo Server calls vendor APIs and streams completed cloud files to users. **No Linux recording workers, local Java Recording SDK or server-side media encoding.** Buckets may be left blank until recording is enabled. IVS native HLS output is converted to MP4 by AWS MediaConvert (additional cloud configuration needed). **LiveKit Cloud + S3 recording was confirmed working by the project user on 2026-10-12** (not independently retested as part of this documentation update); real-cloud E2E for other vendors remains pending, with Agora currently blocked at `acquire` HTTP 401.
 
 ## Architecture and behavior
 

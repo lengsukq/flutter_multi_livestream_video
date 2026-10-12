@@ -55,6 +55,25 @@ configuration and device-target build. Flutter project/global configuration has
 higher priority than the environment override. Do not change user-wide settings
 just to run this check.
 
+### Validate desktop provider runtime assets
+
+After building the Demo on macOS, check that all provider JS entrypoints are
+included in the native Flutter asset bundle:
+
+```sh
+python3 scripts/check_macos_provider_assets.py --configuration Debug
+python3 scripts/check_macos_provider_assets.py --configuration Release
+python3 -m unittest discover -s scripts/tests
+```
+
+The arm64 DMG packager runs the Release asset check automatically **before**
+creating or installing the app. Native AWS WebKit loads Chime/IVS JavaScript
+from `flutter_realtime_provider_aws`, the shared media bridge from
+`flutter_realtime_media_web`, and IVS Chat from
+`flutter_realtime_provider_ivs_chat`. The core `flutter_realtime_sdk` package
+does not bundle these optional provider scripts. Do not hardcode the old
+`flutter_realtime_sdk/assets/provider_web_runtime` path in native plugins.
+
 ## Apple Silicon release installer and Applications installation
 
 Use an **Apple Silicon Mac** with Flutter, Xcode, CocoaPods, and the Demo's Dart

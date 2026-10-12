@@ -17,6 +17,12 @@ import tempfile
 import uuid
 from pathlib import Path
 
+if __package__:
+    from .check_macos_provider_assets import verify_assets
+else:
+    # .command executes this file directly, so its package is not imported.
+    from check_macos_provider_assets import verify_assets
+
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 
@@ -156,6 +162,9 @@ def main(argv: list[str] | None = None, *, repository: Path = REPOSITORY) -> int
                 '--release', '--no-pub',
             ], cwd=repository)
         version = verify_arm64(app, bundle_id)
+        # Fail before generating/installing the DMG if a provider's Flutter
+        # package JS asset was omitted by the build.
+        verify_assets(app, repository)
         dmg = repository / 'dist/macos' / f'{app.stem}-{version}-arm64.dmg'
         make_dmg(app, dmg)
         print(f'DMG: {dmg}')
@@ -171,7 +180,7 @@ def main(argv: list[str] | None = None, *, repository: Path = REPOSITORY) -> int
             if options.open:
                 run(['open', '-a', str(installed)])
         return 0
-    except (PackagingError, subprocess.CalledProcessError, OSError) as error:
+    except (PackagingError, RuntimeError, subprocess.CalledProcessError, OSError) as error:
         print(f'macOS packaging failed: {error}', file=sys.stderr)
         return 1
 
