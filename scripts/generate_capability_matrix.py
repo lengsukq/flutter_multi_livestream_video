@@ -74,7 +74,14 @@ def generate():
         evidence.append((path.relative_to(ROOT).as_posix(), source))
         lines += [f'### {engine}', '', f'Processed-video sink in adapter source: **{"yes" if "ProcessedVideoSink" in source else "no"}**.', '']
         for feature in ['canBlurBackground', 'canReplaceBackgroundImage', 'canScreenShare', 'canReportNetworkStats']:
-            match = re.search(r'\b' + feature + r':\s*([\s\S]*?)(?=,\s*(?:can\w+|max\w+|management)\s*:|,\s*\n\s*\))', source)
+            # A feature can be set through copyWith(canScreenShare: true);
+            # rather than only as an argument in a capabilities constructor.
+            # Stop at the end of that call to avoid copying the next methods.
+            match = re.search(
+                r'\b' + feature +
+                r':\s*([\s\S]*?)(?=,\s*(?:can\w+|max\w+|management)\s*:|,\s*\n\s*\)|\)\s*;)',
+                source,
+            )
             expression = ' '.join(match.group(1).split()) if match else '(not explicitly declared here; inspect factory/profile defaults)'
             lines.append(f'- `{feature}`: `{expression}`')
         lines.append('')

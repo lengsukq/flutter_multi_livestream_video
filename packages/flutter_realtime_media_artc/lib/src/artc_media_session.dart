@@ -40,6 +40,9 @@ abstract class _ArtcMediaSession
   MediaCapabilities _capabilities = const MediaCapabilities.none();
   late MediaSnapshot _snapshot = MediaSnapshot(role: role);
   MediaCameraPosition _cameraPosition = MediaCameraPosition.front;
+  bool _screenShareEnabled = false;
+  ArtcMediaVideoTrack? _localScreenTrack;
+  final Map<String, ArtcMediaVideoTrack> _remoteScreens = {};
   int _trackGeneration = 0;
   bool _disposed = false;
   bool _joinCancelled = false;
@@ -69,6 +72,41 @@ abstract class _ArtcMediaSession
     } on PlatformException {
       _macEffectsInputAvailable = false;
     }
+  }
+
+  void _remoteScreenChanged(String userId, bool available) {
+    if (userId == _joinInfo?.userId) return;
+    _ensureRemoteParticipant(userId);
+    final previous = _remoteScreens[userId];
+    if (available) {
+      if (previous != null) return;
+      final next = ArtcMediaVideoTrack(
+        userId: userId,
+        local: false,
+        screenShare: true,
+        generation: _trackGeneration,
+      );
+      _remoteScreens[userId] = next;
+      _emit(MediaTrackPublished(next));
+    } else {
+      if (previous == null) return;
+      _remoteScreens.remove(userId);
+      _emit(
+        MediaTrackUnpublished(
+          trackId: previous.id,
+          participantId: userId,
+          wasScreenShare: true,
+        ),
+      );
+    }
+    _setSnapshot(
+      _snapshot.copyWith(
+        contentShareTrack:
+            _remoteScreens.values.lastOrNull ?? _localScreenTrack,
+        clearContentShareTrack:
+            _remoteScreens.isEmpty && _localScreenTrack == null,
+      ),
+    );
   }
 
   final _processedSink = NativeProcessedVideoSink(
@@ -263,6 +301,11 @@ abstract class _ArtcMediaSession
             defaultTargetPlatform == TargetPlatform.iOS)) {
       _capabilities = _capabilities.copyWith(canSwitchCamera: true);
     }
+    if (role != MediaRole.viewer &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
+      _capabilities = _capabilities.copyWith(canScreenShare: true);
+    }
     _setState(MediaSessionState.joining);
     try {
       _engine ??= await engineFactory();
@@ -286,6 +329,7 @@ abstract class _ArtcMediaSession
           localParticipantId: joinInfo.userId,
           localMuted: role != MediaRole.viewer,
           localVideoEnabled: false,
+          localScreenShareEnabled: false,
           capabilities: capabilities,
           clearLastError: true,
         ),
@@ -329,6 +373,9 @@ abstract class _ArtcMediaSession
     if (_joinCancelled) await _releaseEngine(leave: false);
     _activeSession = null;
     _trackGeneration++;
+    _screenShareEnabled = false;
+    _localScreenTrack = null;
+    _remoteScreens.clear();
     _setSnapshot(
       _snapshot.copyWith(
         participants: const [],
@@ -336,6 +383,7 @@ abstract class _ArtcMediaSession
         clearLocalParticipantId: true,
         localMuted: true,
         localVideoEnabled: false,
+        localScreenShareEnabled: false,
         clearContentShareTrack: true,
       ),
     );
@@ -380,6 +428,14 @@ abstract class _ArtcMediaSession
     final cleanup = Cleanup(timeout: cleanupTimeout);
     await cleanup.run('processed.input', _processedSink.detach);
     if (engine != null) {
+      if (_screenShareEnabled) {
+        await cleanup.run(
+          'screen.stop',
+          () => engine.setScreenShareEnabled(false),
+        );
+        _screenShareEnabled = false;
+        _localScreenTrack = null;
+      }
       if (leave) {
         await cleanup.run('engine.leave', engine.leave);
       } else {
@@ -395,6 +451,12 @@ abstract class _ArtcMediaSession
     onParticipantJoined: _participantJoined,
     onParticipantLeft: _participantLeft,
     onRemoteVideoChanged: _remoteVideoChanged,
+    onRemoteScreenChanged: _remoteScreenChanged,
+    onLocalScreenShareChanged: (available) {
+      if (_state.isActive && !_disposed) {
+        _syncLocalScreenShare(available);
+      }
+    },
     onRemoteAudioChanged: _remoteAudioChanged,
     onMessage: _receiveMessage,
     onReconnecting: () => _setState(MediaSessionState.reconnecting),
@@ -422,11 +484,25 @@ abstract class _ArtcMediaSession
   void _participantLeft(String userId) {
     final existing = _participantById(userId);
     if (existing == null || existing.isLocal) return;
+    final shared = _remoteScreens.remove(userId);
+    if (shared != null) {
+      _emit(
+        MediaTrackUnpublished(
+          trackId: shared.id,
+          participantId: userId,
+          wasScreenShare: true,
+        ),
+      );
+    }
     _setSnapshot(
       _snapshot.copyWith(
         participants: _snapshot.participants
             .where((item) => item.id != userId)
             .toList(),
+        contentShareTrack:
+            _remoteScreens.values.lastOrNull ?? _localScreenTrack,
+        clearContentShareTrack:
+            _remoteScreens.isEmpty && _localScreenTrack == null,
       ),
     );
     _emit(
@@ -804,7 +880,48 @@ abstract class _ArtcMediaSession
 
   Future<void> _setScreenShareEnabled(bool enabled) async {
     _requireActive();
-    _requireCapability(false, 'screen sharing');
+    _requireCapability(capabilities.canScreenShare, 'screen sharing');
+    if (_screenShareEnabled == enabled) return;
+    await _engine!.setScreenShareEnabled(enabled);
+    // The vendor will also send a publish-state callback. Reconciliation is
+    // idempotent whether that callback arrives before or after this response.
+    _syncLocalScreenShare(enabled);
+  }
+
+  void _syncLocalScreenShare(bool enabled) {
+    if (_screenShareEnabled == enabled) return;
+    _screenShareEnabled = enabled;
+    final info = _joinInfo;
+    if (info == null) return;
+    final previous = _localScreenTrack;
+    _localScreenTrack = enabled
+        ? ArtcMediaVideoTrack(
+            userId: info.userId,
+            local: true,
+            screenShare: true,
+            generation: _trackGeneration,
+          )
+        : null;
+    _setSnapshot(
+      _snapshot.copyWith(
+        localScreenShareEnabled: enabled,
+        contentShareTrack:
+            _remoteScreens.values.lastOrNull ?? _localScreenTrack,
+        clearContentShareTrack:
+            _remoteScreens.isEmpty && _localScreenTrack == null,
+      ),
+    );
+    if (_localScreenTrack case final next?) {
+      _emit(MediaTrackPublished(next));
+    } else if (previous != null) {
+      _emit(
+        MediaTrackUnpublished(
+          trackId: previous.id,
+          participantId: info.userId,
+          wasScreenShare: true,
+        ),
+      );
+    }
   }
 
   Future<List<MediaAudioDevice>> _listAudioDevices() async {

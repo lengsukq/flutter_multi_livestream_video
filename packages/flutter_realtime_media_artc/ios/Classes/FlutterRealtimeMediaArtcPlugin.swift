@@ -296,7 +296,8 @@ extension FlutterRealtimeMediaArtcPlugin: AliRtcEngineDelegate {
 
     public func onRemoteTrackAvailableNotify(_ uid: String, audioTrack: AliRtcAudioTrack, videoTrack: AliRtcVideoTrack) {
         emit(["type": "audioChanged", "userId": uid, "available": audioTrack != .no])
-        emit(["type": "videoChanged", "userId": uid, "available": videoTrack != .no])
+        emit(["type": "videoChanged", "userId": uid, "available": (videoTrack.rawValue & 1) != 0])
+        emit(["type": "screenChanged", "userId": uid, "available": (videoTrack.rawValue & 2) != 0])
     }
 
     public func onDataChannelMessage(_ uid: String, controlMsg: AliRtcDataChannelMsg) {
@@ -327,6 +328,7 @@ private final class ArtcVideoPlatformView: NSObject, FlutterPlatformView {
     private let containerView = UIView()
     private let userId: String
     private let isLocal: Bool
+    private let isScreen: Bool
     /// 0 = cover/crop, 1 = contain/letterbox.
     private let fitMode: Int
     private weak var plugin: FlutterRealtimeMediaArtcPlugin?
@@ -336,11 +338,13 @@ private final class ArtcVideoPlatformView: NSObject, FlutterPlatformView {
         frame: CGRect,
         userId: String,
         isLocal: Bool,
+        isScreen: Bool,
         fitMode: Int,
         plugin: FlutterRealtimeMediaArtcPlugin
     ) {
         self.userId = userId
         self.isLocal = isLocal
+        self.isScreen = isScreen
         self.fitMode = fitMode
         self.plugin = plugin
         super.init()
@@ -358,16 +362,18 @@ private final class ArtcVideoPlatformView: NSObject, FlutterPlatformView {
         let canvas = AliVideoCanvas()
         canvas.view = containerView
         canvas.renderMode = fitMode == 1 ? .fill : .crop
+        let source: AliRtcVideoTrack = isScreen ? .screen : .camera
         if isLocal {
-            _ = engine.setLocalViewConfig(canvas, for: .camera)
+            _ = engine.setLocalViewConfig(canvas, for: source)
             if engine.isCameraOn() { _ = engine.startPreview() }
-        } else { _ = engine.setRemoteViewConfig(canvas, uid: userId, for: .camera) }
+        } else { _ = engine.setRemoteViewConfig(canvas, uid: userId, for: source) }
     }
 
     func detach(from engine: AliRtcEngine?) {
         guard let target = boundEngine ?? engine else { return }
-        if isLocal { _ = target.setLocalViewConfig(nil, for: .camera) }
-        else { _ = target.setRemoteViewConfig(nil, uid: userId, for: .camera) }
+        let source: AliRtcVideoTrack = isScreen ? .screen : .camera
+        if isLocal { _ = target.setLocalViewConfig(nil, for: source) }
+        else { _ = target.setRemoteViewConfig(nil, uid: userId, for: source) }
         boundEngine = nil
     }
 
@@ -384,6 +390,7 @@ private final class ArtcVideoPlatformViewFactory: NSObject, FlutterPlatformViewF
             frame: frame,
             userId: values["userId"] as? String ?? "",
             isLocal: values["isLocal"] as? Bool ?? false,
+            isScreen: values["isScreenShare"] as? Bool ?? false,
             fitMode: values["fitMode"] as? Int ?? 0,
             plugin: plugin!
         )

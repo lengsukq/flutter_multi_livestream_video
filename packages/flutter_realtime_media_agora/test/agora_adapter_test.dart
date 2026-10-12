@@ -259,7 +259,7 @@ void main() {
     test(
       'native screen-share capability matches available capture implementations',
       () async {
-        debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
         final session = AgoraHostSession();
         expect(session.capabilities.canScreenShare, isFalse);
         expect(

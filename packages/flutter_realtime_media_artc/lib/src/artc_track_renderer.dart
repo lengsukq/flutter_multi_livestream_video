@@ -32,6 +32,7 @@ class ArtcTrackRenderer extends MediaTrackRenderer {
     final creationParams = <String, Object?>{
       'userId': track.userId,
       'isLocal': track.isLocal,
+      'isScreenShare': track.isScreenShare,
       'generation': track.generation,
       'fitMode': fit == BoxFit.contain ? 1 : 0,
     };

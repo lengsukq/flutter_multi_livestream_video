@@ -293,8 +293,8 @@ AWS Live 已取消强制绑定 IVS Chat。媒体与产品 Chat 自由组合，�
 | --- | :---: | :---: | :---: | :---: |
 | LiveKit | ✅ 浏览器能力允许时 | ✅ | △ 当前使用应用内采集 | ✅ 需屏幕录制权限 |
 | TRTC | ✅ 浏览器能力允许时 | ✅ | △ 已调用原生 SDK，完整链路待实机验收 | △ 本轮补主屏选取与辅路，待实机 |
-| Agora | △ 浏览器共享发布已接，远端独立轨道待完善 | △ 本轮补原生 MediaProjection，共享远端识别待验收 | ❌ ReplayKit 广播扩展未接 | ❌ 桌面采集源选择未接 |
-| ARTC | ✅ 浏览器能力允许时 | ❌ | ❌ | ❌ |
+| Agora | △ 浏览器可共享，原生→Web共享标识已接，Web→原生信令待补 | △ 原生 MediaProjection + 远端共享信令已接，待实机 | ❌ ReplayKit 广播扩展未接 | △ macOS/Windows 已接主显示器自动选择，待实机 |
+| ARTC | △ Web 发送与远端显示待多设备验收 | △ Android 原生屏幕采集与远端独立轨道已接，待实机 | △ 远端屏幕接收已接，主动共享缺 ReplayKit | △ macOS 远端接收已接，发送与可选原生 Framework 待验收 |
 | AWS Chime | ✅ 浏览器能力允许时 | ❌ | ❌ | ❌ |
 
 详细的五平台 × 六引擎缺口、验证边界和本轮改动见 [屏幕共享实现矩阵](doc/SCREEN_SHARING_PROVIDER_STATUS.md)。

@@ -5,15 +5,18 @@ class ArtcMediaVideoTrack extends MediaVideoTrack {
   const ArtcMediaVideoTrack({
     required this.userId,
     required this.local,
+    this.screenShare = false,
     this.generation = 0,
   });
 
   final String userId;
   final bool local;
+  final bool screenShare;
   final int generation;
 
   @override
-  String get id => 'artc:$userId:camera:$generation';
+  String get id =>
+      'artc:$userId:${screenShare ? 'screen' : 'camera'}:$generation';
 
   @override
   String get participantId => userId;
@@ -22,7 +25,7 @@ class ArtcMediaVideoTrack extends MediaVideoTrack {
   bool get isLocal => local;
 
   @override
-  bool get isScreenShare => false;
+  bool get isScreenShare => screenShare;
 
   @override
   int get width => 0;

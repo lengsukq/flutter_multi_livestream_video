@@ -154,6 +154,89 @@ void main() {
   );
 
   test(
+    'ARTC Android screen capture is an SDK capability, not Demo logic',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final engine = _FakeArtcEngine();
+      final session = ArtcSessionFactory(
+        engineFactory: () async => engine,
+      ).createSession(joinInfo());
+      await session.join(joinInfo());
+      expect(session.capabilities.canScreenShare, isTrue);
+      final publisher = session as InteractiveMediaSession;
+      await publisher.setScreenShareEnabled(true);
+      await publisher.setScreenShareEnabled(true);
+      expect(engine.calls.where((s) => s == 'screen:true'), hasLength(1));
+      expect(session.snapshot.localScreenShareEnabled, isTrue);
+      expect(session.snapshot.contentShareTrack?.isScreenShare, isTrue);
+      // Losing capture permission must update the SDK without a Demo command.
+      engine.events!.onLocalScreenShareChanged?.call(false);
+      expect(session.snapshot.localScreenShareEnabled, isFalse);
+      expect(session.snapshot.contentShareTrack, isNull);
+      await publisher.setScreenShareEnabled(true);
+      await publisher.setScreenShareEnabled(false);
+      expect(engine.calls.where((s) => s == 'screen:false'), hasLength(1));
+      expect(session.snapshot.localScreenShareEnabled, isFalse);
+      expect(session.snapshot.contentShareTrack, isNull);
+      await session.dispose();
+    },
+  );
+
+  test(
+    'ARTC remote screen and camera tracks stay independently renderable',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final engine = _FakeArtcEngine();
+      final session = ArtcSessionFactory(
+        engineFactory: () async => engine,
+      ).createSession(joinInfo());
+      await session.join(joinInfo());
+      engine.events!.onParticipantJoined?.call('teacher');
+      engine.events!.onRemoteVideoChanged?.call('teacher', true);
+      engine.events!.onRemoteScreenChanged?.call('teacher', true);
+      final camera = session.snapshot.remoteParticipants.single.videoTrack!;
+      final shared = session.snapshot.contentShareTrack!;
+      expect(camera.isScreenShare, isFalse);
+      expect(shared.isScreenShare, isTrue);
+      expect(camera.id, isNot(shared.id));
+      engine.events!.onRemoteVideoChanged?.call('teacher', false);
+      expect(session.snapshot.contentShareTrack?.id, shared.id);
+      engine.events!.onRemoteScreenChanged?.call('teacher', false);
+      expect(session.snapshot.contentShareTrack, isNull);
+      engine.events!.onRemoteScreenChanged?.call('teacher', true);
+      engine.events!.onParticipantLeft?.call('teacher');
+      expect(session.snapshot.contentShareTrack, isNull);
+      await session.dispose();
+    },
+  );
+
+  test(
+    'ARTC iOS does not advertise cross-app sharing without extension',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final session = ArtcSessionFactory(
+        engineFactory: () async => _FakeArtcEngine(),
+      ).createSession(joinInfo());
+      await session.join(joinInfo());
+      expect(session.capabilities.canScreenShare, isFalse);
+      await expectLater(
+        (session as InteractiveMediaSession).setScreenShareEnabled(true),
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.unsupportedFeature,
+          ),
+        ),
+      );
+      await session.dispose();
+    },
+  );
+
+  test(
     'macOS Pre-Join blocks when the optional ARTC framework is absent',
     () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -249,7 +332,10 @@ void main() {
       expect(engine.joined.single.userId, 'u-person1');
       expect(engine.joined.single.roomMode, ArtcRoomMode.communication);
       expect(session.snapshot.localParticipantId, 'u-person1');
-      expect(session.capabilities.canScreenShare, isFalse);
+      expect(
+        session.capabilities.canScreenShare,
+        defaultTargetPlatform == TargetPlatform.android,
+      );
       expect(session.capabilities.canEnumerateAudioDevices, isFalse);
       final interactive = session as InteractiveMediaSession;
       await expectLater(
@@ -273,16 +359,22 @@ void main() {
         containsAll(['mute:false', 'video:true', 'camera:back']),
       );
       expect(events.whereType<MediaTrackPublished>(), hasLength(1));
-      await expectLater(
-        interactive.setScreenShareEnabled(true),
-        throwsA(
-          isA<RealtimeException>().having(
-            (error) => error.code,
-            'code',
-            RealtimeErrorCode.unsupportedFeature,
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        await interactive.setScreenShareEnabled(true);
+        expect(session.snapshot.localScreenShareEnabled, isTrue);
+        await interactive.setScreenShareEnabled(false);
+      } else {
+        await expectLater(
+          interactive.setScreenShareEnabled(true),
+          throwsA(
+            isA<RealtimeException>().having(
+              (error) => error.code,
+              'code',
+              RealtimeErrorCode.unsupportedFeature,
+            ),
           ),
-        ),
-      );
+        );
+      }
 
       engine.events!.onParticipantJoined?.call('u-remote');
       engine.events!.onRemoteVideoChanged?.call('u-remote', true);
@@ -484,6 +576,10 @@ class _FakeArtcEngine implements ArtcEngine {
   @override
   Future<void> setVideoEnabled(bool enabled) async =>
       calls.add('video:$enabled');
+
+  @override
+  Future<void> setScreenShareEnabled(bool enabled) async =>
+      calls.add('screen:$enabled');
 
   @override
   Future<void> switchCamera(MediaCameraPosition position) async =>

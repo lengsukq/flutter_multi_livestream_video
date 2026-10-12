@@ -77,6 +77,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
     private boolean viewer;
     private boolean inChannel;
     private boolean videoEnabled;
+    private boolean screenShareEnabled;
     private boolean disposed;
 
     @Override
@@ -95,9 +96,10 @@ public final class FlutterRealtimeMediaArtcPlugin implements
                         Map<?, ?> values = args instanceof Map ? (Map<?, ?>) args : new HashMap<>();
                         String userId = String.valueOf(values.get("userId"));
                         boolean isLocal = Boolean.TRUE.equals(values.get("isLocal"));
+                        boolean isScreen = Boolean.TRUE.equals(values.get("isScreenShare"));
                         Object fitMode = values.get("fitMode");
                         ArtcVideoPlatformView platformView = new ArtcVideoPlatformView(
-                                context, userId, isLocal,
+                                context, userId, isLocal, isScreen,
                                 fitMode instanceof Number ? ((Number) fitMode).intValue() : 0,
                                 FlutterRealtimeMediaArtcPlugin.this);
                         videoViews.add(platformView);
@@ -105,6 +107,27 @@ public final class FlutterRealtimeMediaArtcPlugin implements
                         return platformView;
                     }
                 });
+    }
+
+    /** Android MediaProjection consent is obtained by the ARTC SDK itself. */
+    private void setScreenShareEnabled(MethodCall call, MethodChannel.Result result) {
+        if (!requirePublisher(result)) return;
+        boolean enabled = Boolean.TRUE.equals(call.argument("enabled"));
+        if (enabled == screenShareEnabled) { result.success(null); return; }
+        try {
+            int code = enabled
+                    ? engine.startScreenShare(null, AliRtcEngine.AliRtcScreenShareMode.AliRtcScreenShareOnlyVideoMode)
+                    : engine.stopScreenShare();
+            if (code != 0) {
+                nativeError(result, "ARTC failed to " + (enabled ? "start" : "stop") + " screen sharing", code);
+                return;
+            }
+            screenShareEnabled = enabled;
+            result.success(null);
+        } catch (Throwable error) {
+            error(result, "native_error", error.getMessage() == null
+                    ? "ARTC could not change screen sharing." : error.getMessage());
+        }
     }
 
     @Override
@@ -136,6 +159,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
             case "leave": leave(result); break;
             case "setMuted": setMuted(call, result); break;
             case "setVideoEnabled": setVideoEnabled(call, result); break;
+            case "setScreenShareEnabled": setScreenShareEnabled(call, result); break;
             case "switchCamera": switchCamera(call, result); break;
             case "sendMessage": sendMessage(call, result); break;
             case "dispose": disposeEngine(); result.success(null); break;
@@ -448,6 +472,20 @@ public final class FlutterRealtimeMediaArtcPlugin implements
 
     private final AliRtcEngineEventListener eventListener = new AliRtcEngineEventListener() {
         @Override
+        public void onScreenSharePublishStateChanged(
+                AliRtcEngine.AliRtcPublishState oldState,
+                AliRtcEngine.AliRtcPublishState newState,
+                int elapsedSinceLastState,
+                String channel) {
+            if (newState == AliRtcEngine.AliRtcPublishState.AliRtcStatsPublished) {
+                screenShareEnabled = true;
+                emit(event("localScreenChanged", "available", true));
+            } else if (newState == AliRtcEngine.AliRtcPublishState.AliRtcStatsNoPublish) {
+                screenShareEnabled = false;
+                emit(event("localScreenChanged", "available", false));
+            }
+        }
+        @Override
         public void onJoinChannelResult(int result, String channel, String userId, int elapsed) {
             mainHandler.post(() -> {
                 clearJoinTimeout();
@@ -511,9 +549,13 @@ public final class FlutterRealtimeMediaArtcPlugin implements
         public void onRemoteTrackAvailableNotify(String userId, AliRtcEngine.AliRtcAudioTrack audio,
                                                  AliRtcEngine.AliRtcVideoTrack video) {
             boolean hasAudio = audio != AliRtcEngine.AliRtcAudioTrack.AliRtcAudioTrackNo;
-            boolean hasVideo = video != AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackNo;
+            boolean hasVideo = video == AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera
+                    || video == AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackBoth;
+            boolean hasScreen = video == AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackScreen
+                    || video == AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackBoth;
             emit(event("audioChanged", "userId", userId, "available", hasAudio));
             emit(event("videoChanged", "userId", userId, "available", hasVideo));
+            emit(event("screenChanged", "userId", userId, "available", hasScreen));
         }
 
         @Override
@@ -543,6 +585,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
         if (leaveTimeout != null) mainHandler.removeCallbacks(leaveTimeout);
         leaveTimeout = null;
         inChannel = false;
+        screenShareEnabled = false;
         detachViews();
         MethodChannel.Result result = pendingLeaveResult;
         pendingLeaveResult = null;
@@ -552,6 +595,10 @@ public final class FlutterRealtimeMediaArtcPlugin implements
 
     private void disposeEngine() {
         disposed = true;
+        if (engine != null && screenShareEnabled) {
+            try { engine.stopScreenShare(); } catch (Throwable ignored) { }
+        }
+        screenShareEnabled = false;
         detachProcessedVideoSource();
         clearJoinTimeout();
         if (leaveTimeout != null) mainHandler.removeCallbacks(leaveTimeout);
@@ -647,6 +694,7 @@ public final class FlutterRealtimeMediaArtcPlugin implements
         private final Context context;
         private final String userId;
         private final boolean local;
+        private final boolean screen;
         /** 0 = cover/crop, 1 = contain/letterbox. */
         private final int fitMode;
         private final FlutterRealtimeMediaArtcPlugin plugin;
@@ -654,10 +702,11 @@ public final class FlutterRealtimeMediaArtcPlugin implements
         private AliRtcEngine boundEngine;
         private View sdkView;
 
-        ArtcVideoPlatformView(Context context, String userId, boolean local, int fitMode, FlutterRealtimeMediaArtcPlugin plugin) {
+        ArtcVideoPlatformView(Context context, String userId, boolean local, boolean screen, int fitMode, FlutterRealtimeMediaArtcPlugin plugin) {
             this.context = context;
             this.userId = userId;
             this.local = local;
+            this.screen = screen;
             this.fitMode = fitMode;
             this.plugin = plugin;
             this.container = new FrameLayout(context);
@@ -676,11 +725,14 @@ public final class FlutterRealtimeMediaArtcPlugin implements
             canvas.renderMode = fitMode == 1
                     ? AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeFill
                     : AliRtcEngine.AliRtcRenderMode.AliRtcRenderModeClip;
+            AliRtcEngine.AliRtcVideoTrack source = screen
+                    ? AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackScreen
+                    : AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera;
             if (local) {
-                currentEngine.setLocalViewConfig(canvas, AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera);
+                currentEngine.setLocalViewConfig(canvas, source);
                 if (currentEngine.isCameraOn()) currentEngine.startPreview();
             } else {
-                currentEngine.setRemoteViewConfig(canvas, userId, AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera);
+                currentEngine.setRemoteViewConfig(canvas, userId, source);
             }
         }
 
@@ -688,8 +740,11 @@ public final class FlutterRealtimeMediaArtcPlugin implements
             AliRtcEngine target = boundEngine != null ? boundEngine : currentEngine;
             if (target != null) {
                 try {
-                    if (local) target.setLocalViewConfig(null, AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera);
-                    else target.setRemoteViewConfig(null, userId, AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera);
+                    AliRtcEngine.AliRtcVideoTrack source = screen
+                            ? AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackScreen
+                            : AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera;
+                    if (local) target.setLocalViewConfig(null, source);
+                    else target.setRemoteViewConfig(null, userId, source);
                 } catch (Throwable ignored) { }
             }
             if (sdkView != null) container.removeView(sdkView);

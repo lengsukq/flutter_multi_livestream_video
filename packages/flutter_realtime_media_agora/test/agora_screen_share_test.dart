@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:agora_rtc_engine/agora_rtc_engine.dart' as agora;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_agora/flutter_realtime_media_agora.dart';
@@ -20,12 +22,34 @@ class _ScreenEngine extends Fake implements agora.RtcEngine {
   int stopCount = 0;
   int updates = 0;
   bool failStart = false;
+  final List<Uint8List> announcedMessages = [];
+  final List<int> selectedDesktopDisplays = [];
+  List<agora.ScreenCaptureSourceInfo> desktopSources = [];
   final List<agora.ChannelMediaOptions> mediaOptions = [];
   @override
   Future<void> initialize(agora.RtcEngineContext context) async {}
   @override
   void registerEventHandler(agora.RtcEngineEventHandler eventHandler) {
     handler = eventHandler;
+  }
+
+  @override
+  Future<List<agora.ScreenCaptureSourceInfo>> getScreenCaptureSources({
+    required agora.SIZE thumbSize,
+    required agora.SIZE iconSize,
+    required bool includeScreen,
+  }) async {
+    expect(includeScreen, isTrue);
+    return desktopSources;
+  }
+
+  @override
+  Future<void> startScreenCaptureByDisplayId({
+    required int displayId,
+    required agora.Rectangle regionRect,
+    required agora.ScreenCaptureParameters captureParams,
+  }) async {
+    selectedDesktopDisplays.add(displayId);
   }
 
   @override
@@ -81,6 +105,20 @@ class _ScreenEngine extends Fake implements agora.RtcEngine {
   }
 
   @override
+  Future<int> createDataStream(agora.DataStreamConfig config) async => 6;
+
+  @override
+  Future<void> sendStreamMessage({
+    required int streamId,
+    required Uint8List data,
+    required int length,
+  }) async {
+    expect(streamId, 6);
+    expect(length, data.length);
+    announcedMessages.add(data);
+  }
+
+  @override
   Future<void> leaveChannel({agora.LeaveChannelOptions? options}) async {}
   @override
   Future<void> release({bool sync = false}) async {}
@@ -119,6 +157,10 @@ void main() {
       await session.setScreenShareEnabled(false);
       expect(engine.stopCount, 1);
       expect(engine.mediaOptions.last.publishScreenCaptureVideo, isFalse);
+      expect(
+        jsonDecode(utf8.decode(engine.announcedMessages.last))['message'],
+        'stopped',
+      );
       expect(session.snapshot.localScreenShareEnabled, isFalse);
       expect(session.snapshot.contentShareTrack, isNull);
       await subscription.cancel();
@@ -152,6 +194,145 @@ void main() {
       await session.setScreenShareEnabled(true);
       await session.dispose();
       expect(engine.stopCount, 1);
+    },
+  );
+
+  test(
+    'remote video migrates from camera to screen and back via RTC data',
+    () async {
+      final engine = _ScreenEngine();
+      final session = AgoraInteractiveSession(engineFactory: () => engine);
+      await session.join(_credential());
+      const remoteUid = 998;
+      final connection = agora.RtcConnection(
+        channelId: 'channel',
+        localUid: 123,
+      );
+      engine.handler?.onRemoteVideoStateChanged?.call(
+        connection,
+        remoteUid,
+        agora.RemoteVideoState.remoteVideoStateDecoding,
+        agora.RemoteVideoStateReason.values.first,
+        0,
+      );
+      expect(
+        session.snapshot.remoteParticipants.single.videoTrack?.isScreenShare,
+        false,
+      );
+
+      void signal(String state) {
+        final data = Uint8List.fromList(
+          utf8.encode(
+            jsonEncode({
+              'version': 1,
+              'topic': '_flutter_realtime.screen_share.v1',
+              'message': state,
+            }),
+          ),
+        );
+        engine.handler?.onStreamMessage?.call(
+          connection,
+          remoteUid,
+          6,
+          data,
+          data.length,
+          0,
+        );
+      }
+
+      signal('started');
+      expect(session.snapshot.contentShareTrack?.isScreenShare, true);
+      expect(session.snapshot.contentShareTrack?.participantId, '$remoteUid');
+      expect(session.snapshot.remoteParticipants.single.videoTrack, isNull);
+      expect(session.snapshot.messages, isEmpty);
+
+      signal('stopped');
+      expect(session.snapshot.contentShareTrack, isNull);
+      expect(
+        session.snapshot.remoteParticipants.single.videoTrack?.isScreenShare,
+        false,
+      );
+      expect(session.snapshot.messages, isEmpty);
+
+      signal('started');
+      engine.handler?.onUserOffline?.call(
+        connection,
+        remoteUid,
+        agora.UserOfflineReasonType.userOfflineQuit,
+      );
+      expect(session.snapshot.contentShareTrack, isNull);
+      expect(session.snapshot.remoteParticipants, isEmpty);
+      await session.dispose();
+    },
+  );
+
+  test('late joiner receives the active screen-share announcement', () async {
+    final engine = _ScreenEngine();
+    final session = AgoraInteractiveSession(engineFactory: () => engine);
+    await session.join(_credential());
+    await session.setScreenShareEnabled(true);
+    await Future<void>.delayed(Duration.zero);
+    final before = engine.announcedMessages.length;
+    engine.handler?.onUserJoined?.call(
+      agora.RtcConnection(channelId: 'channel', localUid: 123),
+      88,
+      0,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(engine.announcedMessages.length, before + 1);
+    final decoded = jsonDecode(utf8.decode(engine.announcedMessages.last));
+    expect(decoded['topic'], '_flutter_realtime.screen_share.v1');
+    expect(decoded['message'], 'started');
+    await session.dispose();
+  });
+
+  test(
+    'Agora macOS selects the primary display and releases it on stop',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final engine = _ScreenEngine()
+        ..desktopSources = [
+          const agora.ScreenCaptureSourceInfo(
+            sourceId: 11,
+            type: agora.ScreenCaptureSourceType.screencapturesourcetypeScreen,
+          ),
+          const agora.ScreenCaptureSourceInfo(
+            sourceId: 42,
+            primaryMonitor: true,
+            type: agora.ScreenCaptureSourceType.screencapturesourcetypeScreen,
+          ),
+        ];
+      final session = AgoraInteractiveSession(engineFactory: () => engine);
+      await session.join(_credential());
+      expect(session.capabilities.canScreenShare, isTrue);
+      await session.setScreenShareEnabled(true);
+      expect(engine.selectedDesktopDisplays, [42]);
+      expect(session.snapshot.localScreenShareEnabled, isTrue);
+      await session.setScreenShareEnabled(false);
+      expect(engine.stopCount, 1);
+      await session.dispose();
+    },
+  );
+
+  test(
+    'Agora desktop with no shareable display reports unsupported and preserves state',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      final engine = _ScreenEngine();
+      final session = AgoraInteractiveSession(engineFactory: () => engine);
+      await session.join(_credential());
+      await expectLater(
+        session.setScreenShareEnabled(true),
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.unsupportedFeature,
+          ),
+        ),
+      );
+      expect(session.snapshot.localScreenShareEnabled, isFalse);
+      await session.dispose();
     },
   );
 }

@@ -10,6 +10,8 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'agora_join_info.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'agora_media_track.dart';
+import 'agora_screen_capture.dart';
+import 'agora_screen_share_signals.dart';
 
 const _agoraProviderId = AgoraJoinInfo.providerIdValue;
 
@@ -47,9 +49,13 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
         (defaultTargetPlatform == TargetPlatform.android ||
             defaultTargetPlatform == TargetPlatform.macOS),
     canSwitchCamera: canSwitchCamera,
-    // Android MediaProjection capture is supported by this native SDK.
-    // Other platforms still require verified source picker/broadcast adapters.
-    canScreenShare: !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+    // iOS cross-app sharing requires a separate ReplayKit Broadcast Extension.
+    // Android uses MediaProjection; desktop capture selects a display.
+    canScreenShare:
+        !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows),
     canSendData: true,
     canReceiveData: true,
     canSubscribeVideo: true,
@@ -90,6 +96,9 @@ abstract class _AgoraMediaSession
 
   final Map<String, MediaParticipant> _participants = {};
   final List<MediaMessage> _messages = [];
+  final AgoraRemoteScreenState _remoteScreenState = AgoraRemoteScreenState();
+  final Map<int, AgoraMediaVideoTrack> _remoteScreenTracks = {};
+  final AgoraScreenCapture _screenCapture = const AgoraScreenCapture();
 
   final MediaCapabilities _capabilities;
   MediaSnapshot _snapshot;
@@ -275,6 +284,8 @@ abstract class _AgoraMediaSession
     _cameraPosition = MediaCameraPosition.front;
     _participants.clear();
     _messages.clear();
+    _remoteScreenState.clear();
+    _remoteScreenTracks.clear();
     _activeSpeakerUid = null;
     _dataStreamId = null;
     _setState(MediaSessionState.joining);
@@ -505,18 +516,32 @@ abstract class _AgoraMediaSession
       },
       onUserJoined: (connection, uid, elapsed) {
         final id = uid.toString();
-        final participant = MediaParticipant(
-          id: id,
-          displayName: id,
-          joinedAt: DateTime.now(),
-        );
+        final previous = _participants[id];
+        final participant =
+            previous ??
+            MediaParticipant(id: id, displayName: id, joinedAt: DateTime.now());
         _participants[id] = participant;
         _refreshSnapshot();
-        _emit(MediaParticipantJoined(participant));
+        if (previous == null) _emit(MediaParticipantJoined(participant));
+        // RTC data has no history: announce to late joiners.
+        if (_localScreenShareEnabled) {
+          unawaited(_announceScreenShareState(true));
+        }
       },
       onUserOffline: (connection, uid, reason) {
         final id = uid.toString();
         final removed = _participants.remove(id);
+        _remoteScreenState.remove(uid);
+        final screen = _remoteScreenTracks.remove(uid);
+        if (screen != null) {
+          _emit(
+            MediaTrackUnpublished(
+              trackId: screen.id,
+              participantId: id,
+              wasScreenShare: true,
+            ),
+          );
+        }
         if (_activeSpeakerUid == uid) _activeSpeakerUid = null;
         _refreshSnapshot();
         _emit(
@@ -545,7 +570,8 @@ abstract class _AgoraMediaSession
           MediaTrackMutedChanged(
             participantId: remoteUid.toString(),
             muted: muted,
-            trackId: 'agora:${_joinInfo?.channelName}:$remoteUid:camera',
+            trackId:
+                'agora:${_joinInfo?.channelName}:$remoteUid:${_remoteScreenState.isScreenPublisher(remoteUid) ? 'screen' : 'camera'}',
           ),
         );
       },
@@ -685,6 +711,13 @@ abstract class _AgoraMediaSession
           topic = map['topic']?.toString().trim().isNotEmpty == true
               ? map['topic'].toString().trim()
               : 'chat';
+          if (topic == agoraScreenShareTopic) {
+            final signal = decodeAgoraScreenShareSignal(data);
+            if (signal != null) {
+              _setRemoteScreenPublisher(remoteUid, signal);
+            }
+            return;
+          }
           final ts = map['timestampMs'];
           if (ts is num) metadata['senderTimestampMs'] = ts.toInt().toString();
         }
@@ -708,9 +741,21 @@ abstract class _AgoraMediaSession
   }
 
   void _setRemoteVideoState(int uid, {required bool enabled}) {
+    _remoteScreenState.onVideo(uid, available: enabled);
     final id = uid.toString();
     final before = _participants[id];
-    final track = enabled ? _videoTrack(uid, local: false) : null;
+    final previousCamera = before?.videoTrack;
+    final previousScreen = _remoteScreenTracks[uid];
+    final sharing = _remoteScreenState.showsScreen(uid);
+    final track = enabled && !sharing ? _videoTrack(uid, local: false) : null;
+    final screen = sharing
+        ? _videoTrack(uid, local: false, screenShare: true)
+        : null;
+    if (screen == null) {
+      _remoteScreenTracks.remove(uid);
+    } else {
+      _remoteScreenTracks[uid] = screen;
+    }
     final participant =
         (before ??
                 MediaParticipant(
@@ -719,22 +764,38 @@ abstract class _AgoraMediaSession
                   joinedAt: DateTime.now(),
                 ))
             .copyWith(
-              isVideoEnabled: enabled,
+              isVideoEnabled: track != null,
               videoTrack: track,
-              clearVideoTrack: !enabled,
+              clearVideoTrack: track == null,
             );
     _participants[id] = participant;
     _refreshSnapshot();
-    if (enabled && track != null && before?.isVideoEnabled != true) {
+    if (previousCamera != null && track == null) {
+      _emit(
+        MediaTrackUnpublished(trackId: previousCamera.id, participantId: id),
+      );
+    }
+    if (track != null && previousCamera == null) {
       _emit(MediaTrackPublished(track));
-    } else if (!enabled && before?.isVideoEnabled == true) {
+    }
+    if (previousScreen != null && screen == null) {
       _emit(
         MediaTrackUnpublished(
-          trackId: 'agora:${_joinInfo?.channelName}:$uid:camera',
+          trackId: previousScreen.id,
           participantId: id,
+          wasScreenShare: true,
         ),
       );
     }
+    if (previousScreen == null && screen != null) {
+      _emit(MediaTrackPublished(screen));
+    }
+  }
+
+  void _setRemoteScreenPublisher(int uid, AgoraScreenShareSignal signal) {
+    _remoteScreenState.onSignal(uid, signal);
+    // An announcement may arrive before the first remote video frame.
+    _setRemoteVideoState(uid, enabled: _remoteScreenState.videoAvailable(uid));
   }
 
   void _updateRemoteParticipant(
@@ -750,7 +811,11 @@ abstract class _AgoraMediaSession
     if (emitSnapshot) _refreshSnapshot();
   }
 
-  AgoraMediaVideoTrack? _videoTrack(int uid, {required bool local}) {
+  AgoraMediaVideoTrack? _videoTrack(
+    int uid, {
+    required bool local,
+    bool screenShare = false,
+  }) {
     final engine = _engine;
     final channel = _joinInfo?.channelName;
     if (engine == null || channel == null) return null;
@@ -759,6 +824,7 @@ abstract class _AgoraMediaSession
       channelId: channel,
       uid: uid,
       local: local,
+      screenShare: screenShare,
       processedSource: local ? _processedSink.source : null,
     );
   }
@@ -849,8 +915,8 @@ abstract class _AgoraMediaSession
       throw const RealtimeException(
         code: RealtimeErrorCode.unsupportedFeature,
         message:
-            'Agora native screen sharing is currently available only on Android. '
-            'Other native platforms require a verified capture-source adapter.',
+            'Agora sharing is supported on Android, macOS and Windows. '
+            'iOS requires a ReplayKit Broadcast Extension.',
         providerId: _agoraProviderId,
       );
     }
@@ -859,18 +925,13 @@ abstract class _AgoraMediaSession
     final engine = _requireEngine();
     try {
       if (enabled) {
-        await engine.startScreenCapture(
-          const agora.ScreenCaptureParameters2(
-            captureVideo: true,
-            captureAudio: false,
-          ),
-        );
+        await _screenCapture.start(engine, defaultTargetPlatform);
         _localScreenShareEnabled = true;
         try {
           await _updatePublishOptions();
         } catch (_) {
           _localScreenShareEnabled = false;
-          await engine.stopScreenCapture();
+          await _screenCapture.stop(engine);
           rethrow;
         }
         final uid = _localUid;
@@ -886,7 +947,10 @@ abstract class _AgoraMediaSession
           _emit(MediaTrackPublished(track));
         }
       } else {
-        await engine.stopScreenCapture();
+        // Announce while screen video is still published. Agora can reject
+        // data-stream packets after the last AV track is unpublished.
+        await _announceScreenShareState(false);
+        await _screenCapture.stop(engine);
         _localScreenShareEnabled = false;
         final track = _localScreenTrack;
         _localScreenTrack = null;
@@ -902,9 +966,38 @@ abstract class _AgoraMediaSession
         await _updatePublishOptions();
       }
       _refreshSnapshot();
+      // Metadata is separate from media publication. If data transport fails,
+      // capture remains active and the failure is reported independently.
+      if (enabled) unawaited(_announceScreenShareState(true));
     } catch (error) {
       _refreshSnapshot();
       throw _mapError(error, 'Unable to change Agora screen-share state.');
+    }
+  }
+
+  Future<void> _announceScreenShareState(bool enabled) async {
+    if (!_canPublish || _engine == null || _joinCancelled || _disposed) return;
+    try {
+      final streamId = await _ensureDataStream();
+      if (_disposed || _joinCancelled || _engine == null) return;
+      final payload = encodeAgoraScreenShareSignal(
+        enabled
+            ? AgoraScreenShareSignal.started
+            : AgoraScreenShareSignal.stopped,
+      );
+      await _requireEngine().sendStreamMessage(
+        streamId: streamId,
+        data: payload,
+        length: payload.length,
+      );
+    } catch (error) {
+      if (_disposed || _joinCancelled) return;
+      _reportFailure(
+        _mapError(
+          error,
+          'Agora screen-share metadata announcement failed; remote participants may not recognize the screen track.',
+        ),
+      );
     }
   }
 
@@ -1243,8 +1336,10 @@ abstract class _AgoraMediaSession
       localMuted: _localMuted,
       localVideoEnabled: _localVideoEnabled,
       localScreenShareEnabled: _localScreenShareEnabled,
-      contentShareTrack: _localScreenTrack,
-      clearContentShareTrack: _localScreenTrack == null,
+      contentShareTrack:
+          _remoteScreenTracks.values.lastOrNull ?? _localScreenTrack,
+      clearContentShareTrack:
+          _remoteScreenTracks.isEmpty && _localScreenTrack == null,
       capabilities: _capabilities,
       lastError: error,
       clearLastError: clearLastError,

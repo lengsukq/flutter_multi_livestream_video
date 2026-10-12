@@ -37,6 +37,7 @@ abstract interface class ArtcEngine {
   Future<void> leave();
   Future<void> setMuted(bool muted);
   Future<void> setVideoEnabled(bool enabled);
+  Future<void> setScreenShareEnabled(bool enabled);
   Future<void> switchCamera(MediaCameraPosition position);
   Future<void> sendMessage(String message, String topic);
   Future<void> dispose();
@@ -49,6 +50,8 @@ class ArtcEngineEvents {
     this.onParticipantJoined,
     this.onParticipantLeft,
     this.onRemoteVideoChanged,
+    this.onRemoteScreenChanged,
+    this.onLocalScreenShareChanged,
     this.onRemoteAudioChanged,
     this.onMessage,
     this.onReconnecting,
@@ -60,6 +63,8 @@ class ArtcEngineEvents {
   final void Function(String userId)? onParticipantJoined;
   final void Function(String userId)? onParticipantLeft;
   final void Function(String userId, bool available)? onRemoteVideoChanged;
+  final void Function(String userId, bool available)? onRemoteScreenChanged;
+  final void Function(bool available)? onLocalScreenShareChanged;
   final void Function(String userId, bool available)? onRemoteAudioChanged;
   final void Function(String userId, String data)? onMessage;
   final void Function()? onReconnecting;
@@ -110,6 +115,10 @@ class _NativeArtcEngine implements ArtcEngine {
       _invoke('setVideoEnabled', {'enabled': enabled});
 
   @override
+  Future<void> setScreenShareEnabled(bool enabled) =>
+      _invoke('setScreenShareEnabled', {'enabled': enabled});
+
+  @override
   Future<void> switchCamera(MediaCameraPosition position) =>
       _invoke('switchCamera', {'position': position.name});
 
@@ -130,6 +139,17 @@ class _NativeArtcEngine implements ArtcEngine {
     switch (type) {
       case 'participantJoined':
         if (userId.isNotEmpty) _handlers.onParticipantJoined?.call(userId);
+        return;
+      case 'localScreenChanged':
+        _handlers.onLocalScreenShareChanged?.call(event['available'] == true);
+        return;
+      case 'screenChanged':
+        if (userId.isNotEmpty) {
+          _handlers.onRemoteScreenChanged?.call(
+            userId,
+            event['available'] == true,
+          );
+        }
         return;
       case 'participantLeft':
         if (userId.isNotEmpty) _handlers.onParticipantLeft?.call(userId);

@@ -27,10 +27,12 @@ static NSString *const kArtcViewType =
 @interface ArtcVideoPlatformView : NSView
 @property(nonatomic, copy) NSString *userId;
 @property(nonatomic, assign) BOOL local;
+@property(nonatomic, assign) BOOL screen;
 @property(nonatomic, assign) NSInteger fitMode;
 @property(nonatomic, weak) FlutterRealtimeMediaArtcPlugin *plugin;
 - (instancetype)initWithUserId:(NSString *)userId
                        isLocal:(BOOL)isLocal
+                      isScreen:(BOOL)isScreen
                        fitMode:(NSInteger)fitMode
                         plugin:(FlutterRealtimeMediaArtcPlugin *)plugin;
 - (void)attach;
@@ -429,28 +431,30 @@ static NSInteger ArtcSendIntObjectObjectInteger(
   [canvas setValue:view forKey:@"view"];
   // AliRtcRenderModeFill (2) preserves the full frame; Crop (3) fills the view.
   [canvas setValue:@(view.fitMode == 1 ? 2 : 3) forKey:@"renderMode"];
+  NSInteger source = view.screen ? 2 : 1;
   if (view.local) {
     ArtcSendIntObjectInteger(
         self.engine, NSSelectorFromString(@"setLocalViewConfig:forTrack:"),
-        canvas, 1);
+        canvas, source);
     if (self.processedVideo == nil) ArtcSendInt0(self.engine, NSSelectorFromString(@"startPreview"));
   } else {
     ArtcSendIntObjectObjectInteger(
         self.engine, NSSelectorFromString(@"setRemoteViewConfig:uid:forTrack:"),
-        canvas, view.userId, 1);
+        canvas, view.userId, source);
   }
 }
 
 - (void)detachView:(ArtcVideoPlatformView *)view {
   if (self.engine == nil) return;
+  NSInteger source = view.screen ? 2 : 1;
   if (view.local) {
     ArtcSendIntObjectInteger(
         self.engine, NSSelectorFromString(@"setLocalViewConfig:forTrack:"),
-        nil, 1);
+        nil, source);
   } else {
     ArtcSendIntObjectObjectInteger(
         self.engine, NSSelectorFromString(@"setRemoteViewConfig:uid:forTrack:"),
-        nil, view.userId, 1);
+        nil, view.userId, source);
   }
 }
 
@@ -485,7 +489,10 @@ static NSInteger ArtcSendIntObjectObjectInteger(
                @"available" : @(audioTrack != 0)}];
   [self emit:@{@"type" : @"videoChanged",
                @"userId" : uid ?: @"",
-               @"available" : @(videoTrack != 0)}];
+               @"available" : @((videoTrack & 1) != 0)}];
+  [self emit:@{@"type" : @"screenChanged",
+               @"userId" : uid ?: @"",
+               @"available" : @((videoTrack & 2) != 0)}];
 }
 
 - (void)onDataChannelMessage:(NSString *)uid controlMsg:(id)message {
@@ -532,12 +539,14 @@ static NSInteger ArtcSendIntObjectObjectInteger(
 
 - (instancetype)initWithUserId:(NSString *)userId
                        isLocal:(BOOL)isLocal
+                      isScreen:(BOOL)isScreen
                        fitMode:(NSInteger)fitMode
                         plugin:(FlutterRealtimeMediaArtcPlugin *)plugin {
   self = [super initWithFrame:NSZeroRect];
   if (self) {
     _userId = [userId copy];
     _local = isLocal;
+    _screen = isScreen;
     _fitMode = fitMode;
     _plugin = plugin;
     self.wantsLayer = YES;
@@ -576,6 +585,7 @@ static NSInteger ArtcSendIntObjectObjectInteger(
                          ? values[@"userId"]
                          : @""
            isLocal:[values[@"isLocal"] boolValue]
+          isScreen:[values[@"isScreenShare"] boolValue]
            fitMode:(values[@"fitMode"] != nil ? [values[@"fitMode"] integerValue] : 1)
             plugin:self.plugin];
 }

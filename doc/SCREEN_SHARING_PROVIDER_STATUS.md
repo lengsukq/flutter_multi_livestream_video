@@ -15,11 +15,11 @@
 | RTC 媒体适配器 | Web 桌面浏览器 | Android | iOS | macOS | Windows |
 |---|---|---|---|---|---|
 | LiveKit | 基础，浏览器授权 | 基础，MediaProjection | 条件，当前以应用内采集为主，缺 Broadcast Extension 全屏 | 基础，系统屏幕录制权限 | 基础，待 Windows 构建/实机 |
-| Agora | 初步，屏幕选择/取消/恢复摄像头已修复；远端共享识别需完善 | **初步，本轮实现官方 MediaProjection Capture + 共享发布与状态**，远端共享轨道识别待补 | 未接 ReplayKit Broadcast Extension | 未接屏幕/窗口源选择 | 未接屏幕/窗口源选择 |
+| Agora | 初步，屏幕选择/取消/恢复摄像头已修复；已能接收原生端共享状态，但 Web 发送端缺可靠跨平台信令 | **初步，MediaProjection Capture + 共享发布/远端共享信令与轨道映射已有**，真实双设备待验收 | 未接 ReplayKit Broadcast Extension | **初步，本轮补官方共享显示器枚举 + 自动选择主屏幕**，待实机验证 | **初步，本轮补官方共享显示器枚举 + 自动选择主屏幕**，待 Windows 构建和实机 |
 | 腾讯 TRTC | 初步，JS 辅路采集与播放 | 基础，原生辅路 | 条件，原生 ScreenCapture/ReplayKit 扩展配置需验收 | **初步，本轮实现主显示器自动枚举/选定 + 辅路采集** | **初步，本轮实现主显示器自动枚举/选定 + 辅路采集**，缺 Windows 构建 |
-| 阿里 ARTC | 初步，本轮补远端摄像头/屏幕 bitmask 分流和幂等清理 | 未接原生桥 | 未接原生桥 | 未接原生桥；官方 macOS framework 前置条件 | 无默认原生 Driver |
+| 阿里 ARTC | 初步，Web 摄像头/屏幕流分流和清理 | **初步，Android MediaProjection 共享 SDK+原生桥已接，独立远端屏幕轨道和撤销回调已接；待真机** | **接收远端共享已接；发送整个系统屏幕仍缺 ReplayKit Broadcast Extension** | **接收远端共享已接；发送端尚缺屏幕源选择；需额外厂商 Framework** | 无默认原生 Driver |
 | AWS Chime | 基础，桌面浏览器 Content Share | 未接原生 Content Share 桥 | 未接原生 Content Share/ReplayKit 桥 | 未接 SDK 桌面共享桥 | 无默认 Chime Driver |
-| AWS IVS Real-Time | 初步，屏幕采集/发布与资源清理测试已补，远端区分仍待验收 | 未接原生 Broadcast 屏幕源 | 未接原生 Broadcast/ReplayKit 屏幕源 | 未接桌面共享桥 | 无默认 IVS Driver |
+| AWS IVS Real-Time | 初步，**单 Token 只发布一路视频**：开始共享替换摄像头，停止后恢复；要同时发布需要第二个 Stage Token，远端区分仍待验收 | 未接原生 Broadcast 屏幕源 | 未接原生 Broadcast/ReplayKit 屏幕源 | 未接桌面共享桥 | 无默认 IVS Driver |
 
 Web 浏览器是否支持 `navigator.mediaDevices.getDisplayMedia` 需运行时检测。桌面 Chrome、Edge、Safari 的实现与权限不同，**移动浏览器不能因为同属 Flutter Web 就宣称能共享系统屏幕**。
 
@@ -28,16 +28,20 @@ Web 浏览器是否支持 `navigator.mediaDevices.getDisplayMedia` 需运行时�
 - **统一 Web 状态**：`provider_web_session_factory.dart` 根据本地共享轨道同步 `localScreenShareEnabled`，避免实际共享成功但 UI 永远显示未开启。
 - **Agora Web**：先等待用户选择屏幕再停止原来的摄像头发布；取消选择不影响摄像头。发布失败释放屏幕并恢复摄像头，停止共享后恢复摄像头。
 - **TRTC/ARTC Web**：幂等开启、停止和轨道释放；ARTC 根据远端视频 bitmask 区分摄像头和屏幕；发布失败清理。
-- **IVS Web**：采集失败释放本地屏幕轨道，避免重复开启；观众角色禁止发起屏幕共享。
-- **Agora Android**：`startScreenCapture/stopScreenCapture`、`ChannelMediaOptions.publishScreenCaptureVideo`、本地屏幕轨道与退出清理；原生视频失败回调同步清除活动状态。
+- **IVS Web**：采集失败释放本地屏幕轨道，避免重复开启；观众角色禁止发起屏幕共享。单 Token 发布限制下，屏幕与摄像头互斥发布、停止后恢复摄像头、共享期间切换摄像头只更新待恢复源；离开房间时释放两者。屏幕分辨率按 IVS 文档约束到 720p。
+- **Agora Android**：`startScreenCapture/stopScreenCapture`、`ChannelMediaOptions.publishScreenCaptureVideo`、本地屏幕轨道与退出清理；原生视频失败回调同步清除活动状态。通过 Agora RTC DataStream 私有 topic 向其他客户端通知共享开始/停止、向迟加入用户重发当前状态；远端切换摄像头/共享轨道并在共享者离线时清理；控制消息不进入聊天室。
+- **Agora macOS/Windows**：通过 `getScreenCaptureSources` 获取官方可共享显示器列表，优先选择 `primaryMonitor`，调用 `startScreenCaptureByDisplayId` 捕获主屏幕，并复用统一共享发布、远端通知与状态清理。屏幕录制授权和窗口/其他显示器手动选择尚未实机验收。
+- **Agora Web 接收端**：能处理原生端发送的共享状态信令，将远端普通视频轨道转换为 `isScreenShare` 轨道，并在停止时恢复显示。
 - **TRTC macOS/Windows**：使用 `getScreenCaptureSources` 选择主显示器并 `selectScreenCaptureTarget`，再沿用已存在的辅路编码/远端订阅。
+- **ARTC Android / 远端跨平台接收**：`ArtcEngine` 通过 MethodChannel 调用 Android `AliRtcEngine.startScreenShare/stopScreenShare`（视频模式），安卓厂商回调更新共享状态。远端相机与屏幕按官方 Camera=1/Screen=2/Both=3 的掩码分轨；Android、iOS 和可用时的 macOS 使用相应的原生渲染源。业务 SDK 保持同一 `setScreenShareEnabled()` 接口，Demo 不承载供应商适配。厂商接受 API 调用与真实屏幕出帧不同，仍须实机验证 MediaProjection 授权、系统停止与录屏前台服务。
 
 ## 仍未完成的关键闭环
 
-1. **Agora Web/Native 远端共享标识和独立显示**：屏幕与摄像头视频只有一个或多个 RTC UID/轨道时，必须用服务端分配的可信标识或视频源元数据建立“这是共享源”的映射。不能单凭画面比例猜测。原生 Android 的基本采集发布不意味着异端已能显示到共享舞台。
-2. **ARTC/Chime/IVS 原生平台适配**：需接入厂商原生 SDK 的屏幕采集、Publisher、远端 Track、选屏/授权、共享中断回调。尤其 Chime Android/iOS 官方 SDK **有** Content Share 能力，但当前 Flutter 适配尚未实现。
+1. **Agora Web 发起共享时的反向信令和端到端验收**：Agora Web 4.24.8 有 `stream-message` 接收事件，但没有可用的 `sendStreamMessage` 发布接口。原生 → Web 的 DataStream 控制消息已接通代码层；Web → 原生需另设 provider-neutral 信令服务/IM 通道或合法的屏幕子 UID/Token，不能用视频宽高猜测屏幕类型。所有方向都还需要实机确认。
+2. **ARTC/Chime/IVS 剩余原生平台适配**：ARTC Android 的共享接入已新增，但尚需实机媒体验收；ARTC iOS/桌面发送端、Chime/IVS 原生采集仍需实现。尤其 Chime Android/iOS 官方 SDK **有** Content Share 能力，但当前 Flutter 适配尚未实现。
+   IVS **同时发布摄像头和屏幕**按 [AWS 官方说明](https://docs.aws.amazon.com/ivs/latest/RealTimeUserGuide/web-publish-subscribe.html) 需要额外的共享 Stage Token 和独立参与者；目前 Demo 的单 Token 模式采用暂停摄像头视频并共享屏幕的策略，而非双路并行。
 3. **iOS 跨 App 全屏共享**：ReplayKit Broadcast Upload Extension 和 App Group、原生 SDK 的广播上传桥须由示例 Host App 正确安装并签名；Flutter 单一入口无法省掉扩展。当前 LiveKit iOS 仅应用内捕获，不是整机屏幕。
-4. **原生桌面多显示器与窗口共享**：TRTC 当前仅选主显示器，未做 UI 源选择。Agora macOS/Windows、AWS 桌面仍未接通源选择与 SDK Track。
+4. **原生桌面多显示器与窗口共享**：TRTC 和 Agora 都已接主显示器自动选择；但还没有 SDK 级共享源列表 UI / 手动选择其他显示器或窗口，也没有桌面真机播放验收。AWS 桌面仍未接入。
 5. **运行时权限和系统停止事件**：Android 前台 MediaProjection 服务，macOS 屏幕录制权限，iOS 广播停止、浏览器 `track.ended`、销毁和重连；真实场景均需端到端确认。
 6. **多供应商/多平台验收**：每个组合至少用双设备测试本地采集 → 发布 → 远端订阅 → 坐标与画面比例 → 主动停止/权限拒绝/意外停止 → 重连与退出。自动化 Mock 测试不等于真实 SDK 通过。
 
