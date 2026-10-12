@@ -1,20 +1,26 @@
+import {Readable} from 'node:stream';
+import {pipeline} from 'node:stream/promises';
 import type {Express, Response} from 'express';
-import type {NamedRoomEntry, RoomEntry} from '../types.ts';
+import type {IvsRoomEntry, NamedRoomEntry, RoomEntry} from '../types.ts';
 import {requireRoomManager} from '../room-access.ts';
+import type {CloudRecordingExecutor} from '../recording/cloud-recording-executor.ts';
 import {
-  LiveKitCloudRecording,
   RecordingConfigurationError,
   RecordingProviderError,
 } from '../recording/livekit-cloud-recording.ts';
 
 export function registerRecordingRoutes(app: Express, dependencies: {
   resolveRoom(ref: unknown): Promise<RoomEntry | null>;
-  recorder: LiveKitCloudRecording;
+  recorder?: CloudRecordingExecutor;
+  recorders?: ReadonlyMap<string, CloudRecordingExecutor>;
   contractError(
     response: Response, status: number, code: string, message: string,
   ): Response;
 }) {
-  const {resolveRoom, recorder, contractError} = dependencies;
+  const {resolveRoom, contractError} = dependencies;
+  const recorders = dependencies.recorders ?? new Map(
+    dependencies.recorder ? [['livekit', dependencies.recorder]] : [],
+  );
 
   function handler(action: 'start' | 'stop' | 'status' | 'download') {
     return async (req: import('express').Request, res: Response) => {
@@ -29,10 +35,19 @@ export function registerRecordingRoutes(app: Express, dependencies: {
         )) {
           return contractError(res, 403, 'forbidden', 'Host permission is required for cloud recording.');
         }
-        if (entry.provider !== 'livekit' || !entry.providerRoomName) {
-          return contractError(res, 400, 'unsupported-provider', 'Cloud recording V1 supports LiveKit rooms only.');
+        const recorder = recorders.get(entry.provider);
+        const stageArn = entry.provider === 'ivs' ? (entry as IvsRoomEntry).stageArn : undefined;
+        if (!recorder || (!entry.providerRoomName && !entry.meeting?.MeetingArn && !stageArn)) {
+          return contractError(res, 400, 'unsupported-provider',
+            'Cloud recording is not supported for this media provider.');
         }
-        const room = entry as NamedRoomEntry;
+        // Chime identifies the underlying meeting by its ARN, not by a string
+        // channel name. The backend normalizes this for the cloud adapter.
+        const room: NamedRoomEntry = {
+          ...entry,
+          providerRoomName: entry.providerRoomName ??
+            entry.meeting?.MeetingId ?? stageArn ?? '',
+        };
         if (action === 'start') {
           // No client-supplied URL, storage, credentials or arbitrary vendor API
           // payload are allowed. The backend owns all privileged configuration.
@@ -60,7 +75,15 @@ export function registerRecordingRoutes(app: Express, dependencies: {
           return res.json(await recorder.start(room, layout, preset));
         }
         if (action === 'stop') return res.json(await recorder.stop(room));
-        if (action === 'status') return res.json(await recorder.status(room));
+        if (action === 'status') {
+          const status = await recorder.status(room);
+          const readiness = await recorder.readiness?.();
+          return res.json({
+            ...(status as Record<string, unknown>),
+            recordingAvailable: readiness?.available ?? true,
+            recordingUnavailableReason: readiness?.available === false ? readiness.reason : undefined,
+          });
+        }
         return res.json(await recorder.download(room));
       } catch (error) {
         if (error instanceof RecordingConfigurationError) {
@@ -84,21 +107,48 @@ export function registerRecordingRoutes(app: Express, dependencies: {
   // random, single-use 60-second ticket. The GET contains no RTC credentials.
   app.get('/rooms/:code/recording/export/:ticket', async (req, res) => {
     try {
-      const {absolutePath, filename} = await recorder.consumeExport(
-        String(req.params.code), String(req.params.ticket),
-      );
+      const entry = await resolveRoom(req.params.code);
+      const recorder = entry && recorders.get(entry.provider);
+      if (!recorder) throw new RecordingProviderError('Recording provider unavailable.');
+      const artifact = await recorder.consumeExport(
+        String(req.params.code), String(req.params.ticket));
       res.setHeader('Cache-Control', 'private, no-store');
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.type('video/mp4');
-      res.download(absolutePath, filename, (error) => {
-        if (error && !res.headersSent) {
-          contractError(res, 404, 'recording-file-unavailable',
-            'The recording file could not be exported.');
+      if (artifact.kind === 'local') {
+        res.download(artifact.absolutePath, artifact.filename, (error) => {
+          if (error && !res.headersSent) {
+            contractError(res, 404, 'recording-file-unavailable',
+              'The recording file could not be exported.');
+          }
+        });
+      } else if (artifact.kind === 'stream') {
+        res.attachment(artifact.filename);
+        await pipeline(Readable.from(artifact.body), res);
+        if (artifact.afterDownload) {
+          try {
+            await artifact.afterDownload();
+          } catch {
+            // A fully delivered download must not be reported as failed
+            // because remote file retention cleanup was unsuccessful.
+            console.warn('Recording was downloaded, but storage cleanup failed.');
+          }
         }
-      });
+      } else {
+        // The URL is accepted only from the signature-verified vendor callback.
+        // Never redirect clients to unvalidated storage URLs. Proxy the file
+        // to produce an actual attachment on desktop and mobile browsers.
+        const upstream = await fetch(artifact.url, {
+          redirect: 'error', signal: AbortSignal.timeout(120_000),
+        });
+        if (!upstream.ok || !upstream.body) throw new Error('Recording file unavailable.');
+        res.attachment(artifact.filename);
+        await pipeline(Readable.from(upstream.body as AsyncIterable<Uint8Array>), res);
+      }
     } catch {
-      contractError(res, 404, 'recording-download-invalid',
+      if (!res.headersSent) contractError(res, 404, 'recording-download-invalid',
         'The recording download ticket has expired or is invalid.');
+      else res.destroy();
     }
   });
 }

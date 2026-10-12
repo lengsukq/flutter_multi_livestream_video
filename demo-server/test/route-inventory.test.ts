@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 
-/** Regression guard for the 43 public endpoints before the P1 Router split. */
+/** Regression guard for all intentional public HTTP endpoints. */
 test('typed router extraction retains every baseline HTTP verb and path', () => {
   const expected = JSON.parse(
     readFileSync(new URL('./route-inventory.expected.json', import.meta.url), 'utf8'),
@@ -29,5 +29,5 @@ test('typed router extraction retains every baseline HTTP verb and path', () => 
   const baseline = [...expected].sort(([verbA, pathA], [verbB, pathB]) =>
     verbA.localeCompare(verbB) || pathA.localeCompare(pathB));
   assert.deepEqual(sorted, baseline);
-  assert.equal(sorted.length, 48);
+  assert.equal(sorted.length, 49);
 });

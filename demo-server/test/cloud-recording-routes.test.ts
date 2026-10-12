@@ -10,6 +10,8 @@ import type {AddressInfo} from 'node:net';
 import type {NamedRoomEntry} from '../types.ts';
 import {issueParticipantCredential} from '../participant-credential.ts';
 import {LiveKitCloudRecording} from '../recording/livekit-cloud-recording.ts';
+import {RecordingProviderError} from '../recording/livekit-cloud-recording.ts';
+import type {CloudRecordingExecutor} from '../recording/cloud-recording-executor.ts';
 import {registerRecordingRoutes} from '../routes/recording-routes.ts';
 
 test('cloud recording HTTP routes authorize only this room host and never expose credentials', async () => {
@@ -61,7 +63,10 @@ test('cloud recording HTTP routes authorize only this room host and never expose
       layout: 'grid',
     })).status, 403);
     assert.equal((await send('room2', 'status', asHost)).status, 403);
-    assert.equal((await send('room1', 'status', asHost)).body.state, 'idle');
+    const idle = await send('room1', 'status', asHost);
+    assert.equal(idle.body.state, 'idle');
+    assert.equal(idle.body.recordingAvailable, false);
+    assert.match(idle.body.recordingUnavailableReason, /Egress/);
     assert.equal((await send('room1', 'start', {
       ...asHost, layout: 'grid', rawProviderParams: {storage: {secret: 'client-injected'}},
     })).status, 400);
@@ -73,6 +78,80 @@ test('cloud recording HTTP routes authorize only this room host and never expose
     assert.equal((await send('room1', 'download', asHost)).status, 409);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test('cloud recording routes dispatch TRTC by trusted room provider and proxy a one-time MP4 attachment', async () => {
+  const bytes = Buffer.alloc(512);
+  bytes.write('ftyp', 4);
+  const mediaServer = express();
+  mediaServer.get('/video.mp4', (_req, res) => {
+    res.type('video/mp4').send(bytes);
+  });
+  const mediaListener = mediaServer.listen(0, '127.0.0.1');
+  if (!mediaListener.listening) await once(mediaListener, 'listening');
+  const mediaPort = (mediaListener.address() as AddressInfo).port;
+  const entry: NamedRoomEntry = {
+    provider: 'trtc', roomCode: 'demo-trtc', providerRoomName: 'media-demo-trtc',
+    createdAt: new Date().toISOString(), lastHeartbeatMs: Date.now(),
+    attendees: [
+      {attendeeId: 'host', role: 'host', joinedAt: new Date().toISOString(), externalUserId: 'host'},
+      {attendeeId: 'guest', role: 'participant', joinedAt: new Date().toISOString(), externalUserId: 'guest'},
+    ],
+  };
+  const host = issueParticipantCredential(entry, 'host');
+  const guest = issueParticipantCredential(entry, 'guest');
+  const invoked: string[] = [];
+  let ticketUsed = false;
+  const recorder: CloudRecordingExecutor = {
+    start: async () => {invoked.push('start'); return {provider:'trtc', recordingId:'task-1', state:'recording'};},
+    stop: async () => {invoked.push('stop'); return {provider:'trtc', recordingId:'task-1', state:'processing'};},
+    status: async () => {invoked.push('status'); return {provider:'trtc', recordingId:'task-1', state:'completed', canDownload:true};},
+    download: async () => {invoked.push('download'); return {downloadUrl:'/rooms/demo-trtc/recording/export/ticket-1'};},
+    consumeExport: async (code, ticket) => {
+      if (ticketUsed || code !== entry.roomCode || ticket !== 'ticket-1') {
+        throw new RecordingProviderError('Invalid ticket.');
+      }
+      ticketUsed = true;
+      return {kind: 'remote', url: `http://127.0.0.1:${mediaPort}/video.mp4`, filename:'trtc-test.mp4'};
+    },
+  };
+  const app = express();
+  app.use(express.json());
+  registerRecordingRoutes(app, {
+    resolveRoom: async (code) => code === entry.roomCode ? entry : null,
+    recorders: new Map([['trtc', recorder]]),
+    contractError: (res, status, code, message) =>
+      res.status(status).json({error: {code, message}}),
+  });
+  const listener = app.listen(0, '127.0.0.1');
+  try {
+    if (!listener.listening) await once(listener, 'listening');
+    const port = (listener.address() as AddressInfo).port;
+    const root = `http://127.0.0.1:${port}/rooms/demo-trtc/recording`;
+    async function post(action: string, credential: string, requesterParticipantId = 'host') {
+      return fetch(`${root}/${action}`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({requesterParticipantId, participantCredential: credential, layout:'grid'}),
+      });
+    }
+    assert.equal((await post('start', guest, 'guest')).status, 403);
+    assert.equal(invoked.length, 0);
+    assert.equal((await post('start', host)).status, 200);
+    assert.equal((await post('stop', host)).status, 200);
+    assert.equal((await post('status', host)).status, 200);
+    const reply = await post('download', host);
+    assert.equal(reply.status, 200);
+    const data = await reply.json() as {downloadUrl:string};
+    const download = await fetch(`http://127.0.0.1:${port}${data.downloadUrl}`);
+    assert.equal(download.status, 200);
+    assert.match(download.headers.get('content-disposition') ?? '', /trtc-test.mp4/);
+    assert.equal((await download.arrayBuffer()).byteLength, bytes.length);
+    assert.equal((await fetch(`http://127.0.0.1:${port}${data.downloadUrl}`)).status, 404);
+    assert.deepEqual(invoked, ['start', 'stop', 'status', 'download']);
+  } finally {
+    await new Promise<void>((resolve) => listener.close(() => resolve()));
+    await new Promise<void>((resolve) => mediaListener.close(() => resolve()));
   }
 });
 

@@ -128,6 +128,46 @@ class _DelayedStopSession extends _FakeMediaSession {
   }
 }
 
+class _FakeCloudSession implements MediaCloudRecordingSession {
+  int starts = 0;
+  int stops = 0;
+  bool disposed = false;
+
+  @override
+  Future<RecordingResult> startCloudRecording(RecordingOptions options) async {
+    starts++;
+    return const RecordingResult(
+      mode: RecordingMode.cloud,
+      recordingId: 'trtc-task-1',
+      metadata: {'state': 'recording', 'provider': 'trtc'},
+    );
+  }
+
+  @override
+  Future<RecordingResult> stopCloudRecording() async {
+    stops++;
+    return const RecordingResult(
+      mode: RecordingMode.cloud,
+      recordingId: 'trtc-task-1',
+      metadata: {'state': 'processing', 'canDownload': false},
+    );
+  }
+
+  @override
+  Future<RecordingResult> queryCloudRecording() async => const RecordingResult(
+    mode: RecordingMode.cloud,
+    recordingId: 'trtc-task-1',
+    metadata: {'state': 'completed', 'canDownload': true},
+  );
+
+  @override
+  Future<Uri> cloudRecordingDownloadUrl() async =>
+      Uri.parse('https://backend.example.test/recording/export/ticket');
+
+  @override
+  void dispose() => disposed = true;
+}
+
 void main() {
   late MediaRoomSession roomSession;
   late RoomRecordingController controller;
@@ -177,6 +217,34 @@ void main() {
       expect(stopResult.fileSizeBytes, greaterThan(0));
       expect(controller.status, RecordingStatus.idle);
     });
+
+    test(
+      'provider-neutral controller executes injected TRTC cloud recording and keeps MP4 processing separate',
+      () async {
+        final cloud = _FakeCloudSession();
+        final trtc = RoomRecordingController(
+          media: roomSession,
+          providerId: 'trtc',
+          cloudRecordingSession: cloud,
+        );
+        final started = await trtc.startRecording(
+          RecordingOptions.cloud(layout: RecordingLayout.grid),
+        );
+        expect(started.recordingId, 'trtc-task-1');
+        expect(trtc.status, RecordingStatus.recording);
+        final stopped = await trtc.stopRecording();
+        expect(stopped?.metadata['state'], 'processing');
+        expect(trtc.status, RecordingStatus.idle);
+        final result = await trtc.queryCloudRecording();
+        expect(result.metadata['canDownload'], isTrue);
+        final url = await trtc.cloudRecordingDownloadUrl();
+        expect(url.host, 'backend.example.test');
+        expect(cloud.starts, 1);
+        expect(cloud.stops, 1);
+        await trtc.dispose();
+        expect(cloud.disposed, isTrue);
+      },
+    );
 
     test(
       'generates cloud recording descriptor with parameter pass-through',

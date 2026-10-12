@@ -86,6 +86,10 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
         'provider': data['provider'] ?? 'livekit',
         'state': data['state'] ?? 'idle',
         'canDownload': data['canDownload'] == true,
+        if (data['recordingAvailable'] is bool)
+          'recordingAvailable': data['recordingAvailable'],
+        if (data['recordingUnavailableReason'] is String)
+          'recordingUnavailableReason': data['recordingUnavailableReason'],
         if (data['error'] != null) 'error': data['error'],
         if (data['layout'] != null) 'layout': data['layout'],
       },

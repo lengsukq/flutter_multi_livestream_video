@@ -71,7 +71,7 @@ See [纯功能 SDK 接入与 UI 可选指南](doc/SDK_RUNTIME_INTEGRATION.zh-CN.
 
 Local recording: [真实本地录制支持范围、Web 下载、Native 文件导出、限制与验收](doc/LOCAL_RECORDING.md). Native recording remains pending device E2E acceptance.
 
-Cloud recording V1: [LiveKit Egress 自托管云端录制、参数与 Demo MP4 导出](doc/CLOUD_RECORDING.md). The SDK controls layout, start/stop, progress and export across platforms. **No S3 integration**: self-hosted Egress writes to a shared mounted volume, and the Demo backend serves single-use authorized downloads. LiveKit Cloud hosted Egress cannot write MP4 without configured storage. Other vendors are blueprint-only.
+Cloud recording: [供应商托管的 Agora、LiveKit Cloud、TRTC VOD、Alibaba ARTC、AWS Chime 与 AWS IVS+MediaConvert 云录制/MP4 下载](doc/CLOUD_RECORDING.md). The Flutter SDK owns only provider-neutral start/stop/status/download methods; Demo Server calls vendor APIs and streams completed cloud files to users. **No Linux recording workers, local Java Recording SDK or server-side media encoding.** Buckets may be left blank until recording is enabled. IVS native HLS output is converted to MP4 by AWS MediaConvert (additional cloud configuration needed). End-to-end recording with real vendor credentials and storage remains to be tested.
 
 ## Architecture and behavior
 

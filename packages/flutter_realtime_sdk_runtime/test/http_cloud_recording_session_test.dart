@@ -47,6 +47,25 @@ void main() {
   });
 
   test(
+    'exposes provider-neutral recorder readiness without leaking credentials',
+    () async {
+      backend.respond(200, {
+        'provider': 'agora',
+        'state': 'idle',
+        'recordingAvailable': false,
+        'recordingUnavailableReason': 'Linux Recording SDK is missing',
+      });
+      final result = await session.queryCloudRecording();
+      expect(result.metadata['recordingAvailable'], false);
+      expect(
+        result.metadata['recordingUnavailableReason'],
+        'Linux Recording SDK is missing',
+      );
+      expect(result.metadata.containsKey('AGORA_APP_CERTIFICATE'), false);
+    },
+  );
+
+  test(
     'passes neutral layout and room management credentials to backend',
     () async {
       backend.respond(200, {

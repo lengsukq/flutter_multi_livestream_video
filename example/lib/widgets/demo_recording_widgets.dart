@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
+import '../demo_strings.dart';
 import 'demo_cloud_recording_result_dialog.dart';
 
 /// Top-bar badge showing the current recording status and duration ticker.
@@ -73,7 +76,8 @@ class _DemoRecordingBadgeState extends State<DemoRecordingBadge> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    widget.room.engineProviderId == 'livekit'
+                    widget.room.recording.currentOptions?.mode ==
+                            RecordingMode.cloud
                         ? 'CLOUD $m:$s'
                         : 'REC $m:$s',
                     style: const TextStyle(
@@ -93,15 +97,17 @@ class _DemoRecordingBadgeState extends State<DemoRecordingBadge> {
 }
 
 /// Bottom action bar button for toggling recording and inspecting results.
+///
+/// Renders as [RealtimeDockItem]s so it matches the meeting dock.
 class DemoRecordingButton extends StatefulWidget {
   const DemoRecordingButton({
     super.key,
     required this.room,
-    this.iconOnly = false,
+    this.showLabel = true,
   });
 
   final RealtimeRoom room;
-  final bool iconOnly;
+  final bool showLabel;
 
   @override
   State<DemoRecordingButton> createState() => _DemoRecordingButtonState();
@@ -110,32 +116,81 @@ class DemoRecordingButton extends StatefulWidget {
 class _DemoRecordingButtonState extends State<DemoRecordingButton> {
   bool _operating = false;
   RecordingResult? _lastCloudResult;
+  bool? _cloudRecordingAvailable;
+  String? _cloudUnavailableReason;
   bool get _isCloudRoom =>
-      widget.room.engineProviderId == 'livekit' &&
+      const {
+        'livekit',
+        'trtc',
+        'agora',
+        'artc',
+        'chime',
+        'ivs',
+      }.contains(widget.room.engineProviderId) &&
       widget.room.featureBackendUrl != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isCloudRoom && widget.room.media.isLogicalOwner) {
+      _checkCloudRecordingAvailability();
+    }
+  }
+
+  Future<void> _checkCloudRecordingAvailability() async {
+    try {
+      final result = await widget.room.queryCloudRecording();
+      if (!mounted) return;
+      setState(() {
+        _cloudRecordingAvailable =
+            result.metadata['recordingAvailable'] as bool?;
+        _cloudUnavailableReason =
+            result.metadata['recordingUnavailableReason'] as String?;
+      });
+    } catch (_) {
+      // Keep the actual recording action available when preflight fails due to
+      // a transient network/auth issue. The SDK still returns the real error.
+    }
+  }
 
   Future<void> _toggleRecording() async {
     if (_operating) return;
+    final strings = DemoStrings.of(context);
+    if (_isCloudRoom &&
+        widget.room.recordingStatus != RecordingStatus.recording &&
+        _cloudRecordingAvailable == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            strings.recordingUnavailableReason(
+              _cloudUnavailableReason ?? strings.recordingUnavailable,
+            ),
+          ),
+          backgroundColor: Colors.deepOrange,
+        ),
+      );
+      return;
+    }
     var layout = RecordingLayout.grid;
     if (_isCloudRoom &&
         widget.room.recordingStatus != RecordingStatus.recording) {
       final chosen = await showDialog<RecordingLayout>(
         context: context,
         builder: (context) => SimpleDialog(
-          title: const Text('选择云端录制布局'),
+          title: Text(strings.chooseCloudRecordingLayout),
           children: [
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, RecordingLayout.grid),
-              child: const ListTile(
-                leading: Icon(Icons.grid_view),
-                title: Text('宫格模式（推荐）'),
+              child: ListTile(
+                leading: const Icon(Icons.grid_view),
+                title: Text(strings.gridModePreferred),
               ),
             ),
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, RecordingLayout.speaker),
-              child: const ListTile(
-                leading: Icon(Icons.person_pin),
-                title: Text('演讲者模式'),
+              child: ListTile(
+                leading: const Icon(Icons.person_pin),
+                title: Text(strings.speakerMode),
               ),
             ),
           ],
@@ -170,9 +225,11 @@ class _DemoRecordingButtonState extends State<DemoRecordingButton> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                _isCloudRoom ? '云端录制任务已创建，停止后需要等待云端文件处理完成。' : '已请求本地录制，请确认授权。',
+                _isCloudRoom
+                    ? strings.recordingCloudPending
+                    : strings.recordingLocalPending,
               ),
-              duration: Duration(seconds: 2),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -181,7 +238,7 @@ class _DemoRecordingButtonState extends State<DemoRecordingButton> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('录制操作失败: $e'),
+            content: Text(strings.recordingActionFailed(e)),
             backgroundColor: Colors.redAccent,
           ),
         );
@@ -214,6 +271,7 @@ class _DemoRecordingButtonState extends State<DemoRecordingButton> {
       stream: widget.room.recordingStatuses,
       initialData: widget.room.recordingStatus,
       builder: (context, snapshot) {
+        final strings = DemoStrings.of(context);
         final status = snapshot.data ?? RecordingStatus.idle;
         final isRecording = status == RecordingStatus.recording;
 
@@ -232,47 +290,41 @@ class _DemoRecordingButtonState extends State<DemoRecordingButton> {
                 .padLeft(2, '0');
 
             if (isRecording) {
-              if (widget.iconOnly) {
-                return Tooltip(
-                  message: _isCloudRoom ? '停止云录制 ($m:$s)' : '停止录制 ($m:$s)',
-                  child: IconButton.filled(
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                    ),
-                    icon: const Icon(Icons.stop_circle_outlined, size: 20),
-                    onPressed: _operating ? null : _toggleRecording,
-                  ),
-                );
-              }
-              return FilledButton.tonalIcon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.red.withAlpha(50),
-                  foregroundColor: Colors.redAccent,
-                ),
-                icon: const Icon(Icons.stop_circle_outlined, size: 20),
-                label: Text(_isCloudRoom ? '停止云录制 ($m:$s)' : '停止 ($m:$s)'),
+              return RealtimeDockItem(
+                icon: Icons.stop_circle_outlined,
+                label: _isCloudRoom
+                    ? '${strings.stopCloudRecording} ($m:$s)'
+                    : '${strings.record} ($m:$s)',
+                isDanger: true,
+                isLoading: _operating,
+                showLabel: widget.showLabel,
                 onPressed: _operating ? null : _toggleRecording,
               );
             }
 
             if (_isCloudRoom) {
-              final canRecord =
-                  widget.room.media.session.role == MediaRole.host;
+              // Meeting creators use participant media role but hold the
+              // room-owner credential. They must not be treated as viewers.
+              final canRecord = widget.room.media.isLogicalOwner;
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (_lastCloudResult != null)
-                    IconButton(
-                      tooltip: '查看云录制结果',
-                      icon: const Icon(Icons.cloud_download_outlined),
-                      onPressed: _operating || !canRecord
-                          ? null
-                          : _showCloudResultDialog,
-                    ),
-                  IconButton(
-                    tooltip: '云端录制（宫格 / 演讲者）',
-                    icon: const Icon(Icons.cloud_circle_outlined),
+                  RealtimeDockItem(
+                    icon: Icons.cloud_download_outlined,
+                    label: strings.viewRecordingResult,
+                    showBadgeDot: _lastCloudResult != null,
+                    showLabel: widget.showLabel,
+                    onPressed: _operating || !canRecord
+                        ? null
+                        : _showCloudResultDialog,
+                  ),
+                  RealtimeDockItem(
+                    icon: Icons.cloud_circle_outlined,
+                    label: _cloudRecordingAvailable == false
+                        ? strings.recordingUnavailable
+                        : strings.cloudRecording,
+                    isLoading: _operating,
+                    showLabel: widget.showLabel,
                     onPressed: _operating || !canRecord
                         ? null
                         : _toggleRecording,
@@ -281,12 +333,306 @@ class _DemoRecordingButtonState extends State<DemoRecordingButton> {
               );
             }
 
-            return IconButton(
-              tooltip: widget.room.capabilities.media.canRecordLocal
-                  ? '本地录制尚待真实设备验收，Demo 暂优先展示 LiveKit 云端录制'
-                  : '云端录制 V1 目前仅支持 LiveKit',
-              icon: const Icon(Icons.cloud_off_outlined),
-              onPressed: null,
+            return Opacity(
+              opacity: 0.5,
+              child: RealtimeDockItem(
+                icon: Icons.cloud_off_outlined,
+                label: strings.cloudRecording,
+                tooltip: widget.room.capabilities.media.canRecordLocal
+                    ? strings.recordingLocalPending
+                    : strings.cloudRecordingUnsupported,
+                showLabel: widget.showLabel,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// A menu-ready ListTile item for cloud/local recording inside [RealtimeDockMoreButton].
+class DemoRecordingListTile extends StatefulWidget {
+  const DemoRecordingListTile({super.key, required this.room});
+
+  final RealtimeRoom room;
+
+  @override
+  State<DemoRecordingListTile> createState() => _DemoRecordingListTileState();
+}
+
+class _DemoRecordingListTileState extends State<DemoRecordingListTile> {
+  bool _operating = false;
+  RecordingResult? _lastCloudResult;
+  bool? _cloudRecordingAvailable;
+  String? _cloudUnavailableReason;
+  bool get _isCloudRoom =>
+      const {
+        'livekit',
+        'trtc',
+        'agora',
+        'artc',
+        'chime',
+        'ivs',
+      }.contains(widget.room.engineProviderId) &&
+      widget.room.featureBackendUrl != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isCloudRoom && widget.room.media.isLogicalOwner) {
+      _checkCloudRecordingAvailability();
+    }
+  }
+
+  Future<void> _checkCloudRecordingAvailability() async {
+    try {
+      final result = await widget.room.queryCloudRecording();
+      if (!mounted) return;
+      setState(() {
+        _cloudRecordingAvailable =
+            result.metadata['recordingAvailable'] as bool?;
+        _cloudUnavailableReason =
+            result.metadata['recordingUnavailableReason'] as String?;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_operating) return;
+    final strings = DemoStrings.of(context);
+    if (_isCloudRoom &&
+        widget.room.recordingStatus != RecordingStatus.recording &&
+        _cloudRecordingAvailable == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            strings.recordingUnavailableReason(
+              _cloudUnavailableReason ?? strings.recordingUnavailable,
+            ),
+          ),
+          backgroundColor: Colors.deepOrange,
+        ),
+      );
+      return;
+    }
+    var layout = RecordingLayout.grid;
+    if (_isCloudRoom &&
+        widget.room.recordingStatus != RecordingStatus.recording) {
+      final chosen = await showDialog<RecordingLayout>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: Text(strings.chooseCloudRecordingLayout),
+          children: [
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, RecordingLayout.grid),
+              child: ListTile(
+                leading: const Icon(Icons.grid_view),
+                title: Text(strings.gridModePreferred),
+              ),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, RecordingLayout.speaker),
+              child: ListTile(
+                leading: const Icon(Icons.person_pin),
+                title: Text(strings.speakerMode),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (chosen == null || !mounted) return;
+      layout = chosen;
+    }
+    setState(() => _operating = true);
+
+    try {
+      if (widget.room.recordingStatus == RecordingStatus.recording) {
+        final result = await widget.room.stopRecording();
+        if (mounted && result != null) {
+          if (result.mode == RecordingMode.cloud) {
+            _lastCloudResult = result;
+            _showCloudResultDialog();
+          } else {
+            _showResultDialog(result);
+          }
+        }
+      } else {
+        if (_isCloudRoom) {
+          _lastCloudResult = await widget.room.startRecording(
+            RecordingOptions.cloud(layout: layout),
+          );
+          if (mounted) _showCloudResultDialog();
+        } else {
+          final result = await widget.room.startRecording(
+            RecordingOptions.local(),
+          );
+          if (mounted) {
+            _showResultDialog(result);
+          }
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _operating = false);
+    }
+  }
+
+  void _showResultDialog(RecordingResult result) {
+    showDialog<void>(
+      context: context,
+      builder: (_) =>
+          DemoRecordingResultDialog(room: widget.room, result: result),
+    );
+  }
+
+  void _showCloudResultDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<RecordingStatus>(
+      stream: widget.room.recordingStatuses,
+      initialData: widget.room.recordingStatus,
+      builder: (context, snapshot) {
+        final strings = DemoStrings.of(context);
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final status = snapshot.data ?? RecordingStatus.idle;
+        final isRecording = status == RecordingStatus.recording;
+        final canRecord = widget.room.media.isLogicalOwner;
+
+        return StreamBuilder<Duration>(
+          stream: widget.room.recordingDurations,
+          initialData: widget.room.recording.duration,
+          builder: (context, durationSnapshot) {
+            final duration = durationSnapshot.data ?? Duration.zero;
+            final m = duration.inMinutes
+                .remainder(60)
+                .toString()
+                .padLeft(2, '0');
+            final s = duration.inSeconds
+                .remainder(60)
+                .toString()
+                .padLeft(2, '0');
+
+            if (isRecording) {
+              return ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFF3B30).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.stop_circle_outlined,
+                    color: Color(0xFFFF3B30),
+                    size: 22,
+                  ),
+                ),
+                title: Text(
+                  _isCloudRoom
+                      ? '${strings.stopCloudRecording} ($m:$s)'
+                      : '${strings.record} ($m:$s)',
+                  style: const TextStyle(
+                    color: Color(0xFFFF3B30),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: Text(
+                  strings.isZh ? '点击停止本次录制' : 'Tap to stop recording',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                onTap: _operating
+                    ? null
+                    : () {
+                        Navigator.maybePop(context);
+                        unawaited(_toggleRecording());
+                      },
+              );
+            }
+
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  enabled: canRecord && !_operating,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: (isDark ? Colors.white : Colors.black).withValues(
+                        alpha: 0.1,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.cloud_circle_outlined,
+                      color: Theme.of(context).colorScheme.onSurface,
+                      size: 22,
+                    ),
+                  ),
+                  title: Text(
+                    _cloudRecordingAvailable == false
+                        ? strings.recordingUnavailable
+                        : strings.cloudRecording,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  subtitle: Text(
+                    strings.isZh ? '启动音视频录制' : 'Start audio/video recording',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.maybePop(context);
+                    unawaited(_toggleRecording());
+                  },
+                ),
+                if (_lastCloudResult != null) ...[
+                  const Divider(height: 1, indent: 56),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: RealtimeUiTokens.iosBlue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.cloud_download_outlined,
+                        color: RealtimeUiTokens.iosBlue,
+                        size: 22,
+                      ),
+                    ),
+                    title: Text(strings.viewRecordingResult),
+                    subtitle: Text(
+                      strings.isZh ? '查看云录制文件与回放' : 'Inspect cloud recordings',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.maybePop(context);
+                      _showCloudResultDialog();
+                    },
+                  ),
+                ],
+              ],
             );
           },
         );

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import {s3RecordingReader, type RecordingObjectReader} from './s3-recording-storage.ts';
 
 import type { NamedRoomEntry } from '../types.ts';
 
@@ -68,12 +69,19 @@ export class LiveKitCloudRecording {
   private readonly apiSecret: string;
   private readonly egressOutputDir: string;
   private readonly exportDir: string;
+  private readonly hosted: boolean;
+  private readonly s3Bucket: string;
+  private readonly s3Region: string;
+  private readonly s3Key: string;
+  private readonly s3Secret: string;
+  private readonly reader: RecordingObjectReader;
   private readonly transport: typeof fetch;
   private readonly exportTickets = new Map<string, {roomCode: string; filename: string; expires: number}>();
 
   constructor(
     env: NodeJS.ProcessEnv = process.env,
     transport: typeof fetch = fetch,
+    reader?: RecordingObjectReader,
   ) {
     this.transport = transport;
     this.url = env.LIVEKIT_URL?.trim() ?? '';
@@ -81,20 +89,51 @@ export class LiveKitCloudRecording {
     this.apiSecret = env.LIVEKIT_API_SECRET?.trim() ?? '';
     this.egressOutputDir = env.LIVEKIT_EGRESS_OUTPUT_DIR?.trim() ?? '';
     this.exportDir = env.LIVEKIT_RECORDING_EXPORT_DIR?.trim() ?? '';
+    this.hosted = env.LIVEKIT_RECORDING_MODE === 'cloud' ||
+      (env.LIVEKIT_RECORDING_MODE !== 'local' &&
+        !(this.egressOutputDir && this.exportDir));
+    this.s3Bucket = env.LIVEKIT_RECORDING_S3_BUCKET?.trim() ?? '';
+    this.s3Region = env.LIVEKIT_RECORDING_S3_REGION?.trim() ?? '';
+    this.s3Key = env.LIVEKIT_RECORDING_S3_ACCESS_KEY?.trim() ?? '';
+    this.s3Secret = env.LIVEKIT_RECORDING_S3_SECRET_KEY?.trim() ?? '';
+    this.reader = reader ?? s3RecordingReader({
+      region: this.s3Region || 'us-east-1',
+      accessKeyId: this.s3Key, secretAccessKey: this.s3Secret,
+    });
+  }
+
+  private async refreshRecordedFile(job: Job) {
+    if (this.hosted) {
+      if (job.stopRequested && job.state !== 'failed' && !job.fileKey &&
+          await this.reader.exists(this.s3Bucket, job.expectedKey)) {
+        job.fileKey = job.expectedKey;
+        job.state = 'completed';
+      }
+      return;
+    }
+    await this.refreshLocalFile(job);
   }
 
   get configured(): boolean {
     return Boolean(
       this.url && this.apiKey && this.apiSecret &&
-      path.posix.isAbsolute(this.egressOutputDir) && path.isAbsolute(this.exportDir),
+      (this.hosted
+        ? Boolean(this.s3Bucket && this.s3Region && this.s3Key && this.s3Secret)
+        : path.posix.isAbsolute(this.egressOutputDir) && path.isAbsolute(this.exportDir)),
     );
+  }
+
+  readiness() {
+    return this.configured
+      ? {available: true}
+      : {available: false, reason: this.hosted
+        ? 'LiveKit Cloud Egress needs LIVEKIT_RECORDING_S3_BUCKET/REGION/ACCESS_KEY/SECRET_KEY; bucket settings may remain blank until recording is enabled.'
+        : 'Self-hosted LiveKit Egress needs shared recording directories.'};
   }
 
   private ensureConfigured() {
     if (!this.configured) throw new RecordingConfigurationError(
-      'Self-hosted LiveKit recording requires LIVEKIT_URL, LIVEKIT_API_KEY, ' +
-      'LIVEKIT_API_SECRET, absolute LIVEKIT_EGRESS_OUTPUT_DIR and ' +
-      'absolute LIVEKIT_RECORDING_EXPORT_DIR. Both directories must map to the same host volume.',
+      this.readiness().reason ?? 'LiveKit Egress configuration is incomplete.',
     );
   }
 
@@ -146,12 +185,23 @@ export class LiveKitCloudRecording {
     if (this.job(room) && !['completed', 'failed'].includes(this.job(room)!.state)) {
       throw new RecordingProviderError('A recording is already in progress in this room.');
     }
-    const expectedKey = `${crypto.randomUUID()}.mp4`;
+    const expectedKey = this.hosted
+      ? `flutter-realtime-demo/${crypto.randomUUID()}.mp4`
+      : `${crypto.randomUUID()}.mp4`;
     const payload = {
       room_name: room.providerRoomName,
       template: {layout},
       preset,
-      outputs: [{file: {file_type: 'MP4', filepath: path.posix.join(this.egressOutputDir, expectedKey)}}],
+      outputs: [{
+        file: {
+          file_type: 'MP4',
+          filepath: this.hosted ? expectedKey : path.posix.join(this.egressOutputDir, expectedKey),
+        },
+      }],
+      ...(this.hosted ? {storage: {s3: {
+        access_key: this.s3Key, secret: this.s3Secret,
+        bucket: this.s3Bucket, region: this.s3Region,
+      }}} : {}),
     };
     const response = await this.egress('StartEgress', payload) as RemoteEgress;
     if (!response.egress_id || response.room_name !== room.providerRoomName) {
@@ -182,7 +232,7 @@ export class LiveKitCloudRecording {
     const remote = await this.egress('StopEgress', {egress_id: job.id}) as RemoteEgress;
     job.state = 'processing';
     this.applyRemote(job, remote);
-    await this.refreshLocalFile(job);
+    await this.refreshRecordedFile(job);
     return this.view(job);
   }
 
@@ -204,7 +254,7 @@ export class LiveKitCloudRecording {
         );
         if (remote) this.applyRemote(job, remote);
       }
-      await this.refreshLocalFile(job);
+      await this.refreshRecordedFile(job);
     }
     return this.view(job);
   }
@@ -288,12 +338,25 @@ export class LiveKitCloudRecording {
     if (!/^[0-9a-f-]{36}\.mp4$/.test(filename)) {
       throw new RecordingProviderError('Recording file name is invalid.');
     }
+    if (this.hosted) {
+      if (job.fileKey !== item.filename || !job.fileKey.startsWith('flutter-realtime-demo/')) {
+        throw new RecordingProviderError('Recording storage key mismatch.');
+      }
+      return {
+        kind: 'stream' as const, filename,
+        body: await this.reader.open(this.s3Bucket, item.filename),
+        ...(this.reader.remove ? {afterDownload: async () => {
+          await this.reader.remove!(this.s3Bucket, item.filename);
+          job.fileKey = null;
+        }} : {}),
+      };
+    }
     const absolutePath = path.join(this.exportDir, filename);
     const stats = await fs.lstat(absolutePath);
     if (!stats.isFile() || stats.isSymbolicLink() || stats.size !== job.fileSize) {
       throw new RecordingProviderError('Completed recording file is unavailable.');
     }
-    return {absolutePath, filename};
+    return {kind: 'local' as const, absolutePath, filename};
   }
 
   private view(job: Job) {

@@ -33,6 +33,12 @@ import { registerInteractionRoutes } from './routes/interaction-routes.ts';
 import { registerRoomRoutes } from './routes/room-routes.ts';
 import { registerRecordingRoutes } from './routes/recording-routes.ts';
 import { LiveKitCloudRecording } from './recording/livekit-cloud-recording.ts';
+import { AgoraCloudRecording } from './recording/agora-cloud-recording.ts';
+import { ArtcCloudRecording } from './recording/artc-cloud-recording.ts';
+import { ChimeCloudRecording } from './recording/chime-cloud-recording.ts';
+import { IvsCloudRecording } from './recording/ivs-cloud-recording.ts';
+import { TrtcCloudRecording } from './recording/trtc-cloud-recording.ts';
+import type { CloudRecordingExecutor } from './recording/cloud-recording-executor.ts';
 import { registerChatRoutes } from './routes/chat-routes.ts';
 import { registerLegacyChimeRoutes } from './routes/legacy-chime-routes.ts';
 import { registerDashboardRoutes, type DashboardSelectionState } from './routes/dashboard-routes.ts';
@@ -110,6 +116,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROVIDER_STATE_PATH = process.env.MEDIA_PROVIDER_STATE_PATH ?? path.join(__dirname, '.provider-state.json');
 
 const app = express();
+const trtcCloudRecorder = new TrtcCloudRecording();
 app.set('trust proxy', 1);
 app.use(cors({
   origin: true,
@@ -125,7 +132,22 @@ app.use(cors({
   exposedHeaders: [MEDIA_CONTRACT_HEADER, CHAT_CONTRACT_HEADER],
   maxAge: 600,
 }));
-app.use(express.json({ limit: '64kb' }));
+app.use(express.json({
+  limit: '64kb',
+  verify(req, _res, raw) {
+    // Verify Tencent HMAC using the original bytes, not parsed JSON.
+    if (req.url === '/webhooks/recording/trtc') {
+      (req as Request & {rawBody?: Buffer}).rawBody = Buffer.from(raw);
+    }
+  },
+}));
+app.post('/webhooks/recording/trtc', (req, res) => {
+  const bytes = (req as Request & {rawBody?: Buffer}).rawBody;
+  if (!bytes || !trtcCloudRecorder.receiveCallback(
+    bytes, req.get('Sign') ?? '', req.get('SdkAppId') ?? '',
+  )) return res.sendStatus(403);
+  return res.sendStatus(200);
+});
 app.use((req, res, next) => {
   res.vary('Accept-Language');
   res.locals.language = resolveDemoLanguage(req.get('Accept-Language'));
@@ -394,6 +416,11 @@ app.use('/rooms', (req, res, next) => {
   const isRoomList = req.method === 'GET' && req.path === '/';
   const isRoomDiscovery = req.method === 'GET' && req.path === '/discover';
   const isRoomCleanup = req.method === 'DELETE' && /^\/[^/]+$/.test(req.path);
+  // Export URLs contain a cryptographically random, single-use 60s ticket.
+  // Unlike POST actions, no bearer credential can be attached by url_launcher.
+  const isRecordingExport = req.method === 'GET' &&
+    /^\/[^/]+\/recording\/export\/[^/]+$/.test(req.path);
+  if (isRecordingExport) return requireConnectionsEnabled(req, res, next);
   if (isRoomList || isRoomDiscovery || isRoomCleanup) {
     return requireRoomContract(req, res, next);
   }
@@ -490,7 +517,14 @@ registerLegacyChimeRoutes(app, {
 
 registerRecordingRoutes(app, {
   resolveRoom,
-  recorder: new LiveKitCloudRecording(),
+  recorders: new Map<string, CloudRecordingExecutor>([
+    ['livekit', new LiveKitCloudRecording()],
+    ['trtc', trtcCloudRecorder],
+    ['agora', new AgoraCloudRecording()],
+    ['artc', new ArtcCloudRecording()],
+    ['chime', new ChimeCloudRecording()],
+    ['ivs', new IvsCloudRecording()],
+  ]),
   contractError,
 });
 

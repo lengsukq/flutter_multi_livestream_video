@@ -5,7 +5,7 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 /// Concrete recording controller implementation for [RealtimeRoom].
 ///
 /// Delegates capture to an actual recorder exposed by the media adapter.
-/// Cloud descriptors do not execute vendor server-side recording APIs.
+/// Cloud recordings execute through a backend session, independent of vendor.
 class RoomRecordingController implements MediaRecordingController {
   RoomRecordingController({
     required this.media,
@@ -82,11 +82,10 @@ class RoomRecordingController implements MediaRecordingController {
     final opts = options ?? const RecordingOptions(mode: RecordingMode.local);
     if (opts.mode == RecordingMode.cloud) {
       final cloud = cloudRecordingSession;
-      if (cloud == null || !providerId.toLowerCase().contains('livekit')) {
+      if (cloud == null) {
         throw RealtimeException(
           code: RealtimeErrorCode.unsupportedFeature,
-          message:
-              'Cloud recording V1 requires a LiveKit room and backend executor.',
+          message: 'Cloud recording requires a configured backend executor.',
           providerId: providerId,
         );
       }

@@ -190,5 +190,9 @@
   [
     "POST",
     "/rooms/:code/recording/stop"
+  ],
+  [
+    "POST",
+    "/webhooks/recording/trtc"
   ]
 ]
