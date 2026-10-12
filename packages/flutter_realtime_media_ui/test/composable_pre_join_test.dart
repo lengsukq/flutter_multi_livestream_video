@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
@@ -135,6 +136,134 @@ void main() {
     }
     await tester.binding.setSurfaceSize(null);
   });
+
+  testWidgets(
+    'media controls show checkmark beside switches when permissions are granted',
+    (tester) async {
+      final controller = RealtimePreJoinController(
+        runCheck: () async => _check(role: MediaRole.participant),
+        openPreview: (_, _) async => _Preview(),
+        permissionRequester: const _PermissionRequester(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RealtimePreJoinScope(
+            controller: controller,
+            child: const Scaffold(body: RealtimePreJoinMediaControls()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byIcon(Icons.check_rounded), findsNWidgets(2));
+      expect(find.byIcon(Icons.close_rounded), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'media controls show cross beside switches and trigger request when permission denied',
+    (tester) async {
+      var requestedMic = false;
+      final controller = RealtimePreJoinController(
+        runCheck: () async => _check(role: MediaRole.participant),
+        openPreview: (_, _) async => _Preview(),
+        permissionRequester: _DenyingPermissionRequester(
+          onRequestMic: () => requestedMic = true,
+        ),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RealtimePreJoinScope(
+            controller: controller,
+            child: const Scaffold(body: RealtimePreJoinMediaControls()),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byIcon(Icons.close_rounded), findsNWidgets(2));
+
+      await tester.tap(find.byIcon(Icons.close_rounded).first);
+      await tester.pump();
+      expect(requestedMic, isTrue);
+    },
+  );
+
+  testWidgets('pending macOS-style permission is requested on switch tap and track enabled',
+    (tester) async {
+      final requester = _GrantOnRequest();
+      final controller = RealtimePreJoinController(
+        runCheck: () async => _check(role: MediaRole.participant),
+        openPreview: (_, _) async => _Preview(),
+        permissionRequester: requester,
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      await tester.pumpWidget(MaterialApp(
+        home: RealtimePreJoinScope(
+          controller: controller,
+          child: const Scaffold(body: RealtimePreJoinMediaControls()),
+        ),
+      ));
+      await tester.pump();
+      expect(find.byIcon(Icons.help_outline_rounded), findsNWidgets(2));
+      await tester.tap(find.byType(CupertinoSwitch).first);
+      await tester.pumpAndSettle();
+      expect(controller.permissions[MediaPermissionKind.microphone],
+          MediaPermissionState.granted);
+      expect(controller.preview!.settings.microphoneEnabled, isTrue);
+      await tester.tap(find.byType(CupertinoSwitch).last);
+      await tester.pumpAndSettle();
+      expect(controller.permissions[MediaPermissionKind.camera],
+          MediaPermissionState.granted);
+      expect(controller.preview!.settings.cameraEnabled, isTrue);
+      expect(find.byIcon(Icons.help_outline_rounded), findsNothing);
+    },
+  );
+}
+
+class _GrantOnRequest implements MediaPermissionRequester {
+  final _granted = <MediaPermissionKind>{};
+
+  @override
+  bool get canOpenAppSettings => true;
+  @override
+  Future<bool> openAppSettings() async => true;
+  @override
+  Future<MediaPermissionState> status(MediaPermissionKind kind) async =>
+      _granted.contains(kind) ? MediaPermissionState.granted
+          : MediaPermissionState.unknown;
+  @override
+  Future<MediaPermissionState> request(MediaPermissionKind kind) async {
+    _granted.add(kind);
+    return MediaPermissionState.granted;
+  }
+}
+
+class _DenyingPermissionRequester implements MediaPermissionRequester {
+  const _DenyingPermissionRequester({this.onRequestMic});
+  final VoidCallback? onRequestMic;
+
+  @override
+  bool get canOpenAppSettings => true;
+  @override
+  Future<bool> openAppSettings() async => true;
+  @override
+  Future<MediaPermissionState> status(MediaPermissionKind kind) async =>
+      MediaPermissionState.denied;
+  @override
+  Future<MediaPermissionState> request(MediaPermissionKind kind) async {
+    if (kind == MediaPermissionKind.microphone) {
+      onRequestMic?.call();
+    }
+    return MediaPermissionState.denied;
+  }
 }
 
 MediaPreJoinResult _check({

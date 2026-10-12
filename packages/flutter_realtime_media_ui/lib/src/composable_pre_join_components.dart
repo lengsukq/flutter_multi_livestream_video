@@ -251,8 +251,73 @@ class _RealtimePreJoinReadinessCardState
 }
 
 /// Mic/camera capture switches independent of any toolbar or route.
+///
+/// Automatically displays an inline checkmark or cross status indicator next to
+/// each switch depending on the current permission state, allowing the user to
+/// request access or navigate to app settings directly from the row.
 class RealtimePreJoinMediaControls extends StatelessWidget {
   const RealtimePreJoinMediaControls({super.key});
+
+  Widget? _permissionIndicator({
+    required RealtimePreJoinController controller,
+    required MediaPermissionKind kind,
+    required RealtimeStrings strings,
+  }) {
+    final permission = controller.permissions[kind];
+    if (permission == null || permission == MediaPermissionState.unsupported) {
+      return null;
+    }
+    if (permission == MediaPermissionState.granted) {
+      return Tooltip(
+        message: strings.permissionStateLabel(MediaPermissionState.granted),
+        child: Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: RealtimeUiTokens.iosGreen.withValues(alpha: 0.14),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.check_rounded,
+            size: 13,
+            color: RealtimeUiTokens.iosGreen,
+          ),
+        ),
+      );
+    }
+
+    final isBlocked = permission == MediaPermissionState.permanentlyDenied;
+    final isPending = permission == MediaPermissionState.unknown;
+    return Tooltip(
+      message: isBlocked ? strings.openAppSettings : strings.requestPermission,
+      child: InkWell(
+        onTap: controller.busy
+            ? null
+            : () {
+                if (isBlocked) {
+                  unawaited(controller.openAppSettings());
+                } else {
+                  unawaited(controller.requestPermission(kind));
+                }
+              },
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: (isPending ? RealtimeUiTokens.textMuted : RealtimeUiTokens.danger)
+                .withValues(alpha: 0.14),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            isPending ? Icons.help_outline_rounded : Icons.close_rounded,
+            size: 13,
+            color: isPending ? RealtimeUiTokens.textMuted : RealtimeUiTokens.danger,
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -265,11 +330,37 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
         if (preview == null || controller.result?.role == MediaRole.viewer) {
           return const SizedBox.shrink();
         }
+
+        final micPermission =
+            controller.permissions[MediaPermissionKind.microphone];
+        final micHasPermission =
+            micPermission == null ||
+            micPermission == MediaPermissionState.granted ||
+            micPermission == MediaPermissionState.unsupported;
+        final micBlocked =
+            micPermission == MediaPermissionState.permanentlyDenied;
+
+        final camPermission =
+            controller.permissions[MediaPermissionKind.camera];
+        final camHasPermission =
+            camPermission == null ||
+            camPermission == MediaPermissionState.granted ||
+            camPermission == MediaPermissionState.unsupported;
+        final camBlocked =
+            camPermission == MediaPermissionState.permanentlyDenied;
+
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             RealtimeCupertinoSwitchRow(
               title: Text(strings.microphone),
+              subtitle: !micHasPermission
+                  ? Text(
+                      micBlocked
+                          ? '${strings.permissionStateLabel(micPermission)} · ${strings.openAppSettings}'
+                          : '${strings.permissionStateLabel(micPermission)} · ${strings.requestPermission}',
+                    )
+                  : null,
               leading: Container(
                 width: 28,
                 height: 28,
@@ -283,10 +374,28 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
                   color: RealtimeUiTokens.iosBlue,
                 ),
               ),
-              value: preview.settings.microphoneEnabled,
+              statusWidget: _permissionIndicator(
+                controller: controller,
+                kind: MediaPermissionKind.microphone,
+                strings: strings,
+              ),
+              value: micHasPermission && preview.settings.microphoneEnabled,
               enabled: !controller.busy,
-              onChanged: (enabled) =>
-                  unawaited(controller.setMicrophoneEnabled(enabled)),
+              onChanged: (enabled) {
+                if (!micHasPermission) {
+                  if (micBlocked) {
+                    unawaited(controller.openAppSettings());
+                  } else {
+                    unawaited(
+                      controller.requestPermissionAndEnable(
+                        MediaPermissionKind.microphone,
+                      ),
+                    );
+                  }
+                  return;
+                }
+                unawaited(controller.setMicrophoneEnabled(enabled));
+              },
             ),
             Divider(
               height: 1,
@@ -297,6 +406,13 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
             ),
             RealtimeCupertinoSwitchRow(
               title: Text(strings.camera),
+              subtitle: !camHasPermission
+                  ? Text(
+                      camBlocked
+                          ? '${strings.permissionStateLabel(camPermission)} · ${strings.openAppSettings}'
+                          : '${strings.permissionStateLabel(camPermission)} · ${strings.requestPermission}',
+                    )
+                  : null,
               leading: Container(
                 width: 28,
                 height: 28,
@@ -310,10 +426,26 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
                   color: RealtimeUiTokens.iosTeal,
                 ),
               ),
-              value: preview.settings.cameraEnabled,
+              statusWidget: _permissionIndicator(
+                controller: controller,
+                kind: MediaPermissionKind.camera,
+                strings: strings,
+              ),
+              value: camHasPermission && preview.settings.cameraEnabled,
               enabled: !controller.busy,
-              onChanged: (enabled) =>
-                  unawaited(controller.setCameraEnabled(enabled)),
+              onChanged: (enabled) {
+                if (!camHasPermission) {
+                  if (camBlocked) {
+                    unawaited(controller.openAppSettings());
+                  } else {
+                    unawaited(controller.requestPermissionAndEnable(
+                      MediaPermissionKind.camera,
+                    ));
+                  }
+                  return;
+                }
+                unawaited(controller.setCameraEnabled(enabled));
+              },
             ),
           ],
         );

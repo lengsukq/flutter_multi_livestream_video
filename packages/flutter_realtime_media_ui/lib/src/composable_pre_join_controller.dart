@@ -180,6 +180,22 @@ class RealtimePreJoinController extends ChangeNotifier {
     }
   }
 
+  /// When a switch is tapped, permission granting should immediately turn on
+  /// the requested capture track without requiring a second click.
+  Future<void> requestPermissionAndEnable(MediaPermissionKind kind) async {
+    await requestPermission(kind);
+    if (_disposed || busy ||
+        _permissionStates[kind] != MediaPermissionState.granted) {
+      return;
+    }
+    if (preview == null) await retryPreview();
+    if (kind == MediaPermissionKind.microphone) {
+      await setMicrophoneEnabled(true);
+    } else {
+      await setCameraEnabled(true);
+    }
+  }
+
   Future<bool> openAppSettings() => _permissions.openAppSettings();
 
   MediaPreJoinResult _withPermissionStates(

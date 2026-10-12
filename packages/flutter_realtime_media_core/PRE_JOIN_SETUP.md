@@ -34,20 +34,21 @@ description, and Podfile configuration.
 
 ### macOS and other desktop hosts
 
-`permission_handler` does not reliably report camera/microphone TCC status on
-macOS through this project's default permission probe. For desktop targets,
-the probe returns `MediaPermissionState.unknown` (not `unsupported`), because
-an unreadable permission status is not evidence that a physical device or
-provider SDK cannot capture. Pre-Join permission checks remain advisory under
-the default recommended media requirements. Confirm real access by enabling
-the camera/microphone in the preview or by a provider capture test.
+On macOS, `flutter_realtime_media_core` registers a provider-neutral native
+AVFoundation channel. The default permission probe reads camera/microphone TCC
+status and requests access when a user taps a Pre-Join switch or permission
+indicator. Tapping a switch requests access and enables the track if granted.
+Before the first decision the status is `unknown`, not `denied`.
+Already-denied access requires System Settings > Privacy & Security to grant
+permission. Windows/Linux targets without this native bridge retain `unknown`
+status and rely on provider capture for actual device availability.
 
 macOS host applications need `NSCameraUsageDescription` and
 `NSMicrophoneUsageDescription` in their Runner Info.plist, and sandboxed apps
 need the `com.apple.security.device.camera` and
 `com.apple.security.device.audio-input` entitlements in both DebugProfile and
-Release configurations. The example app already declares these. macOS may
-show an OS permission prompt when the capture API first starts; if it was
-previously denied, review System Settings > Privacy & Security > Camera /
-Microphone for the application. Capture support ultimately depends on the
-selected provider's desktop adapter and available hardware.
+Release configurations. The example app already declares these. Run
+`flutter pub get` and rebuild the macOS app after updating the SDK to ensure
+the native plugin is registered. If previously denied, review System Settings
+> Privacy & Security > Camera / Microphone for the application's bundle ID.
+Capture support depends on the provider's desktop adapter and hardware.

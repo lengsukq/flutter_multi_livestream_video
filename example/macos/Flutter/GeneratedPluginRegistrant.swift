@@ -11,6 +11,7 @@ import device_info_plus
 import flutter_realtime_chat_agora
 import flutter_realtime_media_artc
 import flutter_realtime_media_aws_desktop
+import flutter_realtime_media_core
 import flutter_realtime_media_livekit
 import flutter_realtime_screen_annotation
 import flutter_realtime_video_effects
@@ -29,6 +30,7 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   AgoraChatMacOSPlugin.register(with: registry.registrar(forPlugin: "AgoraChatMacOSPlugin"))
   FlutterRealtimeMediaArtcPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaArtcPlugin"))
   FlutterRealtimeMediaAwsDesktopPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaAwsDesktopPlugin"))
+  FlutterRealtimeMediaCorePlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaCorePlugin"))
   FlutterRealtimeMediaLivekitPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaLivekitPlugin"))
   FlutterRealtimeScreenAnnotationPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeScreenAnnotationPlugin"))
   FlutterRealtimeVideoEffectsPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeVideoEffectsPlugin"))

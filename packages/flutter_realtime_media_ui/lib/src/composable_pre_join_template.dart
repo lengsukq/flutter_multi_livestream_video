@@ -58,7 +58,6 @@ class RealtimeComposablePreJoinTemplate extends StatelessWidget {
               final settings = Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const RealtimePreJoinPermissions(),
                   const RealtimePreJoinMediaControls(),
                   const RealtimePreJoinDevicePicker(
                     kind: MediaDeviceKind.microphone,

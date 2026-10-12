@@ -922,7 +922,8 @@ private final class AwsDesktopRuntime: NSObject,
 
   private func ensureIvsChatBridge(completion: @escaping (Error?) -> Void) {
     ensurePackageScript(
-      "assets/provider_web_runtime/vendors/realtime-chat-provider-bridge.js",
+      "assets/ivs-chat-provider.js",
+      fromPackage: "flutter_realtime_provider_ivs_chat",
       expectedGlobal: "IvsChatMessagingBridge",
       completion: completion
     )
@@ -935,17 +936,18 @@ private final class AwsDesktopRuntime: NSObject,
     let vendorAsset: String
     switch provider {
     case .chime:
-      vendorAsset = "assets/provider_web_runtime/vendors/chime-sdk.js"
+      vendorAsset = "assets/chime-sdk.js"
     case .ivs:
-      vendorAsset = "assets/provider_web_runtime/vendors/amazon-ivs-web-broadcast.js"
+      vendorAsset = "assets/amazon-ivs-web-broadcast.js"
     }
-    ensurePackageScript(vendorAsset) { error in
+    ensurePackageScript(vendorAsset, fromPackage: "flutter_realtime_provider_aws") { error in
       if let error {
         completion(error)
         return
       }
       self.ensurePackageScript(
-        "assets/provider_web_runtime/media-provider-bridge.js",
+        "assets/media-provider-bridge.js",
+        fromPackage: "flutter_realtime_media_web",
         expectedGlobal: "MediaProviderBridge",
         completion: completion
       )
@@ -954,27 +956,31 @@ private final class AwsDesktopRuntime: NSObject,
 
   private func ensurePackageScript(
     _ asset: String,
+    fromPackage package: String,
     expectedGlobal: String? = nil,
     completion: @escaping (Error?) -> Void
   ) {
+    // Cache by both package and asset: provider packages can contain files
+    // with identical relative paths after the SDK was split into modules.
+    let scriptKey = "\(package)/\(asset)"
     ensureReady { error in
       if let error {
         completion(error)
         return
       }
-      if self.loadedPackageScripts.contains(asset) {
+      if self.loadedPackageScripts.contains(scriptKey) {
         completion(nil)
         return
       }
-      self.packageScriptWaiters[asset, default: []].append(completion)
-      guard self.loadingPackageScripts.insert(asset).inserted else { return }
+      self.packageScriptWaiters[scriptKey, default: []].append(completion)
+      guard self.loadingPackageScripts.insert(scriptKey).inserted else { return }
 
       do {
-        let source = try self.packageAssetText(asset)
+        let source = try self.packageAssetText(asset, fromPackage: package)
         let encodedSource = Data(source.utf8).base64EncodedString()
         guard let webView = self.webView else {
-          self.finishPackageScript(asset, error: AwsDesktopError.runtimeInitialization(
-            "AWS desktop WebKit runtime is unavailable while loading \(asset)."
+          self.finishPackageScript(scriptKey, error: AwsDesktopError.runtimeInitialization(
+            "AWS desktop WebKit runtime is unavailable while loading \(scriptKey)."
           ))
           return
         }
@@ -1001,17 +1007,17 @@ private final class AwsDesktopRuntime: NSObject,
               contentWorld: .page
             ) as? Bool ?? false
             self.finishPackageScript(
-              asset,
+              scriptKey,
               error: loaded ? nil : AwsDesktopError.runtimeInitialization(
-                "The bundled JavaScript bridge did not initialize: \(asset)."
+                "The bundled JavaScript bridge did not initialize: \(scriptKey)."
               )
             )
           } catch {
-            self.finishPackageScript(asset, error: error)
+            self.finishPackageScript(scriptKey, error: error)
           }
         }
       } catch {
-        self.finishPackageScript(asset, error: error)
+        self.finishPackageScript(scriptKey, error: error)
       }
     }
   }
@@ -1169,10 +1175,10 @@ private final class AwsDesktopRuntime: NSObject,
       """
   }
 
-  private func packageAssetText(_ asset: String) throws -> String {
+  private func packageAssetText(_ asset: String, fromPackage package: String) throws -> String {
     let key = registrar.lookupKey(
       forAsset: asset,
-      fromPackage: "flutter_realtime_sdk"
+      fromPackage: package
     )
     let mainBundleURL = Bundle.main.bundleURL
     let appBundleURL = mainBundleURL.lastPathComponent == "Contents"
@@ -1186,7 +1192,7 @@ private final class AwsDesktopRuntime: NSObject,
     guard let url = candidates.compactMap({ $0 }).first(where: {
       FileManager.default.fileExists(atPath: $0.path)
     }) else {
-      throw AwsDesktopError.assetMissing(asset)
+      throw AwsDesktopError.assetMissing("\(package)/\(asset)")
     }
     return try String(contentsOf: url, encoding: .utf8)
   }

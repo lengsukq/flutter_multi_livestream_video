@@ -812,6 +812,7 @@ class RealtimeCupertinoSwitchRow extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.leading,
+    this.statusWidget,
     required this.value,
     this.onChanged,
     this.enabled = true,
@@ -820,6 +821,7 @@ class RealtimeCupertinoSwitchRow extends StatelessWidget {
   final Widget title;
   final Widget? subtitle;
   final Widget? leading;
+  final Widget? statusWidget;
   final bool value;
   final ValueChanged<bool>? onChanged;
   final bool enabled;
@@ -864,6 +866,10 @@ class RealtimeCupertinoSwitchRow extends StatelessWidget {
               ],
             ),
           ),
+          if (statusWidget != null) ...[
+            statusWidget!,
+            const SizedBox(width: 8),
+          ],
           CupertinoSwitch(
             value: value,
             activeTrackColor: RealtimeUiTokens.iosGreen,

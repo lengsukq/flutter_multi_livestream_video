@@ -1,5 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart' as permissions;
+
+const _macOSPermissionChannel = MethodChannel(
+  'flutter_realtime_media_core/permissions',
+);
 
 enum MediaPermissionKind { microphone, camera }
 
@@ -44,6 +49,8 @@ class DefaultMediaPermissionProbe
     implements MediaPermissionProbe, MediaPermissionRequester {
   const DefaultMediaPermissionProbe();
 
+  bool get _isMacOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+
   bool get _isSupportedPlatform =>
       kIsWeb ||
       defaultTargetPlatform == TargetPlatform.android ||
@@ -57,6 +64,7 @@ class DefaultMediaPermissionProbe
 
   @override
   Future<MediaPermissionState> status(MediaPermissionKind kind) async {
+    if (_isMacOS) return _macOSPermission('status', kind);
     // permission_handler does not expose a reliable desktop permission
     // status. That is *unknown*, not proof that the device is unavailable.
     // Desktop media adapters own actual capture and device enumeration.
@@ -68,8 +76,34 @@ class DefaultMediaPermissionProbe
     }
   }
 
+  Future<MediaPermissionState> _macOSPermission(
+    String method,
+    MediaPermissionKind kind,
+  ) async {
+    try {
+      final result = await _macOSPermissionChannel.invokeMethod<String>(
+        method,
+        {'kind': kind.name},
+      );
+      return switch (result) {
+        'granted' => MediaPermissionState.granted,
+        'denied' => MediaPermissionState.denied,
+        'permanentlyDenied' => MediaPermissionState.permanentlyDenied,
+        'restricted' => MediaPermissionState.restricted,
+        _ => MediaPermissionState.unknown,
+      };
+    } on MissingPluginException {
+      // Embedders without this SDK's macOS plugin remain usable, but cannot
+      // claim device permission is known or granted.
+      return MediaPermissionState.unknown;
+    } on PlatformException {
+      return MediaPermissionState.unknown;
+    }
+  }
+
   @override
   Future<MediaPermissionState> request(MediaPermissionKind kind) async {
+    if (_isMacOS) return _macOSPermission('request', kind);
     // Do not misreport desktop hardware as unsupported or pretend that we
     // granted access when no platform permission API was called.
     if (!_isSupportedPlatform) return MediaPermissionState.unknown;
@@ -100,12 +134,19 @@ class DefaultMediaPermissionProbe
   bool get canOpenAppSettings =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+          defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
 
   @override
   Future<bool> openAppSettings() async {
     if (!canOpenAppSettings) return false;
     try {
+      if (_isMacOS) {
+        return await _macOSPermissionChannel.invokeMethod<bool>(
+              'openSettings',
+            ) ??
+            false;
+      }
       return await permissions.openAppSettings();
     } catch (_) {
       return false;

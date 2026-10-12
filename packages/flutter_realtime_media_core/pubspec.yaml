@@ -16,6 +16,12 @@ dependencies:
   http: ^1.6.0
   permission_handler: ^13.0.2
 
+flutter:
+  plugin:
+    platforms:
+      macos:
+        pluginClass: FlutterRealtimeMediaCorePlugin
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

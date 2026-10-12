@@ -151,12 +151,7 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
             ),
           ),
           const SizedBox(height: 14),
-          RealtimeInsetGroup(
-            children: const [
-              RealtimePreJoinPermissions(),
-              RealtimePreJoinMediaControls(),
-            ],
-          ),
+          RealtimeInsetGroup(children: const [RealtimePreJoinMediaControls()]),
           const SizedBox(height: 12),
           RealtimeInsetGroup(
             children: const [
