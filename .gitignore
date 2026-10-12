@@ -45,6 +45,7 @@ packages/*/pubspec.lock
 .pub-cache/
 .pub/
 build/
+/dist/
 .build/
 .swiftpm/
 .gradle/

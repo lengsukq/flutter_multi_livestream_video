@@ -54,3 +54,51 @@ The separate macOS CI job sets this override; iOS retains its existing SwiftPM
 configuration and device-target build. Flutter project/global configuration has
 higher priority than the environment override. Do not change user-wide settings
 just to run this check.
+
+## Apple Silicon release installer and Applications installation
+
+Use an **Apple Silicon Mac** with Flutter, Xcode, CocoaPods, and the Demo's Dart
+dependencies installed. On first checkout, resolve packages from `example/`:
+
+```sh
+cd example
+flutter pub get
+cd ..
+```
+
+From the **repository root**, run:
+
+```sh
+./build_macos_arm64.command
+./build_macos_arm64.command --skip-build
+```
+
+Or double-click `build_macos_arm64.command` in Finder. It automatically builds
+the Demo, creates the DMG, installs/replaces the same application in
+`/Applications`, and opens it. If necessary, enable execution once with
+`chmod +x build_macos_arm64.command`. The shell entry point invokes the internal
+Python packaging utility; you do not need to run a `.py` file yourself.
+
+The command builds `example/` in Release mode through
+`scripts/build_flutter_macos.py --release --no-pub` (temporarily using CocoaPods
+without changing global Flutter settings), validates that the main executable
+contains an **arm64 slice**, and writes a compressed DMG under `dist/macos/`.
+The DMG contains the `.app` and an `Applications` shortcut for drag-and-drop.
+The default `.command` invocation copies the `.app` into `/Applications` and
+replaces existing installations of the same application. Replacement is refused for a
+different bundle identifier or symlink and stages the new app before swapping
+it into place. Close the previous Demo app before replacing it.
+
+The command launches the installed app; `--skip-build` packages the latest
+existing Release artifact without rebuilding. If `/Applications` is not writable
+for your account, either use the DMG's drag-and-drop install in Finder (macOS
+will request authorization if necessary) or pass
+`./build_macos_arm64.command --applications-dir ~/Applications` after creating
+that directory.
+Do not run the Flutter build itself with `sudo`.
+
+This is a **development DMG**, not a signed/notarized public distribution.
+macOS Gatekeeper may require additional approval on other machines. Build
+validation proves the main executable supports arm64; it does not replace
+device-level tests of bundled media plugins, microphone/camera permissions,
+or backend connectivity.

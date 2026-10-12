@@ -20,8 +20,6 @@ dependencies:
     sdk: flutter
   flutter_realtime_sdk:
     path: ../packages/flutter_realtime_sdk
-  flutter_realtime_recorder_native:
-    path: ../packages/flutter_realtime_recorder_native
   flutter_realtime_classroom_preset:
     path: ../packages/flutter_realtime_classroom_preset
   flutter_realtime_live_preset:

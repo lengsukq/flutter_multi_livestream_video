@@ -69,8 +69,6 @@ For four independent integration patterns and a custom feature plugin, see
 
 See [纯功能 SDK 接入与 UI 可选指南](doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) for API, lifecycle, permissions, RTC/IM members and snippets; **no separate Headless Demo is maintained**.
 
-Local recording: [真实本地录制支持范围、Web 下载、Native 文件导出、限制与验收](doc/LOCAL_RECORDING.md). Native recording remains pending device E2E acceptance.
-
 Cloud recording: [供应商托管的 Agora、LiveKit Cloud、TRTC VOD、Alibaba ARTC、AWS Chime 与 AWS IVS+MediaConvert 云录制/MP4 下载](doc/CLOUD_RECORDING.md). The Flutter SDK owns only provider-neutral start/stop/status/download methods; Demo Server calls vendor APIs and streams completed cloud files to users. **No Linux recording workers, local Java Recording SDK or server-side media encoding.** Buckets may be left blank until recording is enabled. IVS native HLS output is converted to MP4 by AWS MediaConvert (additional cloud configuration needed). End-to-end recording with real vendor credentials and storage remains to be tested.
 
 ## Architecture and behavior
@@ -101,6 +99,24 @@ Build the Demo from `example`. For macOS, use the project-local helper:
 ```sh
 python3 scripts/build_flutter_macos.py --release --no-pub
 ```
+
+To build an **Apple Silicon (arm64-compatible) macOS installer DMG** from the
+repository root, and optionally install the Demo to `/Applications`:
+
+```sh
+./build_macos_arm64.command                  # Build, package, install and launch
+./build_macos_arm64.command --skip-build     # Package and install an existing Release app
+```
+
+Double-click `build_macos_arm64.command` in Finder for the same build/install
+flow. Run `chmod +x build_macos_arm64.command` once if your checkout does not
+preserve the executable bit. This entry point reuses the CocoaPods-aware helper,
+verifies the built executable
+contains `arm64`, and packages an Applications shortcut into the DMG. It builds
+the **Demo**, not an SDK framework. Dependencies should already be resolved in
+`example/` (`flutter pub get` there if needed). No Apple signing or notarization
+is performed; this is a local/development distribution package. More details
+and install permission alternatives are in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 See [SDK architecture and error handling](doc/SDK_CODE_QUALITY.md), [provider integration](doc/PROVIDER_ADAPTER_GUIDE.md), [lightweight composition](doc/LIGHTWEIGHT_SDK.md), [capability matrix](SDK_CAPABILITY_MATRIX.zh-CN.md) and [acceptance boundaries](doc/INTERACTION_ACCEPTANCE.md).
 
