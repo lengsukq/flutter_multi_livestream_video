@@ -29,6 +29,11 @@ class WhiteboardStrings {
       'stopSharing': ['停止共享', 'Stop Sharing'],
       'prevPage': ['上一页', 'Previous page'],
       'nextPage': ['下一页', 'Next page'],
+      'color': ['颜色', 'Color'],
+      'selectColor': ['选择颜色', 'Select Color'],
+      'customColor': ['自定义颜色', 'Custom Color'],
+      'moreColors': ['更多颜色', 'More colors'],
+      'confirm': ['确定', 'Confirm'],
     };
     return words[key]?[zh ? 0 : 1] ?? key;
   }

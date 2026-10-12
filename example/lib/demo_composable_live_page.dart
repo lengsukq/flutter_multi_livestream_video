@@ -205,65 +205,12 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
   }
 
   void _openHostToolsSheet(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isZh = RealtimeStrings.of(context).isZh;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => RealtimeRoomUiScope(
+    unawaited(
+      showRealtimeHostToolsBottomSheet(
+        context,
         room: widget.room,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withValues(alpha: 0.4),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Text(
-                  isZh ? '主播工具' : 'Host Tools',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    FutureBuilder<List<MediaBackgroundImagePreset>>(
-                      future: _presets,
-                      builder: (context, snapshot) =>
-                          RealtimeBackgroundEffectsButton(
-                            imagePresets: snapshot.data ?? const [],
-                          ),
-                    ),
-                    const RealtimeScreenShareButton(),
-                    const RealtimeAudioOutputButton(),
-                    DemoRecordingButton(room: widget.room),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+        imagePresetsFuture: _presets,
+        extraTools: [DemoRecordingButton(room: widget.room)],
       ),
     );
   }

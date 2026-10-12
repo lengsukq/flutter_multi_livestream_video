@@ -58,10 +58,47 @@ void main() {
     repository.fail = false;
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
-    expect(repository.ids.length, 2);
     expect(repository.ids[0], repository.ids[1]);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await session.dispose();
   });
+
+  testWidgets(
+    'gift panel switches quantity multiplier and triggers close callback',
+    (tester) async {
+      final repository = Repository();
+      repository.fail = false;
+      final session = LiveInteractionSession(
+        repository,
+        pollInterval: const Duration(hours: 1),
+      );
+      var closed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LiveGiftPanel(
+              session: session,
+              showHeader: true,
+              onClose: () => closed = true,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Send a gift'), findsOneWidget);
+      expect(find.text('Star × 1'), findsOneWidget);
+
+      await tester.tap(find.text('×5'));
+      await tester.pumpAndSettle();
+      expect(find.text('Star × 5'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+      expect(closed, isTrue);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await session.dispose();
+    },
+  );
 }

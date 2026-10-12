@@ -668,13 +668,21 @@ class _RealtimeClassroomQuestionComposerState
                 style: TextStyle(fontSize: 14, color: style.text),
                 decoration: InputDecoration(
                   isDense: true,
+                  filled: false,
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
                   hintText: strings.askQuestionHint,
                   hintStyle: TextStyle(
                     fontSize: 14,
                     color: style.textMuted.withValues(alpha: 0.7),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 9,
+                    horizontal: 2,
+                  ),
                 ),
               ),
             ),

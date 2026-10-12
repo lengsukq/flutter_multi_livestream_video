@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'annotation_surface.dart';
+import 'annotation_toolbar.dart';
 import 'shared_content_stage_bar.dart';
 import 'whiteboard_strings.dart';
 
@@ -18,6 +19,9 @@ class WhiteboardView extends StatefulWidget {
 class _WhiteboardViewState extends State<WhiteboardView> {
   Object? _error;
   bool _busy = false;
+  AnnotationTool _tool = AnnotationTool.pen;
+  int _selectedColor = 0xff1e293b;
+  bool _drawingEnabled = true;
   @override
   void initState() {
     super.initState();
@@ -110,6 +114,32 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               onStop: widget.onStop,
             ),
           ),
+          if (state.canEdit)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+              child: AnnotationToolbar(
+                tool: _tool,
+                drawingEnabled: _drawingEnabled,
+                fixedTop: true,
+                showDragHandle: false,
+                showDrawingToggle: false,
+                selectedColor: _selectedColor,
+                onColorChanged: (c) => setState(() => _selectedColor = c),
+                canEdit: !_busy,
+                canUndo: !_busy,
+                canClear: !_busy,
+                canClose: false,
+                onToolChanged: (tool) => setState(() {
+                  _tool = tool;
+                  _drawingEnabled = true;
+                }),
+                onDrawingToggle: () => setState(() {
+                  _drawingEnabled = !_drawingEnabled;
+                }),
+                onUndo: () => _run(widget.session.undo),
+                onClear: () => _run(widget.session.clear),
+              ),
+            ),
           if (_error != null)
             Text(
               '$_error',
@@ -142,6 +172,10 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                       child: AnnotationSurface(
                         key: ValueKey(state.canvas.canvasId),
                         session: widget.session,
+                        tool: _tool,
+                        selectedColor: _selectedColor,
+                        drawingEnabled: _drawingEnabled,
+                        toolbarPlacement: AnnotationToolbarPlacement.none,
                         background: const ColoredBox(color: Colors.white),
                       ),
                     ),

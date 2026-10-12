@@ -368,6 +368,8 @@ extension _RoomChatRendering on _MediaRoomViewState {
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14,

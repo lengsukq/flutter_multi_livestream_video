@@ -165,9 +165,12 @@ class ChatSearchField extends StatelessWidget {
             fontSize: 13.5,
             color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
           ),
+          filled: false,
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
         ),
       ),
     );
@@ -692,23 +695,16 @@ class _ChatComposerState extends State<ChatComposer> {
 
           // iOS style pill input capsule
           Container(
-            padding: const EdgeInsets.fromLTRB(14, 4, 6, 4),
+            padding: const EdgeInsets.fromLTRB(14, 2, 6, 2),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.12)
-                    : Colors.black.withValues(alpha: 0.08),
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Colors.black.withValues(alpha: 0.06),
                 width: 0.8,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -724,7 +720,12 @@ class _ChatComposerState extends State<ChatComposer> {
                     style: const TextStyle(fontSize: 14),
                     decoration: InputDecoration(
                       isDense: true,
+                      filled: false,
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
                       hintText: widget.hintText ?? (zh ? '发消息...' : 'Message'),
                       hintStyle: TextStyle(
                         fontSize: 14,
@@ -732,7 +733,10 @@ class _ChatComposerState extends State<ChatComposer> {
                           alpha: 0.6,
                         ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 9,
+                        horizontal: 2,
+                      ),
                     ),
                   ),
                 ),

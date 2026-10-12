@@ -180,14 +180,94 @@ void main() {
       ),
     );
     expect(find.byType(RealtimeVideoTile), findsOneWidget);
-    expect(
-      tester
-          .widget<RealtimeVideoTile>(find.byType(RealtimeVideoTile))
-          .participant
-          .id,
-      'host',
+    final tile = tester.widget<RealtimeVideoTile>(
+      find.byType(RealtimeVideoTile),
     );
+    expect(tile.participant.id, 'host');
+    expect(tile.showNameTag, isFalse);
+    expect(tile.borderless, isTrue);
+    expect(find.text('Broadcaster'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(
+            body: RealtimeLiveVideoStage(showNameTag: true),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Broadcaster'), findsOneWidget);
   });
+
+  testWidgets('RealtimeHostToolsPanel renders host tools and extra tools', (
+    tester,
+  ) async {
+    final media = _FakeMediaSession();
+    final room = _room(media);
+    addTearDown(room.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(
+            body: RealtimeHostToolsPanel(
+              showHeader: true,
+              extraTools: [Text('CustomRecordingTool')],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(RealtimeHostToolsPanel), findsOneWidget);
+    expect(find.text('Host Tools'), findsOneWidget);
+    expect(find.text('Switch Camera'), findsOneWidget);
+    expect(find.text('Screen Share'), findsOneWidget);
+    expect(find.text('Audio Output'), findsOneWidget);
+    expect(find.text('CustomRecordingTool'), findsOneWidget);
+  });
+
+  testWidgets(
+    'showRealtimeHostToolsBottomSheet opens and closes bottom sheet',
+    (tester) async {
+      final media = _FakeMediaSession();
+      final room = _room(media);
+      addTearDown(room.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => showRealtimeHostToolsBottomSheet(
+                  context,
+                  room: room,
+                  extraTools: const [Text('SheetExtraTool')],
+                ),
+                child: const Text('OpenHostTools'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('OpenHostTools'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RealtimeHostToolsPanel), findsOneWidget);
+      expect(find.text('SheetExtraTool'), findsOneWidget);
+
+      // Tap close button in header
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RealtimeHostToolsPanel), findsNothing);
+    },
+  );
 
   testWidgets('chat widgets inside a media room share one chat subscription', (
     tester,

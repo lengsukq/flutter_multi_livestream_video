@@ -4,10 +4,19 @@ import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
 IconData _icon(String key) => switch (key) {
-  'flower' => Icons.local_florist,
+  'flower' => Icons.local_florist_rounded,
   'star' => Icons.star_rounded,
-  _ => Icons.celebration,
+  'applause' => Icons.celebration_rounded,
+  _ => Icons.card_giftcard_rounded,
 };
+
+Color _giftColor(String key) => switch (key) {
+  'flower' => const Color(0xFFEC4899),
+  'star' => const Color(0xFFF59E0B),
+  'applause' => const Color(0xFF3B82F6),
+  _ => const Color(0xFF8B5CF6),
+};
+
 String _name(BuildContext context, LiveGift gift) {
   if (Localizations.localeOf(context).languageCode != 'zh') return gift.name;
   return switch (gift.id) {
@@ -22,8 +31,17 @@ String _text(BuildContext context, String zh, String en) =>
     Localizations.localeOf(context).languageCode == 'zh' ? zh : en;
 
 class LiveGiftPanel extends StatefulWidget {
-  const LiveGiftPanel({super.key, required this.session});
+  const LiveGiftPanel({
+    super.key,
+    required this.session,
+    this.showHeader = true,
+    this.onClose,
+  });
+
   final LiveInteractionSession session;
+  final bool showHeader;
+  final VoidCallback? onClose;
+
   @override
   State<LiveGiftPanel> createState() => _LiveGiftPanelState();
 }
@@ -34,6 +52,7 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
   Object? _error;
   ({String giftId, int quantity, String eventId})? _retry;
   StreamSubscription<Object>? _errors;
+
   @override
   void initState() {
     super.initState();
@@ -92,107 +111,622 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
     initialData: widget.session.state,
     builder: (context, snapshot) {
       final state = snapshot.data;
-      return ListView(
-        padding: const EdgeInsets.all(20),
+      final style = RealtimeStyle.of(context);
+
+      return Column(
         children: [
-          Text(
-            _text(context, '赠送礼物', 'Send a gift'),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          Text(
-            _text(
-              context,
-              '演示礼物，不扣费、不涉及支付。',
-              'Demo gifts. No payment or balance deduction.',
-            ),
-          ),
-          if (_error != null) ...[
-            Text(
-              '$_error',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            TextButton(
-              onPressed: _busy
-                  ? null
-                  : _retry == null
-                  ? _refresh
-                  : () => _send(_retry!.giftId, retry: true),
-              child: Text(_text(context, '重试', 'Retry')),
-            ),
-          ],
-          if (state == null && _error == null)
-            const Center(child: CircularProgressIndicator()),
-          if (_busy) const LinearProgressIndicator(),
-          if (state != null) ...[
-            if (!state.canSendGift)
-              Text(_text(context, '主播暂时离线', 'Host is offline')),
-            Row(
-              children: [
-                Text(_text(context, '数量', 'Quantity')),
-                const SizedBox(width: 16),
-                DropdownButton<int>(
-                  value: _quantity,
-                  items: [1, 5, 10, 20]
-                      .map((q) => DropdownMenuItem(value: q, child: Text('$q')))
-                      .toList(),
-                  onChanged: _busy
-                      ? null
-                      : (value) => setState(() => _quantity = value ?? 1),
-                ),
-              ],
-            ),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                for (final gift in state.catalog)
-                  FilledButton.tonalIcon(
-                    onPressed: _busy || !state.canSendGift
-                        ? null
-                        : () => _send(gift.id),
-                    icon: Icon(_icon(gift.icon)),
-                    label: Text('${_name(context, gift)} × $_quantity'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final gift in state.catalog)
-                  Chip(
-                    avatar: Icon(_icon(gift.icon), size: 18),
-                    label: Text(
-                      '${_name(context, gift)} ${state.totals[gift.id] ?? 0}',
+          if (widget.showHeader) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 12, 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: style.primarySubtle,
+                      borderRadius: BorderRadius.circular(
+                        RealtimeUiTokens.compactRadius,
+                      ),
+                      border: Border.all(color: style.primaryBorder),
+                    ),
+                    child: Icon(
+                      Icons.card_giftcard_rounded,
+                      color: style.primary,
+                      size: 18,
                     ),
                   ),
-              ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _text(context, '赠送礼物', 'Send a gift'),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: style.text,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    color: style.textMuted,
+                    splashRadius: 18,
+                    onPressed:
+                        widget.onClose ??
+                        () => Navigator.maybeOf(context)?.pop(),
+                  ),
+                ],
+              ),
             ),
-            const Divider(),
-            for (final event in state.events.reversed)
-              ListTile(
-                leading: Icon(
-                  _icon(
-                    state.catalog
-                            .where((g) => g.id == event.giftId)
-                            .firstOrNull
-                            ?.icon ??
-                        '',
+            Divider(color: style.border, height: 1),
+          ],
+          if (_busy)
+            LinearProgressIndicator(
+              minHeight: 2,
+              color: style.primary,
+              backgroundColor: style.primarySubtle,
+            ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: style.surfaceSubtle,
+                    borderRadius: BorderRadius.circular(
+                      RealtimeUiTokens.compactRadius,
+                    ),
+                    border: Border.all(color: style.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 15,
+                        color: style.textMuted,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _text(
+                            context,
+                            '演示礼物，不扣费、不涉及支付。',
+                            'Demo gifts. No payment or balance deduction.',
+                          ),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: style.textMuted,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                title: Text(event.displayName),
-                subtitle: Text(
-                  '${_name(context, state.catalog.firstWhere(
-                    (g) => g.id == event.giftId,
-                    orElse: () => LiveGift(id: event.giftId, name: event.giftId, icon: ''),
-                  ))} × ${event.quantity}',
-                ),
-              ),
-          ],
+                if (_error != null) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: style.dangerSubtle,
+                      borderRadius: BorderRadius.circular(
+                        RealtimeUiTokens.compactRadius,
+                      ),
+                      border: Border.all(
+                        color: style.danger.withValues(alpha: 0.25),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.error_outline_rounded,
+                          size: 18,
+                          color: style.danger,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '$_error',
+                            style: TextStyle(
+                              color: style.danger,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _busy
+                              ? null
+                              : _retry == null
+                              ? _refresh
+                              : () => _send(_retry!.giftId, retry: true),
+                          child: Text(_text(context, '重试', 'Retry')),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (state == null && _error == null)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 40),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                if (state != null) ...[
+                  if (!state.canSendGift) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: RealtimeUiTokens.iosOrange.withValues(
+                          alpha: 0.12,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          RealtimeUiTokens.compactRadius,
+                        ),
+                        border: Border.all(
+                          color: RealtimeUiTokens.iosOrange.withValues(
+                            alpha: 0.3,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.wifi_off_rounded,
+                            size: 16,
+                            color: RealtimeUiTokens.iosOrange,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _text(context, '主播暂时离线', 'Host is offline'),
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: RealtimeUiTokens.iosOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.tune_rounded,
+                          size: 14,
+                          color: style.textMuted,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _text(context, '选择数量', 'Quantity'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: style.textMuted,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      for (final q in [1, 5, 10, 20]) ...[
+                        Expanded(
+                          child: RealtimeGlassPressable(
+                            onTap: _busy
+                                ? null
+                                : () => setState(() => _quantity = q),
+                            borderRadius: RealtimeUiTokens.pillRadius,
+                            child: AnimatedContainer(
+                              duration: RealtimeUiTokens.animFast,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: _quantity == q
+                                    ? style.primary
+                                    : style.surfaceSubtle,
+                                borderRadius: BorderRadius.circular(
+                                  RealtimeUiTokens.pillRadius,
+                                ),
+                                border: Border.all(
+                                  color: _quantity == q
+                                      ? style.primary
+                                      : style.border,
+                                  width: _quantity == q ? 1.5 : 1.0,
+                                ),
+                                boxShadow: _quantity == q
+                                    ? [
+                                        BoxShadow(
+                                          color: style.primary.withValues(
+                                            alpha: 0.28,
+                                          ),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              child: Text(
+                                '×$q',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: _quantity == q
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: _quantity == q
+                                      ? Colors.white
+                                      : style.text,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (q != 20) const SizedBox(width: 8),
+                      ],
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 18, bottom: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.card_giftcard_rounded,
+                          size: 14,
+                          color: style.textMuted,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _text(context, '点击赠送', 'Choose & Send'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: style.textMuted,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final gift in state.catalog)
+                        _buildGiftCard(
+                          context,
+                          gift: gift,
+                          state: state,
+                          style: style,
+                        ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 20, bottom: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.bar_chart_rounded,
+                          size: 14,
+                          color: style.textMuted,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _text(context, '本场打赏统计', 'Gift Totals'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: style.textMuted,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final gift in state.catalog)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: style.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(
+                              RealtimeUiTokens.pillRadius,
+                            ),
+                            border: Border.all(color: style.border),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _icon(gift.icon),
+                                size: 15,
+                                color: _giftColor(gift.id),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _name(context, gift),
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: style.text,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1.5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: style.primarySubtle,
+                                  borderRadius: BorderRadius.circular(
+                                    RealtimeUiTokens.pillRadius,
+                                  ),
+                                ),
+                                child: Text(
+                                  '${state.totals[gift.id] ?? 0}',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: style.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 20, bottom: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.history_rounded,
+                          size: 14,
+                          color: style.textMuted,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _text(context, '近期打赏动态', 'Recent Activity'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: style.textMuted,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (state.events.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      alignment: Alignment.center,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.hourglass_empty_rounded,
+                            size: 26,
+                            color: style.textMuted.withValues(alpha: 0.5),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _text(
+                              context,
+                              '暂无打赏动态，快来送出第一个礼物吧',
+                              'No gifts sent yet. Be the first!',
+                            ),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: style.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    for (final event in state.events.reversed)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
+                        decoration: BoxDecoration(
+                          color: style.surfaceSubtle,
+                          borderRadius: BorderRadius.circular(
+                            RealtimeUiTokens.compactRadius,
+                          ),
+                          border: Border.all(color: style.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: _giftColor(
+                                  event.giftId,
+                                ).withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _icon(
+                                  state.catalog
+                                          .where((g) => g.id == event.giftId)
+                                          .firstOrNull
+                                          ?.icon ??
+                                      '',
+                                ),
+                                size: 16,
+                                color: _giftColor(event.giftId),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    event.displayName,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: style.text,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    _text(context, '送出礼物', 'sent gift'),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: style.textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _giftColor(
+                                  event.giftId,
+                                ).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(
+                                  RealtimeUiTokens.pillRadius,
+                                ),
+                                border: Border.all(
+                                  color: _giftColor(
+                                    event.giftId,
+                                  ).withValues(alpha: 0.28),
+                                ),
+                              ),
+                              child: Text(
+                                '${_name(context, state.catalog.firstWhere(
+                                  (g) => g.id == event.giftId,
+                                  orElse: () => LiveGift(id: event.giftId, name: event.giftId, icon: ''),
+                                ))} × ${event.quantity}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: _giftColor(event.giftId),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                ],
+              ],
+            ),
+          ),
         ],
       );
     },
   );
+
+  Widget _buildGiftCard(
+    BuildContext context, {
+    required LiveGift gift,
+    required LiveInteractionState state,
+    required RealtimeStyle style,
+  }) {
+    final color = _giftColor(gift.id);
+    final icon = _icon(gift.icon);
+    final name = _name(context, gift);
+    final canSend = !_busy && state.canSendGift;
+
+    return RealtimeGlassPressable(
+      onTap: canSend ? () => _send(gift.id) : null,
+      borderRadius: RealtimeUiTokens.cardRadius,
+      child: AnimatedContainer(
+        duration: RealtimeUiTokens.animFast,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: style.surfaceSubtle,
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+          border: Border.all(
+            color: canSend ? color.withValues(alpha: 0.35) : style.border,
+            width: 1.1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: style.isDark ? 0.20 : 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.compactRadius,
+                ),
+                border: Border.all(color: color.withValues(alpha: 0.25)),
+              ),
+              child: Icon(icon, size: 20, color: color),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$name × $_quantity',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                    color: style.text,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _text(context, '点击赠送', 'Tap to send'),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: style.textMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Embedded by the common room view on both host and viewer clients.
@@ -262,12 +796,16 @@ Future<void> showLiveGiftsBottomSheet(
 }) => showRealtimeGlassBottomSheet<void>(
   context: context,
   isScrollControlled: true,
-  builder: (context) => SizedBox(
-    height: MediaQuery.sizeOf(context).height * .72,
+  builder: (sheetContext) => SizedBox(
+    height: MediaQuery.sizeOf(sheetContext).height * .72,
     child: Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720),
-        child: LiveGiftPanel(session: session),
+        child: LiveGiftPanel(
+          session: session,
+          showHeader: true,
+          onClose: () => Navigator.maybeOf(sheetContext)?.pop(),
+        ),
       ),
     ),
   ),

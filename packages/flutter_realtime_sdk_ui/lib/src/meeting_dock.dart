@@ -313,52 +313,28 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
 
         void openMenu() {
           final theme = Theme.of(context);
+          final isDark = theme.brightness == Brightness.dark;
           unawaited(
             showModalBottomSheet<void>(
               context: context,
               backgroundColor: Colors.transparent,
-              builder: (sheetContext) => SafeArea(
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: theme.colorScheme.outlineVariant.withValues(
-                        alpha: 0.5,
-                      ),
-                    ),
-                  ),
+              isScrollControlled: true,
+              builder: (sheetContext) => _MeetingDockModalSheet(
+                title: strings.chooseContentToShare,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          strings.chooseContentToShare,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.12,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.draw_outlined,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                        title: Text(strings.whiteboard),
-                        subtitle: Text(strings.whiteboardDescription),
-                        selected: mode == SharedContentMode.whiteboard,
+                      RealtimeShareOptionCard(
+                        title: strings.whiteboard,
+                        subtitle: strings.whiteboardDescription,
+                        icon: Icons.draw_rounded,
+                        iconColor: theme.colorScheme.primary,
+                        iconBackgroundColor: theme.colorScheme.primary
+                            .withValues(alpha: 0.12),
+                        isSelected: mode == SharedContentMode.whiteboard,
+                        activeBadgeText: strings.activeSharing,
                         onTap: () {
                           Navigator.pop(sheetContext);
                           unawaited(
@@ -366,24 +342,17 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                           );
                         },
                       ),
-                      ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: RealtimeUiTokens.iosGreen.withValues(
-                              alpha: 0.12,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.screen_share_outlined,
-                            color: RealtimeUiTokens.iosGreen,
-                          ),
-                        ),
-                        title: Text(strings.screenShare),
-                        subtitle: Text(strings.shareScreenDescription),
+                      const SizedBox(height: 10),
+                      RealtimeShareOptionCard(
+                        title: strings.screenShare,
+                        subtitle: strings.shareScreenDescription,
+                        icon: Icons.screen_share_outlined,
+                        iconColor: RealtimeUiTokens.iosGreen,
+                        iconBackgroundColor: RealtimeUiTokens.iosGreen
+                            .withValues(alpha: 0.12),
+                        isSelected: mode == SharedContentMode.screen,
                         enabled: shared.canShare,
-                        selected: mode == SharedContentMode.screen,
+                        activeBadgeText: strings.activeSharing,
                         onTap: () {
                           Navigator.pop(sheetContext);
                           unawaited(
@@ -392,34 +361,63 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                         },
                       ),
                       if (isSharing) ...[
-                        const Divider(height: 1),
-                        ListTile(
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.error.withValues(
-                                alpha: 0.12,
+                        const SizedBox(height: 14),
+                        Container(
+                          height: 1,
+                          margin: const EdgeInsets.symmetric(vertical: 2),
+                          color: (isDark ? Colors.white : Colors.black)
+                              .withValues(alpha: isDark ? 0.08 : 0.05),
+                        ),
+                        const SizedBox(height: 8),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              Navigator.pop(sheetContext);
+                              unawaited(
+                                shared.selectMode(SharedContentMode.members),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
                               ),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(
-                              Icons.stop_screen_share_rounded,
-                              color: theme.colorScheme.error,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.error.withValues(
+                                  alpha: isDark ? 0.15 : 0.08,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: theme.colorScheme.error.withValues(
+                                    alpha: 0.25,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.stop_screen_share_rounded,
+                                    size: 20,
+                                    color: theme.colorScheme.error,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    strings.stopSharing,
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.colorScheme.error,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          title: Text(
-                            strings.stopSharing,
-                            style: TextStyle(color: theme.colorScheme.error),
-                          ),
-                          onTap: () {
-                            Navigator.pop(sheetContext);
-                            unawaited(
-                              shared.selectMode(SharedContentMode.members),
-                            );
-                          },
                         ),
                       ],
-                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
@@ -583,206 +581,156 @@ class RealtimeDockReactionsButton extends StatelessWidget {
       final canFeedback = state?.capabilities.canSendFeedback == true;
 
       void openMenu() {
-        final theme = Theme.of(context);
-        final isDark = theme.brightness == Brightness.dark;
-
         unawaited(
           showModalBottomSheet<void>(
             context: context,
             backgroundColor: Colors.transparent,
-            builder: (sheetContext) => SafeArea(
-              child: Container(
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white12
-                        : theme.colorScheme.outlineVariant.withValues(
-                            alpha: 0.5,
-                          ),
-                  ),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 20,
-                      offset: Offset(0, 6),
+            isScrollControlled: true,
+            builder: (sheetContext) => _MeetingDockModalSheet(
+              title: strings.reactions,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (canFeedback) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          for (final kind in ClassroomFeedbackKind.values)
+                            _ReactionEmojiButton(
+                              emoji: switch (kind) {
+                                ClassroomFeedbackKind.understood => '👍',
+                                ClassroomFeedbackKind.great => '🔥',
+                                ClassroomFeedbackKind.idea => '💡',
+                                ClassroomFeedbackKind.question => '❓',
+                                ClassroomFeedbackKind.clap => '👏',
+                              },
+                              label: strings.isZh
+                                  ? switch (kind) {
+                                      ClassroomFeedbackKind.understood => '听懂了',
+                                      ClassroomFeedbackKind.great => '太棒了',
+                                      ClassroomFeedbackKind.idea => '有想法',
+                                      ClassroomFeedbackKind.question => '没听懂',
+                                      ClassroomFeedbackKind.clap => '鼓掌',
+                                    }
+                                  : kind.name,
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                if (controller != null) {
+                                  unawaited(
+                                    controller.sendClassroomFeedback(kind),
+                                  );
+                                }
+                              },
+                            ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(height: 10),
                   ],
-                ),
-                child: Material(
-                  color: isDark
-                      ? const Color(0xFF1E2533)
-                      : theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(20),
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                        child: Row(
-                          children: [
-                            Text(
-                              strings.reactions,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
+                  if (canRaise || onWave != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      child: Row(
+                        children: [
+                          if (canRaise)
+                            Expanded(
+                              child: FilledButton.tonalIcon(
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  backgroundColor: raised
+                                      ? RealtimeUiTokens.iosOrange.withValues(
+                                          alpha: 0.2,
+                                        )
+                                      : null,
+                                  foregroundColor: raised
+                                      ? RealtimeUiTokens.iosOrange
+                                      : null,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                icon: Icon(
+                                  raised
+                                      ? Icons.pan_tool_rounded
+                                      : Icons.pan_tool_outlined,
+                                  size: 20,
+                                  color: raised
+                                      ? RealtimeUiTokens.iosOrange
+                                      : null,
+                                ),
+                                label: Text(
+                                  raised
+                                      ? strings.lowerHand
+                                      : strings.raiseHand,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(sheetContext);
+                                  if (controller != null) {
+                                    unawaited(
+                                      controller.setHandRaised(!raised),
+                                    );
+                                  }
+                                },
                               ),
                             ),
-                            const Spacer(),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.close_rounded, size: 20),
-                              onPressed: () => Navigator.pop(sheetContext),
+                          if (canRaise && onWave != null)
+                            const SizedBox(width: 12),
+                          if (onWave != null)
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.waving_hand_outlined,
+                                  size: 20,
+                                ),
+                                label: Text(
+                                  strings.wave,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                onPressed: () {
+                                  Navigator.pop(sheetContext);
+                                  onWave!();
+                                },
+                              ),
                             ),
-                          ],
-                        ),
+                        ],
                       ),
-                      const Divider(height: 1),
-                      if (canFeedback) ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              for (final kind in ClassroomFeedbackKind.values)
-                                _ReactionEmojiButton(
-                                  emoji: switch (kind) {
-                                    ClassroomFeedbackKind.understood => '👍',
-                                    ClassroomFeedbackKind.great => '🔥',
-                                    ClassroomFeedbackKind.idea => '💡',
-                                    ClassroomFeedbackKind.question => '❓',
-                                    ClassroomFeedbackKind.clap => '👏',
-                                  },
-                                  label: strings.isZh
-                                      ? switch (kind) {
-                                          ClassroomFeedbackKind.understood =>
-                                            '听懂了',
-                                          ClassroomFeedbackKind.great => '太棒了',
-                                          ClassroomFeedbackKind.idea => '有想法',
-                                          ClassroomFeedbackKind.question =>
-                                            '没听懂',
-                                          ClassroomFeedbackKind.clap => '鼓掌',
-                                        }
-                                      : kind.name,
-                                  onTap: () {
-                                    Navigator.pop(sheetContext);
-                                    if (controller != null) {
-                                      unawaited(
-                                        controller.sendClassroomFeedback(kind),
-                                      );
-                                    }
-                                  },
-                                ),
-                            ],
-                          ),
-                        ),
-                        const Divider(height: 1),
-                      ],
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            if (canRaise)
-                              Expanded(
-                                child: FilledButton.tonalIcon(
-                                  style: FilledButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                    backgroundColor: raised
-                                        ? RealtimeUiTokens.iosOrange.withValues(
-                                            alpha: 0.2,
-                                          )
-                                        : null,
-                                    foregroundColor: raised
-                                        ? RealtimeUiTokens.iosOrange
-                                        : null,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  icon: Icon(
-                                    raised
-                                        ? Icons.pan_tool_rounded
-                                        : Icons.pan_tool_outlined,
-                                    size: 20,
-                                    color: raised
-                                        ? RealtimeUiTokens.iosOrange
-                                        : null,
-                                  ),
-                                  label: Text(
-                                    raised
-                                        ? strings.lowerHand
-                                        : strings.raiseHand,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  onPressed: () {
-                                    Navigator.pop(sheetContext);
-                                    if (controller != null) {
-                                      unawaited(
-                                        controller.setHandRaised(!raised),
-                                      );
-                                    }
-                                  },
-                                ),
-                              ),
-                            if (canRaise && onWave != null)
-                              const SizedBox(width: 12),
-                            if (onWave != null)
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  icon: const Icon(
-                                    Icons.waving_hand_outlined,
-                                    size: 20,
-                                  ),
-                                  label: Text(
-                                    strings.wave,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  onPressed: () {
-                                    Navigator.pop(sheetContext);
-                                    onWave!();
-                                  },
-                                ),
-                              ),
-                          ],
-                        ),
+                    ),
+                  if (extraActions.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    for (final action in extraActions)
+                      ListTile(
+                        leading: Icon(action.icon),
+                        title: Text(action.label),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          action.onTap();
+                        },
                       ),
-                      if (extraActions.isNotEmpty) ...[
-                        const Divider(height: 1),
-                        for (final action in extraActions)
-                          ListTile(
-                            leading: Icon(action.icon),
-                            title: Text(action.label),
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              action.onTap();
-                            },
-                          ),
-                      ],
-                      const SizedBox(height: 6),
-                    ],
-                  ),
-                ),
+                  ],
+                ],
               ),
             ),
           ),
@@ -828,31 +776,45 @@ class _ReactionEmojiButton extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 color: (isDark ? Colors.white : Colors.black).withValues(
-                  alpha: 0.06,
+                  alpha: isDark ? 0.08 : 0.04,
                 ),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: (isDark ? Colors.white : Colors.black).withValues(
+                    alpha: isDark ? 0.12 : 0.07,
+                  ),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Center(
-                child: Text(emoji, style: const TextStyle(fontSize: 22)),
+                child: Text(emoji, style: const TextStyle(fontSize: 24)),
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 5),
             Text(
               label,
               style: TextStyle(
                 fontSize: 11,
-                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white70 : RealtimeUiTokens.textMuted,
               ),
             ),
           ],
@@ -874,6 +836,7 @@ class RealtimeDockMoreItem {
     this.badgeText,
     this.showBadgeDot = false,
     this.enabled = true,
+    this.accentColor,
   });
 
   final IconData icon;
@@ -885,6 +848,145 @@ class RealtimeDockMoreItem {
   final String? badgeText;
   final bool showBadgeDot;
   final bool enabled;
+  final Color? accentColor;
+}
+
+/// A tactile squircle action item rendered inside [RealtimeDockMoreButton]'s action grid.
+class _MoreActionGridItem extends StatelessWidget {
+  const _MoreActionGridItem({required this.item, required this.onTap});
+
+  final RealtimeDockMoreItem item;
+  final VoidCallback onTap;
+
+  Color _resolveAccent(BuildContext context, bool isDark) {
+    if (item.accentColor != null) return item.accentColor!;
+    if (item.isDanger) return RealtimeUiTokens.iosRed;
+    if (item.isActive) return RealtimeUiTokens.iosOrange;
+
+    final code = item.icon.codePoint;
+    if (code == Icons.cameraswitch_rounded.codePoint ||
+        code == Icons.switch_camera_rounded.codePoint) {
+      return RealtimeUiTokens.iosTeal;
+    }
+    if (code == Icons.blur_on_rounded.codePoint ||
+        code == Icons.auto_awesome_rounded.codePoint ||
+        code == Icons.palette_outlined.codePoint) {
+      return RealtimeUiTokens.iosIndigo;
+    }
+    if (code == Icons.fiber_manual_record_rounded.codePoint ||
+        code == Icons.radio_button_checked_rounded.codePoint ||
+        code == Icons.stop_circle_outlined.codePoint ||
+        code == Icons.stop_circle_rounded.codePoint) {
+      return RealtimeUiTokens.iosRed;
+    }
+    if (code == Icons.build_outlined.codePoint ||
+        code == Icons.handyman_outlined.codePoint ||
+        code == Icons.construction_rounded.codePoint) {
+      return RealtimeUiTokens.iosOrange;
+    }
+    if (code == Icons.cloud_download_outlined.codePoint ||
+        code == Icons.cloud_download_rounded.codePoint ||
+        code == Icons.download_rounded.codePoint) {
+      return RealtimeUiTokens.iosBlue;
+    }
+    return isDark ? RealtimeUiTokens.iosBlue : RealtimeUiTokens.primary;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = _resolveAccent(context, isDark);
+
+    return InkWell(
+      onTap: item.enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Badge(
+              isLabelVisible:
+                  item.showBadgeDot ||
+                  (item.badgeText != null && item.badgeText!.isNotEmpty),
+              label: item.badgeText != null ? Text(item.badgeText!) : null,
+              smallSize: 8,
+              backgroundColor: RealtimeUiTokens.iosRed,
+              child: AnimatedContainer(
+                duration: RealtimeUiTokens.animNormal,
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: item.isDanger
+                      ? RealtimeUiTokens.iosRed.withValues(alpha: 0.16)
+                      : (item.isActive
+                            ? accent.withValues(alpha: 0.20)
+                            : accent.withValues(alpha: isDark ? 0.14 : 0.09)),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: item.isDanger
+                        ? RealtimeUiTokens.iosRed.withValues(alpha: 0.6)
+                        : (item.isActive
+                              ? accent.withValues(alpha: 0.7)
+                              : accent.withValues(alpha: isDark ? 0.25 : 0.20)),
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (item.isDanger ? RealtimeUiTokens.iosRed : accent)
+                          .withValues(alpha: isDark ? 0.25 : 0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Icon(
+                    item.icon,
+                    color: item.isDanger
+                        ? RealtimeUiTokens.iosRed
+                        : (item.isActive
+                              ? accent
+                              : (isDark ? Colors.white : accent)),
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: item.isActive || item.isDanger
+                    ? FontWeight.w700
+                    : FontWeight.w600,
+                color: item.isDanger
+                    ? RealtimeUiTokens.iosRed
+                    : (isDark ? Colors.white : const Color(0xFF1E293B)),
+              ),
+            ),
+            if (item.subtitle != null && item.subtitle!.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                item.subtitle!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isDark ? Colors.white54 : RealtimeUiTokens.textMuted,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Dock "More" button consolidating secondary media controls and tools
@@ -906,146 +1008,91 @@ class RealtimeDockMoreButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final strings = RealtimeStrings.of(context);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     void openMenu() {
       unawaited(
         showModalBottomSheet<void>(
           context: context,
           backgroundColor: Colors.transparent,
-          builder: (sheetContext) => SafeArea(
-            child: Container(
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white12
-                      : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 20,
-                    offset: Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: isDark
-                    ? const Color(0xFF1E2533)
-                    : theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(20),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                      child: Row(
-                        children: [
-                          Text(
-                            strings.more,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            visualDensity: VisualDensity.compact,
-                            icon: const Icon(Icons.close_rounded, size: 20),
-                            onPressed: () => Navigator.pop(sheetContext),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Flexible(
-                      child: ListView(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        children: [
-                          for (var i = 0; i < items.length; i++) ...[
-                            Builder(
-                              builder: (context) {
-                                final item = items[i];
-                                final itemColor = item.isDanger
-                                    ? const Color(0xFFFF3B30)
-                                    : (item.isActive
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.onSurface);
-                                return ListTile(
-                                  enabled: item.enabled,
-                                  leading: Badge(
-                                    isLabelVisible:
-                                        item.showBadgeDot ||
-                                        (item.badgeText != null &&
-                                            item.badgeText!.isNotEmpty),
-                                    label: item.badgeText != null
-                                        ? Text(item.badgeText!)
-                                        : null,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            (item.isDanger
-                                                    ? const Color(0xFFFF3B30)
-                                                    : (item.isActive
-                                                          ? theme
-                                                                .colorScheme
-                                                                .primary
-                                                          : (isDark
-                                                                ? Colors.white
-                                                                : Colors
-                                                                      .black)))
-                                                .withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Icon(
-                                        item.icon,
-                                        color: itemColor,
-                                        size: 22,
-                                      ),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    item.title,
-                                    style: TextStyle(
-                                      color: itemColor,
-                                      fontWeight: item.isActive || item.isDanger
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
-                                    ),
-                                  ),
-                                  subtitle: item.subtitle != null
-                                      ? Text(
-                                          item.subtitle!,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: theme
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                        )
-                                      : null,
+          isScrollControlled: true,
+          builder: (sheetContext) => _MeetingDockModalSheet(
+            title: strings.more,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final availableWidth = constraints.maxWidth;
+                  final crossAxisCount = (availableWidth / 78).floor().clamp(
+                    3,
+                    6,
+                  );
+                  final itemWidth =
+                      (availableWidth - (crossAxisCount - 1) * 10) /
+                      crossAxisCount;
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (items.isNotEmpty)
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          alignment: WrapAlignment.start,
+                          children: [
+                            for (final item in items)
+                              SizedBox(
+                                width: itemWidth,
+                                child: _MoreActionGridItem(
+                                  item: item,
                                   onTap: () {
                                     Navigator.pop(sheetContext);
                                     item.onTap();
                                   },
-                                );
-                              },
-                            ),
-                            if (i < items.length - 1 || children.isNotEmpty)
-                              const Divider(height: 1, indent: 56),
+                                ),
+                              ),
                           ],
-                          ...children,
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
+                        ),
+                      if (children.isNotEmpty) ...[
+                        if (items.isNotEmpty) const SizedBox(height: 14),
+                        Container(
+                          decoration: BoxDecoration(
+                            color:
+                                (Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.white
+                                        : Colors.black)
+                                    .withValues(
+                                      alpha:
+                                          Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? 0.05
+                                          : 0.035,
+                                    ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color:
+                                  (Theme.of(context).brightness ==
+                                              Brightness.dark
+                                          ? Colors.white
+                                          : Colors.black)
+                                      .withValues(
+                                        alpha:
+                                            Theme.of(context).brightness ==
+                                                Brightness.dark
+                                            ? 0.08
+                                            : 0.06,
+                                      ),
+                            ),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: children,
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -1059,6 +1106,273 @@ class RealtimeDockMoreButton extends StatelessWidget {
       showBadgeDot: hasActiveBadge,
       showLabel: showLabel,
       onPressed: (items.isEmpty && children.isEmpty) ? null : openMenu,
+    );
+  }
+}
+
+/// Modern card item for the share content selection modal.
+class RealtimeShareOptionCard extends StatelessWidget {
+  const RealtimeShareOptionCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBackgroundColor,
+    this.isSelected = false,
+    this.enabled = true,
+    this.activeBadgeText,
+    this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBackgroundColor;
+  final bool isSelected;
+  final bool enabled;
+  final String? activeBadgeText;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final baseBorderColor = (isDark ? Colors.white : Colors.black).withValues(
+      alpha: isDark ? 0.08 : 0.06,
+    );
+    final selectedBorderColor = theme.colorScheme.primary;
+    final borderColor = isSelected ? selectedBorderColor : baseBorderColor;
+
+    final backgroundColor = isSelected
+        ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.12 : 0.06)
+        : (isDark
+            ? Colors.white.withValues(alpha: 0.03)
+            : Colors.black.withValues(alpha: 0.02));
+
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.45,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: enabled ? onTap : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeInOut,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: borderColor,
+                width: isSelected ? 1.5 : 1.0,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: iconBackgroundColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: iconColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              title,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF0F172A),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isSelected && activeBadgeText != null) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.15,
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                activeBadgeText!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: isDark ? Colors.white60 : Colors.black54,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (isSelected)
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 22,
+                  )
+                else
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: (isDark ? Colors.white : Colors.black).withValues(
+                      alpha: 0.25,
+                    ),
+                    size: 22,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Unified floating frosted-glass sheet for meeting dock popup menus.
+class _MeetingDockModalSheet extends StatelessWidget {
+  const _MeetingDockModalSheet({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xE81E293B)
+                    : Colors.white.withValues(alpha: 0.94),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: (isDark ? Colors.white : Colors.black).withValues(
+                    alpha: isDark ? 0.12 : 0.08,
+                  ),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.12),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4.5,
+                      margin: const EdgeInsets.only(top: 10, bottom: 6),
+                      decoration: BoxDecoration(
+                        color: (isDark ? Colors.white : Colors.black)
+                            .withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(2.5),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 4, 14, 10),
+                    child: Row(
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            backgroundColor:
+                                (isDark ? Colors.white : Colors.black)
+                                    .withValues(alpha: 0.06),
+                            shape: const CircleBorder(),
+                            padding: const EdgeInsets.all(6),
+                            minimumSize: const Size(28, 28),
+                          ),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: isDark ? Colors.white70 : Colors.black54,
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    height: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    color: (isDark ? Colors.white : Colors.black).withValues(
+                      alpha: isDark ? 0.07 : 0.05,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  child,
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

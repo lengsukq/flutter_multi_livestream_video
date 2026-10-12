@@ -67,8 +67,12 @@ class _RealtimeComposableRoomTemplateState
                   padding: const EdgeInsets.all(8),
                   child: Row(
                     children: [
-                      const Expanded(child: RealtimeRoomInfo()),
-                      if (wide) const RealtimeConnectionIndicator(),
+                      const RealtimeRoomInfo(),
+                      if (wide) ...[
+                        const SizedBox(width: 8),
+                        const RealtimeConnectionIndicator(),
+                      ],
+                      const Spacer(),
                       if (widget.isLive) const RealtimeLiveStatus(),
                       RealtimeLeaveButton(onLeft: widget.onLeft),
                     ],

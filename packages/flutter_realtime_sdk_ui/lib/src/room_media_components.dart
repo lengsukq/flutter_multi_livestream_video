@@ -85,11 +85,17 @@ class RealtimeVideoTile extends StatelessWidget {
     required this.participant,
     this.onTap,
     this.isFocused = false,
+    this.showNameTag = true,
+    this.borderless = false,
+    this.fit = BoxFit.contain,
   });
 
   final MediaParticipant participant;
   final VoidCallback? onTap;
   final bool isFocused;
+  final bool showNameTag;
+  final bool borderless;
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +105,9 @@ class RealtimeVideoTile extends StatelessWidget {
       renderer: controller.room.renderer,
       isFocused: isFocused,
       onTap: onTap,
+      showNameTag: showNameTag,
+      borderless: borderless,
+      fit: fit,
     );
   }
 }

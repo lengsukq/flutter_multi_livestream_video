@@ -169,8 +169,13 @@ extension _ClassroomQuestions on _ClassroomPanelState {
                     controller: _question,
                     maxLength: 500,
                     decoration: InputDecoration(
-                      border: InputBorder.none,
                       isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
                       counterText: '',
                       hintText: strings.t('ask'),
                       hintStyle: const TextStyle(

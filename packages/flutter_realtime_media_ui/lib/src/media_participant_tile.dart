@@ -12,11 +12,17 @@ class MediaParticipantTile extends StatelessWidget {
     required this.renderer,
     this.isFocused = false,
     this.onTap,
+    this.showNameTag = true,
+    this.borderless = false,
+    this.fit = BoxFit.contain,
   });
   final MediaParticipant participant;
   final MediaTrackRenderer renderer;
   final bool isFocused;
   final VoidCallback? onTap;
+  final bool showNameTag;
+  final bool borderless;
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -30,34 +36,42 @@ class MediaParticipantTile extends StatelessWidget {
     Widget tile = AnimatedContainer(
       duration: RealtimeUiTokens.animNormal,
       curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        gradient: style.glassGradient,
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-        border: Border.all(
-          color: speaking
-              ? const Color(0xFF10B981)
-              : isFocused
-              ? style.primary
-              : style.border,
-          width: speaking || isFocused ? 2.2 : 1.1,
-        ),
-        boxShadow: speaking
-            ? [
-                BoxShadow(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.22),
-                  blurRadius: 20,
-                  offset: const Offset(0, 6),
-                ),
-              ]
-            : style.cardShadow,
-      ),
+      decoration: borderless
+          ? null
+          : BoxDecoration(
+              gradient: style.glassGradient,
+              borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+              border: Border.all(
+                color: speaking
+                    ? const Color(0xFF10B981)
+                    : isFocused
+                    ? style.primary
+                    : style.border,
+                width: speaking || isFocused ? 2.2 : 1.1,
+              ),
+              boxShadow: speaking
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.22),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                      ),
+                    ]
+                  : style.cardShadow,
+            ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius - 2),
+        borderRadius: borderless
+            ? BorderRadius.zero
+            : BorderRadius.circular(RealtimeUiTokens.cardRadius - 2),
         child: Stack(
           fit: StackFit.expand,
           children: [
             if (participant.isVideoEnabled && participant.videoTrack != null)
-              MediaTrackView(renderer: renderer, track: participant.videoTrack)
+              MediaTrackView(
+                renderer: renderer,
+                track: participant.videoTrack,
+                fit: fit,
+              )
             else
               Container(
                 color: style.surfaceSubtle,
@@ -77,13 +91,13 @@ class MediaParticipantTile extends StatelessWidget {
                         : null,
                   ),
                   child: CircleAvatar(
-                    radius: 32,
+                    radius: borderless ? 44 : 32,
                     backgroundColor: style.primarySubtle,
                     child: Text(
                       name.characters.first.toUpperCase(),
                       style: TextStyle(
                         color: style.primary,
-                        fontSize: 23,
+                        fontSize: borderless ? 32 : 23,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -126,70 +140,71 @@ class MediaParticipantTile extends StatelessWidget {
                   ),
                 ),
               ),
-            Positioned(
-              left: 10,
-              bottom: 10,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 240),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.pillRadius,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
+            if (showNameTag)
+              Positioned(
+                left: 10,
+                bottom: 10,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 240),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      RealtimeUiTokens.pillRadius,
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.65),
-                      borderRadius: BorderRadius.circular(
-                        RealtimeUiTokens.pillRadius,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
                       ),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        width: 0.6,
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 8,
-                          offset: Offset(0, 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.65),
+                        borderRadius: BorderRadius.circular(
+                          RealtimeUiTokens.pillRadius,
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            '$name${participant.isLocal ? strings.youSuffix : ''}',
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                              letterSpacing: -0.2,
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          width: 0.6,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '$name${participant.isLocal ? strings.youSuffix : ''}',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                                letterSpacing: -0.2,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          participant.isMuted
-                              ? Icons.mic_off_rounded
-                              : Icons.mic_rounded,
-                          size: 13,
-                          color: participant.isMuted
-                              ? const Color(0xFFFF453A)
-                              : speaking
-                              ? const Color(0xFF30D158)
-                              : Colors.white70,
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          Icon(
+                            participant.isMuted
+                                ? Icons.mic_off_rounded
+                                : Icons.mic_rounded,
+                            size: 13,
+                            color: participant.isMuted
+                                ? const Color(0xFFFF453A)
+                                : speaking
+                                ? const Color(0xFF30D158)
+                                : Colors.white70,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

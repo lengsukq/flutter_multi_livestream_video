@@ -472,6 +472,7 @@ class RealtimeStrings {
   String get shareScreenDescription =>
       isZh ? '共享电脑或手机屏幕给所有参会者' : 'Share your display with all participants';
   String get stopSharing => isZh ? '停止共享' : 'Stop share';
+  String get activeSharing => isZh ? '共享中' : 'Sharing';
   String get classroom => isZh ? '课堂管理' : 'Classroom';
   String get classroomActivities => isZh ? '测验' : 'Activities';
   String get classroomQuestions => isZh ? '提问' : 'Questions';

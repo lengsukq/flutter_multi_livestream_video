@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
+import 'color_picker_dialog.dart';
 import 'whiteboard_strings.dart';
 
 /// Unified Material 3 toolbar widget for screen annotations and whiteboard.
@@ -22,7 +24,12 @@ class AnnotationToolbar extends StatelessWidget {
     this.canClose = true,
     this.editTooltip,
     this.showDragHandle = true,
+    this.showDrawingToggle = true,
     this.compact = false,
+    this.fixedTop = false,
+    this.selectedColor,
+    this.onColorChanged,
+    this.availableColors,
   });
 
   final AnnotationTool tool;
@@ -38,29 +45,56 @@ class AnnotationToolbar extends StatelessWidget {
   final bool canClose;
   final String? editTooltip;
   final bool showDragHandle;
+  final bool showDrawingToggle;
   final bool compact;
+  final bool fixedTop;
+  final int? selectedColor;
+  final ValueChanged<int>? onColorChanged;
+  final List<int>? availableColors;
+
+  static const defaultColors = <int>[
+    0xff1e293b, // slate dark
+    0xff2563eb, // blue
+    0xffdc2626, // red
+    0xfff59e0b, // amber
+    0xff16a34a, // green
+  ];
 
   @override
   Widget build(BuildContext context) {
     final s = WhiteboardStrings.of(context);
     final theme = Theme.of(context);
+    final showTools = drawingEnabled || fixedTop;
+    final borderRadius = BorderRadius.circular(fixedTop ? 16 : 20);
+
+    Widget divider() => Container(
+      width: 1,
+      height: 20,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      color: theme.colorScheme.outlineVariant.withValues(alpha: .5),
+    );
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: borderRadius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Material(
-          color: theme.colorScheme.surface.withValues(alpha: .88),
-          elevation: 2,
+          color: theme.colorScheme.surface.withValues(
+            alpha: fixedTop ? .94 : .88,
+          ),
+          elevation: fixedTop ? 3 : 2,
           shadowColor: Colors.black12,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: borderRadius,
             side: BorderSide(
               color: theme.colorScheme.outlineVariant.withValues(alpha: .5),
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            padding: EdgeInsets.symmetric(
+              horizontal: fixedTop ? 8 : 6,
+              vertical: 4,
+            ),
             child: Wrap(
               spacing: 2,
               runSpacing: 2,
@@ -74,17 +108,19 @@ class AnnotationToolbar extends StatelessWidget {
                       child: Icon(Icons.drag_indicator, size: 20),
                     ),
                   ),
-                IconButton(
-                  tooltip: editTooltip ?? s.t('annotate'),
-                  isSelected: drawingEnabled,
-                  onPressed: canEdit ? onDrawingToggle : null,
-                  icon: Icon(
-                    drawingEnabled
-                        ? Icons.draw_outlined
-                        : Icons.pan_tool_outlined,
+                if (showDrawingToggle)
+                  IconButton(
+                    tooltip: editTooltip ?? s.t('annotate'),
+                    isSelected: drawingEnabled,
+                    onPressed: canEdit ? onDrawingToggle : null,
+                    icon: Icon(
+                      drawingEnabled
+                          ? Icons.draw_outlined
+                          : Icons.pan_tool_outlined,
+                    ),
                   ),
-                ),
-                if (drawingEnabled) ...[
+                if (showTools) ...[
+                  if (showDrawingToggle || showDragHandle) divider(),
                   for (final item in const <(AnnotationTool, IconData, String)>[
                     (AnnotationTool.pen, Icons.edit, 'pen'),
                     (AnnotationTool.highlight, Icons.highlight, 'highlight'),
@@ -100,6 +136,77 @@ class AnnotationToolbar extends StatelessWidget {
                           : null,
                       icon: Icon(item.$2),
                     ),
+                  if (onColorChanged != null) ...[
+                    divider(),
+                    for (final c in (availableColors ?? defaultColors))
+                      Tooltip(
+                        message: s.t('color'),
+                        child: InkWell(
+                          onTap: canEdit ? () => onColorChanged!(c) : null,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Container(
+                              width: 18,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: Color(c),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: selectedColor == c
+                                      ? (theme.brightness == Brightness.dark
+                                            ? Colors.white
+                                            : Colors.black87)
+                                      : Colors.transparent,
+                                  width: selectedColor == c ? 2.5 : 1,
+                                ),
+                                boxShadow: [
+                                  if (selectedColor == c)
+                                    BoxShadow(
+                                      color: Color(c).withValues(alpha: 0.45),
+                                      blurRadius: 4,
+                                      spreadRadius: 1,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    IconButton(
+                      tooltip: s.t('moreColors'),
+                      iconSize: 18,
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      onPressed: canEdit
+                          ? () {
+                              unawaited(
+                                showWhiteboardColorPicker(
+                                  context,
+                                  initialColor:
+                                      selectedColor ?? defaultColors.first,
+                                ).then((color) {
+                                  if (color != null) onColorChanged!(color);
+                                }),
+                              );
+                            }
+                          : null,
+                      icon: Icon(
+                        Icons.palette_outlined,
+                        color:
+                            selectedColor != null &&
+                                !(availableColors ?? defaultColors).contains(
+                                  selectedColor,
+                                )
+                            ? Color(selectedColor!)
+                            : null,
+                      ),
+                    ),
+                  ],
+                  if (onUndo != null || onClear != null) divider(),
                   if (onUndo != null)
                     IconButton(
                       tooltip: s.t('undo'),
@@ -113,12 +220,14 @@ class AnnotationToolbar extends StatelessWidget {
                       icon: const Icon(Icons.delete_sweep_outlined),
                     ),
                 ],
-                if (onClose != null && canClose)
+                if (onClose != null && canClose) ...[
+                  divider(),
                   IconButton(
                     tooltip: s.t('close'),
                     onPressed: onClose,
                     icon: const Icon(Icons.close),
                   ),
+                ],
               ],
             ),
           ),

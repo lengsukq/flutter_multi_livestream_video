@@ -96,8 +96,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Draw / navigate'));
-      await tester.pumpAndSettle();
+      expect(find.byType(MovableAnnotationToolbar), findsNothing);
+      expect(find.byIcon(Icons.drag_indicator), findsNothing);
+      expect(find.byTooltip('Draw / navigate'), findsNothing);
       final surface = find.byType(AnnotationSurface);
       final rect = tester.getRect(surface);
       for (final label in ['Pen', 'Highlight', 'Circle', 'Arrow']) {
@@ -125,8 +126,23 @@ void main() {
       await tester.tap(find.byTooltip('Delete current page'));
       await tester.pumpAndSettle();
       expect(session.canvas.shapes.length, 4);
-      await tester.tap(find.byTooltip('Draw / navigate'));
+
+      // Verify changing color applies to highlight
+      final blueDot = find.byWidgetPredicate(
+        (w) =>
+            w is Container &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).color == const Color(0xff2563eb),
+      );
+      await tester.tap(blueDot);
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Highlight'));
+      await tester.pump();
+      await tester.dragFrom(rect.center, const Offset(30, 20));
+      await tester.pumpAndSettle();
+      expect(session.canvas.shapes.last.tool, AnnotationTool.highlight);
+      expect(session.canvas.shapes.last.color, 0xff2563eb);
+
       await tester.tap(find.byTooltip('Clear'));
       await tester.pumpAndSettle();
       expect(session.canvas.shapes, isEmpty);
@@ -175,8 +191,6 @@ void main() {
       );
       viewer.transformationController!.value = Matrix4.identity()
         ..scaleByDouble(2, 2, 1, 1);
-      await tester.pump();
-      await tester.tap(find.byTooltip('Draw / navigate'));
       await tester.pumpAndSettle();
       final rect = tester.getRect(find.byType(AnnotationSurface));
       final start = rect.topLeft + Offset(rect.width * .5, rect.height * .5);

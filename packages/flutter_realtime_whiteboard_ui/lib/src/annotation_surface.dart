@@ -6,6 +6,8 @@ import 'whiteboard_strings.dart';
 import 'movable_annotation_toolbar.dart';
 import 'annotation_toolbar.dart';
 
+enum AnnotationToolbarPlacement { floating, fixedTop, none }
+
 /// This widget must occupy the contained shared-video rectangle (not the full
 /// viewport). Its logical points then align on phones, tablets and desktops.
 class AnnotationSurface extends StatefulWidget {
@@ -16,6 +18,12 @@ class AnnotationSurface extends StatefulWidget {
     this.allowEditing = true,
     this.enableNavigation = true,
     this.toolbarAtTop = false,
+    this.toolbarPlacement = AnnotationToolbarPlacement.floating,
+    this.initialColor = 0xfff59e0b,
+    this.tool,
+    this.selectedColor,
+    this.drawingEnabled,
+    this.onToolChanged,
     this.editTooltip,
   });
   final AnnotationController session;
@@ -23,6 +31,12 @@ class AnnotationSurface extends StatefulWidget {
   final bool allowEditing;
   final bool enableNavigation;
   final bool toolbarAtTop;
+  final AnnotationToolbarPlacement toolbarPlacement;
+  final int initialColor;
+  final AnnotationTool? tool;
+  final int? selectedColor;
+  final bool? drawingEnabled;
+  final ValueChanged<AnnotationTool>? onToolChanged;
   final String? editTooltip;
   @override
   State<AnnotationSurface> createState() => _AnnotationSurfaceState();
@@ -31,6 +45,10 @@ class AnnotationSurface extends StatefulWidget {
 class _AnnotationSurfaceState extends State<AnnotationSurface> {
   AnnotationTool _tool = AnnotationTool.pen;
   bool _editing = false;
+  late int _selectedColor = widget.initialColor;
+  AnnotationTool get _activeTool => widget.tool ?? _tool;
+  bool get _isEditing => widget.drawingEnabled ?? _editing;
+  int get _activeColor => widget.selectedColor ?? _selectedColor;
   AnnotationShape? _draft;
   final _batch = <AnnotationPoint>[];
   Timer? _flushTimer;
@@ -75,19 +93,21 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
     final id =
         '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}';
     _canvasId = canvas.canvasId;
+    final tool = _activeTool;
+    final color = _activeColor;
     final shape = AnnotationShape(
       id: id,
-      tool: _tool,
+      tool: tool,
       points: [_point(offset, size)],
-      color: _tool == AnnotationTool.highlight ? 0xffffeb3b : 0xfff59e0b,
-      width: _tool == AnnotationTool.highlight ? 16 : 3,
+      color: color,
+      width: tool == AnnotationTool.highlight ? 16 : 3,
     );
     setState(() {
       _draft = shape;
       _error = null;
     });
     _failedStroke = null;
-    if (_tool == AnnotationTool.pen || _tool == AnnotationTool.highlight) {
+    if (tool == AnnotationTool.pen || tool == AnnotationTool.highlight) {
       _enqueue(
         () => widget.session.begin(shape, canvasId: canvas.canvasId),
         strokeId: id,
@@ -177,6 +197,7 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
       id: '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}',
       tool: AnnotationTool.text,
       points: [_point(offset, size)],
+      color: _activeColor,
       text: text,
     );
     _enqueue(() => widget.session.begin(shape, canvasId: canvas.canvasId));
@@ -206,9 +227,10 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
                 transformationController: _transform,
                 minScale: 1,
                 maxScale: 5,
-                panEnabled: widget.enableNavigation && (!teacher || !_editing),
+                panEnabled:
+                    widget.enableNavigation && (!teacher || !_isEditing),
                 scaleEnabled:
-                    widget.enableNavigation && (!teacher || !_editing),
+                    widget.enableNavigation && (!teacher || !_isEditing),
                 child: SizedBox(
                   width: size.width,
                   height: size.height,
@@ -235,49 +257,107 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
                 ),
               ),
               IgnorePointer(
-                ignoring: !teacher || !_editing || !matches,
+                ignoring: !teacher || !_isEditing || !matches,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onPanStart: _tool == AnnotationTool.text
+                  onPanStart: _activeTool == AnnotationTool.text
                       ? null
                       : (event) => _start(event.localPosition, size),
-                  onPanUpdate: _tool == AnnotationTool.text
+                  onPanUpdate: _activeTool == AnnotationTool.text
                       ? null
                       : (event) => _update(event.localPosition, size),
-                  onPanEnd: _tool == AnnotationTool.text
+                  onPanEnd: _activeTool == AnnotationTool.text
                       ? null
                       : (_) => _finish(),
-                  onPanCancel: _tool == AnnotationTool.text ? null : _finish,
-                  onTapUp: _tool == AnnotationTool.text
+                  onPanCancel: _activeTool == AnnotationTool.text
+                      ? null
+                      : _finish,
+                  onTapUp: _activeTool == AnnotationTool.text
                       ? (event) => _label(event.localPosition, size)
                       : null,
                 ),
               ),
-              if (teacher)
-                MovableAnnotationToolbar(
-                  startAtTop: widget.toolbarAtTop,
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: AnnotationToolbar(
-                      tool: _tool,
-                      drawingEnabled: _editing,
-                      canEdit: matches,
-                      canUndo: _draft == null && !_finishing,
-                      canClear: _draft == null && !_finishing,
-                      canClose: false,
-                      editTooltip: widget.editTooltip ?? s.t('annotate'),
-                      onToolChanged: _draft != null || _finishing
-                          ? null
-                          : (tool) => setState(() => _tool = tool),
-                      onDrawingToggle: () => setState(() {
-                        if (_editing) _finish();
-                        _editing = !_editing;
-                      }),
-                      onUndo: () => _enqueue(widget.session.undo),
-                      onClear: () => _enqueue(widget.session.clear),
+              if (teacher &&
+                  widget.toolbarPlacement != AnnotationToolbarPlacement.none)
+                if (widget.toolbarPlacement ==
+                    AnnotationToolbarPlacement.fixedTop)
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                      child: AnnotationToolbar(
+                        tool: _activeTool,
+                        fixedTop: true,
+                        showDragHandle: false,
+                        drawingEnabled: _isEditing,
+                        selectedColor: _activeColor,
+                        onColorChanged: (c) {
+                          if (mounted) setState(() => _selectedColor = c);
+                        },
+                        canEdit: matches,
+                        canUndo: _draft == null && !_finishing,
+                        canClear: _draft == null && !_finishing,
+                        canClose: false,
+                        editTooltip: widget.editTooltip ?? s.t('annotate'),
+                        onToolChanged: _draft != null || _finishing
+                            ? null
+                            : (tool) {
+                                if (widget.onToolChanged != null) {
+                                  widget.onToolChanged!(tool);
+                                } else {
+                                  setState(() {
+                                    _tool = tool;
+                                    _editing = true;
+                                  });
+                                }
+                              },
+                        onDrawingToggle: () => setState(() {
+                          if (_editing) _finish();
+                          _editing = !_editing;
+                        }),
+                        onUndo: () => _enqueue(widget.session.undo),
+                        onClear: () => _enqueue(widget.session.clear),
+                      ),
+                    ),
+                  )
+                else
+                  MovableAnnotationToolbar(
+                    startAtTop: widget.toolbarAtTop,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: AnnotationToolbar(
+                        tool: _activeTool,
+                        drawingEnabled: _isEditing,
+                        selectedColor: _activeColor,
+                        onColorChanged: (c) {
+                          if (mounted) setState(() => _selectedColor = c);
+                        },
+                        canEdit: matches,
+                        canUndo: _draft == null && !_finishing,
+                        canClear: _draft == null && !_finishing,
+                        canClose: false,
+                        editTooltip: widget.editTooltip ?? s.t('annotate'),
+                        onToolChanged: _draft != null || _finishing
+                            ? null
+                            : (tool) {
+                                if (widget.onToolChanged != null) {
+                                  widget.onToolChanged!(tool);
+                                } else {
+                                  setState(() {
+                                    _tool = tool;
+                                    _editing = true;
+                                  });
+                                }
+                              },
+                        onDrawingToggle: () => setState(() {
+                          if (_editing) _finish();
+                          _editing = !_editing;
+                        }),
+                        onUndo: () => _enqueue(widget.session.undo),
+                        onClear: () => _enqueue(widget.session.clear),
+                      ),
                     ),
                   ),
-                ),
               if (_error != null)
                 Align(
                   alignment: Alignment.bottomCenter,
