@@ -735,7 +735,8 @@ test('Agora Web defers camera publication until SDK effects are configured', asy
   await bridge.create('agora', 'agora-1', JSON.stringify(agoraPayload));
   await bridge.join('agora', 'agora-1');
 
-  assert.ok(calls.includes('publish:agora-audio'));
+  assert.equal(calls.includes('createMicrophoneAudioTrack'), false);
+  assert.equal(calls.includes('publish:agora-audio'), false);
   assert.equal(
     calls.some((call) => call.startsWith('getUserMedia:')),
     false,
@@ -744,6 +745,12 @@ test('Agora Web defers camera publication until SDK effects are configured', asy
     calls.some((call) => call.startsWith('createCustomVideoTrack:')),
     false,
   );
+
+  await bridge.command('agora', 'agora-1', 'setMuted', JSON.stringify({muted: false}));
+  assert.ok(calls.includes('createMicrophoneAudioTrack'));
+  assert.ok(calls.includes('publish:agora-audio'));
+  await bridge.command('agora', 'agora-1', 'setMuted', JSON.stringify({muted: true}));
+  assert.ok(calls.includes('audio-enabled:false'));
 
   await bridge.command(
     'agora',

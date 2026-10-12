@@ -106,8 +106,21 @@ class ProviderWebBridge {
     }
   }
 
-  static Future<void> join(String providerId, String sessionId) async =>
-      _command(providerId, sessionId, 'join');
+  // Joining is a lifecycle operation. It cannot use bridge.command(), which
+  // correctly rejects ordinary media commands before session.joined is true.
+  static Future<void> join(String providerId, String sessionId) async {
+    try {
+      await _bridge
+          .callMethod<JSPromise<JSAny?>>(
+            'join'.toJS,
+            providerId.toJS,
+            sessionId.toJS,
+          )
+          .toDart;
+    } catch (error) {
+      throw _mapError(providerId, 'Browser media join failed.', error);
+    }
+  }
 
   static Future<String> command(
     String providerId,
@@ -130,8 +143,19 @@ class ProviderWebBridge {
     );
   }
 
-  static Future<void> leave(String providerId, String sessionId) async =>
-      _command(providerId, sessionId, 'leave');
+  static Future<void> leave(String providerId, String sessionId) async {
+    try {
+      await _bridge
+          .callMethod<JSPromise<JSAny?>>(
+            'leave'.toJS,
+            providerId.toJS,
+            sessionId.toJS,
+          )
+          .toDart;
+    } catch (error) {
+      throw _mapError(providerId, 'Browser media leave failed.', error);
+    }
+  }
 
   static Future<void> dispose(String providerId, String sessionId) async {
     try {

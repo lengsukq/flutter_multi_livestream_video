@@ -707,18 +707,30 @@
       async join() {
         if (live) await client.setClientRole(session.role === 'viewer' ? 'audience' : 'host');
         await client.join(info.appId, info.channelName, info.token, Number(info.uid));
-        if (session.role !== 'viewer') {
-          localTracks.audio = await AgoraRTC.createMicrophoneAudioTrack();
-          localTracks.audio.play();
-          await client.publish(localTracks.audio);
-          session.localMuted = false;
-          session.localVideoEnabled = false;
-        }
+        // RTC joining must not prompt for microphone permission. Pre-Join
+        // defaults both devices to off; explicit unmute controls acquisition.
+        session.localMuted = true;
+        session.localVideoEnabled = false;
       },
       async command(name, args) {
         if (name === 'setMuted') {
-          if (localTracks.audio) await localTracks.audio.setEnabled(!args.muted);
-          session.localMuted = Boolean(args.muted);
+          const muted = Boolean(args.muted);
+          if (!muted && session.role === 'viewer') {
+            throw new Error('Agora viewers cannot publish microphone audio.');
+          }
+          if (!muted && !localTracks.audio) {
+            const audio = await AgoraRTC.createMicrophoneAudioTrack();
+            try {
+              await client.publish(audio);
+              localTracks.audio = audio;
+            } catch (error) {
+              audio.close?.();
+              throw error;
+            }
+          } else if (localTracks.audio) {
+            await localTracks.audio.setEnabled(!muted);
+          }
+          session.localMuted = muted;
           return;
         }
         if (name === 'attachProcessedVideoSource') {
