@@ -253,6 +253,15 @@ export function createLiveKitProvider({
         },
         body: JSON.stringify({ room: room.providerRoomName }),
       });
+      // LiveKit automatically removes empty rooms. Since the Demo creates the
+      // room lazily on the first RTC join, it might never have existed, or it
+      // might already have disappeared by the time the sweep closes it.
+      // Accept only LiveKit's structured not_found response: a generic 404
+      // could instead indicate a broken RoomService endpoint configuration.
+      if (response.status === 404) {
+        const body = await response.json().catch(() => null) as { code?: string } | null;
+        if (body?.code === 'not_found') return;
+      }
       if (!response.ok) {
         throw new Error(`LiveKit DeleteRoom failed with HTTP ${response.status}.`);
       }

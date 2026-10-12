@@ -33,6 +33,7 @@ enum _DemoSidePanel { closed, chat, participants, classroom }
 class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   late Future<void> _videoEffectsReady;
   _DemoSidePanel _panel = _DemoSidePanel.closed;
+  bool _recordingBusy = false;
 
   @override
   void initState() {
@@ -369,7 +370,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                         ? (isZh ? '录制中' : 'Recording')
                                         : (isCloud
                                               ? (isZh ? '云端录制' : 'Cloud')
-                                              : (isZh ? '本地录制' : 'Local')),
+                                              : (isZh ? '录制不可用' : 'Unavailable')),
                                     isDanger: isRecording,
                                     showBadgeDot: isRecording,
                                     onTap: () =>
@@ -673,6 +674,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   }
 
   Future<void> _handleRecording(BuildContext context) async {
+    if (_recordingBusy || !mounted) return;
     final isCloud =
         const {
           'livekit',
@@ -684,18 +686,27 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
         }.contains(widget.room.engineProviderId) &&
         widget.room.featureBackendUrl != null;
 
-    if (widget.room.recordingStatus == RecordingStatus.recording) {
-      final result = await widget.room.stopRecording();
-      if (!mounted || result == null) return;
-      if (context.mounted) {
+    final isZh = Localizations.localeOf(context).languageCode == 'zh';
+    if (!isCloud || !widget.room.media.isLogicalOwner) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+        content: Text(!isCloud
+            ? (isZh ? '当前没有可用的云录制后端；本地录制已移除。'
+                : 'Cloud recording is unavailable; local recording was removed.')
+            : (isZh ? '只有房主可以操作云录制。'
+                : 'Only the room owner can control cloud recording.')),
+      ));
+      return;
+    }
+    setState(() => _recordingBusy = true);
+    try {
+      if (widget.room.recordingStatus == RecordingStatus.recording) {
+        await widget.room.stopRecording();
+        if (!mounted || !context.mounted) return;
         showDialog<void>(
           context: context,
           builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
         );
-      }
-    } else {
-      if (isCloud) {
-        final isZh = Localizations.localeOf(context).languageCode == 'zh';
+      } else {
         final chosen = await showDialog<RecordingLayout>(
           context: context,
           builder: (dialogCtx) => SimpleDialog(
@@ -730,6 +741,16 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
           );
         }
       }
+    } catch (error) {
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+          content: Text(isZh ? '云录制操作失败：$error' : 'Cloud recording failed: $error'),
+          duration: const Duration(seconds: 8),
+          showCloseIcon: true,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _recordingBusy = false);
     }
   }
 

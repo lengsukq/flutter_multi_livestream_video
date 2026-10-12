@@ -37,6 +37,40 @@ test('LiveKit removes a participant from demo room state on leave', async () => 
   assert.equal(created.entry.attendees.length, 0);
 });
 
+test('LiveKit close treats a verified missing room as successfully closed', async () => {
+  const provider = createLiveKitProvider({
+    env: {
+      LIVEKIT_URL: 'wss://example.livekit.cloud',
+      LIVEKIT_API_KEY: 'test-key',
+      LIVEKIT_API_SECRET: 'test-secret',
+    },
+    contractVersion: 1,
+    normalizeDisplayName: normalizeName,
+  });
+  const { entry } = await provider.createRoom({
+    roomCode: 'alreadygone', role: 'participant',
+  });
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (_input, init) => {
+      assert.equal(JSON.parse(String(init?.body)).room, 'media-alreadygone');
+      return new Response(JSON.stringify({ code: 'not_found', msg: 'room does not exist' }), {
+        status: 404,
+      });
+    };
+    await provider.closeRoom({ entry, reason: 'idle' });
+
+    // A 404 for an invalid API route or a different error is not a
+    // confirmation that the room has already been deleted.
+    globalThis.fetch = async () => new Response('404 page not found', { status: 404 });
+    await assert.rejects(provider.closeRoom({ entry, reason: 'idle' }), /HTTP 404/);
+    globalThis.fetch = async () => new Response('{"code":"permission_denied"}', { status: 403 });
+    await assert.rejects(provider.closeRoom({ entry, reason: 'idle' }), /HTTP 403/);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test('LiveKit Meeting students cannot publish microphone before grant', async () => {
   const provider = createLiveKitProvider({
     env: {

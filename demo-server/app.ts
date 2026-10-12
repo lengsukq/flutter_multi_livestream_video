@@ -35,6 +35,7 @@ import { registerRecordingRoutes } from './routes/recording-routes.ts';
 import { LiveKitCloudRecording } from './recording/livekit-cloud-recording.ts';
 import { AgoraCloudRecording } from './recording/agora-cloud-recording.ts';
 import { ArtcCloudRecording } from './recording/artc-cloud-recording.ts';
+import { ArtcVodRecording } from './recording/artc-vod-recording.ts';
 import { ChimeCloudRecording } from './recording/chime-cloud-recording.ts';
 import { IvsCloudRecording } from './recording/ivs-cloud-recording.ts';
 import { TrtcCloudRecording } from './recording/trtc-cloud-recording.ts';
@@ -521,7 +522,8 @@ registerRecordingRoutes(app, {
     ['livekit', new LiveKitCloudRecording()],
     ['trtc', trtcCloudRecorder],
     ['agora', new AgoraCloudRecording()],
-    ['artc', new ArtcCloudRecording()],
+    ['artc', process.env.ARTC_RECORDING_STORAGE === 'oss'
+      ? new ArtcCloudRecording() : new ArtcVodRecording()],
     ['chime', new ChimeCloudRecording()],
     ['ivs', new IvsCloudRecording()],
   ]),

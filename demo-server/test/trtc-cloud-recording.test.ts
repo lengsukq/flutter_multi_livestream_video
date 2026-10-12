@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import type {NamedRoomEntry} from '../types.ts';
 import {TrtcCloudRecording} from '../recording/trtc-cloud-recording.ts';
+import type {RecordingObjectReader} from '../recording/s3-recording-storage.ts';
 import {
   RecordingConfigurationError, RecordingProviderError,
 } from '../recording/livekit-cloud-recording.ts';
@@ -32,7 +33,7 @@ function createRecorder() {
     assert.match(headers.get('authorization') ?? '', /TC3-HMAC-SHA256 Credential=/);
     if (action === 'CreateCloudRecording') {
       assert.equal(payload.RoomId, 'media-room1');
-      assert.equal(payload.RoomIdType, 1);
+      assert.equal(payload.RoomIdType, 0);
       assert.equal(payload.RecordParams.RecordMode, 2);
       assert.equal(payload.StorageParams.CloudVod.TencentVod.ExpireTime, 0);
     }
@@ -72,6 +73,88 @@ test('TRTC recording requires trusted cloud config; missing keys fail before any
   const recorder = new TrtcCloudRecording({});
   await assert.rejects(recorder.start(entry, 'grid', 'H264_720P_30'), RecordingConfigurationError);
   assert.equal((await recorder.status(entry)).state, 'idle');
+});
+
+test('TRTC AWS S3 is optional and requires explicit storage credentials', async () => {
+  const recorder = new TrtcCloudRecording({
+    ...env, TRTC_RECORDING_STORAGE: 's3', TRTC_RECORDING_VOD_HOSTS: '',
+  });
+  assert.equal(recorder.readiness().available, false);
+  assert.match(recorder.readiness().reason ?? '', /TRTC_RECORDING_S3/);
+  await assert.rejects(recorder.start(entry, 'grid', 'H264_720P_30'), RecordingConfigurationError);
+});
+
+test('TRTC AWS S3 starts native CloudStorage, exports only verified signed MP4 and scopes the ticket', async () => {
+  const written = new Set<string>();
+  const reader: RecordingObjectReader = {
+    async exists(bucket, key) {
+      assert.equal(bucket, 'rec-trtc-test');
+      return written.has(key);
+    },
+    async open(bucket, key) {
+      assert.equal(bucket, 'rec-trtc-test');
+      assert.ok(written.has(key));
+      return (async function* () {yield Buffer.from('mock recording');})();
+    },
+  };
+  const requests: Record<string, any>[] = [];
+  const transport = (async (_url: string | URL | Request, options?: RequestInit) => {
+    const request = JSON.parse(String(options?.body));
+    requests.push(request);
+    if (new Headers(options?.headers).get('X-TC-Action') === 'CreateCloudRecording') {
+      assert.equal(request.RoomIdType, 0);
+      assert.equal(request.StorageParams.CloudStorage.Vendor, 1);
+      assert.deepEqual(request.StorageParams.CloudStorage.FileNamePrefix, [
+        'flutter_realtime_demo', 'trtc',
+      ]);
+      assert.equal(request.StorageParams.CloudStorage.Bucket, 'rec-trtc-test');
+      assert.equal(request.StorageParams.CloudVod, undefined);
+      return Response.json({Response: {TaskId: 'task-1'}});
+    }
+    return Response.json({Response: {TaskId: 'task-1'}});
+  }) as typeof fetch;
+  const recorder = new TrtcCloudRecording({
+    ...env, TRTC_RECORDING_STORAGE: 's3', TRTC_RECORDING_VOD_HOSTS: '',
+    TRTC_RECORDING_S3_BUCKET: 'rec-trtc-test',
+    TRTC_RECORDING_S3_REGION: 'ap-southeast-1',
+    TRTC_RECORDING_S3_ACCESS_KEY: 'aws-key',
+    TRTC_RECORDING_S3_SECRET_KEY: 'aws-secret',
+  }, transport, reader);
+  assert.equal(recorder.readiness().available, true);
+  const start = await recorder.start(entry, 'grid', 'H264_720P_30');
+  assert.equal(start.state, 'recording');
+  await recorder.stop(entry);
+  const sign = (data: Buffer) => crypto.createHmac('sha256', env.TRTC_RECORDING_CALLBACK_KEY!)
+    .update(data).digest('base64');
+  const callbackBody = (type: number, filename: string) => Buffer.from(JSON.stringify({
+    EventGroupId: 3, EventType: type, CallbackTs: Date.now(),
+    EventInfo: {RoomId: 'media-room1', TaskId: 'task-1',
+      Payload: {Status: 0, FileList: [filename], TencentVod: {VideoUrl: 'https://media.example.test/rec.mp4'}}},
+  }));
+  const vodCallback = callbackBody(311, 'recording.mp4');
+  assert.equal(recorder.receiveCallback(vodCallback, sign(vodCallback), '1400000001'), true);
+  assert.equal((await recorder.status(entry)).state, 'processing');
+  const attack = callbackBody(310, '../secrets.mp4');
+  assert.equal(recorder.receiveCallback(attack, sign(attack), '1400000001'), true);
+  assert.equal((await recorder.status(entry)).state, 'failed');
+  // Recreate a fresh task after the invalid artifact.
+  await recorder.start(entry, 'grid', 'H264_720P_30');
+  await recorder.stop(entry);
+  const good = callbackBody(310, 'recording.mp4');
+  assert.equal(recorder.receiveCallback(good, 'invalid', '1400000001'), false);
+  assert.equal(recorder.receiveCallback(good, sign(good), '1400000001'), true);
+  assert.equal((await recorder.status(entry)).state, 'processing');
+  const key = 'flutter_realtime_demo/trtc/task-1/recording.mp4';
+  written.add(key);
+  assert.equal((await recorder.status(entry)).state, 'completed');
+  const issued = await recorder.download(entry);
+  assert.equal(issued.canDownload, true);
+  const ticket = issued.downloadUrl.split('/').at(-1)!;
+  await assert.rejects(recorder.consumeExport('another-room', ticket), RecordingProviderError);
+  const ticket2 = (await recorder.download(entry)).downloadUrl.split('/').at(-1)!;
+  assert.equal((await recorder.consumeExport('room1', ticket2)).kind, 'stream');
+  await assert.rejects(recorder.consumeExport('room1', ticket2), RecordingProviderError);
+  assert.equal(requests.length, 4);
 });
 
 test('TRTC start/describe/stop produce real task id; MP4 export requires signed upload completion', async () => {

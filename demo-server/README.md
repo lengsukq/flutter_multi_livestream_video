@@ -282,6 +282,14 @@ selection.
 | `ARTC_APP_ID` | unset | public ARTC AppID returned in join payloads |
 | `ARTC_APP_KEY` | unset | server-only ARTC token-signing key; never return it to Flutter |
 | `ARTC_TOKEN_TTL_SECONDS` | `600` | ARTC token lifetime; accepted range is 60–86400 seconds |
+| `ARTC_RECORDING_STORAGE` | `vod` | ARTC: `vod` via Live RTC APIs (default), `oss` for legacy RTC recording |
+| `ARTC_RECORDING_VOD_REGION` | `cn-shanghai` | `cn-shanghai` or `ap-southeast-1`; VOD not available for US East RTC recording |
+| `ARTC_RECORDING_VOD_STORAGE_LOCATION` | unset | Alibaba VOD media storage address |
+| `ARTC_RECORDING_VOD_TRANSCODE_GROUP_ID` | unset | VOD transcoding group that produces unencrypted MP4 |
+| `ARTC_RECORDING_VOD_HOSTS` | unset | Exact HTTPS VOD video delivery hosts allowed by server HTTP proxy |
+| `TRTC_RECORDING_STORAGE` | `vod` | `vod` (default), `s3` to write directly to AWS S3 |
+| `TRTC_RECORDING_S3_BUCKET` / `TRTC_RECORDING_S3_REGION` | unset | Private S3 bucket/region for TRTC direct S3 upload |
+| `TRTC_RECORDING_S3_ACCESS_KEY` / `TRTC_RECORDING_S3_SECRET_KEY` | unset | Server-only TRTC S3 upload and authorized download credentials |
 
 For local LiveKit Server testing:
 

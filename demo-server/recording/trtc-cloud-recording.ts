@@ -6,6 +6,10 @@ import type {
   CloudRecordingExecutor, RecordingLayout, RecordingPreset,
 } from './cloud-recording-executor.ts';
 import {RecordingConfigurationError, RecordingProviderError} from './livekit-cloud-recording.ts';
+import {s3RecordingReader, type RecordingObjectReader} from './s3-recording-storage.ts';
+
+const S3_PREFIX = ['flutter_realtime_demo', 'trtc'] as const;
+type Storage = 'vod' | 's3';
 
 type TrtcState = 'recording' | 'processing' | 'completed' | 'failed';
 type Job = {
@@ -15,12 +19,14 @@ type Job = {
   layout: RecordingLayout;
   stopRequested: boolean;
   videoUrl: string | null;
+  s3Key: string | null;
+  storage: Storage;
   error: string | null;
 };
 
 /**
- * TRTC's mixed cloud recording writes MP4 to Tencent VOD (not S3).
- * The signed 311 callback is authoritative for the exported artifact.
+ * Mixed cloud recording supports Tencent VOD or native AWS S3 output.
+ * Signed 311 (VOD) / 310 (S3) callbacks identify the exported artifact.
  */
 export class TrtcCloudRecording implements CloudRecordingExecutor {
   private readonly jobs = new Map<string, Job>();
@@ -34,8 +40,15 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
   private readonly region: string;
   private readonly apiHost: string;
   private readonly transport: typeof fetch;
+  private readonly storage: Storage;
+  private readonly s3Bucket: string;
+  private readonly s3Region: string;
+  private readonly s3AccessKey: string;
+  private readonly s3SecretKey: string;
+  private readonly reader: RecordingObjectReader;
 
-  constructor(env: NodeJS.ProcessEnv = process.env, transport: typeof fetch = fetch) {
+  constructor(env: NodeJS.ProcessEnv = process.env, transport: typeof fetch = fetch,
+    reader?: RecordingObjectReader) {
     this.sdkAppId = Number(env.TRTC_SDK_APP_ID ?? 0);
     this.sdkSecret = env.TRTC_SDK_SECRET_KEY?.trim() ?? '';
     this.secretId = env.TENCENTCLOUD_SECRET_ID?.trim() ?? '';
@@ -48,26 +61,43 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
     this.region = env.TRTC_RECORDING_REGION?.trim() || 'ap-guangzhou';
     this.apiHost = 'trtc.tencentcloudapi.com';
     this.transport = transport;
+    this.storage = env.TRTC_RECORDING_STORAGE === 's3' ? 's3' : 'vod';
+    this.s3Bucket = env.TRTC_RECORDING_S3_BUCKET?.trim() ?? '';
+    this.s3Region = env.TRTC_RECORDING_S3_REGION?.trim() ?? '';
+    this.s3AccessKey = env.TRTC_RECORDING_S3_ACCESS_KEY?.trim() ?? '';
+    this.s3SecretKey = env.TRTC_RECORDING_S3_SECRET_KEY?.trim() ?? '';
+    this.reader = reader ?? s3RecordingReader({
+      region: this.s3Region || 'us-east-1',
+      accessKeyId: this.s3AccessKey, secretAccessKey: this.s3SecretKey,
+    });
   }
 
   readiness() {
     return this.configured
       ? {available: true}
-      : {available: false, reason: 'TRTC cloud recording requires Tencent Cloud API credentials, callback signing and VOD configuration.'};
+      : {available: false, reason: this.configurationReason()};
   }
 
   get configured(): boolean {
     return Number.isSafeInteger(this.sdkAppId) && this.sdkAppId > 0 &&
-      Boolean(this.sdkSecret && this.secretId && this.secretKey &&
-        this.callbackKey && this.allowedVodHosts.size) &&
+      Boolean(this.sdkSecret && this.secretId && this.secretKey && this.callbackKey) &&
+      (this.storage === 'vod' ? this.allowedVodHosts.size > 0 : Boolean(
+        this.s3Bucket && this.s3Region && this.s3AccessKey && this.s3SecretKey)) &&
       ['ap-beijing', 'ap-guangzhou', 'ap-shanghai'].includes(this.region);
+  }
+
+  private configurationReason(): string {
+    const storage = this.storage === 's3'
+      ? 'TRTC_RECORDING_S3_BUCKET/REGION/ACCESS_KEY/SECRET_KEY'
+      : 'TRTC_RECORDING_VOD_HOSTS';
+    return 'TRTC cloud recording requires TRTC_SDK_APP_ID/SECRET_KEY, ' +
+      'TENCENTCLOUD_SECRET_ID/SECRET_KEY, TRTC_RECORDING_CALLBACK_KEY, ' +
+      storage + ' and a supported TRTC_RECORDING_REGION.';
   }
 
   private ensureConfigured(): void {
     if (!this.configured) throw new RecordingConfigurationError(
-      'TRTC cloud recording requires TRTC_SDK_APP_ID, TRTC_SDK_SECRET_KEY, ' +
-      'TENCENTCLOUD_SECRET_ID, TENCENTCLOUD_SECRET_KEY, ' +
-      'TRTC_RECORDING_CALLBACK_KEY, TRTC_RECORDING_VOD_HOSTS and a supported region.',
+      this.configurationReason(),
     );
   }
 
@@ -119,7 +149,7 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
   }
 
   private view(job: Job) {
-    const canDownload = job.state === 'completed' && Boolean(job.videoUrl);
+    const canDownload = job.state === 'completed' && Boolean(job.videoUrl || job.s3Key);
     return {
       provider: 'trtc', recordingId: job.id, state: job.state,
       layout: job.layout, canDownload,
@@ -143,23 +173,36 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
     const response = await this.call('CreateCloudRecording', {
       SdkAppId: this.sdkAppId, RoomId: room.providerRoomName,
       // All Demo TRTC provider room IDs are strings (media-<roomCode>).
-      RoomIdType: 1, UserId: userId, UserSig: credentials.userSig,
+      RoomIdType: 0, UserId: userId, UserSig: credentials.userSig,
       RecordParams: {RecordMode: 2, StreamType: 0, MaxIdleTime: 60},
       MixTranscodeParams: {
         VideoParams: {Width: 1280, Height: 720, Fps: 15, BitRate: 1500000, Gop: 10},
       },
       MixLayoutParams: {MixLayoutMode: layout === 'speaker' ? 1 : 3},
-      StorageParams: {CloudVod: {TencentVod: {ExpireTime: 0}}},
+      StorageParams: this.storage === 'vod'
+        ? {CloudVod: {TencentVod: {ExpireTime: 0}}}
+        : {CloudStorage: {
+          Vendor: 1, Region: this.s3Region, Bucket: this.s3Bucket,
+          AccessKey: this.s3AccessKey, SecretKey: this.s3SecretKey,
+          FileNamePrefix: [...S3_PREFIX],
+        }},
     });
     if (typeof response.TaskId !== 'string' || !response.TaskId) {
       throw new RecordingProviderError('TRTC did not return a cloud recording TaskId.');
     }
     const job: Job = {
       id: response.TaskId, roomName: room.providerRoomName, state: 'recording',
-      layout, stopRequested: false, videoUrl: null, error: null,
+      layout, stopRequested: false, videoUrl: null, s3Key: null,
+      storage: this.storage, error: null,
     };
     this.jobs.set(room.roomCode, job);
     return this.view(job);
+  }
+
+  private async refreshS3(job: Job): Promise<void> {
+    if (job.storage !== 's3' || !job.stopRequested || !job.s3Key ||
+        job.state === 'failed' || job.state === 'completed') return;
+    if (await this.reader.exists(this.s3Bucket, job.s3Key)) job.state = 'completed';
   }
 
   async stop(room: NamedRoomEntry) {
@@ -172,6 +215,7 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
       job.stopRequested = true;
       if (job.state !== 'failed') job.state = job.videoUrl ? 'completed' : 'processing';
     }
+    await this.refreshS3(job);
     return this.view(job);
   }
 
@@ -187,6 +231,7 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
       });
       if (response.Status === 'Exited') job.state = 'processing';
     }
+    await this.refreshS3(job);
     return this.view(job);
   }
 
@@ -217,7 +262,7 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
     const job = [...this.jobs.values()].find((current) =>
       current.id === info.TaskId && current.roomName === String(info.RoomId));
     if (!job) return false;
-    if (callback.EventType === 311) {
+    if (callback.EventType === 311 && job.storage === 'vod') {
       const vod = payload.TencentVod as Record<string, unknown> | undefined;
       const url = vod?.VideoUrl;
       if (payload.Status === 0 && typeof url === 'string' && this.acceptsVodUrl(url)) {
@@ -227,9 +272,27 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
         job.state = 'failed';
         job.error = 'TRTC VOD recording upload failed or returned an invalid media URL.';
       }
-    } else if (callback.EventType === 312 && payload.Status !== 0 && !job.videoUrl) {
+    } else if (callback.EventType === 312 && job.storage === 'vod' &&
+        payload.Status !== 0 && !job.videoUrl) {
       job.state = 'failed';
       job.error = 'TRTC VOD recording task failed.';
+    } else if (callback.EventType === 310 && job.storage === 's3') {
+      const files = Array.isArray(payload.FileList) ? payload.FileList : [];
+      const filename = files.find((item): item is string =>
+        typeof item === 'string' && /^[a-zA-Z0-9_-][a-zA-Z0-9_.-]*\.mp4$/i.test(item) &&
+        !item.includes('..'));
+      // Names are supplied by the vendor only after a verified callback.
+      // Accept a basename, never a path or a customer-supplied bucket/key.
+      if (payload.Status === 0 && filename && /^[a-zA-Z0-9_.-]{1,256}$/.test(job.id)) {
+        job.s3Key = [...S3_PREFIX, job.id, filename].join('/');
+      } else {
+        job.state = 'failed';
+        job.error = 'TRTC S3 recording failed or returned an unsafe MP4 filename.';
+      }
+    } else if (callback.EventType === 305 && job.storage === 's3' &&
+        payload.LeaveCode === 1) {
+      job.state = 'failed';
+      job.error = 'TRTC could not upload every recording file to S3.';
     }
     return true;
   }
@@ -245,8 +308,8 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
 
   async download(room: NamedRoomEntry) {
     const job = this.jobs.get(room.roomCode);
-    if (!job || job.state !== 'completed' || !job.videoUrl) {
-      throw new RecordingProviderError('TRTC VOD file has not completed uploading.');
+    if (!job || job.state !== 'completed' || (!job.videoUrl && !job.s3Key)) {
+      throw new RecordingProviderError('TRTC recording MP4 has not completed uploading.');
     }
     const ticket = crypto.randomBytes(32).toString('base64url');
     this.tickets.set(ticket, {
@@ -265,9 +328,22 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
     const job = this.jobs.get(roomCode);
     if (!value || !job || value.roomCode !== roomCode ||
         value.jobId !== job.id || value.expires < Date.now() ||
-        job.state !== 'completed' || !job.videoUrl ||
-        !this.acceptsVodUrl(job.videoUrl)) {
+        job.state !== 'completed' || !(job.videoUrl || job.s3Key)) {
       throw new RecordingProviderError('Invalid TRTC recording export ticket.');
+    }
+    if (job.storage === 's3') {
+      if (!job.s3Key || !job.s3Key.startsWith(`${S3_PREFIX.join('/')}/${job.id}/`) ||
+          !await this.reader.exists(this.s3Bucket, job.s3Key)) {
+        throw new RecordingProviderError('TRTC S3 recording is missing.');
+      }
+      return {
+        kind: 'stream' as const,
+        filename: this.view(job).fileName ?? 'recording.mp4',
+        body: await this.reader.open(this.s3Bucket, job.s3Key),
+      };
+    }
+    if (!job.videoUrl || !this.acceptsVodUrl(job.videoUrl)) {
+      throw new RecordingProviderError('TRTC VOD recording URL is invalid.');
     }
     return {
       kind: 'remote' as const, url: job.videoUrl,

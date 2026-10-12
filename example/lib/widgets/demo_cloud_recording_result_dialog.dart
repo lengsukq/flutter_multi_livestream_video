@@ -77,6 +77,9 @@ class _DemoCloudRecordingResultDialogState
   Widget build(BuildContext context) {
     final state = _result?.metadata['state']?.toString() ?? 'loading';
     final canDownload = _result?.metadata['canDownload'] == true;
+    final unavailableReason = _result?.metadata['recordingAvailable'] == false
+        ? _result?.metadata['recordingUnavailableReason']?.toString()
+        : null;
     final label = switch (state) {
       'starting' => '云端正在创建录制任务',
       'recording' => '正在云端录制',
@@ -103,6 +106,11 @@ class _DemoCloudRecordingResultDialogState
               SelectableText('文件：${_result!.fileName}'),
             if (_result != null && _result!.fileSizeBytes > 0)
               Text('大小：${_result!.fileSizeBytes} 字节'),
+            if (unavailableReason != null) ...[
+              const SizedBox(height: 8),
+              Text(unavailableReason,
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ],
             if (state == 'processing')
               const Text('停止录制后，服务器还需要封装 MP4 文件。准备好后才能下载。'),
             if (_result?.metadata['error'] != null)

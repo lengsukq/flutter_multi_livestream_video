@@ -4,16 +4,16 @@
 
 ## 供应商能力现状
 
-| 媒体供应商 | Demo 录制执行器 | 厂商托管录制 | 存储要求 | MP4 下载 |
-|---|---|---|---|---|
-| Agora | `agora-cloud-recording.ts` | Agora Cloud Recording：Acquire/Start/Query/Stop | S3（第一版下载适配；Agora 也支持其他厂商存储，但需对应下载适配） | 通过 S3 读取后由 Demo 下载 |
-| LiveKit | `livekit-cloud-recording.ts` | LiveKit Egress API，配 LiveKit Cloud 服务 | S3 | 通过 S3 读取后由 Demo 下载 |
-| Tencent TRTC | `trtc-cloud-recording.ts` | 腾讯云 Create/Describe/DeleteCloudRecording | 腾讯云 VOD | 经过签名回调确认后转发 VOD HTTPS MP4 |
-| Alibaba ARTC | `artc-cloud-recording.ts` | 阿里云 RTC Start/Describe/StopCloudRecord | OSS + 已创建的录制模板 | 通过 OSS SDK 读取后由 Demo 下载 |
-| AWS Chime SDK | `chime-cloud-recording.ts` | AWS Media Capture Pipeline + Media Concatenation Pipeline | S3 | 完成云端合成后从 S3 读取 MP4 |
-| AWS IVS Real-Time | `ivs-cloud-recording.ts` | AWS IVS Composition（HLS）+ AWS MediaConvert（云端 MP4 转码） | S3 + IVS Encoder/Storage ARN + MediaConvert IAM Role | 等录制完成事件 → MediaConvert Job 完成 → S3 MP4 下载 |
+| 媒体供应商 | Demo 录制执行器 | 厂商托管录制 | 存储要求 | MP4 下载 | 实际验收状态 |
+|---|---|---|---|---|---|
+| Agora | `agora-cloud-recording.ts` | Agora Cloud Recording：Acquire/Start/Query/Stop | S3（第一版下载适配；Agora 也支持其他厂商存储，但需对应下载适配） | 通过 S3 读取后由 Demo 下载 | ❌ 真实调用 `acquire` 返回 HTTP 401；未验收 |
+| LiveKit | `livekit-cloud-recording.ts` | LiveKit Egress API，配 LiveKit Cloud 服务 | S3 | 通过 S3 读取后由 Demo 下载 | ✅ **用户确认已可用（2026-10-12）** |
+| Tencent TRTC | `trtc-cloud-recording.ts` | 腾讯云 Create/Describe/DeleteCloudRecording | 默认腾讯 VOD；可选直接写入 AWS S3 | VOD HTTPS 转发，或从 S3 私有读取后由 Demo 下载 | ⏳ 真实环境待验收 |
+| Alibaba ARTC | `artc-vod-recording.ts`（默认）/ `artc-cloud-recording.ts`（旧 OSS） | 阿里云 Live RTC Start/Stop/DescribeRtcCloudRecordingFiles | 默认阿里云 VOD；旧 OSS 可显式启用；**不新增 AWS S3** | VOD GetPlayInfo MP4 HTTPS 转发；旧 OSS 流式下载 | ⏳ 真实环境待验收 |
+| AWS Chime SDK | `chime-cloud-recording.ts` | AWS Media Capture Pipeline + Media Concatenation Pipeline | S3 | 完成云端合成后从 S3 读取 MP4 | ⏳ 真实环境待验收 |
+| AWS IVS Real-Time | `ivs-cloud-recording.ts` | AWS IVS Composition（HLS）+ AWS MediaConvert（云端 MP4 转码） | S3 + IVS Encoder/Storage ARN + MediaConvert IAM Role | 等录制完成事件 → MediaConvert Job 完成 → S3 MP4 下载 | ⏳ 真实环境待验收 |
 
-接口已实现并通过模拟厂商 API 单测；**所有需要账户付费/存储配置的真实云端 E2E 都仍待验证**。测试通过不等于供应商 API 账户已开通或视频录制画面正确。
+接口已实现并通过模拟厂商 API 单测。**LiveKit Cloud 录制由项目使用者于 2026-10-12 确认可用**；该状态是使用者反馈，未在本次文档更新中独立重新执行真实云端 E2E，也不代表已逐平台验证全部布局、音轨或长时间录制。**其余供应商真实 E2E 仍待验收**；Agora 当前受 REST API `acquire` HTTP 401 阻断（与 RTC 入会、S3 文件下载属于不同环节）。
 
 ## 填写方式：存储桶可以先留空
 
@@ -44,6 +44,8 @@ Agora Cloud Recording 可以配置其他云存储厂商，但本次真正写好�
 
 ### LiveKit Cloud Egress
 
+**验收记录（2026-10-12）：用户已确认 LiveKit 云录制可用。** 当前项目采用 LiveKit Cloud Egress → AWS S3 → Demo 下载 MP4 的执行路径，统一 Flutter SDK 录制 API 不变。后续如果调整 S3 Bucket、Egress 模式、视频布局或目标平台，应重新验证实际录制与下载；本条不等同于全部平台和音画质量的逐项验收。
+
 ```dotenv
 LIVEKIT_URL=wss://your-project.livekit.cloud
 LIVEKIT_API_KEY=
@@ -58,7 +60,7 @@ LIVEKIT_RECORDING_S3_SECRET_KEY=
 
 默认在未填写本地 Egress 路径时使用**云端 S3**，无需 Egress Worker。服务端使用 `StartEgress → StopEgress → ListEgress`，存储字段由后端注入；上传完成后通过受控 S3 Key 验证文件再提供下载。为了不破坏之前的自部署示例，仍可通过 `LIVEKIT_RECORDING_MODE=local` + `LIVEKIT_EGRESS_OUTPUT_DIR`、`LIVEKIT_RECORDING_EXPORT_DIR` 使用旧的共享本地挂载目录模式。**推荐 Demo 使用 cloud。**
 
-### Tencent TRTC 云录制 / VOD
+### Tencent TRTC 云录制 / VOD 或 AWS S3
 
 ```dotenv
 TRTC_SDK_APP_ID=
@@ -68,18 +70,43 @@ TENCENTCLOUD_SECRET_KEY=
 TRTC_RECORDING_CALLBACK_KEY=
 TRTC_RECORDING_VOD_HOSTS=
 TRTC_RECORDING_REGION=ap-guangzhou
+TRTC_RECORDING_STORAGE=vod
+
+# 可选：将 TRTC_RECORDING_STORAGE 改为 s3，直接写入 AWS S3
+# 此模式不需要 TRTC_RECORDING_VOD_HOSTS，但仍需要回调签名密钥
+TRTC_RECORDING_S3_BUCKET=
+TRTC_RECORDING_S3_REGION=              # 例如 ap-southeast-1
+TRTC_RECORDING_S3_ACCESS_KEY=
+TRTC_RECORDING_S3_SECRET_KEY=
 ```
 
-TRTC 不需要另建 S3/OSS Bucket，但仍需要开通腾讯云 VOD；回调配置为 `https://<your-backend>/webhooks/recording/trtc`。后端使用带签名的厂商 API 和经过签名校验的上传完成回调，匹配 TaskId、RoomId、HTTPS VOD 域名，防止未验证视频地址被当成 MP4 下载。
+默认 VOD 模式不需要 AWS S3 Bucket，但必须开通腾讯云 VOD。可切换 S3 模式：官方 `CreateCloudRecording` 的 `StorageParams.CloudStorage.Vendor=1` 直接写入 AWS S3（不是后端二次转存）。回调地址统一配置为 `https://<your-backend>/webhooks/recording/trtc`，且服务端可由公网访问；后端验签后仅接受当前房间 TaskId 的 **311（VOD）**或 **310（S3）** 完成事件。S3 模式必须验证受控前缀 `flutter_realtime_demo/trtc/<TaskId>/<filename>.mp4` 下的对象实际存在，才能开放下载。录制生成的多段 MP4 当前 V1 只导出首个回调文件，不提供自动合并。
 
-### Alibaba ARTC Cloud Recording
+配置 S3 Bucket 最小写入权限及后端私有读取权限，设置生命周期自动清理录像；S3 密钥只存储于服务端。注意录制本身与 S3 存储/请求/下行流量可能另外计费。
+
+### Alibaba ARTC → VOD（默认，不依赖 AWS S3）
 
 ```dotenv
 ARTC_APP_ID=
 ALIBABA_CLOUD_ACCESS_KEY_ID=
 ALIBABA_CLOUD_ACCESS_KEY_SECRET=
 
-# 在阿里云 RTC 控制台预先创建、包含混流/MP4 输出设置的录制模板
+# 默认 ARTC_RECORDING_STORAGE=vod，使用阿里 Live 新版 RTC 云录制 API
+ARTC_RECORDING_STORAGE=vod
+ARTC_RECORDING_VOD_REGION=cn-shanghai   # 或 ap-southeast-1；us-east-1 暂不支持 VOD
+ARTC_RECORDING_VOD_STORAGE_LOCATION=    # 阿里云 VOD 媒资管理 > 存储管理里的存储地址
+ARTC_RECORDING_VOD_TRANSCODE_GROUP_ID=  # VOD 转码模板组（必须产生未加密的 MP4）
+ARTC_RECORDING_VOD_HOSTS=               # 下载 HTTPS 域名白名单，逗号分隔，须精确匹配
+```
+
+新适配器调用官方 `@alicloud/live20161101` 的 `StartRtcCloudRecording → StopRtcCloudRecording → DescribeRtcCloudRecordingFiles`，取得混流录像的 `VodMediaList[].MediaIds/MergedIds` 后，通过 `@alicloud/vod20170321` 的 `GetPlayInfo` 获取未加密 MP4 播放地址，由 Demo Server 代理 HTTP 下载，**不需要 AWS S3**。VOD 本身需要开通并配置存储，可能产生录制/存储/转码/下载费用。
+
+V1 录制开始时订阅当前房间内在线发布者；Grid 使用静态宫格，Speaker 固定突出第一个发布者，当前版本**尚不支持录制开始后自动同步新加入成员，也不支持自动切换当前发言人**。默认导出一个已完成、未加密且位于配置域名白名单内的 MP4；如果厂商返回多个媒体分段，则报明确错误，不误把单片段当作完整录像。必须在 VOD 模板中生成 MP4。
+
+### Alibaba ARTC 旧 OSS 模式（保留兼容，不新增 S3）
+
+```dotenv
+ARTC_RECORDING_STORAGE=oss
 ARTC_RECORDING_TEMPLATE_ID=
 ARTC_RECORDING_OSS_BUCKET=
 ARTC_RECORDING_OSS_REGION=             # 例如 oss-cn-shanghai
@@ -88,7 +115,7 @@ ARTC_RECORDING_OSS_ACCESS_KEY=
 ARTC_RECORDING_OSS_SECRET_KEY=
 ```
 
-使用官方 `@alicloud/rtc20180111` SDK 执行 `StartCloudRecord → DescribeCloudRecordStatus → StopCloudRecord → DescribeAppRecordingFiles`，再通过 `ali-oss` 验证并读取任务对应的 MP4 文件。**录制布局/视频编码以云端模板为准**；当前 `grid` / `speaker` 都调用配置的同一模板，Demo UI 选择项不能覆写其布局。后续需要不同布局时可增加多模板映射。
+旧模式继续使用 `@alicloud/rtc20180111` 的 `StartCloudRecord` 和 OSS；录制布局/编码由旧模板决定。该旧接口本身不支持 VOD，不能通过修改 `StorageConfig.Vendor` 实现 VOD。
 
 ### AWS Chime SDK 云录制 / MP4 云端合成
 
@@ -104,13 +131,16 @@ CHIME_RECORDING_S3_BUCKET=
 ### AWS IVS Cloud Composition + AWS MediaConvert（完全云端 MP4）
 
 ```dotenv
-IVS_RECORDING_AWS_REGION=ap-northeast-1
+IVS_REALTIME_REGION=us-east-1
+IVS_RECORDING_AWS_REGION=us-east-1
 IVS_RECORDING_S3_BUCKET=
 IVS_RECORDING_STORAGE_CONFIGURATION_ARN=
 IVS_RECORDING_ENCODER_CONFIGURATION_ARN=
 IVS_RECORDING_MEDIACONVERT_ROLE_ARN=
 # IAM 权限由 AWS SDK 默认凭据链提供，密钥不放客户端
 ```
+
+直播 Stage、录制所用 IVS Encoder/Storage Configuration 以及 S3 Bucket 必须位于同一区域。设置 `IVS_REALTIME_REGION=us-east-1` 时，也应将 `IVS_RECORDING_AWS_REGION` 设置为 `us-east-1` 并使用该区域的 S3 Bucket。修改区域只影响后续创建的 Stage，不会迁移已存在的直播房间。
 
 IVS Real-Time Stage Composition 的**原生录像是 HLS**。为保持统一 MP4 下载，Demo 实现了两项 AWS 供应商托管服务的编排：`StartComposition → StopComposition`，再等待录制 S3 前缀里的 `events/recording-ended.json`，检查 `media/hls/multivariant.m3u8`，调用 **AWS MediaConvert CreateJob/GetJob** 转码为 MP4，最后验证云存储里的 MP4 并开放一次性下载。**所有媒体转码均在 AWS 云端执行；Demo Server 不跑 FFmpeg 或其他录制引擎**。
 
@@ -160,6 +190,6 @@ cd ../packages/flutter_realtime_sdk_runtime
 flutter test --no-pub test/http_cloud_recording_session_test.dart test/recording_controller_test.dart
 ```
 
-单元测试使用可注入的云厂商响应和对象存储模拟，不涉及真实账号扣费。使用云存储后需要分别验收 **真实用户入会 → 双人音视频 → 云端录制 → MP4 布局/声音回放 → 授权下载 → 清理**。
+单元测试使用可注入的云厂商响应和对象存储模拟，不涉及真实账号扣费。LiveKit 已有上述用户可用性确认；其他厂商以及 LiveKit 尚未单独确认的场景仍需分别验收 **真实用户入会 → 双人音视频 → 云端录制 → MP4 布局/声音回放 → 授权下载 → 清理**。
 
 官方参考：[Agora Cloud Recording REST](https://docs.agora.io/en/cloud-recording/get-started/getstarted)、[LiveKit Egress](https://docs.livekit.io/home/egress/overview/)、[Amazon Chime Media Pipelines](https://docs.aws.amazon.com/chime-sdk/latest/dg/create-concat-pipe-steps.html)、[Amazon IVS Stage Composition](https://docs.aws.amazon.com/ivs/latest/RealTimeUserGuide/rt-composite-recording.html)、[阿里云 RTC Cloud Record](https://help.aliyun.com/zh/document_detail/2703647.html)。
