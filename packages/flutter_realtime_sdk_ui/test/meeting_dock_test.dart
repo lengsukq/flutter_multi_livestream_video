@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -301,18 +300,7 @@ class _FakeMediaSession extends Fake implements MediaSession {
   @override
   Stream<MediaEvent> get events => const Stream.empty();
   @override
-  Stream<MediaMessage> get dataMessages => const Stream.empty();
-  @override
-  Future<void> sendData(
-    Object message, {
-    MediaSendOptions options = const MediaSendOptions(),
-  }) async {}
-  @override
-  Future<void> sendMessage(String message, {String topic = 'chat'}) async {}
-  @override
   Future<void> leave() async {}
   @override
   Future<void> dispose() async {}
-  @override
-  Future<void> setScreenShareEnabled(bool enabled) async {}
 }

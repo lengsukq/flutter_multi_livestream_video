@@ -1149,8 +1149,8 @@ class RealtimeShareOptionCard extends StatelessWidget {
     final backgroundColor = isSelected
         ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.12 : 0.06)
         : (isDark
-            ? Colors.white.withValues(alpha: 0.03)
-            : Colors.black.withValues(alpha: 0.02));
+              ? Colors.white.withValues(alpha: 0.03)
+              : Colors.black.withValues(alpha: 0.02));
 
     return Opacity(
       opacity: enabled ? 1.0 : 0.45,
@@ -1180,11 +1180,7 @@ class RealtimeShareOptionCard extends StatelessWidget {
                     color: iconBackgroundColor,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(
-                    icon,
-                    color: iconColor,
-                    size: 24,
-                  ),
+                  child: Icon(icon, color: iconColor, size: 24),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
