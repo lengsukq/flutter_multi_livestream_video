@@ -116,6 +116,37 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
     );
   }
 
+  Future<void> _sendWave(BuildContext context) async {
+    try {
+      await widget.room.interactions.publish(DemoWaveInteraction.topic, {
+        'sentAtMs': DateTime.now().millisecondsSinceEpoch,
+      });
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text('$error')));
+      }
+    }
+  }
+
+  void _openClassroomTools(BuildContext context) {
+    final classroom = widget.room.classroom;
+    if (classroom == null) return;
+    showRealtimeGlassBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.75,
+        child: ClassroomToolsPanel(
+          classroom: classroom,
+          showHeader: true,
+          onClose: () => Navigator.maybeOf(sheetContext)?.pop(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => FutureBuilder<void>(
     future: _videoEffectsReady,
@@ -201,12 +232,12 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                               ),
                             ),
                           ),
-                          DemoRecordingBadge(room: widget.room),
                           if (wide) ...[
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 8),
                             const RealtimeConnectionIndicator(),
                           ],
-                          const SizedBox(width: 10),
+                          DemoRecordingBadge(room: widget.room),
+                          const Spacer(),
                           RealtimeLeaveButton(
                             onConfirm: _confirmLeave,
                             onLeft: _onLeft,
@@ -230,34 +261,16 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                         mediaGroup: [
                           RealtimeDockMicrophoneButton(showLabel: wide),
                           RealtimeDockCameraButton(showLabel: wide),
-                          RealtimeRoomActionButton(
-                            action: RealtimeRoomUiAction.switchCamera,
-                            builder: (context, onPressed, active, pending) =>
-                                RealtimeDockItem(
-                                  icon: Icons.cameraswitch_rounded,
-                                  label: RealtimeStrings.of(context).flipCamera,
-                                  isLoading: pending,
-                                  onPressed: onPressed,
-                                  showLabel: wide,
-                                ),
-                          ),
-                          RealtimeDockItem(
-                            icon: Icons.blur_on_rounded,
-                            label: RealtimeStrings.of(
-                              context,
-                            ).backgroundEffects,
-                            onPressed: () => _openEffects(context),
-                            showLabel: wide,
-                          ),
-                          DemoRecordingButton(room: widget.room),
                         ],
                         collaborationGroup: [
                           RealtimeDockSharedContentButton(showLabel: wide),
-                          DemoWaveAction(room: widget.room, showLabel: wide),
-                          if (widget.room.classroom != null) ...[
-                            RealtimeDockRaiseHandButton(showLabel: wide),
-                            RealtimeDockFeedbackButton(showLabel: wide),
-                          ],
+                          RealtimeDockReactionsButton(
+                            showLabel: wide,
+                            onWave:
+                                widget.room.interactions.capabilities.canPublish
+                                ? () => unawaited(_sendWave(context))
+                                : null,
+                          ),
                         ],
                         panelsGroup: [
                           if (widget.room.chat != null)
@@ -281,8 +294,6 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                             showLabel: wide,
                           ),
                           if (widget.room.classroom != null)
-                            const RealtimeClassroomToolsButton(),
-                          if (widget.room.classroom != null)
                             RealtimeDockItem(
                               icon: Icons.school_outlined,
                               label: RealtimeStrings.of(context).classroom,
@@ -294,6 +305,65 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                               ),
                               showLabel: wide,
                             ),
+                          RealtimeDockMoreButton(
+                            showLabel: wide,
+                            hasActiveBadge:
+                                widget.room.recordingStatus ==
+                                RecordingStatus.recording,
+                            items: [
+                              RealtimeDockMoreItem(
+                                icon: Icons.cameraswitch_rounded,
+                                title: RealtimeStrings.of(context).flipCamera,
+                                subtitle:
+                                    Localizations.localeOf(
+                                          context,
+                                        ).languageCode ==
+                                        'zh'
+                                    ? '切换前后置摄像头'
+                                    : 'Switch front/rear camera',
+                                onTap: () {
+                                  final controller = RealtimeRoomUiScope.of(
+                                    context,
+                                  );
+                                  unawaited(controller.switchCamera());
+                                },
+                              ),
+                              RealtimeDockMoreItem(
+                                icon: Icons.blur_on_rounded,
+                                title: RealtimeStrings.of(
+                                  context,
+                                ).backgroundEffects,
+                                subtitle:
+                                    Localizations.localeOf(
+                                          context,
+                                        ).languageCode ==
+                                        'zh'
+                                    ? '背景虚化与虚拟背景'
+                                    : 'Background blur & virtual background',
+                                onTap: () => unawaited(_openEffects(context)),
+                              ),
+                              if (widget
+                                      .room
+                                      .classroom
+                                      ?.state
+                                      ?.capabilities
+                                      .canUseTools ==
+                                  true)
+                                RealtimeDockMoreItem(
+                                  icon: Icons.build_outlined,
+                                  title: RealtimeStrings.of(
+                                    context,
+                                  ).classroomTools,
+                                  subtitle: RealtimeStrings.of(
+                                    context,
+                                  ).classroomToolsDescription,
+                                  onTap: () => _openClassroomTools(context),
+                                ),
+                            ],
+                            children: [
+                              DemoRecordingListTile(room: widget.room),
+                            ],
+                          ),
                         ],
                         exitAction: RealtimeDockItem(
                           icon: Icons.call_end_rounded,
@@ -341,120 +411,128 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => RealtimeRoomUiScope(
-        room: widget.room,
-        child: Container(
-          height: MediaQuery.of(sheetContext).size.height * 0.68,
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.35),
-                blurRadius: 24,
-                offset: const Offset(0, -6),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4.5,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(2.5),
+      builder: (sheetContext) {
+        final viewInsets = MediaQuery.viewInsetsOf(sheetContext);
+        return Padding(
+          padding: EdgeInsets.only(bottom: viewInsets.bottom),
+          child: RealtimeRoomUiScope(
+            room: widget.room,
+            child: Container(
+              height: MediaQuery.of(sheetContext).size.height * 0.72,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    blurRadius: 24,
+                    offset: const Offset(0, -6),
                   ),
-                ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      width: 38,
+                      height: 4.5,
+                      margin: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color:
-                            (panel == _DemoSidePanel.chat
-                                    ? const Color(0xFF0284C7)
-                                    : const Color(0xFF3B82F6))
-                                .withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        switch (panel) {
-                          _DemoSidePanel.chat =>
-                            Icons.chat_bubble_outline_rounded,
-                          _DemoSidePanel.classroom => Icons.school_outlined,
-                          _ => Icons.people_outline_rounded,
-                        },
-                        size: 16,
-                        color: panel == _DemoSidePanel.chat
-                            ? const Color(0xFF0284C7)
-                            : const Color(0xFF3B82F6),
+                        color: Colors.grey.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(2.5),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Text(
-                      switch (panel) {
-                        _DemoSidePanel.chat => strings.chat,
-                        _DemoSidePanel.classroom => strings.classroom,
-                        _ => strings.participants,
-                      },
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => Navigator.pop(sheetContext),
-                    ),
-                  ],
-                ),
-              ),
-              Divider(
-                height: 1,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : const Color(0xFFE2E8F0),
-              ),
-              Expanded(
-                child: switch (panel) {
-                  _DemoSidePanel.chat => const RealtimeChatPanel(),
-                  _DemoSidePanel.classroom => RealtimeClassroomPanel(
-                    onClose: () => Navigator.pop(sheetContext),
                   ),
-                  _ => const RealtimeManagedParticipantList(),
-                },
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: (switch (panel) {
+                              _DemoSidePanel.chat => const Color(0xFF0284C7),
+                              _DemoSidePanel.classroom => const Color(
+                                0xFF8B5CF6,
+                              ),
+                              _ => const Color(0xFF3B82F6),
+                            }).withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            switch (panel) {
+                              _DemoSidePanel.chat =>
+                                Icons.chat_bubble_outline_rounded,
+                              _DemoSidePanel.classroom => Icons.school_outlined,
+                              _ => Icons.people_outline_rounded,
+                            },
+                            size: 16,
+                            color: switch (panel) {
+                              _DemoSidePanel.chat => const Color(0xFF0284C7),
+                              _DemoSidePanel.classroom => const Color(
+                                0xFF8B5CF6,
+                              ),
+                              _ => const Color(0xFF3B82F6),
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          switch (panel) {
+                            _DemoSidePanel.chat => strings.chat,
+                            _DemoSidePanel.classroom => strings.classroom,
+                            _ => strings.participants,
+                          },
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => Navigator.pop(sheetContext),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Divider(
+                    height: 1,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                  Expanded(
+                    child: switch (panel) {
+                      _DemoSidePanel.chat => const RealtimeChatPanel(),
+                      _DemoSidePanel.classroom => RealtimeClassroomPanel(
+                        showHeader: false,
+                        onClose: () => Navigator.pop(sheetContext),
+                      ),
+                      _ => const RealtimeManagedParticipantList(),
+                    },
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   Widget _sidePanel() {
     final strings = RealtimeStrings.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (_panel == _DemoSidePanel.classroom) {
-      return RealtimeCard(
-        margin: const EdgeInsets.all(8),
-        radius: RealtimeUiTokens.cardRadius,
-        child: RealtimeClassroomPanel(
-          onClose: () => setState(() => _panel = _DemoSidePanel.closed),
-        ),
-      );
-    }
     return Container(
       margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
       decoration: BoxDecoration(
@@ -486,11 +564,11 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                 Container(
                   padding: const EdgeInsets.all(5),
                   decoration: BoxDecoration(
-                    color:
-                        (_panel == _DemoSidePanel.chat
-                                ? const Color(0xFF0284C7)
-                                : const Color(0xFF3B82F6))
-                            .withValues(alpha: 0.15),
+                    color: (switch (_panel) {
+                      _DemoSidePanel.chat => const Color(0xFF0284C7),
+                      _DemoSidePanel.classroom => const Color(0xFF8B5CF6),
+                      _ => const Color(0xFF3B82F6),
+                    }).withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -500,9 +578,11 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                       _ => Icons.people_outline_rounded,
                     },
                     size: 16,
-                    color: _panel == _DemoSidePanel.chat
-                        ? const Color(0xFF0284C7)
-                        : const Color(0xFF3B82F6),
+                    color: switch (_panel) {
+                      _DemoSidePanel.chat => const Color(0xFF0284C7),
+                      _DemoSidePanel.classroom => const Color(0xFF8B5CF6),
+                      _ => const Color(0xFF3B82F6),
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -510,6 +590,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                   child: Text(
                     switch (_panel) {
                       _DemoSidePanel.chat => strings.chat,
+                      _DemoSidePanel.classroom => strings.classroom,
                       _ => strings.participants,
                     },
                     style: TextStyle(
@@ -541,6 +622,10 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
           Expanded(
             child: switch (_panel) {
               _DemoSidePanel.chat => const RealtimeChatPanel(),
+              _DemoSidePanel.classroom => RealtimeClassroomPanel(
+                showHeader: false,
+                onClose: () => setState(() => _panel = _DemoSidePanel.closed),
+              ),
               _ => const RealtimeManagedParticipantList(),
             },
           ),

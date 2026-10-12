@@ -232,12 +232,15 @@ class DemoStrings {
       ? '云端录制任务已创建，停止后需要等待云端文件处理完成。'
       : 'Cloud recording started. The file needs server-side processing after stopping.';
   String get cloudRecordingUnsupported => isZh
-      ? '云端录制目前仅支持 LiveKit'
-      : 'Cloud recording currently supports LiveKit only';
+      ? '当前供应商未配置云录制执行器'
+      : 'Cloud recording requires a supported provider and configured backend';
   String get chooseCloudRecordingLayout =>
       isZh ? '选择云端录制布局' : 'Choose a cloud recording layout';
   String get gridModePreferred => isZh ? '宫格模式（推荐）' : 'Grid (recommended)';
   String get speakerMode => isZh ? '演讲者模式' : 'Speaker';
   String recordingActionFailed(Object error) =>
       isZh ? '录制操作失败: $error' : 'Recording failed: $error';
+  String get recordingUnavailable => isZh ? '录制服务未就绪' : 'Recorder unavailable';
+  String recordingUnavailableReason(String reason) =>
+      isZh ? '服务器尚未准备好录制：$reason' : 'The server recorder is not ready: $reason';
 }

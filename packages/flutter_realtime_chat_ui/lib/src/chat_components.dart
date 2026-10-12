@@ -324,30 +324,62 @@ class ChatMessageList extends StatelessWidget {
                   backgroundColor: Colors.transparent,
                   builder: (sheetContext) => SafeArea(
                     child: Container(
-                      margin: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
+                        color: isDark ? const Color(0xFF1E1E22) : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: theme.colorScheme.outlineVariant.withValues(
-                            alpha: 0.5,
-                          ),
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : Colors.black.withValues(alpha: 0.08),
+                          width: 0.8,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.35 : 0.08,
+                            ),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          const SizedBox(height: 10),
+                          Center(
+                            child: Container(
+                              width: 36,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.2)
+                                    : Colors.black.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           ListTile(
-                            leading: const Icon(Icons.reply_rounded),
-                            title: Text(zh ? '回复消息' : 'Reply'),
+                            leading: const Icon(Icons.reply_rounded, size: 20),
+                            title: Text(
+                              zh ? '回复消息' : 'Reply',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            dense: true,
                             onTap: () {
                               Navigator.pop(sheetContext);
                               controller.selectReply(message);
                             },
                           ),
                           ListTile(
-                            leading: const Icon(Icons.copy_rounded),
-                            title: Text(zh ? '复制内容' : 'Copy'),
+                            leading: const Icon(Icons.copy_rounded, size: 20),
+                            title: Text(
+                              zh ? '复制内容' : 'Copy',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            dense: true,
                             onTap: () {
                               Navigator.pop(sheetContext);
                               unawaited(
@@ -360,6 +392,7 @@ class ChatMessageList extends StatelessWidget {
                                   content: Text(
                                     zh ? '已复制消息' : 'Message copied',
                                   ),
+                                  behavior: SnackBarBehavior.floating,
                                 ),
                               );
                             },
@@ -368,14 +401,17 @@ class ChatMessageList extends StatelessWidget {
                             ListTile(
                               leading: Icon(
                                 Icons.delete_outline_rounded,
+                                size: 20,
                                 color: theme.colorScheme.error,
                               ),
                               title: Text(
                                 zh ? '删除消息' : 'Delete',
                                 style: TextStyle(
+                                  fontSize: 14,
                                   color: theme.colorScheme.error,
                                 ),
                               ),
+                              dense: true,
                               onTap: () {
                                 Navigator.pop(sheetContext);
                                 unawaited(controller.deleteMessage(message));
@@ -385,14 +421,17 @@ class ChatMessageList extends StatelessWidget {
                             ListTile(
                               leading: Icon(
                                 Icons.person_remove_outlined,
+                                size: 20,
                                 color: theme.colorScheme.error,
                               ),
                               title: Text(
                                 zh ? '移出成员' : 'Remove user',
                                 style: TextStyle(
+                                  fontSize: 14,
                                   color: theme.colorScheme.error,
                                 ),
                               ),
+                              dense: true,
                               onTap: () {
                                 Navigator.pop(sheetContext);
                                 unawaited(
@@ -400,7 +439,7 @@ class ChatMessageList extends StatelessWidget {
                                 );
                               },
                             ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                         ],
                       ),
                     ),
@@ -411,10 +450,12 @@ class ChatMessageList extends StatelessWidget {
 
             final bubbleBgColor = own
                 ? theme.colorScheme.primary
-                : (isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE9E9EB));
+                : (isDark ? const Color(0xFF262629) : const Color(0xFFF2F2F7));
             final bubbleTextColor = own
                 ? Colors.white
                 : (isDark ? Colors.white : const Color(0xFF0F172A));
+            final timeStr =
+                '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
 
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
@@ -459,23 +500,49 @@ class ChatMessageList extends StatelessWidget {
                               vertical: 9,
                             ),
                             decoration: BoxDecoration(
-                              color: bubbleBgColor,
+                              gradient: own
+                                  ? LinearGradient(
+                                      colors: [
+                                        theme.colorScheme.primary,
+                                        theme.colorScheme.primary.withValues(
+                                          alpha: 0.88,
+                                        ),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    )
+                                  : null,
+                              color: own ? null : bubbleBgColor,
                               borderRadius: BorderRadius.only(
                                 topLeft: const Radius.circular(18),
                                 topRight: const Radius.circular(18),
                                 bottomLeft: Radius.circular(own ? 18 : 4),
                                 bottomRight: Radius.circular(own ? 4 : 18),
                               ),
+                              border: Border.all(
+                                color: own
+                                    ? Colors.white.withValues(alpha: 0.12)
+                                    : (isDark
+                                          ? Colors.white.withValues(alpha: 0.08)
+                                          : Colors.black.withValues(
+                                              alpha: 0.05,
+                                            )),
+                                width: 0.8,
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.04),
+                                  color: Colors.black.withValues(
+                                    alpha: isDark ? 0.25 : 0.04,
+                                  ),
                                   blurRadius: 6,
                                   offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: own
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   message.message,
@@ -483,6 +550,18 @@ class ChatMessageList extends StatelessWidget {
                                     color: bubbleTextColor,
                                     fontSize: 14,
                                     height: 1.35,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  timeStr,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w400,
+                                    color: own
+                                        ? Colors.white.withValues(alpha: 0.72)
+                                        : theme.colorScheme.onSurfaceVariant
+                                              .withValues(alpha: 0.65),
                                   ),
                                 ),
                               ],

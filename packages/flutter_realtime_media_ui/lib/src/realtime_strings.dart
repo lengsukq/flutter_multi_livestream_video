@@ -493,6 +493,8 @@ class RealtimeStrings {
   String get closeCommentInput => isZh ? '收起评论输入' : 'Close comment input';
   String get shareScreen => screenShare;
   String get classroomFeedback => isZh ? '课堂互动反馈' : 'Classroom feedback';
+  String get reactions => isZh ? '互动' : 'Reactions';
+  String get wave => isZh ? '挥手' : 'Wave';
   String get classroomTools => isZh ? '课堂工具' : 'Classroom tools';
   String get classroomToolsDescription =>
       isZh ? '课堂工具（公告、作业、倒计时）' : 'Classroom tools (notices, homework, timer)';
@@ -505,6 +507,48 @@ class RealtimeStrings {
           'One moment',
           'Thanks for sharing!',
         ];
+
+  // Classroom sub-features
+  String get submit => isZh ? '提交' : 'Submit';
+  String get noRaisedHands => isZh ? '暂无举手学生' : 'No raised hands';
+  String get noRaisedHandsDesc =>
+      isZh ? '学生举手申请发言将在此实时显示' : 'Student requests to speak will appear here';
+  String get speakingPermitted => isZh ? '允许发言中' : 'Speaking permitted';
+  String get handRaisedStatus => isZh ? '申请发言中' : 'Hand raised';
+  String get allow => isZh ? '允许' : 'Allow';
+  String get allowSpeaking => isZh ? '允许发言' : 'Allow speaking';
+  String get revoke => isZh ? '收回' : 'Revoke';
+  String get revokeSpeaking => isZh ? '收回发言' : 'Revoke speaking';
+  String get rosterUnavailable => isZh ? '花名册暂不可用' : 'Roster unavailable';
+  String get canSpeak => isZh ? '可发言' : 'Can speak';
+  String get listening => isZh ? '听课中' : 'Listening';
+  String get noQuestionsYet => isZh ? '暂无课堂提问' : 'No questions yet';
+  String get noQuestionsDesc =>
+      isZh ? '输入问题后点击发送，向老师请教' : 'Type a question below to ask the teacher';
+  String get noQuestionsDescTeacher => isZh
+      ? '学生提问后将在此展示，可直接在此解答'
+      : 'Questions submitted by students will appear here';
+  String get askQuestionHint => isZh ? '向老师提问…' : 'Ask a question';
+  String get askQuestionTooltip => isZh ? '向老师提问' : 'Ask question';
+  String get manageQuestion => isZh ? '管理提问' : 'Manage question';
+  String get answer => isZh ? '回答' : 'Answer';
+  String get answerQuestion => isZh ? '回答提问' : 'Answer question';
+  String get resolve => isZh ? '标记已处理' : 'Resolve';
+  String get teacherAnswerBadge => isZh ? '老师解答' : 'Teacher';
+  String get questionPending => isZh ? '待解答' : 'Pending';
+  String get questionAnswered => isZh ? '已回答' : 'Answered';
+  String get questionResolved => isZh ? '已完结' : 'Resolved';
+  String activityResponses(int count) =>
+      isZh ? '$count 人参与' : '$count responses';
+  String get activityClosed => isZh ? '已结束' : 'Closed';
+  String get closeActivity => isZh ? '结束活动' : 'Close';
+
+  // Meeting Chat additions
+  String get meetingChatEmptyTitle => isZh ? '暂无会议消息' : 'No messages yet';
+  String get meetingChatEmptyDesc =>
+      isZh ? '发送消息与参会者实时沟通' : 'Send a message to chat with participants';
+  String get sendMessage => isZh ? '发送消息' : 'Send message';
+  String get replyMessage => isZh ? '回复消息' : 'Reply';
 }
 
 class _RealtimeStringsDelegate extends LocalizationsDelegate<RealtimeStrings> {

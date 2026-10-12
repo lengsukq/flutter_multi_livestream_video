@@ -567,6 +567,9 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                                   children: [
                                     // Anchor capsule
                                     Container(
+                                      constraints: BoxConstraints(
+                                        maxWidth: wide ? 220 : 130,
+                                      ),
                                       padding: const EdgeInsets.fromLTRB(
                                         4,
                                         4,
@@ -661,33 +664,41 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                                             ],
                                           ),
                                           const SizedBox(width: 8),
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                strings.liveStream,
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: isDark
-                                                      ? Colors.white
-                                                      : RealtimeUiTokens.text,
+                                          Flexible(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  strings.liveStream,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : RealtimeUiTokens.text,
+                                                  ),
                                                 ),
-                                              ),
-                                              Text(
-                                                widget.room.roomCode,
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: isDark
-                                                      ? Colors.white70
-                                                      : RealtimeUiTokens
-                                                            .textMuted,
+                                                Text(
+                                                  widget.room.roomCode,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: isDark
+                                                        ? Colors.white70
+                                                        : RealtimeUiTokens
+                                                              .textMuted,
+                                                  ),
                                                 ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -717,35 +728,27 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
 
                                     DemoRecordingBadge(room: widget.room),
 
-                                    // Clean Screen button
-                                    RealtimeGlassIconButton(
-                                      tooltip: strings.cleanScreen,
-                                      icon: Icons.fullscreen_rounded,
-                                      size: 36,
-                                      radius: RealtimeUiTokens.pillRadius,
-                                      onPressed: () =>
-                                          setState(() => _cleanScreen = true),
-                                    ),
-                                    const SizedBox(width: 8),
+                                    // Clean Screen button (wide screens)
+                                    if (wide) ...[
+                                      RealtimeGlassIconButton(
+                                        tooltip: strings.cleanScreen,
+                                        icon: Icons.fullscreen_rounded,
+                                        size: 36,
+                                        radius: RealtimeUiTokens.pillRadius,
+                                        onPressed: () =>
+                                            setState(() => _cleanScreen = true),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ],
 
                                     // Leave button
-                                    RealtimeGlassIconButton(
-                                      tooltip: isHost
-                                          ? strings.endLive
-                                          : strings.leave,
-                                      icon: Icons.close_rounded,
-                                      size: 36,
-                                      radius: RealtimeUiTokens.pillRadius,
-                                      danger: isHost,
-                                      onPressed: () async {
-                                        if (await _confirmLeave(context)) {
-                                          try {
-                                            await controller.leave();
-                                            if (context.mounted &&
-                                                Navigator.canPop(context)) {
-                                              Navigator.pop(context);
-                                            }
-                                          } catch (_) {}
+                                    RealtimeLeaveButton(
+                                      iconOnly: true,
+                                      onConfirm: (ctx) => _confirmLeave(ctx),
+                                      onLeft: () {
+                                        if (context.mounted &&
+                                            Navigator.canPop(context)) {
+                                          Navigator.pop(context);
                                         }
                                       },
                                     ),

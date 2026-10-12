@@ -537,7 +537,9 @@ class RealtimePill extends StatelessWidget {
       curve: Curves.easeOutCubic,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: effectiveBg.withValues(alpha: 0.88),
+        color: effectiveBg.a < 0.99
+            ? effectiveBg
+            : effectiveBg.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
         border: Border.all(color: effectiveBorder),
       ),
