@@ -18,7 +18,6 @@ class Realtime extends base.Realtime {
     Duration? requestTimeout,
     RealtimeTokenProvider? tokenProvider,
     InteractionControlPlaneFactory? interactionControlPlaneFactory,
-    RealtimeLocalRecordingDriverFactory? localRecordingDriverFactory,
     Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
     RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
   }) {
@@ -28,7 +27,6 @@ class Realtime extends base.Realtime {
       requestTimeout: requestTimeout,
       tokenProvider: tokenProvider,
       interactionControlPlaneFactory: interactionControlPlaneFactory,
-      localRecordingDriverFactory: localRecordingDriverFactory,
       featurePlugins: featurePlugins,
       platformResolver: platformResolver,
     );

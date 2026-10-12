@@ -12,7 +12,6 @@ import flutter_realtime_chat_agora
 import flutter_realtime_media_artc
 import flutter_realtime_media_aws_desktop
 import flutter_realtime_media_livekit
-import flutter_realtime_recorder_native
 import flutter_realtime_screen_annotation
 import flutter_realtime_video_effects
 import flutter_webrtc
@@ -31,7 +30,6 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FlutterRealtimeMediaArtcPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaArtcPlugin"))
   FlutterRealtimeMediaAwsDesktopPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaAwsDesktopPlugin"))
   FlutterRealtimeMediaLivekitPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaLivekitPlugin"))
-  FlutterRealtimeRecorderNativePlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeRecorderNativePlugin"))
   FlutterRealtimeScreenAnnotationPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeScreenAnnotationPlugin"))
   FlutterRealtimeVideoEffectsPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeVideoEffectsPlugin"))
   FlutterWebRTCPlugin.register(with: registry.registrar(forPlugin: "FlutterWebRTCPlugin"))

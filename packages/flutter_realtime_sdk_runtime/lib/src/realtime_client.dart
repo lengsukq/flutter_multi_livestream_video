@@ -18,8 +18,6 @@ typedef RealtimeChatClientFactory = ChatClient Function();
 typedef RealtimePublicProviderResolver = String Function(String engineId);
 typedef InteractionControlPlaneFactory =
     InteractionControlPlane? Function(MediaRoomSession mediaRoom);
-typedef RealtimeLocalRecordingDriverFactory =
-    MediaLocalRecordingSession? Function(MediaRoomSession mediaRoom);
 
 /// Recommended application-level entry point for realtime rooms.
 ///
@@ -37,7 +35,6 @@ class RealtimeClient {
     RealtimeChatClientFactory? chatClientFactory,
     RealtimePublicProviderResolver? publicProviderResolver,
     this.interactionControlPlaneFactory,
-    this.localRecordingDriverFactory,
     Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
   }) : chatRegistry = chatRegistry ?? ChatRegistry(),
        featurePlugins = List.unmodifiable(featurePlugins),
@@ -57,7 +54,6 @@ class RealtimeClient {
   final RealtimeChatClientFactory? _chatClientFactory;
   final RealtimePublicProviderResolver? _publicProviderResolver;
   final InteractionControlPlaneFactory? interactionControlPlaneFactory;
-  final RealtimeLocalRecordingDriverFactory? localRecordingDriverFactory;
   final List<RealtimeFeaturePlugin> featurePlugins;
 
   ChatClient newChatClient({ChatProvisioner? provisioner}) =>
@@ -342,7 +338,6 @@ class RealtimeClient {
       final resolved = RealtimeRoom(
         effectsCapabilities: effects,
         media: room,
-        localRecordingDriver: localRecordingDriverFactory?.call(room),
         publicProviderId:
             _publicProviderResolver?.call(room.providerId) ?? room.providerId,
         renderer: renderer,

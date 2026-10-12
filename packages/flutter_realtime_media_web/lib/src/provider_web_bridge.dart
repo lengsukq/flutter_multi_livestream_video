@@ -129,20 +129,6 @@ class ProviderWebBridge {
     Map<String, Object?> arguments = const {},
   ]) => _command(providerId, sessionId, command, arguments);
 
-  /// Synchronous to preserve the browser's user-activation download gesture.
-  static void downloadRecording(
-    String providerId,
-    String sessionId,
-    String downloadId,
-  ) {
-    _bridge.callMethod<JSAny?>(
-      'downloadRecording'.toJS,
-      providerId.toJS,
-      sessionId.toJS,
-      downloadId.toJS,
-    );
-  }
-
   static Future<void> leave(String providerId, String sessionId) async {
     try {
       await _bridge

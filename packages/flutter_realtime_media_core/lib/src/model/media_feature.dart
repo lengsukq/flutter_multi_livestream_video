@@ -23,7 +23,6 @@ enum MediaFeature {
   listParticipants,
   removeParticipants,
   closeRoom,
-  recordLocal,
   recordCloud,
 }
 
@@ -51,7 +50,6 @@ extension MediaCapabilitiesFeatures on MediaCapabilities {
     MediaFeature.listParticipants => canListParticipants,
     MediaFeature.removeParticipants => canRemoveParticipants,
     MediaFeature.closeRoom => canCloseRoom,
-    MediaFeature.recordLocal => canRecordLocal,
     MediaFeature.recordCloud => canRecordCloud,
   };
 }

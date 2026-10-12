@@ -195,78 +195,6 @@ test('Chime bridge uses the current 3.32 media input APIs', async () => {
   assert.ok(calls.includes('destroyDeviceController'));
 });
 
-test('Web local recording encodes captured media and downloads a real Blob', async () => {
-  const calls = [];
-  const tracks = [
-    { kind: 'video', addEventListener() {}, stop() { calls.push('stopVideo'); } },
-    { kind: 'audio', addEventListener() {}, stop() { calls.push('stopAudio'); } },
-  ];
-  class FakeRecorder {
-    static isTypeSupported(value) { return value === 'video/webm'; }
-    constructor(stream, options) {
-      this.stream = stream;
-      this.mimeType = options.mimeType;
-      this.state = 'inactive';
-    }
-    start() { this.state = 'recording'; }
-    stop() {
-      this.state = 'inactive';
-      this.ondataavailable({data: new Blob([Uint8Array.from([26, 69, 223, 163, 159])])});
-      this.onstop();
-    }
-  }
-  const anchor = {
-    style: {},
-    click() { calls.push('download'); },
-    remove() {},
-  };
-  const {bridge} = await createChimeHarness({
-    MediaRecorder: FakeRecorder,
-    navigator: {
-      mediaDevices: {
-        getDisplayMedia: async ({video, audio}) => {
-          assert.equal(video, true);
-          assert.equal(audio, true);
-          return {
-            getTracks: () => tracks,
-            getVideoTracks: () => tracks.filter((track) => track.kind === 'video'),
-            getAudioTracks: () => tracks.filter((track) => track.kind === 'audio'),
-          };
-        },
-      },
-    },
-    URL: {
-      createObjectURL() { calls.push('objectUrl'); return 'blob:recording-1'; },
-      revokeObjectURL() { calls.push('revoke'); },
-    },
-    document: {
-      createElement: () => anchor,
-      body: {appendChild() {}},
-    },
-  });
-  await bridge.create('chime', 'recording-session', JSON.stringify(chimePayload));
-  await bridge.join('chime', 'recording-session');
-
-  const start = JSON.parse(await bridge.command(
-    'chime', 'recording-session', 'startLocalRecording',
-    JSON.stringify({streamType: 'both', containerFormat: 'mp4'}),
-  ));
-  assert.equal(start.mimeType, 'video/webm');
-  const result = JSON.parse(await bridge.command(
-    'chime', 'recording-session', 'stopLocalRecording', '{}',
-  ));
-  assert.equal(result.mimeType, 'video/webm');
-  assert.ok(result.fileName.endsWith('.webm'));
-  assert.equal(result.fileSizeBytes, 5);
-  assert.equal(result.hasAudio, true);
-  bridge.downloadRecording('chime', 'recording-session', result.downloadId);
-  assert.ok(calls.includes('download'));
-  await bridge.dispose('chime', 'recording-session');
-  assert.ok(calls.includes('revoke'));
-  assert.ok(calls.includes('stopVideo'));
-  assert.ok(calls.includes('stopAudio'));
-});
-
 test('Chime bridge sends and receives normalized data messages', async () => {
   const { bridge, calls, events, getDataObserver } =
     await createChimeHarness();
@@ -519,27 +447,63 @@ test('IVS viewer never requests local media or publishes', async () => {
 });
 
 test('IVS browser sharing reports the track, ignores duplicate starts and releases on stop', async () => {
-  const {bridge, calls, events} = await createIvsHarness();
+  const {bridge, calls, events, getStage} = await createIvsHarness();
   const payload = {
     participantId: 'host-screen', role: 'host',
     ivs: {token: 'publisher-token', capabilities: ['PUBLISH', 'SUBSCRIBE']},
   };
   await bridge.create('ivs', 'stage-screen', JSON.stringify(payload));
   await bridge.join('ivs', 'stage-screen');
+  await bridge.command('ivs', 'stage-screen', 'selectDevice', JSON.stringify({
+    device: {kind: 'camera', id: 'cam-1'},
+  }));
+  const publishedVideos = () => getStage().strategy.stageStreamsToPublish()
+    .filter(stream => stream.streamType === 'video');
+  assert.equal(publishedVideos().length, 1);
+  const oldCameraId = publishedVideos()[0].id;
   const command = (enabled) => bridge.command(
     'ivs', 'stage-screen', 'setScreenShareEnabled', JSON.stringify({enabled}),
   );
   await command(true);
+  assert.equal(publishedVideos().length, 1);
+  assert.equal(publishedVideos()[0].id, 'screen-1');
+  await bridge.command('ivs', 'stage-screen', 'selectDevice', JSON.stringify({
+    device: {kind: 'camera', id: 'cam-2'},
+  }));
+  assert.equal(publishedVideos().length, 1);
+  assert.equal(publishedVideos()[0].id, 'screen-1');
   await command(true);
+  assert.equal(publishedVideos().length, 1);
+  assert.equal(publishedVideos()[0].id, 'screen-1');
   assert.equal(calls.filter(c => c === 'getDisplayMedia').length, 1);
   assert.ok(events.some(({event}) =>
     event.type === 'snapshot' && event.tracks?.some(t => t.isScreenShare && t.isLocal)));
   await command(false);
   assert.ok(calls.includes('stop:screen-1'));
+  assert.equal(publishedVideos().length, 1);
+  assert.notEqual(publishedVideos()[0].id, oldCameraId);
   const finalSnapshot = events.filter(({event}) => event.type === 'snapshot').at(-1)?.event;
   assert.ok(finalSnapshot);
   assert.ok(finalSnapshot.tracks.every(t => !t.isScreenShare));
   await bridge.dispose('ivs', 'stage-screen');
+});
+
+test('IVS leaving while sharing releases both screen and paused camera', async () => {
+  const {bridge, calls, getStage} = await createIvsHarness();
+  await bridge.create('ivs', 'stage-share-dispose', JSON.stringify({
+    participantId: 'host', role: 'host',
+    ivs: {token: 'publisher-token', capabilities: ['PUBLISH', 'SUBSCRIBE']},
+  }));
+  await bridge.join('ivs', 'stage-share-dispose');
+  await bridge.command('ivs', 'stage-share-dispose', 'selectDevice', JSON.stringify({
+    device: {kind: 'camera', id: 'cam-a'},
+  }));
+  const camera = getStage().strategy.stageStreamsToPublish()
+    .find(stream => stream.streamType === 'video');
+  await bridge.command('ivs', 'stage-share-dispose', 'setScreenShareEnabled', JSON.stringify({enabled: true}));
+  await bridge.dispose('ivs', 'stage-share-dispose');
+  assert.ok(calls.includes(`stop:${camera.id}`));
+  assert.ok(calls.includes('stop:screen-1'));
 });
 
 async function createAgoraHarness() {
@@ -673,6 +637,7 @@ async function createAgoraHarness() {
   const context = vm.createContext({
     console,
     URL,
+    TextDecoder,
     performance: { now: () => 1 },
     navigator: { mediaDevices },
     requestAnimationFrame: () => 1,
@@ -887,6 +852,40 @@ test('Agora screen share switches camera video back on after stop', async () => 
   assert.ok(calls.includes('unpublish:test-screen'));
   assert.equal(calls.filter(c => c === 'publish:agora-custom-video').length, 2);
   await bridge.dispose('agora', 'agora-screen');
+});
+
+test('Agora Web recognizes native screen-share state without leaking it into chat', async () => {
+  const {bridge, context, events} = await createAgoraHarness();
+  await bridge.create('agora', 'agora-remote-screen', JSON.stringify(agoraPayload));
+  await bridge.join('agora', 'agora-remote-screen');
+  const client = context.AgoraRTC.createClient();
+  const remote = {uid: 889, videoTrack: {play() {}, stop() {}}};
+  client.remoteUsers.push(remote);
+  await client.handlers.get('user-published')(remote, 'video');
+  await Promise.resolve();
+
+  const snapshot = () => events.filter(({event}) => event.type === 'snapshot').at(-1)?.event;
+  assert.ok(snapshot().tracks.some(t => t.id === 'agora:video:889' && !t.isScreenShare));
+  const signal = (state) => client.handlers.get('stream-message')(
+    889, new TextEncoder().encode(JSON.stringify({
+      topic: '_flutter_realtime.screen_share.v1', message: state,
+    })),
+  );
+  signal('started');
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.ok(snapshot().tracks.some(t => t.id === 'agora:screen:889' && t.isScreenShare));
+  assert.equal(snapshot().tracks.some(t => t.id === 'agora:video:889'), false);
+  assert.equal(events.filter(({event}) => event.type === 'message').length, 0);
+
+  signal('stopped');
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.ok(snapshot().tracks.some(t => t.id === 'agora:video:889' && !t.isScreenShare));
+  assert.equal(snapshot().tracks.some(t => t.id === 'agora:screen:889'), false);
+  client.handlers.get('user-unpublished')(remote, 'video');
+  assert.equal(snapshot().tracks.some(t => t.participantId === '889'), false);
+  await bridge.dispose('agora', 'agora-remote-screen');
 });
 
 test('Pre-Join bridge creates no capture until camera is explicitly enabled', async () => {

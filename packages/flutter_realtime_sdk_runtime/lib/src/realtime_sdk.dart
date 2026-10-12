@@ -32,7 +32,6 @@ class RealtimeSdk {
     RealtimeTokenProvider? tokenProvider,
     RealtimeClientFactory? clientFactory,
     this.interactionControlPlaneFactory,
-    this.localRecordingDriverFactory,
     Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
     this.driverRegistry,
     RealtimeProviderWebAssetsLoader? webAssetsLoader,
@@ -57,7 +56,6 @@ class RealtimeSdk {
   final RealtimeTokenProvider? _tokenProvider;
   final RealtimeClientFactory? _clientFactory;
   final InteractionControlPlaneFactory? interactionControlPlaneFactory;
-  final RealtimeLocalRecordingDriverFactory? localRecordingDriverFactory;
   final List<RealtimeFeaturePlugin> featurePlugins;
   RealtimeRuntimePlatform get platform =>
       driverRegistry?.platform ?? resolveRealtimeRuntimePlatform();
@@ -176,7 +174,6 @@ class RealtimeSdk {
         tokenProvider: _tokenProvider,
         publicProviderResolver: driverRegistry?.publicProviderForEngine,
         interactionControlPlaneFactory: interactionControlPlaneFactory,
-        localRecordingDriverFactory: localRecordingDriverFactory,
         featurePlugins: featurePlugins,
       );
 

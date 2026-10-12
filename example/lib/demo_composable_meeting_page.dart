@@ -6,6 +6,7 @@ import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 import 'demo_background.dart';
+import 'widgets/demo_cloud_recording_result_dialog.dart';
 import 'widgets/demo_recording_widgets.dart';
 
 /// Demo-owned layout: the SDK supplies only stateful functional widgets.
@@ -189,9 +190,11 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Flexible(
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: wide ? 240 : 150,
+                            ),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
@@ -305,64 +308,99 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                               ),
                               showLabel: wide,
                             ),
-                          RealtimeDockMoreButton(
-                            showLabel: wide,
-                            hasActiveBadge:
-                                widget.room.recordingStatus ==
-                                RecordingStatus.recording,
-                            items: [
-                              RealtimeDockMoreItem(
-                                icon: Icons.cameraswitch_rounded,
-                                title: RealtimeStrings.of(context).flipCamera,
-                                subtitle:
-                                    Localizations.localeOf(
-                                          context,
-                                        ).languageCode ==
-                                        'zh'
-                                    ? '切换前后置摄像头'
-                                    : 'Switch front/rear camera',
-                                onTap: () {
-                                  final controller = RealtimeRoomUiScope.of(
+                          StreamBuilder<RecordingStatus>(
+                            stream: widget.room.recordingStatuses,
+                            initialData: widget.room.recordingStatus,
+                            builder: (context, snapshot) {
+                              final recStatus =
+                                  snapshot.data ?? RecordingStatus.idle;
+                              final isRecording =
+                                  recStatus == RecordingStatus.recording;
+                              final isZh =
+                                  Localizations.localeOf(
                                     context,
-                                  );
-                                  unawaited(controller.switchCamera());
-                                },
-                              ),
-                              RealtimeDockMoreItem(
-                                icon: Icons.blur_on_rounded,
-                                title: RealtimeStrings.of(
-                                  context,
-                                ).backgroundEffects,
-                                subtitle:
-                                    Localizations.localeOf(
-                                          context,
-                                        ).languageCode ==
-                                        'zh'
-                                    ? '背景虚化与虚拟背景'
-                                    : 'Background blur & virtual background',
-                                onTap: () => unawaited(_openEffects(context)),
-                              ),
-                              if (widget
-                                      .room
-                                      .classroom
-                                      ?.state
-                                      ?.capabilities
-                                      .canUseTools ==
-                                  true)
-                                RealtimeDockMoreItem(
-                                  icon: Icons.build_outlined,
-                                  title: RealtimeStrings.of(
-                                    context,
-                                  ).classroomTools,
-                                  subtitle: RealtimeStrings.of(
-                                    context,
-                                  ).classroomToolsDescription,
-                                  onTap: () => _openClassroomTools(context),
-                                ),
-                            ],
-                            children: [
-                              DemoRecordingListTile(room: widget.room),
-                            ],
+                                  ).languageCode ==
+                                  'zh';
+                              final isCloud =
+                                  const {
+                                    'livekit',
+                                    'trtc',
+                                    'agora',
+                                    'artc',
+                                    'chime',
+                                    'ivs',
+                                  }.contains(widget.room.engineProviderId) &&
+                                  widget.room.featureBackendUrl != null;
+
+                              return RealtimeDockMoreButton(
+                                showLabel: wide,
+                                hasActiveBadge: isRecording,
+                                items: [
+                                  RealtimeDockMoreItem(
+                                    icon: Icons.cameraswitch_rounded,
+                                    title: RealtimeStrings.of(
+                                      context,
+                                    ).flipCamera,
+                                    subtitle: isZh ? '前后切换' : 'Flip',
+                                    onTap: () {
+                                      final controller = RealtimeRoomUiScope.of(
+                                        context,
+                                      );
+                                      unawaited(controller.switchCamera());
+                                    },
+                                  ),
+                                  RealtimeDockMoreItem(
+                                    icon: Icons.blur_on_rounded,
+                                    title: RealtimeStrings.of(
+                                      context,
+                                    ).backgroundEffects,
+                                    subtitle: isZh ? '背景特效' : 'Effects',
+                                    onTap: () =>
+                                        unawaited(_openEffects(context)),
+                                  ),
+                                  RealtimeDockMoreItem(
+                                    icon: isRecording
+                                        ? Icons.stop_circle_rounded
+                                        : Icons.fiber_manual_record_rounded,
+                                    title: isRecording
+                                        ? (isZh ? '停止录制' : 'Stop Rec')
+                                        : (isZh ? '会议录制' : 'Record'),
+                                    subtitle: isRecording
+                                        ? (isZh ? '录制中' : 'Recording')
+                                        : (isCloud
+                                              ? (isZh ? '云端录制' : 'Cloud')
+                                              : (isZh ? '本地录制' : 'Local')),
+                                    isDanger: isRecording,
+                                    showBadgeDot: isRecording,
+                                    onTap: () =>
+                                        unawaited(_handleRecording(context)),
+                                  ),
+                                  if (isCloud)
+                                    RealtimeDockMoreItem(
+                                      icon: Icons.cloud_download_rounded,
+                                      title: isZh ? '录制结果' : 'Recordings',
+                                      subtitle: isZh ? '查看云录像' : 'Files',
+                                      onTap: () =>
+                                          _showCloudResultDialog(context),
+                                    ),
+                                  if (widget
+                                          .room
+                                          .classroom
+                                          ?.state
+                                          ?.capabilities
+                                          .canUseTools ==
+                                      true)
+                                    RealtimeDockMoreItem(
+                                      icon: Icons.build_outlined,
+                                      title: RealtimeStrings.of(
+                                        context,
+                                      ).classroomTools,
+                                      subtitle: isZh ? '互动工具' : 'Tools',
+                                      onTap: () => _openClassroomTools(context),
+                                    ),
+                                ],
+                              );
+                            },
                           ),
                         ],
                         exitAction: RealtimeDockItem(
@@ -631,6 +669,74 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _handleRecording(BuildContext context) async {
+    final isCloud =
+        const {
+          'livekit',
+          'trtc',
+          'agora',
+          'artc',
+          'chime',
+          'ivs',
+        }.contains(widget.room.engineProviderId) &&
+        widget.room.featureBackendUrl != null;
+
+    if (widget.room.recordingStatus == RecordingStatus.recording) {
+      final result = await widget.room.stopRecording();
+      if (!mounted || result == null) return;
+      if (context.mounted) {
+        showDialog<void>(
+          context: context,
+          builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
+        );
+      }
+    } else {
+      if (isCloud) {
+        final isZh = Localizations.localeOf(context).languageCode == 'zh';
+        final chosen = await showDialog<RecordingLayout>(
+          context: context,
+          builder: (dialogCtx) => SimpleDialog(
+            title: Text(isZh ? '选择云端录制布局' : 'Choose Cloud Recording Layout'),
+            children: [
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialogCtx, RecordingLayout.grid),
+                child: ListTile(
+                  leading: const Icon(Icons.grid_view),
+                  title: Text(isZh ? '画廊视图（多画面网格）' : 'Grid Layout'),
+                ),
+              ),
+              SimpleDialogOption(
+                onPressed: () =>
+                    Navigator.pop(dialogCtx, RecordingLayout.speaker),
+                child: ListTile(
+                  leading: const Icon(Icons.person_pin),
+                  title: Text(isZh ? '主讲人视图（大画面聚焦）' : 'Speaker Layout'),
+                ),
+              ),
+            ],
+          ),
+        );
+        if (chosen == null || !mounted) return;
+        await widget.room.startRecording(
+          RecordingOptions.cloud(layout: chosen),
+        );
+        if (mounted && context.mounted) {
+          showDialog<void>(
+            context: context,
+            builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
+          );
+        }
+      }
+    }
+  }
+
+  void _showCloudResultDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
     );
   }
 }

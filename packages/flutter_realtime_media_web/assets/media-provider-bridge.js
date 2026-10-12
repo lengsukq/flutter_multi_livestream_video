@@ -178,7 +178,6 @@
 
   async function leave(session) {
     if (!session.joined) return;
-    if (session.recording) await stopLocalRecording(session);
     stopStats(session);
     await session.driver.leave();
     session.processedTrack?.stop?.();
@@ -196,10 +195,6 @@
     try {
       await leave(session);
     } finally {
-      for (const artifact of session.recordings?.values() || []) {
-        if (artifact.objectUrl) URL.revokeObjectURL(artifact.objectUrl);
-      }
-      session.recordings?.clear();
       stopStats(session);
       if (session.driver.dispose) await session.driver.dispose();
       sessions.delete(session.id);
@@ -235,8 +230,6 @@
       throw new Error(`Cannot run ${name} while the session is not connected.`);
     }
     args ||= {};
-    if (name === 'startLocalRecording') return JSON.stringify(await startLocalRecording(session, args));
-    if (name === 'stopLocalRecording') return JSON.stringify(await stopLocalRecording(session));
     if (session.role === 'viewer' && [
       'attachProcessedVideoSource', 'setProcessedVideoEffect', 'setScreenShareEnabled',
     ].includes(name)) {
@@ -322,110 +315,6 @@
 
   function getTrackAttachment(session, trackId) {
     return session.attachments.get(String(trackId));
-  }
-
-  // Cross-provider Web V1 captures only the explicitly user-selected browser
-  // tab/window/screen. Browser tab audio is optional and browser-dependent.
-  // It does not claim access to every provider's raw remote audio track.
-  async function startLocalRecording(session, options) {
-    if (session.recording) throw new Error('A local recording is already running.');
-    if (typeof global.MediaRecorder !== 'function' ||
-        !global.navigator?.mediaDevices?.getDisplayMedia) {
-      throw new Error('Local browser recording is unsupported.');
-    }
-    if (options.streamType === 'audioOnly') {
-      throw new Error('Audio-only display capture is not supported by this recorder.');
-    }
-    const recordingMimeCandidates = options.containerFormat === 'mp4'
-      ? ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
-      : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
-    const mimeType = recordingMimeCandidates.find((value) => MediaRecorder.isTypeSupported?.(value));
-    if (!mimeType) throw new Error('No browser video recording MIME type is supported.');
-
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-      audio: options.streamType !== 'videoOnly',
-    });
-    try {
-      if (!stream.getVideoTracks().length) throw new Error('Screen capture has no video track.');
-      const recorder = new MediaRecorder(stream, {mimeType});
-      const chunks = [];
-      const startedAt = Date.now();
-      let settleResolve;
-      let settleReject;
-      const finished = new Promise((resolve, reject) => {
-        settleResolve = resolve;
-        settleReject = reject;
-      });
-      recorder.ondataavailable = (event) => {
-        if (event.data?.size) chunks.push(event.data);
-      };
-      recorder.onerror = (event) => settleReject(event.error || new Error('Browser recorder failed.'));
-      recorder.onstop = () => {
-        const actualMime = recorder.mimeType || mimeType;
-        const blob = new Blob(chunks, {type: actualMime});
-        if (blob.size === 0) {
-          settleReject(new Error('Browser recording has no encoded media.'));
-          return;
-        }
-        const isMp4 = actualMime.includes('mp4');
-        const id = `recording-${session.id}-${startedAt}`;
-        const safeRoom = String(session.payload.roomCode || 'room').replace(/[^a-z0-9_-]/gi, '_');
-        const fileName = `${safeRoom}-${startedAt}.${isMp4 ? 'mp4' : 'webm'}`;
-        session.recordings ||= new Map();
-        for (const previous of session.recordings.values()) {
-          if (previous.objectUrl) URL.revokeObjectURL(previous.objectUrl);
-        }
-        session.recordings.clear();
-        session.recordings.set(id, {blob, fileName});
-        settleResolve({
-          downloadId: id,
-          fileName,
-          mimeType: actualMime,
-          fileSizeBytes: blob.size,
-          durationMs: Date.now() - startedAt,
-          hasVideo: true,
-          hasAudio: stream.getAudioTracks().length > 0,
-        });
-      };
-      session.recording = {stream, recorder, finished};
-      for (const track of stream.getTracks()) {
-        track.addEventListener?.('ended', () => {
-          if (recorder.state === 'recording') recorder.stop();
-        }, {once: true});
-      }
-      recorder.start(1000);
-      return {mimeType: recorder.mimeType || mimeType};
-    } catch (error) {
-      for (const track of stream.getTracks()) track.stop();
-      session.recording = null;
-      throw error;
-    }
-  }
-
-  async function stopLocalRecording(session) {
-    const current = session.recording;
-    if (!current) throw new Error('No active browser recording.');
-    if (current.recorder.state !== 'inactive') current.recorder.stop();
-    try {
-      return await current.finished;
-    } finally {
-      for (const track of current.stream.getTracks()) track.stop();
-      if (session.recording === current) session.recording = null;
-    }
-  }
-
-  function downloadRecording(session, downloadId) {
-    const artifact = session.recordings?.get(downloadId);
-    if (!artifact) throw new Error('Recording artifact is no longer available.');
-    if (!artifact.objectUrl) artifact.objectUrl = URL.createObjectURL(artifact.blob);
-    const anchor = document.createElement('a');
-    anchor.href = artifact.objectUrl;
-    anchor.download = artifact.fileName;
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-    try { anchor.click(); }
-    finally { anchor.remove(); }
   }
 
   const bridge = {
@@ -533,9 +422,6 @@
       sessions.set(previewId, preview);
     },
 
-    downloadRecording(providerId, sessionId, downloadId) {
-      downloadRecording(requireSession(providerId, sessionId), String(downloadId));
-    },
 
     async create(providerId, sessionId, serializedPayload) {
       const payload = parsePayload(serializedPayload);
@@ -609,6 +495,7 @@
     let processedSourceId = null;
     let providerInputTrack = null;
     const remoteUsers = new Map();
+    const remoteScreenUids = new Set();
     const processedTrackForSource = (sourceId) => {
       const effectsBridge = global.RealtimeVideoEffectsBridge;
       if (!effectsBridge?.getTrack) {
@@ -672,10 +559,17 @@
       const participant = addParticipant(session, participantId);
       if (mediaType === 'audio' && user.audioTrack) user.audioTrack.play();
       if (mediaType === 'video' && user.videoTrack) {
-        const trackId = `agora:video:${participantId}`;
+        const screenShare = remoteScreenUids.has(participantId);
+        const trackId = `agora:${screenShare ? 'screen' : 'video'}:${participantId}`;
+        const formerId = `agora:${screenShare ? 'video' : 'screen'}:${participantId}`;
+        remoteUsers.delete(formerId);
+        removeVideoTrack(session, formerId);
         const remote = { user, track: user.videoTrack };
         remoteUsers.set(trackId, remote);
-        addVideoTrack(session, { id: trackId, participantId, native: remote });
+        addVideoTrack(session, {
+          id: trackId, participantId,
+          isScreenShare: screenShare, native: remote,
+        });
         const attachment = getTrackAttachment(session, trackId);
         if (attachment) user.videoTrack.play(attachment.elementId, { fit: 'contain' });
       }
@@ -686,7 +580,26 @@
       addParticipant(session, user.uid);
       publishSnapshot(session);
     });
-    client.on('user-left', (user) => removeParticipant(session, user.uid));
+    client.on('user-left', (user) => {
+      remoteScreenUids.delete(String(user.uid));
+      removeParticipant(session, user.uid);
+    });
+    client.on('stream-message', (uid, payload) => {
+      try {
+        const message = JSON.parse(new TextDecoder().decode(payload));
+        if (message.topic !== '_flutter_realtime.screen_share.v1' ||
+            !['started', 'stopped'].includes(message.message)) return;
+        const key = String(uid);
+        if (message.message === 'started') remoteScreenUids.add(key);
+        else remoteScreenUids.delete(key);
+        const remote = client.remoteUsers?.find(user => String(user.uid) === key);
+        if (remote?.videoTrack) updateRemote(remote, 'video').catch(
+          (error) => reportError(session, error),
+        );
+      } catch (_) {
+        // Another SDK's unrelated data stream must not break media.
+      }
+    });
     client.on('user-published', async (user, type) => {
       try {
         await client.subscribe(user, type);
@@ -694,7 +607,12 @@
       } catch (error) { reportError(session, error); }
     });
     client.on('user-unpublished', (user, type) => {
-      if (type === 'video') removeVideoTrack(session, `agora:video:${user.uid}`);
+      if (type === 'video') {
+        remoteUsers.delete(`agora:video:${user.uid}`);
+        remoteUsers.delete(`agora:screen:${user.uid}`);
+        removeVideoTrack(session, `agora:video:${user.uid}`);
+        removeVideoTrack(session, `agora:screen:${user.uid}`);
+      }
       if (type === 'audio') {
         const participant = session.participants.get(String(user.uid));
         if (participant) participant.isMuted = true;
@@ -1251,30 +1169,64 @@
         }
         if (name === 'setScreenShareEnabled') {
           if (args.enabled && !session.screenTrack) {
-            const media = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            // IVS needs a second Stage token for a simultaneous screen and
+            // camera video. In a single-token Demo, switch the video source.
+            const media = await navigator.mediaDevices.getDisplayMedia({
+              video: { width: { max: 1280 }, height: { max: 720 } },
+            });
             const track = media.getVideoTracks()[0];
             if (!track) throw new Error('Browser screen capture provided no video track.');
             let localStream;
             try { localStream = new sdk.LocalStageStream(track); }
             catch (error) { track.stop(); throw error; }
+            const pausedCamera = session.localVideoStream;
+            const cameraIndex = localStreams.indexOf(pausedCamera);
+            if (cameraIndex >= 0) localStreams.splice(cameraIndex, 1);
+            session.screenPausedCamera = cameraIndex >= 0 ? pausedCamera : null;
+            if (cameraIndex >= 0) {
+              removeVideoTrack(session, [...session.tracks.values()].find(
+                item => item.native === pausedCamera,
+              )?.id);
+            }
             localStreams.push(localStream);
             session.screenTrack = localStream;
             try { stage.refreshStrategy(); }
             catch (error) {
               localStreams.splice(localStreams.indexOf(localStream), 1);
               session.screenTrack = null;
+              if (session.screenPausedCamera) {
+                localStreams.push(session.screenPausedCamera);
+                const camera = session.screenPausedCamera;
+                addVideoTrack(session, {
+                  id: `ivs:local:${camera.mediaStreamTrack.id}`,
+                  participantId: session.localParticipantId,
+                  isLocal: true, native: camera,
+                });
+                session.screenPausedCamera = null;
+                stage.refreshStrategy();
+              }
               track.stop();
               throw error;
             }
             addVideoTrack(session, { id: `ivs:screen:${track.id}`, participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: localStream });
             track.addEventListener('ended', () => this.command('setScreenShareEnabled', { enabled: false }).catch(() => {}), { once: true });
-          } else if (session.screenTrack) {
+          } else if (!args.enabled && session.screenTrack) {
             const track = session.screenTrack.mediaStreamTrack;
             track.stop();
             const index = localStreams.indexOf(session.screenTrack);
             if (index >= 0) localStreams.splice(index, 1);
             removeVideoTrack(session, [...session.tracks.values()].find((item) => item.native === session.screenTrack)?.id);
             session.screenTrack = null;
+            if (session.screenPausedCamera) {
+              const camera = session.screenPausedCamera;
+              session.screenPausedCamera = null;
+              localStreams.push(camera);
+              addVideoTrack(session, {
+                id: `ivs:local:${camera.mediaStreamTrack.id}`,
+                participantId: session.localParticipantId,
+                isLocal: true, native: camera,
+              });
+            }
             stage.refreshStrategy();
           }
           return;
@@ -1292,12 +1244,21 @@
             if (index >= 0) localStreams.splice(index, 1);
           }
           const replacement = new sdk.LocalStageStream(track);
-          localStreams.push(replacement);
           if (selected.kind === 'camera') {
             session.localVideoStream = replacement;
             if (old) removeVideoTrack(session, [...session.tracks.values()].find((item) => item.native === old)?.id);
+            if (session.screenTrack) {
+              // A camera switch during a share changes what will be restored,
+              // not the sole video stream currently published to IVS.
+              session.screenPausedCamera = replacement;
+              return;
+            }
+            localStreams.push(replacement);
             addVideoTrack(session, { id: `ivs:local:${track.id}`, participantId: session.localParticipantId, isLocal: true, native: replacement });
-          } else session.localAudioStream = replacement;
+          } else {
+            session.localAudioStream = replacement;
+            localStreams.push(replacement);
+          }
           stage.refreshStrategy();
           return;
         }
@@ -1313,8 +1274,12 @@
           if (index >= 0) localStreams.splice(index, 1);
           removeVideoTrack(session, [...session.tracks.values()].find((item) => item.native === old)?.id);
         }
-        localStreams.push(replacement);
         session.localVideoStream = replacement;
+        if (session.screenTrack) {
+          session.screenPausedCamera = replacement;
+          return;
+        }
+        localStreams.push(replacement);
         addVideoTrack(session, {id: `ivs:local:${track.id}`, participantId: session.localParticipantId, isLocal: true, native: replacement});
         stage.refreshStrategy();
       },
@@ -1326,6 +1291,7 @@
           removeVideoTrack(session, [...session.tracks.values()].find((item) => item.native === old)?.id);
         }
         session.localVideoStream = null;
+        if (session.screenTrack) session.screenPausedCamera = null;
         stage.refreshStrategy();
       },
       async attachVideo(track, container) { attachStreamTrack(track.native.mediaStreamTrack, container); },
@@ -1333,6 +1299,11 @@
       async leave() {
         stage.leave();
         for (const stream of [...localStreams]) stream.mediaStreamTrack.stop();
+        if (session.screenPausedCamera &&
+            !localStreams.includes(session.screenPausedCamera)) {
+          session.screenPausedCamera.mediaStreamTrack.stop();
+        }
+        session.screenPausedCamera = null;
         localStreams.length = 0;
       },
       async dispose() { stage.removeAllListeners?.(); },

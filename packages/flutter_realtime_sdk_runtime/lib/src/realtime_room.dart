@@ -38,12 +38,10 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     VideoEffectsBridge? videoEffectsBridge,
     MediaBackgroundCapabilities effectsCapabilities =
         const MediaBackgroundCapabilities.none(),
-    MediaLocalRecordingSession? localRecordingDriver,
   }) : publicProviderId = publicProviderId ?? media.providerId,
        _productChatRoom = productChatRoom,
        _rtcChatRoom = rtcChatRoom,
-       _disposeClients = disposeClients,
-       _localRecordingDriver = localRecordingDriver {
+       _disposeClients = disposeClients {
     features = RealtimeFeatureRegistry(
       featurePlugins,
       onError: (id, error, stack) => _reportFailure(
@@ -66,7 +64,6 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     recording = RoomRecordingController(
       media: media,
       providerId: providerId,
-      localRecordingDriver: _localRecordingDriver,
       cloudRecordingSession: featureBackendUrl == null
           ? null
           : HttpCloudRecordingSession(
@@ -99,7 +96,6 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   }
 
   final MediaRoomSession media;
-  final MediaLocalRecordingSession? _localRecordingDriver;
   final String publicProviderId;
   final MediaTrackRenderer renderer;
 
@@ -213,13 +209,7 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   bool get usesProductChat => _productChatRoom != null;
   bool get usesRtcDataChat => _rtcChatRoom != null;
   RealtimeRoomCapabilities get capabilities => RealtimeRoomCapabilities(
-    media: _localRecordingDriver == null
-        ? media.session.capabilities
-        : media.session.capabilities.copyWith(
-            canRecordLocal: true,
-            canRecordLocalVideo: true,
-            canRecordScreen: true,
-          ),
+    media: media.session.capabilities,
     chat: chat?.capabilities,
   );
   late final RoomVideoEffectsController _effects;
@@ -264,7 +254,7 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
 
   /// Starts recording with optional [options].
   ///
-  /// Defaults to [RecordingMode.local] (writing directly to local sandbox storage).
+  /// Uses cloud recording through the configured backend.
   Future<RecordingResult> startRecording([RecordingOptions? options]) =>
       recording.startRecording(options);
 
@@ -278,14 +268,6 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   /// Returns a short-lived signed download URL once the recording is complete.
   Future<Uri> cloudRecordingDownloadUrl() =>
       recording.cloudRecordingDownloadUrl();
-
-  /// Download an encoded browser recording. Call directly from a button tap.
-  void downloadRecording(RecordingResult result) =>
-      recording.downloadRecording(result);
-
-  /// Export a finalized native recording into a user-selected/public location.
-  Future<String> exportRecording(RecordingResult result) =>
-      recording.exportRecording(result);
 
   /// Generates a structured [CloudRecordingDescriptor] containing official
   /// vendor API endpoints, HTTP headers, and request body payloads.

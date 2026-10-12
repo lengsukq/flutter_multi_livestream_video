@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
-import 'package:flutter_realtime_recorder_native/flutter_realtime_recorder_native.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 import 'demo_provider_catalog.dart';
@@ -323,8 +322,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       widget.realtimeFactory?.call(_server) ??
       Realtime(
         providers: createDemoProviders(),
-        // Optional platform recorder; Web uses its built-in browser adapter.
-        localRecordingDriverFactory: nativeRecordingDriverFor,
         backendUrl: _server,
         tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
         // Demo elects to showcase prebuilt business features. SDK consumers
