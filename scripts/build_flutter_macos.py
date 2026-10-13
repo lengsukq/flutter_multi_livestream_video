@@ -59,7 +59,12 @@ def without_generated_swiftpm_dependency(project_file: str) -> str:
     return ''.join(result)
 
 
-def build(project: Path, args: list[str], run=subprocess.run) -> int:
+def with_cocoapods(project: Path, command: list[str], run=subprocess.run) -> int:
+    """Run a macOS Flutter command with CocoaPods without changing iOS config.
+
+    A `flutter run` process inherits the terminal's stdin/stdout, so hot reload
+    stays interactive until the user quits. The manifest is restored afterward.
+    """
     manifest = project / 'pubspec.yaml'
     original = manifest.read_text()
     modified, count = re.subn(
@@ -92,7 +97,7 @@ def build(project: Path, args: list[str], run=subprocess.run) -> int:
         manifest.write_text(modified)
         if swift_original is not None:
             swift_manifest.write_text(SWIFT_STUB)
-        result = run(['flutter', 'build', 'macos', *(args or ['--release', '--no-pub'])], cwd=project)
+        result = run(command, cwd=project)
         return result.returncode
     finally:
         if swift_original is not None and swift_manifest.exists() and swift_manifest.read_text() == SWIFT_STUB:
@@ -101,6 +106,15 @@ def build(project: Path, args: list[str], run=subprocess.run) -> int:
             manifest.write_text(original)
         else:
             print(f'Manifest changed during the build; newer edits preserved. Original backup: {backup}', file=sys.stderr)
+
+
+def build(project: Path, args: list[str], run=subprocess.run) -> int:
+    return with_cocoapods(project, ['flutter', 'build', 'macos', *(args or ['--release', '--no-pub'])], run)
+
+
+def debug(project: Path, args: list[str], run=subprocess.run) -> int:
+    """Launch the normal Flutter debug tool (including hot reload and restart)."""
+    return with_cocoapods(project, ['flutter', 'run', '-d', 'macos', *(args or [])], run)
 
 
 def stop(_signal, _frame):

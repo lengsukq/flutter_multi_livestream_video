@@ -95,10 +95,9 @@ dependency_overrides:
 # The following section is specific to Flutter packages.
 flutter:
   config:
-    # iOS IVS Media/Chat require SwiftPM. For macOS only, the CocoaPods-aware
-    # scripts/build_flutter_macos.py disables this temporarily; mixing both
-    # integration methods in the macOS Runner breaks iris_method_channel_objc.
-    enable-swift-package-manager: true
+    # macOS IDE runs use CocoaPods, including transitive native plugin deps.
+    # iOS IVS Media/Chat use scripts/flutter_ios.py to enable SwiftPM per run.
+    enable-swift-package-manager: false
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

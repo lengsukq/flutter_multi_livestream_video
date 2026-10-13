@@ -54,6 +54,33 @@ class MacosBuildTest(unittest.TestCase):
         self.assertEqual(self.swift.read_text(), 'original generated dependencies')
         self.assertNotIn('FlutterGeneratedPluginSwiftPackage', self.runner.read_text())
 
+    def test_interactive_debug_run_uses_cocoapods_then_restores_ios_swiftpm(self):
+        def run(command, cwd):
+            self.assertEqual(cwd, self.project)
+            self.assertEqual(command, ['flutter', 'run', '-d', 'macos', '--debug'])
+            self.assertIn('enable-swift-package-manager: false', self.manifest.read_text())
+            self.assertEqual(self.swift.read_text(), helper.SWIFT_STUB)
+            self.assertNotIn('FlutterGeneratedPluginSwiftPackage', self.runner.read_text())
+            return subprocess.CompletedProcess(command, 0)
+        self.assertEqual(helper.debug(self.project, ['--debug'], run), 0)
+        self.assertEqual(self.manifest.read_text(), self.original)
+        self.assertEqual(self.swift.read_text(), 'original generated dependencies')
+
+    def test_debug_failure_also_restores_swiftpm_configuration(self):
+        def run(command, cwd):
+            self.assertIn('enable-swift-package-manager: false', self.manifest.read_text())
+            return subprocess.CompletedProcess(command, 7)
+        self.assertEqual(helper.debug(self.project, [], run), 7)
+        self.assertEqual(self.manifest.read_text(), self.original)
+
+    def test_interrupted_debug_restores_swiftpm_configuration(self):
+        def run(command, cwd):
+            raise KeyboardInterrupt
+        with self.assertRaises(KeyboardInterrupt):
+            helper.debug(self.project, ['--debug'], run)
+        self.assertEqual(self.manifest.read_text(), self.original)
+        self.assertEqual(self.swift.read_text(), 'original generated dependencies')
+
     def test_generated_runner_cleanup_is_idempotent(self):
         fixed = helper.without_generated_swiftpm_dependency(self.original_runner)
         self.assertNotIn('FlutterGeneratedPluginSwiftPackage', fixed)
