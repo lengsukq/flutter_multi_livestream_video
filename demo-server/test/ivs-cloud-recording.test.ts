@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {IvsCloudRecording} from '../recording/ivs-cloud-recording.ts';
+import {IvsCloudRecording, ivsCompositionLayout} from '../recording/ivs-cloud-recording.ts';
 import {RecordingConfigurationError} from '../recording/livekit-cloud-recording.ts';
 import type {RecordingObjectReader} from '../recording/s3-recording-storage.ts';
 import type {IvsRoomEntry, NamedRoomEntry} from '../types.ts';
@@ -26,6 +26,37 @@ test('IVS MP4 cloud recording refuses incomplete storage and MediaConvert config
   assert.equal(recorder.readiness().available, false);
   await assert.rejects(recorder.start(room, 'grid', 'H264_720P_30'), RecordingConfigurationError);
   assert.equal((await recorder.status(room)).canDownload, false);
+});
+
+test('IVS 1080p requires a separate matching encoder and speaker layout pins an explicitly featured host', async () => {
+  assert.deepEqual(ivsCompositionLayout('grid'), {grid: {}});
+  assert.deepEqual(ivsCompositionLayout('speaker'),
+    {grid: {featuredParticipantAttribute: 'isFeatured'}});
+  const missing = new IvsCloudRecording(env);
+  await assert.rejects(
+    missing.start(room, 'speaker', 'H264_1080P_30'),
+    RecordingConfigurationError,
+  );
+  let selectedEncoder = '';
+  let selectedLayout = '';
+  const api = {
+    async start(_stage: string, encoder: string, _storage: string, layout: string) {
+      selectedEncoder = encoder;
+      selectedLayout = layout;
+      return {arn: 'arn:aws:ivs:ap-northeast-1:123:composition/new'};
+    },
+    async get() {return {state: 'ACTIVE'};},
+    async stop() {},
+    async convert() {return 'job-id';},
+    async conversionStatus() {return 'PROGRESSING';},
+  };
+  const configured = new IvsCloudRecording({
+    ...env, IVS_RECORDING_ENCODER_CONFIGURATION_ARN_1080P:
+      'arn:aws:ivs:ap-northeast-1:123:encoder-configuration/hd',
+  }, api);
+  await configured.start(room, 'speaker', 'H264_1080P_30');
+  assert.match(selectedEncoder, /encoder-configuration\/hd$/);
+  assert.equal(selectedLayout, 'speaker');
 });
 
 test('IVS cloud service captures HLS, waits for recording-ended event, converts MP4 via AWS, and streams', async () => {

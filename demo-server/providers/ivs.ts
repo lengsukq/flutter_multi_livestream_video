@@ -81,6 +81,9 @@ function createAwsApi(region: string): IvsRealtimeApi {
           attributes: {
             displayName,
             role,
+            // Used by IVS featured-grid composition; this is a pinned host,
+            // not an audio-active-speaker detector.
+            isFeatured: role === 'host' ? 'true' : 'false',
           },
         }),
       );

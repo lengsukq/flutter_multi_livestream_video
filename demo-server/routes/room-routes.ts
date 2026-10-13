@@ -166,6 +166,7 @@ app.post('/rooms', async (req, res) => {
       created.entry,
       response.participantId,
     );
+    roomDirectory.flush();
     if (roomMode === 'meeting') {
       classroomDirectory.snapshot(created.entry, true, userId);
     }
@@ -281,6 +282,7 @@ app.post('/rooms/:code/join', async (req, res) => {
       entry,
       response.participantId,
     );
+    roomDirectory.flush();
     if (entry.roomMode === 'meeting') {
       classroomDirectory.snapshot(
         entry, Boolean(response.roomOwnerCredential), userId,

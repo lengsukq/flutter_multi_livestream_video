@@ -11,29 +11,47 @@ import type {
 } from './cloud-recording-executor.ts';
 import {RecordingConfigurationError, RecordingProviderError} from './livekit-cloud-recording.ts';
 import {s3RecordingReader, type RecordingObjectReader} from './s3-recording-storage.ts';
+import {FileRecordingJobStore} from './file-recording-job-store.ts';
 
 type Job = {
   id: string; captureArn: string; sourceArn: string;
   concatId: string | null; key: string | null;
   captureStopped: boolean;
-  layout: RecordingLayout; state: 'recording' | 'processing' | 'completed' | 'failed';
+  layout: RecordingLayout; preset: RecordingPreset;
+  state: 'recording' | 'processing' | 'completed' | 'failed';
   error: string | null;
 };
 type CloudApi = {
-  start(meetingArn: string, bucketArn: string): Promise<{id: string; arn: string}>;
+  start(meetingArn: string, bucketArn: string, layout: RecordingLayout,
+    preset: RecordingPreset): Promise<{id: string; arn: string}>;
   concatenate(captureArn: string, destinationArn: string): Promise<string>;
   stopCapture(id: string): Promise<void>;
   concatenationStatus(id: string): Promise<string>;
 };
 
+/** Chime only switches to active-speaker overlay while content is shared;
+ * webcam-only sessions always use GridView. */
+export function chimeCompositedVideo(layout: RecordingLayout, preset: RecordingPreset) {
+  return {
+    Layout: 'GridView' as const,
+    Resolution: preset === 'H264_1080P_30' ? 'FHD' as const : 'HD' as const,
+    GridViewConfiguration: layout === 'speaker'
+      ? {ContentShareLayout: 'ActiveSpeakerOnly' as const,
+        ActiveSpeakerOnlyConfiguration: {ActiveSpeakerPosition: 'TopRight' as const}}
+      : {ContentShareLayout: 'PresenterOnly' as const},
+  };
+}
+
 /** AWS Chime hosted capture + concatenation: Chime creates the MP4 in S3. */
 export class ChimeCloudRecording implements CloudRecordingExecutor {
   private readonly jobs = new Map<string, Job>();
+  private readonly rooms = new Map<string, NamedRoomEntry>();
   private readonly tickets = new Map<string, {roomCode: string; id: string; expires: number}>();
   private readonly bucket: string;
   private readonly region: string;
   private readonly api: CloudApi;
   private readonly reader: RecordingObjectReader;
+  private readonly store: FileRecordingJobStore<Job>;
 
   constructor(
     env: NodeJS.ProcessEnv = process.env,
@@ -45,7 +63,7 @@ export class ChimeCloudRecording implements CloudRecordingExecutor {
       env.AWS_REGION?.trim() || 'us-east-1';
     const client = new ChimeSDKMediaPipelinesClient({region: this.region});
     this.api = injectedApi ?? {
-      async start(meetingArn, bucketArn) {
+      async start(meetingArn, bucketArn, layout, preset) {
         const reply = await client.send(new CreateMediaCapturePipelineCommand({
           SourceType: 'ChimeSdkMeeting', SourceArn: meetingArn,
           SinkType: 'S3Bucket', SinkArn: bucketArn,
@@ -54,10 +72,7 @@ export class ChimeCloudRecording implements CloudRecordingExecutor {
               Audio: {MuxType: 'AudioWithCompositedVideo'},
               Video: {State: 'Disabled'},
               Content: {State: 'Disabled'},
-              CompositedVideo: {
-                Layout: 'GridView', Resolution: 'HD',
-                GridViewConfiguration: {ContentShareLayout: 'PresenterOnly'},
-              },
+              CompositedVideo: chimeCompositedVideo(layout, preset),
             },
           },
           ClientRequestToken: crypto.randomUUID(),
@@ -109,6 +124,7 @@ export class ChimeCloudRecording implements CloudRecordingExecutor {
       },
     };
     this.reader = injectedReader ?? s3RecordingReader({region: this.region});
+    this.store = new FileRecordingJobStore(env.DEMO_RECORDING_STATE_DIR?.trim(), 'chime');
   }
 
   get configured() {
@@ -128,32 +144,47 @@ export class ChimeCloudRecording implements CloudRecordingExecutor {
   private view(job: Job) {
     return {
       provider: 'chime', recordingId: job.id, state: job.state,
-      layout: job.layout, canDownload: job.state === 'completed' && Boolean(job.key),
+      layout: job.layout, preset: job.preset,
+      canDownload: job.state === 'completed' && Boolean(job.key),
       fileName: job.key?.split('/').at(-1) ?? null, fileSizeBytes: 0, error: job.error,
     };
   }
-  async start(room: NamedRoomEntry, layout: RecordingLayout, _preset: RecordingPreset) {
+  private job(room: NamedRoomEntry): Job | null {
+    this.rooms.set(room.roomCode, room);
+    const cached = this.jobs.get(room.roomCode);
+    if (cached) return cached;
+    const restored = this.store.load(room);
+    if (restored && restored.sourceArn === room.meeting?.MeetingArn) {
+      this.jobs.set(room.roomCode, restored);
+      return restored;
+    }
+    return null;
+  }
+  async start(room: NamedRoomEntry, layout: RecordingLayout, preset: RecordingPreset) {
     this.ensureConfigured();
     const sourceArn = room.meeting?.MeetingArn;
     if (!sourceArn?.startsWith('arn:aws:chime:')) {
       throw new RecordingProviderError('AWS Chime meeting ARN is required for cloud media capture.');
     }
-    const old = this.jobs.get(room.roomCode);
+    const old = this.job(room);
     if (old && !['completed', 'failed'].includes(old.state)) {
       throw new RecordingProviderError('Chime capture is already running.');
     }
-    const created = await this.api.start(sourceArn, `arn:aws:s3:::${this.bucket}`);
+    const created = await this.api.start(
+      sourceArn, `arn:aws:s3:::${this.bucket}`, layout, preset,
+    );
     const job: Job = {
       id: created.id, captureArn: created.arn, sourceArn,
       concatId: null, key: null, captureStopped: false,
-      layout, state: 'recording', error: null,
+      layout, preset, state: 'recording', error: null,
     };
     this.jobs.set(room.roomCode, job);
+    this.store.save(room, job);
     return this.view(job);
   }
   async stop(room: NamedRoomEntry) {
     this.ensureConfigured();
-    const job = this.jobs.get(room.roomCode);
+    const job = this.job(room);
     if (!job) throw new RecordingProviderError('No Chime cloud recording exists.');
     if (!job.concatId) {
       // Chime concatenation is created first; it waits for capture to stop.
@@ -164,17 +195,19 @@ export class ChimeCloudRecording implements CloudRecordingExecutor {
       job.concatId = concatId;
       job.key = `${prefix}/composited-video/${concatId}.mp4`;
       job.state = 'processing';
+      this.store.save(room, job);
     }
     if (!job.captureStopped) {
       // Retry stopping capture if an earlier network/API failure occurred
       // after the concatenation pipeline was already created.
       await this.api.stopCapture(job.id);
       job.captureStopped = true;
+      this.store.save(room, job);
     }
     return this.view(job);
   }
   async status(room: NamedRoomEntry) {
-    const job = this.jobs.get(room.roomCode);
+    const job = this.job(room);
     if (!job) return {
       provider: 'chime', recordingId: null, state: 'idle',
       layout: null, canDownload: false, fileName: null, fileSizeBytes: 0, error: null,
@@ -184,16 +217,18 @@ export class ChimeCloudRecording implements CloudRecordingExecutor {
       if (state === 'Failed') {
         job.state = 'failed';
         job.error = 'AWS Chime concatenation failed.';
+        this.store.save(room, job);
       } else if (state === 'Stopped' && job.key &&
           await this.reader.exists(this.bucket, job.key)) {
         job.state = 'completed';
+        this.store.save(room, job);
       }
     }
     return this.view(job);
   }
   async download(room: NamedRoomEntry) {
     const status = await this.status(room);
-    const job = this.jobs.get(room.roomCode);
+    const job = this.job(room);
     if (!job?.key || job.state !== 'completed') {
       throw new RecordingProviderError('AWS Chime concatenation MP4 has not completed.');
     }
@@ -221,6 +256,8 @@ export class ChimeCloudRecording implements CloudRecordingExecutor {
       ...(this.reader.remove ? {afterDownload: async () => {
         await this.reader.remove!(this.bucket, job.key!);
         job.key = null;
+        const room = this.rooms.get(roomCode);
+        if (room) this.store.save(room, job);
       }} : {}),
     };
   }

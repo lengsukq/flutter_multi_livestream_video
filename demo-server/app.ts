@@ -299,7 +299,7 @@ const chatProviderRegistry = new ChatProviderRegistry([
     contractVersion: CONTRACT_VERSION,
   }),
 ]);
-const roomDirectory = new RoomDirectory();
+const roomDirectory = new RoomDirectory(process.env.DEMO_ROOM_STATE_PATH?.trim());
 const chatRoomDirectory = new ChatRoomDirectory();
 
 const {

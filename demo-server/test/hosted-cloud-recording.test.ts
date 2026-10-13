@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {LiveKitCloudRecording, RecordingConfigurationError} from '../recording/livekit-cloud-recording.ts';
-import {ChimeCloudRecording} from '../recording/chime-cloud-recording.ts';
+import {ChimeCloudRecording, chimeCompositedVideo} from '../recording/chime-cloud-recording.ts';
 import {ArtcCloudRecording} from '../recording/artc-cloud-recording.ts';
 import type {RecordingObjectReader} from '../recording/s3-recording-storage.ts';
 import type {NamedRoomEntry} from '../types.ts';
@@ -11,6 +11,14 @@ const entry = (provider: string): NamedRoomEntry => ({
   provider, roomCode: 'R4567', providerRoomName: 'media-R4567',
   createdAt: new Date().toISOString(), lastHeartbeatMs: Date.now(),
   attendees: [],
+});
+
+test('Chime maps selected bitrate preset and speaker content-share layout to AWS configuration', () => {
+  assert.equal(chimeCompositedVideo('grid', 'H264_720P_30').Resolution, 'HD');
+  const layout = chimeCompositedVideo('speaker', 'H264_1080P_30');
+  assert.equal(layout.Resolution, 'FHD');
+  assert.equal(layout.GridViewConfiguration.ContentShareLayout, 'ActiveSpeakerOnly');
+  assert.equal(layout.Layout, 'GridView');
 });
 
 test('ARTC official SDK client can be constructed with valid cloud env even before storage is used', () => {
