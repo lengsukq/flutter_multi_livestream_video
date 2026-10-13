@@ -90,6 +90,33 @@ void main() {
     },
   );
 
+  test('macOS may join Chime as a listener when both media permissions are denied', () async {
+    // ignore: deprecated_member_use
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final session = activeSession = ChimeMeetingSession();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(_channel, (call) async {
+      calls.add(call);
+      if (call.method == 'manageAudioPermissions' ||
+          call.method == 'manageVideoPermissions') {
+        return {
+          'success': false,
+          'code': 'permission_denied',
+          'message': 'Device unavailable on macOS.',
+          'data': null,
+          'details': null,
+        };
+      }
+      return _success();
+    });
+
+    await session.join(_joinInfo());
+    expect(session.state, MeetingState.connecting);
+    expect(calls.map((call) => call.method), contains('join'));
+    expect(calls.map((call) => call.method), contains('manageAudioPermissions'));
+    expect(calls.map((call) => call.method), contains('manageVideoPermissions'));
+  });
+
   test(
     'rejects malformed join info as a typed exception before platform calls',
     () async {

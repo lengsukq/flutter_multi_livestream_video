@@ -102,6 +102,8 @@ async function createChimeHarness(browserGlobals = {}) {
     console,
     TextDecoder,
     Blob,
+    setTimeout,
+    clearTimeout,
     setInterval: () => 1,
     clearInterval: () => {},
     ...browserGlobals,
@@ -123,8 +125,10 @@ async function createChimeHarness(browserGlobals = {}) {
   vm.runInContext(source, context, { filename: 'bridge.js' });
   return {
     bridge: context.MediaProviderBridge,
+    audioVideo,
     calls,
     events,
+    stopChime: (status) => observer?.audioVideoDidStop?.(status),
     getDataObserver: () => dataObserver,
   };
 }
@@ -193,6 +197,46 @@ test('Chime bridge uses the current 3.32 media input APIs', async () => {
   assert.ok(calls.includes('unsubscribePresence'));
   assert.ok(calls.includes('unsubscribeData'));
   assert.ok(calls.includes('destroyDeviceController'));
+});
+
+test('Chime bridge rejects an unsuccessful signaling handshake instead of reporting connected', async () => {
+  const { bridge, calls, audioVideo, stopChime, events } = await createChimeHarness();
+  audioVideo.start = () => {
+    calls.push('start');
+    queueMicrotask(() => stopChime({ statusCode: () => 17 }));
+  };
+  await bridge.create('chime', 'handshake-failure', JSON.stringify(chimePayload));
+  await assert.rejects(bridge.join('chime', 'handshake-failure'), /stopped before joining.*17/);
+  assert.ok(calls.includes('start'));
+  assert.ok(!events.some(({ event }) => event.type === 'state' && event.state === 'connected'));
+  await bridge.dispose('chime', 'handshake-failure');
+});
+
+test('Chime meeting join remains available when WKWebView blocks device enumeration', async () => {
+  const { bridge, calls, audioVideo } = await createChimeHarness();
+  audioVideo.listAudioInputDevices = async () => {
+    throw new Error('NotAllowedError: WebKit capture blocked');
+  };
+  audioVideo.listVideoInputDevices = async () => {
+    throw new Error('NotFoundError: No camera');
+  };
+  await bridge.create('chime', 'meeting-no-devices', JSON.stringify(chimePayload));
+  await bridge.join('chime', 'meeting-no-devices');
+  assert.ok(calls.includes('start'), 'Chime signaling must start without device permission');
+  assert.ok(!calls.some((call) => call.startsWith('startAudioInput:')));
+  assert.ok(!calls.includes('listVideoInputs'), 'camera probing must not block joining');
+  await bridge.dispose('chime', 'meeting-no-devices');
+});
+
+test('Chime meeting join remains available if microphone capture initialization fails', async () => {
+  const { bridge, calls, audioVideo } = await createChimeHarness();
+  audioVideo.startAudioInput = async () => {
+    throw new Error('NotReadableError: device in use');
+  };
+  await bridge.create('chime', 'meeting-mic-busy', JSON.stringify(chimePayload));
+  await bridge.join('chime', 'meeting-mic-busy');
+  assert.ok(calls.includes('start'), 'capture failure must not block meeting signaling');
+  await bridge.dispose('chime', 'meeting-mic-busy');
 });
 
 test('Chime bridge sends and receives normalized data messages', async () => {
@@ -979,6 +1023,8 @@ test('Agora Web publishes an attached SDK processed source without recapturing c
 
 test('all five Web suppliers consume clones of one processed source and camera switching never recaptures in suppliers', async () => {
   const h = await createAgoraHarness();
+  h.context.setTimeout = setTimeout;
+  h.context.clearTimeout = clearTimeout;
   const inputs = [];
   h.context.supplierInputs = inputs;
   const receive = (provider, track) => { if (track) inputs.push({provider,track}); };
@@ -1004,11 +1050,11 @@ test('all five Web suppliers consume clones of one processed source and camera s
     LocalStageStream:class {constructor(track){this.mediaStreamTrack=track;this.id=track.id;if(track.kind==='video')receive('ivs',track);}setMuted(){}},
     StageConnectionState:{},StreamType:{AUDIO:'audio',VIDEO:'video'},SubscribeType:{NONE:0,AUDIO_VIDEO:1},
   };
-  const audioVideo = {addObserver(){},removeObserver(){}, realtimeSubscribeToAttendeeIdPresence(){},realtimeUnsubscribeToAttendeeIdPresence(){},
+  const audioVideo = {addObserver(observer){this.observer=observer;},removeObserver(){}, realtimeSubscribeToAttendeeIdPresence(){},realtimeUnsubscribeToAttendeeIdPresence(){},
     realtimeSubscribeToReceiveDataMessage(){},realtimeUnsubscribeFromReceiveDataMessage(){},
     async listAudioInputDevices(){return [];},async listVideoInputDevices(){return [];},
     async startVideoInput(stream){assert.ok(stream.tracks);receive('chime',stream.tracks[0]);},async stopVideoInput(){},
-    start(){},stop(){},startLocalVideoTile(){},stopLocalVideoTile(){},getAllVideoTiles(){return [];}};
+    start(){this.observer?.audioVideoDidStart?.();},stop(){},startLocalVideoTile(){},stopLocalVideoTile(){},getAllVideoTiles(){return [];}};
   h.context.ChimeSDK = {ConsoleLogger:class {},LogLevel:{WARN:1},MeetingSessionConfiguration:class {},
     DefaultDeviceController:class {async destroy(){}}, DefaultMeetingSession:class {constructor(){this.audioVideo=audioVideo;}},MeetingSessionStatusCode:{Left:0}};
   await h.effectsBridge.createSource('shared-output', {effect:{type:'blur'}});

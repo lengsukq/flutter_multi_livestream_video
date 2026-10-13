@@ -169,7 +169,18 @@
 
   async function join(session) {
     emitState(session, 'connecting');
-    await session.driver.join();
+    try {
+      await session.driver.join();
+    } catch (error) {
+      // A Chime signaling attempt may have started even if we never received
+      // audioVideoDidStart. Tear it down instead of leaking a background SDK
+      // connection when the caller retries after a timeout or stop event.
+      if (session.providerId === 'chime') {
+        try { await session.driver.leave(); }
+        catch (_) { /* Keep the original signaling failure. */ }
+      }
+      throw error;
+    }
     session.joined = true;
     emitState(session, 'connected');
     publishSnapshot(session);
@@ -1330,11 +1341,19 @@
     const audioVideo = meetingSession.audioVideo;
     const tiles = new Map();
     const tileIdFor = (tile) => `chime:tile:${tile.tileId}`;
+    let settleStart = null;
     const observer = {
-      audioVideoDidStart() { emitState(session, 'connected'); },
+      audioVideoDidStart() {
+        settleStart?.(null);
+        emitState(session, 'connected');
+      },
       audioVideoDidStop(status) {
-        if (session.joined && status?.statusCode !== ChimeSDK.MeetingSessionStatusCode.Left) {
-          reportError(session, status);
+        const code = typeof status?.statusCode === 'function'
+          ? status.statusCode() : status?.statusCode;
+        if (settleStart) {
+          settleStart(new Error(`Chime connection stopped before joining (status ${code ?? 'unknown'}).`));
+        } else if (session.joined && code !== ChimeSDK.MeetingSessionStatusCode.Left) {
+          reportError(session, new Error(`Chime meeting disconnected (status ${code ?? 'unknown'}).`));
         }
       },
       videoTileDidUpdate(tile) {
@@ -1388,15 +1407,34 @@
     session.meetingSession = meetingSession;
     session.driver = {
       async join() {
-        const [microphones, cameras] = await Promise.all([
-          audioVideo.listAudioInputDevices(),
-          audioVideo.listVideoInputDevices(),
-        ]);
+        // Device enumeration can reject on macOS WKWebView when the OS has not
+        // granted TCC permission or no physical input exists. Connecting to
+        // Chime is independent of capture; join muted and enable it later.
+        let microphones = [];
+        try { microphones = await audioVideo.listAudioInputDevices(); }
+        catch (_) { /* Continue to the meeting without microphone access. */ }
         if (microphones.length) {
-          await audioVideo.startAudioInput(microphones[0].deviceId);
+          try { await audioVideo.startAudioInput(microphones[0].deviceId); }
+          catch (_) { microphones = []; /* Capture failures are not join failures. */ }
         }
 
-        audioVideo.start();
+        // start() begins asynchronous signaling. Do not mark the attendee as
+        // connected until Chime actually fires audioVideoDidStart. Otherwise
+        // macOS can show a joined room while the service still reports 0 users.
+        const connected = new Promise((resolve, reject) => {
+          const timeout = global.setTimeout(() => {
+            settleStart?.(new Error('Chime signaling timed out after 30 seconds. Check network and AWS media region.'));
+          }, 30000);
+          settleStart = (error) => {
+            global.clearTimeout(timeout);
+            settleStart = null;
+            if (error) reject(error);
+            else resolve();
+          };
+        });
+        try { audioVideo.start(); }
+        catch (error) { settleStart?.(error); }
+        await connected;
 
         session.localMuted = microphones.length === 0;
         session.localVideoEnabled = false;

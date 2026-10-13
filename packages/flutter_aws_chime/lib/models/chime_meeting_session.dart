@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../src/chime_native_channel.dart';
@@ -49,7 +50,8 @@ class ChimeMeetingSession {
   Stream<ChimeEvent> get events => _eventController.stream;
 
   /// Joins a meeting using short-lived credentials returned by your backend.
-  /// Microphone and camera permission prompts are both shown before joining.
+  /// On macOS camera and microphone permissions are optional for listening.
+  /// The user can grant either permission later without blocking meeting join.
   Future<void> join(JoinInfo joinInfo) async {
     _ensureNotDisposed();
     if (_snapshot.state != MeetingState.idle &&
@@ -104,7 +106,13 @@ class ChimeMeetingSession {
           permissionError ??= error;
         }
       }
-      if (permissionError != null) throw permissionError;
+      // On macOS an attendee must be able to join as a listener even when
+      // camera or microphone access is denied. WebKit capture is activated
+      // separately; it must not gate the underlying Chime signaling session.
+      if (permissionError != null &&
+          (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS)) {
+        throw permissionError;
+      }
       _ensureNotDisposed();
       _nativeJoinStarted = true;
       await _channel.invoke('join', joinInfo.toJson());
