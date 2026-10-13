@@ -30,8 +30,8 @@
      --client-request-token "demo-$(date +%s)" \
      --external-meeting-id <demo-id>
    ```
-3. `chime-demo` 只有 Chime 最小权限，**没有** `iam:*` / `s3:*`。
-   `aws iam list-users --profile chime-demo` 报 `AccessDenied` 是**预期正确**，不是故障。
+3. `chime-demo` 使用最小权限、仅针对录制 Bucket 和 AWS 录制服务授权，**没有** `iam:*` / `s3:*` 通配权限；现已允许对指定录制 Bucket 使用 `s3:GetBucketPolicy` 等受限 S3 操作。
+   `aws iam list-users --profile chime-demo` 报 `AccessDenied` 是**预期正确**，不是故障。策略与 Bucket Policy 详见 [AWS S3 云录制权限配置](doc/AWS_S3_RECORDING_PERMISSIONS.md)。
 4. root（`lengxiaoying599`）只做 IAM 管理，不直接 `create-meeting` 跑 Demo。
 5. **AK/SK 永不进 Flutter 包、永不进 git、永不贴到聊天记录。**
    新 Key 的 Secret 只出现一次，丢了就删了重建，不找回。

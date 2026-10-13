@@ -126,7 +126,16 @@ CHIME_RECORDING_S3_BUCKET=
 # AWS 的服务端角色/环境变量凭证由标准 AWS SDK Provider Chain 提供
 ```
 
-使用 `CreateMediaCapturePipeline` 开始捕获；停止时创建 `CreateMediaConcatenationPipeline` 并结束 Capture；再通过 `GetMediaPipeline` 等待合成完成。预期 S3 Key 仅使用服务端生成的前缀和该 Concatenation Pipeline ID，防止下载其他会议录像。音视频合成由 AWS 执行，不在 Demo Server 转码。需要为 Chime Media Pipelines 配置正确的 S3 Bucket Policy 与 IAM 权限。此第一版采用 Chime GridView 合流；布局/预设的完全映射及真实 AWS 云端回放仍需验证。
+使用 `CreateMediaCapturePipeline` 开始捕获；停止时创建 `CreateMediaConcatenationPipeline` 并结束 Capture；再通过 `GetMediaPipeline` 等待合成完成。预期 S3 Key 仅使用服务端生成的前缀和该 Concatenation Pipeline ID，防止下载其他会议录像。音视频合成由 AWS 执行，不在 Demo Server 转码。需要为 Chime Media Pipelines 配置正确的 S3 Bucket Policy、IAM 权限和 `AWSServiceRoleForAmazonChimeSDKMediaPipelines` 服务关联角色。
+
+2026-10-13 已在 Demo AWS 账号中配置并通过只读检查：Chime 录制复用 IVS 的 us-east-1 S3 Bucket；Bucket Policy 保留 IVS 原有授权，额外允许 `mediapipelines.chime.amazonaws.com` 的服务主体执行所需的 PutObject/PutObjectAcl/GetObject/ListBucket，并使用 SourceAccount/SourceArn 限制。录制调用身份 `chime-demo` 使用独立、受限的 IAM 托管策略，临时配置权限已经移除。
+
+**IAM `s3:GetBucketPolicy`、Chime/IVS Bucket Policy、MediaConvert Role 以及验证命令，统一详见
+[AWS S3 云录制权限配置](AWS_S3_RECORDING_PERMISSIONS.md)。**
+
+- `H264_720P_30` → Chime `Resolution=HD`；`H264_1080P_30` → `Resolution=FHD`。Chime composited video 没有按帧率单独设置的 API，录制帧率由 AWS 服务决定。
+- `grid` → Chime `GridView`，屏幕共享时 `PresenterOnly`；`speaker` → 屏幕共享时 `ActiveSpeakerOnly`。**没有屏幕共享时仍然是 GridView**，不是语音驱动的单人全屏布局。
+- 配置/授权检查通过**不代表**真实双人录制、云端文件产出与回放已验收。
 
 ### AWS IVS Cloud Composition + AWS MediaConvert（完全云端 MP4）
 
@@ -136,6 +145,7 @@ IVS_RECORDING_AWS_REGION=us-east-1
 IVS_RECORDING_S3_BUCKET=
 IVS_RECORDING_STORAGE_CONFIGURATION_ARN=
 IVS_RECORDING_ENCODER_CONFIGURATION_ARN=
+IVS_RECORDING_ENCODER_CONFIGURATION_ARN_1080P=   # 1080p 必须使用独立的 EncoderConfiguration
 IVS_RECORDING_MEDIACONVERT_ROLE_ARN=
 # IAM 权限由 AWS SDK 默认凭据链提供，密钥不放客户端
 ```
@@ -144,13 +154,23 @@ IVS_RECORDING_MEDIACONVERT_ROLE_ARN=
 
 IVS Real-Time Stage Composition 的**原生录像是 HLS**。为保持统一 MP4 下载，Demo 实现了两项 AWS 供应商托管服务的编排：`StartComposition → StopComposition`，再等待录制 S3 前缀里的 `events/recording-ended.json`，检查 `media/hls/multivariant.m3u8`，调用 **AWS MediaConvert CreateJob/GetJob** 转码为 MP4，最后验证云存储里的 MP4 并开放一次性下载。**所有媒体转码均在 AWS 云端执行；Demo Server 不跑 FFmpeg 或其他录制引擎**。
 
-需要先在 IVS 控制台创建 EncoderConfiguration / StorageConfiguration，并为 MediaConvert 服务角色授予读取 IVS HLS 对象和写入 MP4 的 S3 权限。默认使用 IVS Grid 合流；`speaker` 布局尚未映射到 IVS 特定布局。存储配置留空时会显示明确的 `recordingAvailable: false`；这一组合服务的真实 HLS 文件路径、权限与媒体质量 **尚未在 AWS 云服务上 E2E 验收**。IVS 产生的原始 HLS 文件不会在 MP4 下载后自动清理，建议设置 S3 生命周期过期规则。
+需要先在 IVS 控制台创建 EncoderConfiguration / StorageConfiguration，并为 MediaConvert 服务角色授予读取 IVS HLS 对象和写入 MP4 的 S3 权限。2026-10-13 已验证本项目 IVS StorageConfiguration 指向指定 S3，720p EncoderConfiguration 为 1280×720/30fps，并创建及配置了独立的 1920×1080/30fps EncoderConfiguration。
+
+IVS 写入 S3 的 Bucket Policy、转码角色的 S3 权限和受限 `iam:PassRole` 见
+[AWS S3 云录制权限配置](AWS_S3_RECORDING_PERMISSIONS.md)，不要把 IAM 用户权限与 S3 的服务主体权限混为一谈。
+
+- `H264_720P_30` 选择标准 Encoder ARN，`H264_1080P_30` 选择 `_1080P` ARN；未配 1080p Encoder 时返回明确配置错误，不伪装成 1080p。
+- `grid` 对应默认网格，`speaker` 对应 `featuredParticipantAttribute=isFeatured` 的突出显示网格；IVS 参与者 Token 由服务端根据 `role=host` 生成 `isFeatured=true`。**这是固定主持人/重点人物，不是实时语音激活切换。**
+- 存储配置留空时会显示明确的 `recordingAvailable: false`。真实 HLS 文件路径、不同编码/布局的音画质量仍 **尚未在 AWS 云服务上 E2E 验收**。IVS 产生的原始 HLS 文件不会在 MP4 下载后自动清理，建议设置 S3 生命周期过期规则。
 
 ## SDK 与 Demo 使用方式
 
 ```dart
 final started = await room.startRecording(
-  RecordingOptions.cloud(layout: RecordingLayout.grid),
+  RecordingOptions.cloud(
+    layout: RecordingLayout.grid,
+    qualityPreset: RecordingQualityPreset.fullHd1080p30,
+  ),
 );
 // 默认按厂商执行器发起录制；失败时为明确的供应商/配置错误。
 
@@ -177,7 +197,16 @@ if (status.metadata['canDownload'] == true) {
 
 Demo 云存储执行器在 MP4 传输**完整成功后**，尽力删除本次产生的 S3/OSS MP4 对象，避免长期占用示例 Bucket；删除失败会在服务器记录告警，不影响已经完成的下载。IVS 云端转码仍会留存原始 HLS，TRTC VOD 文件暂不由这个通用删除流程自动删除，建议配置供应商存储的自动过期规则。**正式项目需要决定更完整的留存策略和一段时间内允许重复下载的规则**。
 
-后端录像任务和一次性票据都在内存里，重启后无法恢复；这符合最小 Demo，但不适合生产长期管理文件。Bucket 或存储服务可先留空，实际测试录制之前必须开通、授予最低权限；供应商的 RTC、云录制、S3/OSS/VOD 费用另计。
+**单机 AWS 录制断点恢复（2026-10-13 新增）：** 可在 `demo-server/.env` 中配置：
+
+```dotenv
+DEMO_ROOM_STATE_PATH=.room-state.json
+DEMO_RECORDING_STATE_DIR=.recording-state
+```
+
+这两个目录只供单机 Demo 使用（文件以 0600 权限写入，采用临时文件原子替换，并被 git 忽略）。RoomDirectory 仅保存 Chime/IVS 房间元数据与身份凭据的**哈希值**；对应录制执行器保存供应商任务 ID、处理状态和预期对象 Key。Demo 重启后可恢复未关闭的 AWS 房间，继续查询已有任务和下载结果，**不会保存 AWS Key、用户原始凭证或者已经发放的一次性下载票据**。下载票据重启后必须重新申请。请勿将此本地文件方案视为多实例/Vercel 无状态部署所需的持久化；生产环境必须使用共享数据库、任务队列并清理过期房间和任务。断点恢复对服务器意外掉电、请求中断和供应商超时仅是尽力恢复，不保证原子跨系统事务。
+
+Bucket 或存储服务可先留空，实际测试录制之前必须开通、授予最低权限；供应商的 RTC、云录制、S3/OSS/VOD 费用另计。
 
 ## 验证
 
