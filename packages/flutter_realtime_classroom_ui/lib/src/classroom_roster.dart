@@ -4,20 +4,39 @@ import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'classroom_strings.dart';
 import 'classroom_command_presenter.dart';
-class ClassroomRaisedHandsPanel extends StatefulWidget {
- const ClassroomRaisedHandsPanel({super.key, required this.classroom, required this.snapshot, this.onActionError});
- final ClassroomSession classroom;
- final ClassroomState snapshot;
- final void Function(RealtimeException error)? onActionError;
- @override State<ClassroomRaisedHandsPanel> createState() => _ClassroomRaisedHandsPanelState();
-}
-class _ClassroomRaisedHandsPanelState extends State<ClassroomRaisedHandsPanel> {
 
-late final _commands = ClassroomCommandPresenter(onChanged: () { if (mounted) setState(() {}); }, onError: (error) => widget.onActionError?.call(error));
- bool get _busy => _commands.pending;
- Future<void> _run(Future<void> Function() task) => _commands.run(task);
-@override void dispose() {  _commands.dispose(); super.dispose(); }
-@override Widget build(BuildContext context) => _hands(widget.snapshot);
+class ClassroomRaisedHandsPanel extends StatefulWidget {
+  const ClassroomRaisedHandsPanel({
+    super.key,
+    required this.classroom,
+    required this.snapshot,
+    this.onActionError,
+  });
+  final ClassroomSession classroom;
+  final ClassroomState snapshot;
+  final void Function(RealtimeException error)? onActionError;
+  @override
+  State<ClassroomRaisedHandsPanel> createState() =>
+      _ClassroomRaisedHandsPanelState();
+}
+
+class _ClassroomRaisedHandsPanelState extends State<ClassroomRaisedHandsPanel> {
+  late final _commands = ClassroomCommandPresenter(
+    onChanged: () {
+      if (mounted) setState(() {});
+    },
+    onError: (error) => widget.onActionError?.call(error),
+  );
+  bool get _busy => _commands.pending;
+  Future<void> _run(Future<void> Function() task) => _commands.run(task);
+  @override
+  void dispose() {
+    _commands.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _hands(widget.snapshot);
 
   Widget _hands(ClassroomState state) {
     final strings = ClassroomStrings.of(context);
@@ -256,5 +275,4 @@ late final _commands = ClassroomCommandPresenter(onChanged: () { if (mounted) se
       ],
     );
   }
-
 }

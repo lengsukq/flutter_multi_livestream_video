@@ -7,5 +7,6 @@ class SystemAnnotationRoomFeature {
   final SharedContentController _shared;
   final SystemScreenAnnotationController controller;
   Future<void>? _disposal;
-  Future<void> dispose() => _disposal ??= _shared.removeSystemAnnotations(controller);
+  Future<void> dispose() =>
+      _disposal ??= _shared.removeSystemAnnotations(controller);
 }

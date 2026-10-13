@@ -1,0 +1,1 @@
+enum ClassroomRole { teacher, student }

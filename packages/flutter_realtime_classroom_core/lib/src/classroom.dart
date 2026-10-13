@@ -1,14 +1,16 @@
+import 'classroom_activity_kind.dart';
+import 'classroom_feedback_kind.dart';
+import 'classroom_material_uploader.dart';
+import 'classroom_notification.dart';
+import 'classroom_revision_transport.dart';
+import 'classroom_state.dart';
+import 'classroom_state_event.dart';
 import 'dart:async';
 import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
-import 'classroom_models.dart';
 import 'classroom_repository.dart';
 import 'classroom_command.dart';
-import 'classroom_tools.dart';
 import 'classroom_annotations.dart';
 import 'classroom_changes.dart';
-export 'classroom_models.dart';
-export 'classroom_repository.dart';
-export 'classroom_annotations.dart';
 
 /// SDK-owned state and API, independent of the Demo UI.
 class ClassroomSession {

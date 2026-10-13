@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'classroom_strings.dart';
+
 class ClassroomHeader extends StatelessWidget {
- const ClassroomHeader({super.key, required this.snapshot, this.showCloseButton = false});
- final ClassroomState snapshot;
- final bool showCloseButton;
- @override Widget build(BuildContext context) => _buildHeader(context, snapshot, ClassroomStrings.of(context));
+  const ClassroomHeader({
+    super.key,
+    required this.snapshot,
+    this.showCloseButton = false,
+  });
+  final ClassroomState snapshot;
+  final bool showCloseButton;
+  @override
+  Widget build(BuildContext context) =>
+      _buildHeader(context, snapshot, ClassroomStrings.of(context));
 
   Widget _buildHeader(
     BuildContext context,
@@ -114,5 +121,4 @@ class ClassroomHeader extends StatelessWidget {
       ],
     );
   }
-
 }

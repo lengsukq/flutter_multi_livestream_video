@@ -5,23 +5,45 @@ import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'classroom_strings.dart';
 import 'classroom_command_presenter.dart';
+
 class ClassroomQuestionsPanel extends StatefulWidget {
- const ClassroomQuestionsPanel({super.key, required this.classroom, required this.snapshot, this.onActionError});
- final ClassroomSession classroom;
- final ClassroomState snapshot;
- final void Function(RealtimeException error)? onActionError;
- @override State<ClassroomQuestionsPanel> createState() => _ClassroomQuestionsPanelState();
+  const ClassroomQuestionsPanel({
+    super.key,
+    required this.classroom,
+    required this.snapshot,
+    this.onActionError,
+  });
+  final ClassroomSession classroom;
+  final ClassroomState snapshot;
+  final void Function(RealtimeException error)? onActionError;
+  @override
+  State<ClassroomQuestionsPanel> createState() =>
+      _ClassroomQuestionsPanelState();
 }
+
 class _ClassroomQuestionsPanelState extends State<ClassroomQuestionsPanel> {
-final _question = TextEditingController();
-final _questionSearch = TextEditingController();
-ClassroomQuestionStatus? _questionFilter;
-late final _commands = ClassroomCommandPresenter(onChanged: () { if (mounted) setState(() {}); }, onError: (error) => widget.onActionError?.call(error));
- bool get _busy => _commands.pending;
- Future<void> _run(Future<void> Function() task) => _commands.run(task);
-void _update(VoidCallback action) => setState(action);
-@override void dispose() { _question.dispose(); _questionSearch.dispose(); _commands.dispose(); super.dispose(); }
-@override Widget build(BuildContext context) => _questions(widget.snapshot);
+  final _question = TextEditingController();
+  final _questionSearch = TextEditingController();
+  ClassroomQuestionStatus? _questionFilter;
+  late final _commands = ClassroomCommandPresenter(
+    onChanged: () {
+      if (mounted) setState(() {});
+    },
+    onError: (error) => widget.onActionError?.call(error),
+  );
+  bool get _busy => _commands.pending;
+  Future<void> _run(Future<void> Function() task) => _commands.run(task);
+  void _update(VoidCallback action) => setState(action);
+  @override
+  void dispose() {
+    _question.dispose();
+    _questionSearch.dispose();
+    _commands.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _questions(widget.snapshot);
   Future<void> _answer(ClassroomQuestion question) async {
     final strings = ClassroomStrings.of(context);
     final answer = await showDialog<String>(
@@ -36,7 +58,6 @@ void _update(VoidCallback action) => setState(action);
       await _run(() => widget.classroom.answerQuestion(question.id, answer));
     }
   }
-
 
   Widget _questionFilterPill(
     ClassroomQuestionStatus? value,
@@ -469,5 +490,4 @@ void _update(VoidCallback action) => setState(action);
       ],
     );
   }
-
 }

@@ -9,7 +9,6 @@ dependencies:
     path: ../flutter_realtime_foundation
   flutter_realtime_whiteboard_core:
     path: ../flutter_realtime_whiteboard_core
-  http: ^1.4.0
 dev_dependencies:
   test: ^1.25.0
   lints: ^5.0.0

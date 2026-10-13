@@ -16,8 +16,7 @@ typedef LiveRepositoryFactory =
 
 /// Optional, headless likes/gifts backed by the existing trusted repository.
 /// Gift events are demonstration features, NOT payment or currency settlement.
-class LivePreset
-    extends RealtimeFeaturePlugin<LiveInteractionSession> {
+class LivePreset extends RealtimeFeaturePlugin<LiveInteractionSession> {
   const LivePreset({
     this.repositoryFactory,
     this.pollInterval = const Duration(seconds: 2),
@@ -25,7 +24,9 @@ class LivePreset
   });
 
   static const featureId = 'live';
-  static const featureKey = RealtimeFeatureKey<LiveInteractionSession>(featureId);
+  static const featureKey = RealtimeFeatureKey<LiveInteractionSession>(
+    featureId,
+  );
   @override
   RealtimeFeatureKey<LiveInteractionSession> get key => featureKey;
   @override
@@ -84,12 +85,10 @@ class LivePreset
   }
 
   @override
-  Future<void> start(LiveInteractionSession feature) =>
-      feature.start();
+  Future<void> start(LiveInteractionSession feature) => feature.start();
 
   @override
-  Future<void> detach(LiveInteractionSession feature) =>
-      feature.dispose();
+  Future<void> detach(LiveInteractionSession feature) => feature.dispose();
 }
 
 /// Legacy revision hint adapters have no authority and can be safely wrapped.

@@ -3,17 +3,29 @@ import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'classroom_strings.dart';
 import 'classroom_feedback_presentation.dart';
-class ClassroomFeedbackPanel extends StatefulWidget {
- const ClassroomFeedbackPanel({super.key, required this.classroom, required this.snapshot, this.onActionError});
- final ClassroomSession classroom;
- final ClassroomState snapshot;
- final void Function(RealtimeException error)? onActionError;
- @override State<ClassroomFeedbackPanel> createState() => _ClassroomFeedbackPanelState();
-}
-class _ClassroomFeedbackPanelState extends State<ClassroomFeedbackPanel> {
 
-@override void dispose() {   super.dispose(); }
-@override Widget build(BuildContext context) => _feedback(widget.snapshot);
+class ClassroomFeedbackPanel extends StatefulWidget {
+  const ClassroomFeedbackPanel({
+    super.key,
+    required this.classroom,
+    required this.snapshot,
+    this.onActionError,
+  });
+  final ClassroomSession classroom;
+  final ClassroomState snapshot;
+  final void Function(RealtimeException error)? onActionError;
+  @override
+  State<ClassroomFeedbackPanel> createState() => _ClassroomFeedbackPanelState();
+}
+
+class _ClassroomFeedbackPanelState extends State<ClassroomFeedbackPanel> {
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _feedback(widget.snapshot);
 
   Widget _feedback(ClassroomState state) {
     final strings = ClassroomStrings.of(context);
@@ -157,5 +169,4 @@ class _ClassroomFeedbackPanelState extends State<ClassroomFeedbackPanel> {
       ],
     );
   }
-
 }

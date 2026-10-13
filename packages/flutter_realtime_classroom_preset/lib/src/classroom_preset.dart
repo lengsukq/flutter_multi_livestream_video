@@ -1,3 +1,4 @@
+import 'http_classroom_repository.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
@@ -18,8 +19,7 @@ typedef ClassroomRepositoryFactory =
 /// No new business behavior is implemented by the Demo. The repository may be
 /// supplied by the host, or the existing reference HTTP repository is used.
 /// The media room must declare meeting mode in its backend metadata.
-class ClassroomPreset
-    extends RealtimeFeaturePlugin<ClassroomSession> {
+class ClassroomPreset extends RealtimeFeaturePlugin<ClassroomSession> {
   const ClassroomPreset({
     this.repositoryFactory,
     this.pollInterval = const Duration(seconds: 2),
@@ -106,12 +106,10 @@ class ClassroomPreset
   }
 
   @override
-  Future<void> start(ClassroomSession feature) =>
-      feature.start();
+  Future<void> start(ClassroomSession feature) => feature.start();
 
   @override
-  Future<void> detach(ClassroomSession feature) =>
-      feature.dispose();
+  Future<void> detach(ClassroomSession feature) => feature.dispose();
 }
 
 /// Typed access remains opt-in and is no longer compiled into RealtimeRoom.

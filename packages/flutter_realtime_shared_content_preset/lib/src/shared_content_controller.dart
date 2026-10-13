@@ -49,11 +49,16 @@ class SharedContentController {
   final MediaSession media;
   final ClassroomSession classroom;
   late final WhiteboardSession whiteboard;
-  SystemAnnotationBridge _systemAnnotations = const UnavailableSystemAnnotationBridge();
+  SystemAnnotationBridge _systemAnnotations =
+      const UnavailableSystemAnnotationBridge();
   SystemAnnotationBridge get systemAnnotations => _systemAnnotations;
 
   Future<void> setSystemAnnotations(SystemAnnotationBridge bridge) async {
-    if (_disposed) throw const RealtimeException(code: RealtimeErrorCode.invalidState, message: 'content.disposed');
+    if (_disposed)
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'content.disposed',
+      );
     await _systemSub?.cancel();
     await _systemAnnotations.dispose();
     _systemAnnotations = bridge;

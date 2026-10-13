@@ -1,4 +1,9 @@
-import 'classroom_models.dart';
+import 'classroom_notification.dart';
+import 'classroom_notification_kind.dart';
+import 'classroom_question_status.dart';
+import 'classroom_state.dart';
+import 'classroom_state_event.dart';
+import 'classroom_state_event_kind.dart';
 
 void deriveClassroomChanges(
   ClassroomState? old,
