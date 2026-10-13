@@ -35,6 +35,19 @@ the base. Agora, IVS and Tencent Chat use separate runtime bundles; effects load
 from the effects package only when a processed source/device preview needs them.
 All files are locally packaged; hosts do not need CDN tags.
 
+Bundled media providers also supply the default video-effects implementation.
+`Realtime(providers: [createLivekitProvider(), ...])` therefore retains background
+blur/image replacement support without requiring an additional `services` argument.
+An explicit `RealtimeRoomServices(videoEffectsFactory: ...)` takes precedence.
+For custom driver-only `Realtime.standard(drivers: ...)` integrations, supply the
+factory through `services` because those drivers do not declare a provider bundle.
+
+With `backendUrl` configured, both the standard SDK and directly constructed
+`RealtimeClient` instances use an HTTP cloud recording session by default;
+`recordingSessionFactory` overrides that default. Failed cloud recording results
+preserve the backend's `error` string in `RecordingResult.metadata['error']` so
+the host can display the recording task's failure reason.
+
 The existing `example/` Demo demonstrates freely arranging optional UI
 components. No separate Headless example project is required or maintained;
 read `doc/SDK_RUNTIME_INTEGRATION.zh-CN.md` for UI-free integration snippets.

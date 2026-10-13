@@ -1,14 +1,18 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
 test('dashboard provider switcher is metadata-driven and its script parses', async () => {
-  const html = await readFile(
+  const shell = await readFile(
     path.resolve(import.meta.dirname, '..', 'public', 'index.html'),
     'utf8',
   );
 
+  const directory = path.resolve(import.meta.dirname, '..', 'public', 'dashboard');
+  const modules = await Promise.all((await readdir(directory)).filter((name) => name.endsWith('.js')).map((name) => readFile(path.join(directory, name), 'utf8')));
+  const html = shell + modules.join('\n');
+  assert.match(shell, /type="module" src="\/dashboard\/dashboard.js"/);
   assert.match(html, /id="provider-switcher"/);
   assert.match(html, /id="provider-capability-matrix"/);
   assert.match(html, /id="media-capability-details"/);
@@ -46,11 +50,13 @@ test('dashboard provider switcher is metadata-driven and its script parses', asy
     assert.equal(html.includes(hardcodedFlow), false, `dashboard still hardcodes ${hardcodedFlow}`);
   }
 
-  const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
-  assert.ok(scriptMatch, 'dashboard inline script not found');
-  assert.match(scriptMatch[1]!, /function updateCapabilityTooltip\(\)/);
-  assert.match(scriptMatch[1]!, /function executeCloseChatRoom\(\)/);
-  assert.doesNotThrow(() => new Function(scriptMatch[1]!));
+  assert.match(html, /function updateCapabilityTooltip\(\)/);
+  assert.match(html, /function executeCloseChatRoom\(\)/);
+  for (const module of modules) {
+    const body = module.replace(/^import[^;]+;\n/gm, '').replace(/\bexport /g, '');
+    assert.doesNotThrow(() => new Function(body));
+  }
+
 });
 
 test('dashboard cloud chat management routes require admin authentication', async () => {
@@ -66,7 +72,8 @@ test('dashboard cloud chat management routes require admin authentication', asyn
     chatRoutes,
     /'\/api\/chat\/cloud-rooms\/:provider\/:roomId'/,
   );
-  assert.match(chatRoutes, /provider\.deleteCloudRoom\(providerRoomId\)/);
+  const cloudRoomService = await readFile(path.resolve(import.meta.dirname, '..', 'services', 'chat', 'delete-api-chat-cloud-rooms-by-provider-by-roomid.ts'), 'utf8');
+  assert.match(cloudRoomService, /provider\.deleteCloudRoom\(providerRoomId\)/);
 });
 
 test('chat-token route is protected by the shared room middleware', async () => {

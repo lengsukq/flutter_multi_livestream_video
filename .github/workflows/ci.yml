@@ -77,7 +77,7 @@ jobs:
 
       - name: Test Android video frame processing
         working-directory: flutter_aws_chime/example/android
-        run: ./gradlew :flutter_realtime_video_effects:testDebugUnitTest :flutter_realtime_video_effects:externalNativeBuildDebug
+        run: ./gradlew :flutter_realtime_video_effects:testDebugUnitTest :flutter_realtime_media_agora:externalNativeBuildDebug
 
   package-tests:
     needs: inventory
@@ -256,7 +256,7 @@ jobs:
           node --test
           packages/flutter_realtime_video_effects/test/web_bridge_test.mjs
           packages/flutter_realtime_media_aws_desktop/test/aws_desktop_runtime_test.mjs
-          packages/flutter_realtime_sdk/tool/provider_bridge/src/*.test.js
+          tool/provider_web_assets/src/*.test.js
 
   macos:
     runs-on: macos-26

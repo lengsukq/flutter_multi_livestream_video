@@ -1,3 +1,5 @@
+import { readDemoConfiguration } from './services/demo-configuration.ts';
+import { createIdleRoomSweeper } from './services/idle-room-sweeper.ts';
 // Multi-provider demo backend — provider credentials stay server-side.
 //
 // `npm start` is the single backend entry point. Flutter sends room/user intent;
@@ -83,42 +85,22 @@ import type {
   RoomSummary,
 } from './types.ts';
 
-const CONTROL_REGION = process.env.AWS_REGION ?? 'us-east-1';
-const MEDIA_REGION = process.env.CHIME_MEDIA_REGION ?? 'ap-southeast-1';
-const CONTRACT_VERSION = 1;
-const MEDIA_CONTRACT_HEADER = 'X-Media-Backend-Contract';
-const CHAT_CONTRACT_HEADER = 'X-Realtime-Chat-Contract';
-const LEGACY_CHIME_CONTRACT_HEADER = 'X-Chime-Backend-Contract';
-const DEMO_BEARER_TOKEN = process.env.DEMO_BEARER_TOKEN?.trim() || null;
-const MEDIA_ADMIN_PASSWORD = process.env.MEDIA_ADMIN_PASSWORD?.trim() || '';
-const ADMIN_SESSION_COOKIE = 'media_admin_session';
-const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
-const IS_VERCEL = process.env.VERCEL === '1';
-const MEDIA_CONNECTIONS_ENABLED = parseBoolean(
-  process.env.MEDIA_CONNECTIONS_ENABLED,
-  !IS_VERCEL,
-);
-const INITIAL_PROVIDER = String(process.env.MEDIA_DEFAULT_PROVIDER ?? 'aws').trim().toLowerCase();
-const INITIAL_CHAT_PROVIDER = String(process.env.CHAT_DEFAULT_PROVIDER ?? 'none').trim().toLowerCase();
-const STARTED_AT = Date.now();
-const EMPTY_CLOSE_AFTER_MS = Number(process.env.EMPTY_CLOSE_AFTER_MS ?? 90_000);
-const PARTICIPANT_STALE_AFTER_MS = Number(
-  process.env.PARTICIPANT_STALE_AFTER_MS ?? Math.max(120_000, EMPTY_CLOSE_AFTER_MS),
-);
-const SWEEP_INTERVAL_MS = 30_000;
+export async function createDemoApplication(env: NodeJS.ProcessEnv = process.env) {
+const {CONTROL_REGION, MEDIA_REGION, CONTRACT_VERSION, MEDIA_CONTRACT_HEADER, CHAT_CONTRACT_HEADER, LEGACY_CHIME_CONTRACT_HEADER, DEMO_BEARER_TOKEN, MEDIA_ADMIN_PASSWORD, ADMIN_SESSION_COOKIE, ADMIN_SESSION_TTL_SECONDS, IS_VERCEL, MEDIA_CONNECTIONS_ENABLED, INITIAL_PROVIDER, INITIAL_CHAT_PROVIDER, STARTED_AT, EMPTY_CLOSE_AFTER_MS, PARTICIPANT_STALE_AFTER_MS, SWEEP_INTERVAL_MS} = readDemoConfiguration(env);
 const roomOperations = new RoomOperationQueue();
 const liveInteractionDirectory = new LiveInteractionDirectory();
-const classroomStateDir = process.env.CLASSROOM_STATE_DIR?.trim();
+const classroomStateDir = env.CLASSROOM_STATE_DIR?.trim();
 const classroomDirectory = new ClassroomStateDirectory(
   classroomStateDir ? new FileClassroomStore(classroomStateDir) : undefined,
 );
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROVIDER_STATE_PATH = process.env.MEDIA_PROVIDER_STATE_PATH ?? path.join(__dirname, '.provider-state.json');
+const PROVIDER_STATE_PATH = env.MEDIA_PROVIDER_STATE_PATH ?? path.join(__dirname, '.provider-state.json');
 
 const app = express();
-const trtcCloudRecorder = new TrtcCloudRecording();
+const trtcCloudRecorder = new TrtcCloudRecording(env);
 app.set('trust proxy', 1);
+app.use('/dashboard', express.static(path.join(__dirname, 'public', 'dashboard')));
 app.use(cors({
   origin: true,
   methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -155,10 +137,6 @@ app.use((req, res, next) => {
   next();
 });
 
-function parseBoolean(value: string | undefined, fallback: boolean): boolean {
-  if (value == null || value.trim() === '') return fallback;
-  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
-}
 
 function bindLogicalIdentity(
   entry: RoomEntry,
@@ -200,7 +178,7 @@ const { hasAdminSession, setAdminCookie, clearAdminCookie, requireSameOrigin, re
     password: MEDIA_ADMIN_PASSWORD,
     cookieName: ADMIN_SESSION_COOKIE,
     sessionTtlSeconds: ADMIN_SESSION_TTL_SECONDS,
-    isVercel: IS_VERCEL, nodeEnv: process.env.NODE_ENV,
+    isVercel: IS_VERCEL, nodeEnv: env.NODE_ENV,
     contractError,
   });
 
@@ -226,7 +204,7 @@ function requireLegacyConnectionAccess(req: Request, res: Response, next: NextFu
 }
 
 const chimeProvider = createChimeProvider({
-  env: process.env,
+  env: env,
   contractVersion: CONTRACT_VERSION,
   normalizeUserId,
 });
@@ -270,36 +248,36 @@ function mediaManagementCapabilities(provider: ProviderAdapter) {
 }
 
 const ivsProvider = createIvsProvider({
-  env: process.env,
+  env: env,
   contractVersion: CONTRACT_VERSION,
   normalizeDisplayName,
 });
 
 const providerRegistry = new ProviderRegistry([
   chimeProvider,
-  createLiveKitProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
-  createAgoraProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
-  createTrtcProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
-  createArtcProvider({ env: process.env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
+  createLiveKitProvider({ env: env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
+  createAgoraProvider({ env: env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
+  createTrtcProvider({ env: env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
+  createArtcProvider({ env: env, contractVersion: CONTRACT_VERSION, normalizeDisplayName }),
   ivsProvider,
 ]);
-const ivsChatRegion = await resolveIvsChatRegion(process.env);
+const ivsChatRegion = await resolveIvsChatRegion(env);
 const chatProviderRegistry = new ChatProviderRegistry([
   createIvsChatProvider({
-    env: process.env,
+    env: env,
     contractVersion: CONTRACT_VERSION,
     resolvedRegion: ivsChatRegion,
   }),
   createTencentChatProvider({
-    env: process.env,
+    env: env,
     contractVersion: CONTRACT_VERSION,
   }),
   createAgoraChatProvider({
-    env: process.env,
+    env: env,
     contractVersion: CONTRACT_VERSION,
   }),
 ]);
-const roomDirectory = new RoomDirectory(process.env.DEMO_ROOM_STATE_PATH?.trim());
+const roomDirectory = new RoomDirectory(env.DEMO_ROOM_STATE_PATH?.trim());
 const chatRoomDirectory = new ChatRoomDirectory();
 
 const {
@@ -442,20 +420,19 @@ let activeProvider = loadPersistedProvider();
 let activeChatProvider = loadPersistedChatProvider();
 
 
-if (!IS_VERCEL) {
-  setInterval(() => {
-    for (const entry of roomDirectory.entries()) {
-      void withRoomOperation(entry, async () => {
-        const now = Date.now();
-        pruneStaleAttendees(entry, now, true);
-        if (entry.roomMode === 'meeting') classroomDirectory.snapshot(entry, false);
-        if (now - (entry.lastHeartbeatMs ?? 0) <= EMPTY_CLOSE_AFTER_MS) return;
-        const idleSec = Math.round((now - entry.lastHeartbeatMs) / 1000);
-        await closeRoomUnlocked(entry, `idle ${idleSec}s, no heartbeat`);
-      }).catch((error) => console.error('auto-close failed', entry.roomCode, error));
-    }
-  }, SWEEP_INTERVAL_MS);
-}
+const sweeper = createIdleRoomSweeper({
+  intervalMs: SWEEP_INTERVAL_MS,
+  rooms: () => roomDirectory.entries(),
+  sweep: (entry) => withRoomOperation(entry, async () => {
+    const now = Date.now();
+    pruneStaleAttendees(entry, now, true);
+    if (entry.roomMode === 'meeting') classroomDirectory.snapshot(entry, false);
+    if (now - (entry.lastHeartbeatMs ?? 0) <= EMPTY_CLOSE_AFTER_MS) return;
+    const idleSec = Math.round((now - entry.lastHeartbeatMs) / 1000);
+    await closeRoomUnlocked(entry, `idle ${idleSec}s, no heartbeat`);
+  }),
+  reportError: (entry, error) => console.error('auto-close failed', entry.roomCode, error),
+});
 
 const dashboardSelection: DashboardSelectionState = {
   get activeProvider() { return activeProvider; },
@@ -519,20 +496,22 @@ registerLegacyChimeRoutes(app, {
 registerRecordingRoutes(app, {
   resolveRoom,
   recorders: new Map<string, CloudRecordingExecutor>([
-    ['livekit', new LiveKitCloudRecording()],
+    ['livekit', new LiveKitCloudRecording(env)],
     ['trtc', trtcCloudRecorder],
-    ['agora', new AgoraCloudRecording()],
-    ['artc', process.env.ARTC_RECORDING_STORAGE === 'oss'
-      ? new ArtcCloudRecording() : new ArtcVodRecording()],
-    ['chime', new ChimeCloudRecording()],
-    ['ivs', new IvsCloudRecording()],
+    ['agora', new AgoraCloudRecording(env)],
+    ['artc', env.ARTC_RECORDING_STORAGE === 'oss'
+      ? new ArtcCloudRecording(env) : new ArtcVodRecording(env)],
+    ['chime', new ChimeCloudRecording(env)],
+    ['ivs', new IvsCloudRecording(env)],
   ]),
   contractError,
 });
 
 let server: ReturnType<typeof app.listen> | null = null;
-if (!IS_VERCEL) {
-  const port = Number(process.env.PORT ?? 3000);
+let stopping: Promise<void> | null = null;
+function start(port = Number(env.PORT ?? 3000)) {
+  if (stopping) throw new Error('Demo application is stopping');
+  if (server) return server;
   server = app.listen(port, '0.0.0.0', () => {
     const address = server?.address();
     const listeningPort = address && typeof address === 'object' ? address.port : port;
@@ -544,7 +523,16 @@ if (!IS_VERCEL) {
     console.log(`connections enabled: ${MEDIA_CONNECTIONS_ENABLED ? 'yes' : 'no'}`);
     console.log(`dashboard: http://127.0.0.1:${listeningPort}/`);
   });
+  if (!IS_VERCEL) sweeper.start();
+  return server;
 }
-
-export { app, server, providerRegistry, roomDirectory };
-export default app;
+function stop(): Promise<void> {
+  return stopping ??= (async () => {
+    await sweeper.stop();
+    const listener = server;
+    server = null;
+    if (listener) await new Promise<void>((resolve, reject) => listener.close((error) => error ? reject(error) : resolve()));
+  })();
+}
+return { app, providerRegistry, roomDirectory, start, stop };
+}
