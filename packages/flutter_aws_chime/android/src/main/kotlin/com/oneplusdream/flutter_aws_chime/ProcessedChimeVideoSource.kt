@@ -6,9 +6,9 @@ import com.amazonaws.services.chime.sdk.meetings.audiovideo.video.VideoRotation
 import com.amazonaws.services.chime.sdk.meetings.audiovideo.video.VideoSink
 import com.amazonaws.services.chime.sdk.meetings.audiovideo.video.VideoSource
 import com.amazonaws.services.chime.sdk.meetings.audiovideo.video.buffer.VideoFrameI420Buffer
-import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrame
-import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameHub
-import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameSink
+import com.oneplusdream.flutter_realtime_processed_video.ProcessedVideoFrame
+import com.oneplusdream.flutter_realtime_processed_video.ProcessedVideoFrameHub
+import com.oneplusdream.flutter_realtime_processed_video.ProcessedVideoFrameSink
 import java.util.concurrent.CopyOnWriteArraySet
 import org.amazon.chime.webrtc.JavaI420Buffer
 import org.amazon.chime.webrtc.YuvHelper

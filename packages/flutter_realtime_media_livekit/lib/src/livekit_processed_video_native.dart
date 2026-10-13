@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter_realtime_processed_video/flutter_realtime_processed_video.dart';
 // The plugin returns a registered native stream descriptor; FlutterWebRTC
 // currently exposes its descriptor wrapper through this implementation file.
 // ignore: implementation_imports

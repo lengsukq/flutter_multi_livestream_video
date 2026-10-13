@@ -7,9 +7,7 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:web/web.dart' as web;
 
 import 'flutter_realtime_video_effects_platform_interface.dart';
-import 'src/processed_video_source.dart';
 import 'src/video_effects_failure.dart';
-import 'src/video_effects_camera_device.dart';
 import 'src/video_effects_assets.dart';
 import 'src/video_effects_source_config.dart';
 
@@ -17,7 +15,7 @@ import 'src/video_effects_source_config.dart';
 external JSObject get _globalThis;
 
 class FlutterRealtimeVideoEffectsWeb
-    extends FlutterRealtimeVideoEffectsPlatform {
+    extends FlutterRealtimeProcessedVideoPlatform {
   FlutterRealtimeVideoEffectsWeb() {
     _globalThis.setProperty(
       '__flutterVideoEffectsOnError'.toJS,
@@ -36,7 +34,7 @@ class FlutterRealtimeVideoEffectsWeb
   Stream<VideoEffectsFailure> get failures => _failures.stream;
 
   static void registerWith(Object registrar) {
-    FlutterRealtimeVideoEffectsPlatform.instance =
+    FlutterRealtimeProcessedVideoPlatform.instance =
         FlutterRealtimeVideoEffectsWeb();
   }
 
@@ -92,7 +90,7 @@ class FlutterRealtimeVideoEffectsWeb
     final info = (infoJs?.dartify() as Map?) ?? const {};
     return ProcessedVideoSource(
       id: sourceId,
-      platform: VideoEffectsPlatform.web,
+      platform: ProcessedVideoPlatform.web,
       kind: ProcessedVideoSourceKind.mediaStreamTrack,
       width: (info['width'] as num?)?.toInt() ?? config.width,
       height: (info['height'] as num?)?.toInt() ?? config.height,
@@ -136,14 +134,14 @@ class FlutterRealtimeVideoEffectsWeb
       .then((_) {});
 
   @override
-  Future<List<VideoEffectsCameraDevice>> listCameras() async {
+  Future<List<ProcessedVideoCameraDevice>> listCameras() async {
     await ensureVideoEffectsWebAssets();
     final mediaDevices = web.window.navigator.mediaDevices;
     final devices = await mediaDevices.enumerateDevices().toDart;
     return devices.toDart
         .where((device) => device.kind == 'videoinput')
         .map(
-          (device) => VideoEffectsCameraDevice(
+          (device) => ProcessedVideoCameraDevice(
             id: device.deviceId,
             label: device.label.isEmpty ? 'Camera' : device.label,
           ),

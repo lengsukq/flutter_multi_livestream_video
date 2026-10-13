@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'agora_join_info.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter_realtime_processed_video/flutter_realtime_processed_video.dart';
 import 'agora_media_track.dart';
 import 'agora_screen_capture.dart';
 import 'agora_screen_share_signals.dart';
@@ -114,8 +114,8 @@ abstract class _AgoraMediaSession
       _processedSink.supports(source) &&
       source.platform ==
           (defaultTargetPlatform == TargetPlatform.android
-              ? VideoEffectsPlatform.android
-              : VideoEffectsPlatform.macos);
+              ? ProcessedVideoPlatform.android
+              : ProcessedVideoPlatform.macos);
   @override
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _ensurePublisherActive('processed video');
@@ -150,7 +150,7 @@ abstract class _AgoraMediaSession
       return const [];
     }
     return List.unmodifiable([
-      for (final camera in await VideoEffectsBridge().listCameras())
+      for (final camera in await ProcessedVideoBridge().listCameras())
         MediaDevice(
           id: camera.id,
           label: camera.label,

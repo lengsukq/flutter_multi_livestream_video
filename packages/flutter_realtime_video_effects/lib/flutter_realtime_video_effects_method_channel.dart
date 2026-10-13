@@ -4,13 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'flutter_realtime_video_effects_platform_interface.dart';
-import 'src/processed_video_source.dart';
 import 'src/video_effects_failure.dart';
-import 'src/video_effects_camera_device.dart';
 import 'src/video_effects_source_config.dart';
 
 class MethodChannelFlutterRealtimeVideoEffects
-    extends FlutterRealtimeVideoEffectsPlatform {
+    extends FlutterRealtimeProcessedVideoPlatform {
   bool _errorHandlerRegistered = false;
 
   void _registerErrorHandler() {
@@ -82,14 +80,14 @@ class MethodChannelFlutterRealtimeVideoEffects
       });
 
   @override
-  Future<List<VideoEffectsCameraDevice>> listCameras() async {
+  Future<List<ProcessedVideoCameraDevice>> listCameras() async {
     final values =
         await methodChannel.invokeListMethod<Object?>('listCameras') ??
         const [];
     return values
         .whereType<Map<Object?, Object?>>()
         .map(
-          (value) => VideoEffectsCameraDevice.fromJson(
+          (value) => ProcessedVideoCameraDevice.fromJson(
             value.map((key, value) => MapEntry(key.toString(), value)),
           ),
         )

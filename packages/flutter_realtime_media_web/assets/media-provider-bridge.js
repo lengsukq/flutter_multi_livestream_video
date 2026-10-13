@@ -1,521 +1,77 @@
-(function installMediaProviderBridge(global) {
-  'use strict';
-
-  const sessions = new Map();
-  const StageEvents = {
-    CONNECTION: 'stageConnectionStateChanged',
-    JOINED: 'stageParticipantJoined',
-    LEFT: 'stageParticipantLeft',
-    STREAMS_ADDED: 'stageParticipantStreamsAdded',
-    STREAMS_REMOVED: 'stageParticipantStreamsRemoved',
-    ERROR: 'stageError',
-  };
-
-  let nextPreviewSource = 0;
-  async function createSdkProcessedVideo({effect = {type: 'none'}, deviceId = null} = {}) {
-    const bridge = global.RealtimeVideoEffectsBridge;
-    if (!bridge) throw new Error('The SDK video effects runtime is unavailable.');
-    const id = `provider-preview-${Date.now()}-${nextPreviewSource++}`;
-    await bridge.createSource(id, {effect, cameraDeviceId: deviceId});
-    return {
-      get track() { return bridge.getTrack(id); },
-      setEffect: (next) => bridge.setEffect(id, next),
-      setCameraDevice: (next) => bridge.selectCamera(id, next),
-      setEnabled: (enabled) => bridge.setEnabled(id, enabled),
-      stop: () => bridge.disposeSource(id),
-    };
-  }
-
-  function parsePayload(value) {
-    return typeof value === 'string' ? JSON.parse(value) : value;
-  }
-
-  function providerBlock(session, key = session.providerId) {
-    const payload = session.payload;
-    const block = payload[key];
-    return block && typeof block === 'object' ? block : payload;
-  }
-
-  function emit(session, event) {
-    const callback = global.__flutterMediaProviderOnEvent;
-    if (typeof callback === 'function') {
-      callback(session.id, JSON.stringify(event));
+(() => {
+  // ../../packages/flutter_realtime_processed_video/web/processed-video-bridge.js
+  (function installProcessedVideoBridge(global) {
+    if (global.RealtimeProcessedVideoBridge) return;
+    const sources = /* @__PURE__ */ new Map();
+    function requireSource(id) {
+      const source = sources.get(id);
+      if (!source) throw new Error("processedVideo.source.unregistered");
+      return source;
     }
-  }
-
-  function emitState(session, state, reason) {
-    emit(session, { type: 'state', state, reason });
-  }
-
-  function addParticipant(session, id, displayName, isLocal = false) {
-    if (!id) return null;
-    const current = session.participants.get(String(id)) || {};
-    const participant = {
-      ...current,
-      id: String(id),
-      displayName: displayName || current.displayName || String(id),
-      isLocal: Boolean(isLocal || current.isLocal),
-      isMuted: Boolean(current.isMuted),
-      isVideoEnabled: Boolean(current.isVideoEnabled),
-    };
-    session.participants.set(participant.id, participant);
-    return participant;
-  }
-
-  function removeParticipant(session, id) {
-    const participantId = String(id || '');
-    if (!participantId || participantId === session.localParticipantId) return;
-    session.participants.delete(participantId);
-    for (const [trackId, track] of session.tracks) {
-      if (track.participantId === participantId) session.tracks.delete(trackId);
-    }
-    publishSnapshot(session);
-  }
-
-  function addVideoTrack(session, { id, participantId, isLocal = false, isScreenShare = false, native }) {
-    if (!id || !participantId) return null;
-    const track = {
-      id: String(id),
-      participantId: String(participantId),
-      isLocal: Boolean(isLocal),
-      isScreenShare: Boolean(isScreenShare),
-      native,
-    };
-    session.tracks.set(track.id, track);
-    const participant = addParticipant(session, participantId, null, isLocal);
-    participant.isVideoEnabled = true;
-    if (!isScreenShare) participant.videoTrackId = track.id;
-    publishSnapshot(session);
-    return track;
-  }
-
-  function removeVideoTrack(session, id) {
-    const track = session.tracks.get(String(id));
-    if (!track) return;
-    session.tracks.delete(String(id));
-    const participant = session.participants.get(track.participantId);
-    if (participant && ![...session.tracks.values()].some((item) => item.participantId === track.participantId)) {
-      participant.isVideoEnabled = false;
-      delete participant.videoTrackId;
-    } else if (participant && participant.videoTrackId === track.id) {
-      const replacement = [...session.tracks.values()].find(
-        (item) => item.participantId === track.participantId && !item.isScreenShare,
-      );
-      participant.videoTrackId = replacement?.id;
-      if (!replacement) participant.isVideoEnabled = false;
-    }
-    publishSnapshot(session);
-  }
-
-  function emitMessage(session, { participantId, displayName, message, topic = 'chat', timestampMs = Date.now(), throttled = false }) {
-    emit(session, {
-      type: 'message',
-      participantId: String(participantId || ''),
-      displayName: String(displayName || participantId || ''),
-      message: String(message || ''),
-      topic: String(topic || 'chat'),
-      timestampMs: Number(timestampMs || Date.now()),
-      throttled: Boolean(throttled),
+    global.RealtimeProcessedVideoBridge = Object.freeze({
+      register(id, source) {
+        if (!id || sources.has(id)) throw new Error("processedVideo.source.duplicate");
+        sources.set(id, source);
+      },
+      unregister(id) {
+        sources.delete(id);
+      },
+      getTrack(id) {
+        return requireSource(id).track;
+      },
+      setEnabled(id, enabled) {
+        return requireSource(id).setEnabled(enabled);
+      },
+      selectCamera(id, deviceId) {
+        return requireSource(id).setCameraDevice(deviceId);
+      },
+      attachPreviewElement(id, element, fit) {
+        const source = requireSource(id);
+        if (source.attachPreviewElement) return source.attachPreviewElement(element, fit);
+        const video = global.document.createElement("video");
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.style.width = "100%";
+        video.style.height = "100%";
+        video.style.objectFit = fit;
+        video.srcObject = new global.MediaStream([source.track]);
+        element.replaceChildren(video);
+        void video.play().catch(() => {
+        });
+      }
     });
-  }
+  })(globalThis);
 
-  function publishSnapshot(session) {
-    const participants = [...session.participants.values()];
-    emit(session, {
-      type: 'snapshot',
-      localParticipantId: session.localParticipantId,
-      localMuted: session.localMuted,
-      localVideoEnabled: session.localVideoEnabled,
-      participants,
-      tracks: [...session.tracks.values()].map(({ native, ...track }) => track),
-    });
-  }
-
-  function reportError(session, error) {
-    emit(session, {
-      type: 'error',
-      message: error && error.message ? error.message : String(error),
-    });
-  }
-
-  function createSession(providerId, id, payload) {
-    const role = String(payload.role || 'participant').toLowerCase();
-    const session = {
-      id,
-      providerId,
-      payload,
-      role,
-      localParticipantId: String(payload.participantId || ''),
-      localMuted: true,
-      localVideoEnabled: false,
-      joined: false,
-      participants: new Map(),
-      tracks: new Map(),
-      attachments: new Map(),
-      timers: new Set(),
-      screenTrack: null,
-    };
-    addParticipant(session, session.localParticipantId, payload.displayName, true);
-    switch (providerId) {
-      case 'agora': return createAgoraSession(session);
-      case 'chime': return createChimeSession(session);
-      case 'trtc': return createTrtcSession(session);
-      case 'artc': return createArtcSession(session);
-      case 'ivs': return createIvsSession(session);
-      default:
-        throw new Error(`No browser SDK driver is registered for ${providerId}.`);
-    }
-  }
-
-  async function join(session) {
-    emitState(session, 'connecting');
-    try {
-      await session.driver.join();
-    } catch (error) {
-      // A Chime signaling attempt may have started even if we never received
-      // audioVideoDidStart. Tear it down instead of leaking a background SDK
-      // connection when the caller retries after a timeout or stop event.
-      if (session.providerId === 'chime') {
-        try { await session.driver.leave(); }
-        catch (_) { /* Keep the original signaling failure. */ }
-      }
-      throw error;
-    }
-    session.joined = true;
-    emitState(session, 'connected');
-    publishSnapshot(session);
-    startStats(session);
-  }
-
-  async function leave(session) {
-    if (!session.joined) return;
-    stopStats(session);
-    await session.driver.leave();
-    session.processedTrack?.stop?.();
-    session.processedTrack = null;
-    session.processedSourceId = null;
-    session.joined = false;
-    session.tracks.clear();
-    session.participants.clear();
-    session.localParticipantId = '';
-    emitState(session, 'ended');
-    publishSnapshot(session);
-  }
-
-  async function dispose(session) {
-    try {
-      await leave(session);
-    } finally {
-      stopStats(session);
-      if (session.driver.dispose) await session.driver.dispose();
-      sessions.delete(session.id);
-    }
-  }
-
-  function startStats(session) {
-    if (!session.driver.getStats || session.timers.size) return;
-    const timer = global.setInterval(async () => {
-      try {
-        const stats = await session.driver.getStats();
-        if (stats) emit(session, { type: 'stats', timestampMs: Date.now(), ...stats });
-      } catch (_) {
-        // Stats are best-effort and must not affect a live call.
-      }
-    }, 4000);
-    session.timers.add(timer);
-  }
-
-  function stopStats(session) {
-    for (const timer of session.timers) global.clearInterval(timer);
-    session.timers.clear();
-  }
-
-  function effectsTrack(sourceId) {
-    const track = global.RealtimeVideoEffectsBridge?.getTrack(sourceId);
-    if (!track) throw new Error(`Unknown processed video source: ${sourceId}`);
-    return track;
-  }
-
-  async function command(session, name, args) {
-    if (!session.joined && name !== 'listDevices') {
-      throw new Error(`Cannot run ${name} while the session is not connected.`);
-    }
-    args ||= {};
-    if (session.role === 'viewer' && [
-      'attachProcessedVideoSource', 'setProcessedVideoEffect', 'setScreenShareEnabled',
-    ].includes(name)) {
-      throw new Error('Viewers cannot publish camera or screen video.');
-    }
-    if (name === 'attachProcessedVideoSource' && session.providerId !== 'agora') {
-      const sourceId = String(args.sourceId || '');
-      if (session.processedSourceId === sourceId) return '';
-      if (!session.driver.attachProcessedTrack) throw new Error('Provider has no processed video input.');
-      const sourceTrack = effectsTrack(sourceId);
-      const track = sourceTrack.clone?.() || sourceTrack;
-      try { await session.driver.attachProcessedTrack(track); }
-      catch (error) { if (track !== sourceTrack) track.stop?.(); throw error; }
-      session.processedTrack?.stop?.();
-      session.processedSourceId = sourceId;
-      session.processedTrack = track;
-      publishSnapshot(session);
-      return '';
-    }
-    if (name === 'detachProcessedVideoSource' && session.providerId !== 'agora') {
-      await session.driver.command('setVideoEnabled', {enabled: false});
-      await session.driver.detachProcessedTrack?.();
-      session.processedTrack?.stop?.();
-      session.processedTrack = null;
-      session.processedSourceId = null;
-      publishSnapshot(session);
-      return '';
-    }
-    const sourceId = session.processedSourceId;
-    if (sourceId && name === 'setProcessedVideoEffect') {
-      await global.RealtimeVideoEffectsBridge.setEffect(sourceId, JSON.stringify(args));
-      return '';
-    }
-    if (sourceId && name === 'selectDevice' && (args.device || args).kind === 'camera') {
-      await global.RealtimeVideoEffectsBridge.selectCamera(sourceId, (args.device || args).id);
-      return '';
-    }
-    if (sourceId && name === 'switchCamera') {
-      const cameras = (await listDevices(session)).filter((d) => d.kind === 'camera');
-      const next = cameras[(cameras.findIndex((d) => d.id === session.cameraId) + 1) % cameras.length];
-      if (next) { await global.RealtimeVideoEffectsBridge.selectCamera(sourceId, next.id); session.cameraId = next.id; }
-      return '';
-    }
-    if (sourceId && name === 'setVideoEnabled') {
-      await global.RealtimeVideoEffectsBridge.setEnabled(sourceId, Boolean(args.enabled));
-    }
-    const result = await session.driver.command(name, args);
-    publishSnapshot(session);
-    return result === undefined ? '' : JSON.stringify(result);
-  }
-
-  async function listDevices(session) {
-    if (!global.navigator || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    return devices.map((device) => ({
-      id: device.deviceId,
-      label: device.label,
-      groupId: device.groupId,
-      kind: device.kind === 'audioinput' ? 'microphone' : device.kind === 'audiooutput' ? 'audioOutput' : 'camera',
-    }));
-  }
-
-  function makeVideoElement(container) {
-    const existing = container.querySelector('video');
-    if (existing) return existing;
-    const video = document.createElement('video');
-    video.autoplay = true;
-    video.playsInline = true;
-    video.muted = false;
-    video.style.width = '100%';
-    video.style.height = '100%';
-    video.style.objectFit = 'contain';
-    container.replaceChildren(video);
-    return video;
-  }
-
-  function attachStreamTrack(track, container) {
-    const video = makeVideoElement(container);
-    video.srcObject = new MediaStream([track]);
-    video.play().catch(() => {});
-    return video;
-  }
-
-  function getTrackAttachment(session, trackId) {
-    return session.attachments.get(String(trackId));
-  }
-
-  const bridge = {
-    async createLocalPreview(providerId, previewId, serializedArgs) {
-      const args = parsePayload(serializedArgs || '{}') || {};
-      if (sessions.has(previewId)) {
-        throw new Error(`Duplicate local preview session ${previewId}.`);
-      }
-      let pipeline = null;
-      let creatingPipeline = null;
-      let effect = args.backgroundEffect || {
-          type: 'none',
-          blurStrength: 'medium',
-        };
-      let cameraId = args.cameraId || null;
-      const preview = {
-        id: previewId,
-        providerId,
-        payload: {},
-        role: String(args.role || 'participant'),
-        localParticipantId: `preview:${previewId}`,
-        localMuted: !Boolean(args.microphoneEnabled),
-        localVideoEnabled: args.cameraEnabled === true,
-        joined: true,
-        participants: new Map(),
-        tracks: new Map(),
-        attachments: new Map(),
-        timers: new Set(),
-        screenTrack: null,
-      };
-      const trackId = `preview:video:${previewId}`;
-      addParticipant(
-        preview,
-        preview.localParticipantId,
-        'Local preview',
-        true,
-      );
-      async function ensurePipeline() {
-        if (pipeline) return pipeline;
-        if (creatingPipeline) return creatingPipeline;
-        creatingPipeline = (async () => {
-          const created = await createSdkProcessedVideo({ effect, deviceId: cameraId });
-          if (!preview.joined) {
-            await created.stop();
-            throw new Error('Local preview was disposed while enabling the camera.');
-          }
-          pipeline = created;
-          addVideoTrack(preview, {
-            id: trackId, participantId: preview.localParticipantId,
-            isLocal: true, native: { mediaStreamTrack: pipeline.track },
-          });
-          return pipeline;
-        })();
-        try { return await creatingPipeline; }
-        finally { creatingPipeline = null; }
-      }
-      if (preview.localVideoEnabled) {
-        await (await ensurePipeline()).setEnabled(true);
-      }
-      preview.driver = {
-        async command(name, commandArgs) {
-          if (name === 'setMuted') {
-            preview.localMuted = Boolean(commandArgs.muted);
-            return;
-          }
-          if (name === 'setVideoEnabled') {
-            const enabled = Boolean(commandArgs.enabled);
-            const capture = enabled ? await ensurePipeline() : pipeline;
-            if (capture) await capture.setEnabled(enabled);
-            preview.localVideoEnabled = enabled;
-            return;
-          }
-          if (name === 'setBackgroundEffect') {
-            effect = {
-              type: String(commandArgs.type || 'none'),
-              blurStrength: String(commandArgs.blurStrength || 'medium'),
-              imageBytes: commandArgs.imageBytes || null,
-            };
-            if (pipeline) await pipeline.setEffect(effect);
-            return;
-          }
-          if (name === 'selectDevice') {
-            const selected = commandArgs.device || commandArgs;
-            if (selected.kind === 'camera') {
-              cameraId = selected.id;
-              if (pipeline) await pipeline.setCameraDevice(cameraId);
-            }
-            return;
-          }
-          if (name === 'listDevices') return listDevices(preview);
-          throw new Error(`Local preview does not support ${name}.`);
-        },
-        async attachVideo(track, container) {
-          const mediaTrack = track.native?.mediaStreamTrack;
-          if (mediaTrack) attachStreamTrack(mediaTrack, container);
-        },
-        detachVideo(_track, container) {
-          container.replaceChildren();
-        },
-        async leave() {
-          preview.joined = false;
-          if (pipeline) await pipeline.stop();
-        },
-      };
-      sessions.set(previewId, preview);
-    },
-
-
-    async create(providerId, sessionId, serializedPayload) {
-      const payload = parsePayload(serializedPayload);
-      const session = createSession(providerId, sessionId, payload);
-      session.driver = session.driver || {};
-      sessions.set(sessionId, session);
-    },
-
-    async join(providerId, sessionId) {
-      const session = requireSession(providerId, sessionId);
-      await join(session);
-    },
-
-    async leave(providerId, sessionId) {
-      const session = sessions.get(sessionId);
-      if (session && session.providerId === providerId) await leave(session);
-    },
-
-    async dispose(providerId, sessionId) {
-      const session = sessions.get(sessionId);
-      if (session && session.providerId === providerId) await dispose(session);
-    },
-
-    async command(providerId, sessionId, name, serializedArgs) {
-      const session = requireSession(providerId, sessionId);
-      const result = await command(session, name, parsePayload(serializedArgs));
-      return typeof result === 'string' ? result : JSON.stringify(result || {});
-    },
-
-    async attachVideo(providerId, sessionId, trackId, elementId) {
-      const session = requireSession(providerId, sessionId);
-      const track = session.tracks.get(String(trackId));
-      const container = document.getElementById(elementId);
-      if (!track || !container) return;
-      session.attachments.set(track.id, { elementId, container });
-      await session.driver.attachVideo(track, container);
-    },
-
-    detachVideo(providerId, sessionId, trackId, elementId) {
-      const session = sessions.get(sessionId);
-      if (!session || session.providerId !== providerId) return;
-      const track = session.tracks.get(String(trackId));
-      const attachment = session.attachments.get(String(trackId));
-      if (track && attachment && attachment.elementId === elementId && session.driver.detachVideo) {
-        session.driver.detachVideo(track, attachment.container);
-      }
-      session.attachments.delete(String(trackId));
-    },
-  };
-
-  function requireSession(providerId, sessionId) {
-    const session = sessions.get(sessionId);
-    if (!session || session.providerId !== providerId) throw new Error(`Unknown ${providerId} session ${sessionId}.`);
-    return session;
-  }
-
-  function createAgoraSession(session) {
-    const info = providerBlock(session, 'agora');
-    const live = session.role !== 'participant';
-    const client = AgoraRTC.createClient({ mode: live ? 'live' : 'rtc', codec: 'vp8' });
+  // src/media/agora-session.js
+  function createAgoraSession(session, context) {
+    const { global, StageEvents, createSdkProcessedVideo, parsePayload, providerBlock, emit, emitState, addParticipant, removeParticipant, addVideoTrack, removeVideoTrack, emitMessage, publishSnapshot, reportError, createSession, join, leave, dispose, startStats, stopStats, effectsTrack, command, listDevices, makeVideoElement, attachStreamTrack, getTrackAttachment, requireSession } = context;
+    const info = providerBlock(session, "agora");
+    const live = session.role !== "participant";
+    const client = AgoraRTC.createClient({ mode: live ? "live" : "rtc", codec: "vp8" });
     const localTracks = {
       audio: null,
       video: null,
       screen: null,
       pipeline: null,
       videoTrackId: `agora:video:${session.localParticipantId}`,
-      videoPublished: false,
+      videoPublished: false
     };
     let selectedCameraId = null;
-    let backgroundEffect = { type: 'none', blurStrength: 'medium' };
+    let backgroundEffect = { type: "none", blurStrength: "medium" };
     let processedSourceId = null;
     let providerInputTrack = null;
-    const remoteUsers = new Map();
-    const remoteScreenUids = new Set();
+    const remoteUsers = /* @__PURE__ */ new Map();
+    const remoteScreenUids = /* @__PURE__ */ new Set();
     const processedTrackForSource = (sourceId) => {
-      const effectsBridge = global.RealtimeVideoEffectsBridge;
+      const effectsBridge = global.RealtimeProcessedVideoBridge;
       if (!effectsBridge?.getTrack) {
-        throw new Error('RealtimeVideoEffectsBridge is unavailable.');
+        throw new Error("RealtimeProcessedVideoBridge is unavailable.");
       }
       const mediaStreamTrack = effectsBridge.getTrack(sourceId);
       if (!mediaStreamTrack) {
         throw new Error(
-          `Processed video source ${sourceId} has no MediaStreamTrack.`,
+          `Processed video source ${sourceId} has no MediaStreamTrack.`
         );
       }
       return mediaStreamTrack;
@@ -525,21 +81,21 @@
         if (!localTracks.video) {
           const sourceTrack = processedTrackForSource(processedSourceId);
           providerInputTrack = sourceTrack.clone?.() || sourceTrack;
-          localTracks.video = AgoraRTC.createCustomVideoTrack({mediaStreamTrack: providerInputTrack});
+          localTracks.video = AgoraRTC.createCustomVideoTrack({ mediaStreamTrack: providerInputTrack });
         }
         return localTracks.video;
       }
       if (!localTracks.pipeline) {
         localTracks.pipeline = await createSdkProcessedVideo({
           effect: backgroundEffect,
-          deviceId: selectedCameraId,
+          deviceId: selectedCameraId
         });
       } else {
         await localTracks.pipeline.setEffect(backgroundEffect);
       }
       if (!localTracks.video) {
         localTracks.video = AgoraRTC.createCustomVideoTrack({
-          mediaStreamTrack: localTracks.pipeline.track,
+          mediaStreamTrack: localTracks.pipeline.track
         });
       }
       return localTracks.video;
@@ -554,7 +110,7 @@
         id: localTracks.videoTrackId,
         participantId: session.localParticipantId,
         isLocal: true,
-        native: { track: videoTrack },
+        native: { track: videoTrack }
       });
     };
     const unpublishCameraIfNeeded = async () => {
@@ -568,86 +124,86 @@
     const updateRemote = async (user, mediaType) => {
       const participantId = String(user.uid);
       const participant = addParticipant(session, participantId);
-      if (mediaType === 'audio' && user.audioTrack) user.audioTrack.play();
-      if (mediaType === 'video' && user.videoTrack) {
+      if (mediaType === "audio" && user.audioTrack) user.audioTrack.play();
+      if (mediaType === "video" && user.videoTrack) {
         const screenShare = remoteScreenUids.has(participantId);
-        const trackId = `agora:${screenShare ? 'screen' : 'video'}:${participantId}`;
-        const formerId = `agora:${screenShare ? 'video' : 'screen'}:${participantId}`;
+        const trackId = `agora:${screenShare ? "screen" : "video"}:${participantId}`;
+        const formerId = `agora:${screenShare ? "video" : "screen"}:${participantId}`;
         remoteUsers.delete(formerId);
         removeVideoTrack(session, formerId);
         const remote = { user, track: user.videoTrack };
         remoteUsers.set(trackId, remote);
         addVideoTrack(session, {
-          id: trackId, participantId,
-          isScreenShare: screenShare, native: remote,
+          id: trackId,
+          participantId,
+          isScreenShare: screenShare,
+          native: remote
         });
         const attachment = getTrackAttachment(session, trackId);
-        if (attachment) user.videoTrack.play(attachment.elementId, { fit: 'contain' });
+        if (attachment) user.videoTrack.play(attachment.elementId, { fit: "contain" });
       }
       participant.isMuted = !user.audioTrack;
       publishSnapshot(session);
     };
-    client.on('user-joined', (user) => {
+    client.on("user-joined", (user) => {
       addParticipant(session, user.uid);
       publishSnapshot(session);
     });
-    client.on('user-left', (user) => {
+    client.on("user-left", (user) => {
       remoteScreenUids.delete(String(user.uid));
       removeParticipant(session, user.uid);
     });
-    client.on('stream-message', (uid, payload) => {
+    client.on("stream-message", (uid, payload) => {
       try {
         const message = JSON.parse(new TextDecoder().decode(payload));
-        if (message.topic !== '_flutter_realtime.screen_share.v1' ||
-            !['started', 'stopped'].includes(message.message)) return;
+        if (message.topic !== "_flutter_realtime.screen_share.v1" || !["started", "stopped"].includes(message.message)) return;
         const key = String(uid);
-        if (message.message === 'started') remoteScreenUids.add(key);
+        if (message.message === "started") remoteScreenUids.add(key);
         else remoteScreenUids.delete(key);
-        const remote = client.remoteUsers?.find(user => String(user.uid) === key);
-        if (remote?.videoTrack) updateRemote(remote, 'video').catch(
-          (error) => reportError(session, error),
+        const remote = client.remoteUsers?.find((user) => String(user.uid) === key);
+        if (remote?.videoTrack) updateRemote(remote, "video").catch(
+          (error) => reportError(session, error)
         );
       } catch (_) {
-        // Another SDK's unrelated data stream must not break media.
       }
     });
-    client.on('user-published', async (user, type) => {
+    client.on("user-published", async (user, type) => {
       try {
         await client.subscribe(user, type);
         await updateRemote(user, type);
-      } catch (error) { reportError(session, error); }
+      } catch (error) {
+        reportError(session, error);
+      }
     });
-    client.on('user-unpublished', (user, type) => {
-      if (type === 'video') {
+    client.on("user-unpublished", (user, type) => {
+      if (type === "video") {
         remoteUsers.delete(`agora:video:${user.uid}`);
         remoteUsers.delete(`agora:screen:${user.uid}`);
         removeVideoTrack(session, `agora:video:${user.uid}`);
         removeVideoTrack(session, `agora:screen:${user.uid}`);
       }
-      if (type === 'audio') {
+      if (type === "audio") {
         const participant = session.participants.get(String(user.uid));
         if (participant) participant.isMuted = true;
         publishSnapshot(session);
       }
     });
-    client.on('connection-state-change', (current) => {
-      if (current === 'RECONNECTING') emitState(session, 'reconnecting');
-      if (current === 'CONNECTED') emitState(session, 'connected');
+    client.on("connection-state-change", (current) => {
+      if (current === "RECONNECTING") emitState(session, "reconnecting");
+      if (current === "CONNECTED") emitState(session, "connected");
     });
     session.driver = {
       async join() {
-        if (live) await client.setClientRole(session.role === 'viewer' ? 'audience' : 'host');
+        if (live) await client.setClientRole(session.role === "viewer" ? "audience" : "host");
         await client.join(info.appId, info.channelName, info.token, Number(info.uid));
-        // RTC joining must not prompt for microphone permission. Pre-Join
-        // defaults both devices to off; explicit unmute controls acquisition.
         session.localMuted = true;
         session.localVideoEnabled = false;
       },
       async command(name, args) {
-        if (name === 'setMuted') {
+        if (name === "setMuted") {
           const muted = Boolean(args.muted);
-          if (!muted && session.role === 'viewer') {
-            throw new Error('Agora viewers cannot publish microphone audio.');
+          if (!muted && session.role === "viewer") {
+            throw new Error("Agora viewers cannot publish microphone audio.");
           }
           if (!muted && !localTracks.audio) {
             const audio = await AgoraRTC.createMicrophoneAudioTrack();
@@ -664,13 +220,14 @@
           session.localMuted = muted;
           return;
         }
-        if (name === 'attachProcessedVideoSource') {
-          const sourceId = String(args.sourceId || '');
-          if (!sourceId) throw new Error('Processed video sourceId is required.');
+        if (name === "attachProcessedVideoSource") {
+          const sourceId = String(args.sourceId || "");
+          if (!sourceId) throw new Error("Processed video sourceId is required.");
           processedTrackForSource(sourceId);
           await unpublishCameraIfNeeded();
           localTracks.video?.close?.();
-          providerInputTrack?.stop?.(); providerInputTrack = null;
+          providerInputTrack?.stop?.();
+          providerInputTrack = null;
           localTracks.video = null;
           localTracks.pipeline?.stop?.();
           localTracks.pipeline = null;
@@ -679,63 +236,62 @@
           if (session.localVideoEnabled) await publishCameraIfNeeded();
           return;
         }
-        if (name === 'detachProcessedVideoSource') {
+        if (name === "detachProcessedVideoSource") {
           await unpublishCameraIfNeeded();
           localTracks.video?.close?.();
-          providerInputTrack?.stop?.(); providerInputTrack = null;
+          providerInputTrack?.stop?.();
+          providerInputTrack = null;
           localTracks.video = null;
           processedSourceId = null;
           session.processedSourceId = null;
           return;
         }
-        if (name === 'setProcessedVideoEffect') {
+        if (name === "setProcessedVideoEffect") {
           if (!processedSourceId) {
-            throw new Error('No SDK processed video source is attached.');
+            throw new Error("No SDK processed video source is attached.");
           }
-          const effectsBridge = global.RealtimeVideoEffectsBridge;
+          const effectsBridge = global.RealtimeProcessedVideoBridge;
           if (!effectsBridge?.setEffect) {
-            throw new Error('RealtimeVideoEffectsBridge is unavailable.');
+            throw new Error("RealtimeProcessedVideoBridge is unavailable.");
           }
           await effectsBridge.setEffect(
             processedSourceId,
             JSON.stringify({
-              type: String(args.type || 'none'),
-              blurStrength: String(args.blurStrength || 'medium'),
-              imageBytes: args.imageBytes || null,
-            }),
+              type: String(args.type || "none"),
+              blurStrength: String(args.blurStrength || "medium"),
+              imageBytes: args.imageBytes || null
+            })
           );
           return;
         }
-        if (name === 'setVideoEnabled') {
+        if (name === "setVideoEnabled") {
           const enabled = Boolean(args.enabled);
           session.localVideoEnabled = enabled;
           if (enabled) await publishCameraIfNeeded();
           else await unpublishCameraIfNeeded();
           return;
         }
-        if (name === 'setBackgroundEffect') {
-          const type = String(args.type || 'none');
-          if (!['none', 'blur', 'replaceImage'].includes(type)) {
+        if (name === "setBackgroundEffect") {
+          const type = String(args.type || "none");
+          if (!["none", "blur", "replaceImage"].includes(type)) {
             throw new Error(`Unsupported SDK background effect: ${type}`);
           }
-          if (type === 'blur' && !global.SdkVideoEffectsVision?.ImageSegmenter) {
-            throw new Error('SDK MediaPipe background processor is unavailable.');
+          if (type === "blur" && !global.SdkVideoEffectsVision?.ImageSegmenter) {
+            throw new Error("SDK MediaPipe background processor is unavailable.");
           }
           backgroundEffect = {
             type,
-            blurStrength: String(args.blurStrength || 'medium'),
-            imageBytes: args.imageBytes || null,
+            blurStrength: String(args.blurStrength || "medium"),
+            imageBytes: args.imageBytes || null
           };
           if (localTracks.pipeline) {
             await localTracks.pipeline.setEffect(backgroundEffect);
           }
           return;
         }
-        if (name === 'setScreenShareEnabled') {
+        if (name === "setScreenShareEnabled") {
           if (args.enabled && !localTracks.screen) {
-            // Ask for browser consent *before* disrupting a healthy camera
-            // stream. Cancelling the picker must leave camera publish intact.
-            const screen = await AgoraRTC.createScreenVideoTrack({ encoderConfig: '1080p_1' }, 'disable');
+            const screen = await AgoraRTC.createScreenVideoTrack({ encoderConfig: "1080p_1" }, "disable");
             await unpublishCameraIfNeeded();
             try {
               await client.publish(screen);
@@ -745,25 +301,26 @@
               await publishCameraIfNeeded();
               throw error;
             }
-            addVideoTrack(session, { id: 'agora:screen:local', participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: { track: localTracks.screen } });
-            localTracks.screen.on('track-ended', () => this.command('setScreenShareEnabled', { enabled: false }).catch(() => {}));
+            addVideoTrack(session, { id: "agora:screen:local", participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: { track: localTracks.screen } });
+            localTracks.screen.on("track-ended", () => this.command("setScreenShareEnabled", { enabled: false }).catch(() => {
+            }));
           } else if (!args.enabled && localTracks.screen) {
             await client.unpublish(localTracks.screen);
             localTracks.screen.close();
             localTracks.screen = null;
-            removeVideoTrack(session, 'agora:screen:local');
+            removeVideoTrack(session, "agora:screen:local");
             await publishCameraIfNeeded();
           }
           return;
         }
-        if (name === 'selectDevice' || name === 'selectAudioOutput') {
+        if (name === "selectDevice" || name === "selectAudioOutput") {
           const selected = args.device || args;
-          if (selected.kind === 'microphone' && localTracks.audio) await localTracks.audio.setDevice(selected.id);
-          if (selected.kind === 'camera') {
+          if (selected.kind === "microphone" && localTracks.audio) await localTracks.audio.setDevice(selected.id);
+          if (selected.kind === "camera") {
             if (processedSourceId) {
-              await global.RealtimeVideoEffectsBridge?.selectCamera?.(
+              await global.RealtimeProcessedVideoBridge?.selectCamera?.(
                 processedSourceId,
-                selected.id,
+                selected.id
               );
               return;
             }
@@ -772,15 +329,15 @@
               await localTracks.pipeline.setCameraDevice(selected.id);
             }
           }
-          if (selected.kind === 'audioOutput') {
+          if (selected.kind === "audioOutput") {
             for (const user of client.remoteUsers || []) if (user.audioTrack?.setPlaybackDevice) await user.audioTrack.setPlaybackDevice(selected.id);
           }
           return;
         }
-        if (name === 'switchCamera') {
+        if (name === "switchCamera") {
           const cameras = await AgoraRTC.getCameras();
           const index = cameras.findIndex(
-            (device) => device.deviceId === selectedCameraId,
+            (device) => device.deviceId === selectedCameraId
           );
           const next = cameras[(index + 1) % cameras.length];
           if (next) {
@@ -791,12 +348,12 @@
           }
           return;
         }
-        if (name === 'listDevices') return listDevices(session);
+        if (name === "listDevices") return listDevices(session);
         throw new Error(`Agora does not support ${name}.`);
       },
       async attachVideo(track, container) {
         const native = track.native?.track || remoteUsers.get(track.id)?.track;
-        if (native?.play) native.play(container.id, { fit: 'contain' });
+        if (native?.play) native.play(container.id, { fit: "contain" });
       },
       detachVideo(track, container) {
         const native = track.native?.track || remoteUsers.get(track.id)?.track;
@@ -807,59 +364,67 @@
         for (const track of [localTracks.screen, localTracks.video, localTracks.audio]) {
           if (track?.close) track.close();
         }
-        providerInputTrack?.stop?.(); providerInputTrack = null;
+        providerInputTrack?.stop?.();
+        providerInputTrack = null;
         localTracks.pipeline?.stop();
         localTracks.pipeline = null;
         processedSourceId = null;
         localTracks.videoPublished = false;
         await client.leave();
       },
-      async dispose() { client.removeAllListeners?.(); },
+      async dispose() {
+        client.removeAllListeners?.();
+      },
       async getStats() {
         const stats = client.getRTCStats?.();
-        return stats ? { rttMs: Math.round(stats.RTT || 0), uploadKbps: Math.round((stats.SendBitrate || 0) / 1000), downloadKbps: Math.round((stats.RecvBitrate || 0) / 1000) } : null;
-      },
+        return stats ? { rttMs: Math.round(stats.RTT || 0), uploadKbps: Math.round((stats.SendBitrate || 0) / 1e3), downloadKbps: Math.round((stats.RecvBitrate || 0) / 1e3) } : null;
+      }
     };
     return session;
   }
 
-  function createTrtcSession(session) {
-    const info = providerBlock(session, 'trtc');
+  // src/media/trtc-session.js
+  function createTrtcSession(session, context) {
+    const { global, StageEvents, createSdkProcessedVideo, parsePayload, providerBlock, emit, emitState, addParticipant, removeParticipant, addVideoTrack, removeVideoTrack, emitMessage, publishSnapshot, reportError, createSession, join, leave, dispose, startStats, stopStats, effectsTrack, command, listDevices, makeVideoElement, attachStreamTrack, getTrackAttachment, requireSession } = context;
+    const info = providerBlock(session, "trtc");
     const sdk = global.TRTC;
-    const trtc = sdk.create({ assetsPath: (globalThis.__realtimeTrtcAssetsPath || new URL('assets/packages/flutter_realtime_sdk/assets/provider_web_runtime/vendors/trtc-assets/', document.baseURI).toString()) });
+    const trtc = sdk.create({ assetsPath: globalThis.__realtimeTrtcAssetsPath || new URL("assets/packages/flutter_realtime_sdk/assets/provider_web_runtime/vendors/trtc-assets/", document.baseURI).toString() });
     const localVideoId = `trtc:video:${session.localParticipantId}`;
-    const remoteTracks = new Map();
+    const remoteTracks = /* @__PURE__ */ new Map();
     const refreshLocalTrack = () => {
       const track = trtc.getVideoTrack?.();
       if (track) addVideoTrack(session, { id: localVideoId, participantId: session.localParticipantId, isLocal: true, native: track });
     };
     const events = sdk.EVENT || {};
     const attachRemote = (event) => {
-      const userId = String(event.userId || '');
+      const userId = String(event.userId || "");
       if (!userId) return;
       addParticipant(session, userId);
-      const streamType = event.streamType || sdk.TYPE?.STREAM_TYPE_MAIN || 'main';
+      const streamType = event.streamType || sdk.TYPE?.STREAM_TYPE_MAIN || "main";
       const trackId = `trtc:video:${userId}:${streamType}`;
       remoteTracks.set(trackId, { userId, streamType });
-      addVideoTrack(session, { id: trackId, participantId: userId, isScreenShare: streamType === (sdk.TYPE?.STREAM_TYPE_SUB || 'sub'), native: { userId, streamType } });
+      addVideoTrack(session, { id: trackId, participantId: userId, isScreenShare: streamType === (sdk.TYPE?.STREAM_TYPE_SUB || "sub"), native: { userId, streamType } });
     };
-    trtc.on(events.REMOTE_USER_ENTER || 'remote-user-enter', (event) => { addParticipant(session, event.userId); publishSnapshot(session); });
-    trtc.on(events.REMOTE_USER_EXIT || 'remote-user-exit', (event) => removeParticipant(session, event.userId));
-    trtc.on(events.REMOTE_VIDEO_AVAILABLE || 'remote-video-available', attachRemote);
-    trtc.on(events.REMOTE_VIDEO_UNAVAILABLE || 'remote-video-unavailable', (event) => removeVideoTrack(session, `trtc:video:${event.userId}:${event.streamType || sdk.TYPE?.STREAM_TYPE_MAIN || 'main'}`));
-    trtc.on(events.CONNECTION_STATE_CHANGED || 'connection-state-changed', (event) => {
-      const value = String(event.state || event.currentState || '').toLowerCase();
-      if (value.includes('reconnect')) emitState(session, 'reconnecting');
-      if (value.includes('connected')) emitState(session, 'connected');
+    trtc.on(events.REMOTE_USER_ENTER || "remote-user-enter", (event) => {
+      addParticipant(session, event.userId);
+      publishSnapshot(session);
     });
-    trtc.on(events.ERROR || 'error', (error) => reportError(session, error));
-    trtc.on(events.SCREEN_SHARE_STOPPED || 'screen-share-stopped', () => {
+    trtc.on(events.REMOTE_USER_EXIT || "remote-user-exit", (event) => removeParticipant(session, event.userId));
+    trtc.on(events.REMOTE_VIDEO_AVAILABLE || "remote-video-available", attachRemote);
+    trtc.on(events.REMOTE_VIDEO_UNAVAILABLE || "remote-video-unavailable", (event) => removeVideoTrack(session, `trtc:video:${event.userId}:${event.streamType || sdk.TYPE?.STREAM_TYPE_MAIN || "main"}`));
+    trtc.on(events.CONNECTION_STATE_CHANGED || "connection-state-changed", (event) => {
+      const value = String(event.state || event.currentState || "").toLowerCase();
+      if (value.includes("reconnect")) emitState(session, "reconnecting");
+      if (value.includes("connected")) emitState(session, "connected");
+    });
+    trtc.on(events.ERROR || "error", (error) => reportError(session, error));
+    trtc.on(events.SCREEN_SHARE_STOPPED || "screen-share-stopped", () => {
       session.screenTrack = null;
       removeVideoTrack(session, `trtc:screen:${session.localParticipantId}`);
     });
     session.driver = {
       async join() {
-        const live = session.role !== 'participant';
+        const live = session.role !== "participant";
         await trtc.enterRoom({
           sdkAppId: Number(info.sdkAppId),
           strRoomId: info.strRoomId,
@@ -867,39 +432,40 @@
           userSig: info.userSig,
           privateMapKey: info.privateMapKey,
           scene: live ? sdk.TYPE.SCENE_LIVE : sdk.TYPE.SCENE_RTC,
-          ...(live ? { role: session.role === 'viewer' ? sdk.TYPE.ROLE_AUDIENCE : sdk.TYPE.ROLE_ANCHOR } : {}),
+          ...live ? { role: session.role === "viewer" ? sdk.TYPE.ROLE_AUDIENCE : sdk.TYPE.ROLE_ANCHOR } : {},
           autoReceiveAudio: true,
-          autoReceiveVideo: true,
+          autoReceiveVideo: true
         });
-        if (session.role !== 'viewer') {
+        if (session.role !== "viewer") {
           await trtc.startLocalAudio();
           session.localMuted = false;
           session.localVideoEnabled = false;
         }
       },
       async command(name, args) {
-        if (name === 'setMuted') {
+        if (name === "setMuted") {
           await trtc.updateLocalAudio({ mute: Boolean(args.muted) });
           session.localMuted = Boolean(args.muted);
           return;
         }
-        if (name === 'setVideoEnabled') {
+        if (name === "setVideoEnabled") {
           if (args.enabled && !session.localVideoEnabled) {
             await trtc.startLocalVideo({
               publish: true,
               option: {
-                fillMode: 'contain',
-                ...(session.processedTrack ? {videoTrack: session.processedTrack} : {}),
-              },
+                fillMode: "contain",
+                ...session.processedTrack ? { videoTrack: session.processedTrack } : {}
+              }
             });
           } else if (!args.enabled) {
             await trtc.stopLocalVideo();
           }
           session.localVideoEnabled = Boolean(args.enabled);
-          if (!args.enabled) removeVideoTrack(session, localVideoId); else refreshLocalTrack();
+          if (!args.enabled) removeVideoTrack(session, localVideoId);
+          else refreshLocalTrack();
           return;
         }
-        if (name === 'setScreenShareEnabled') {
+        if (name === "setScreenShareEnabled") {
           if (args.enabled && !session.screenTrack) {
             await trtc.startLocalScreen({ publish: true });
             session.screenTrack = trtc.getVideoTrack({ streamType: sdk.TYPE.STREAM_TYPE_SUB });
@@ -911,53 +477,69 @@
           }
           return;
         }
-        if (name === 'switchCamera') {
+        if (name === "switchCamera") {
           const cameras = await sdk.getCameras();
           const current = cameras.find((device) => device.deviceId === session.cameraId);
           const index = current ? cameras.indexOf(current) : -1;
           const next = cameras[(index + 1) % cameras.length];
-          if (next) { session.cameraId = next.deviceId; await trtc.updateLocalVideo({ option: { cameraId: next.deviceId } }); }
+          if (next) {
+            session.cameraId = next.deviceId;
+            await trtc.updateLocalVideo({ option: { cameraId: next.deviceId } });
+          }
           return;
         }
-        if (name === 'selectDevice') {
+        if (name === "selectDevice") {
           const selected = args.device || args;
-          if (selected.kind === 'microphone') await trtc.updateLocalAudio({ option: { microphoneId: selected.id } });
-          if (selected.kind === 'camera') { session.cameraId = selected.id; await trtc.updateLocalVideo({ option: { cameraId: selected.id } }); }
+          if (selected.kind === "microphone") await trtc.updateLocalAudio({ option: { microphoneId: selected.id } });
+          if (selected.kind === "camera") {
+            session.cameraId = selected.id;
+            await trtc.updateLocalVideo({ option: { cameraId: selected.id } });
+          }
           return;
         }
-        if (name === 'listDevices') return listDevices(session);
+        if (name === "listDevices") return listDevices(session);
         throw new Error(`TRTC does not support ${name}.`);
       },
       async attachProcessedTrack(track) {
-        if (session.localVideoEnabled) await trtc.updateLocalVideo({option: {videoTrack: track}});
+        if (session.localVideoEnabled) await trtc.updateLocalVideo({ option: { videoTrack: track } });
       },
-      async detachProcessedTrack() { await trtc.stopLocalVideo(); },
+      async detachProcessedTrack() {
+        await trtc.stopLocalVideo();
+      },
       async attachVideo(track, container) {
         const native = track.native;
         if (native?.userId) {
-          await trtc.startRemoteVideo({ userId: native.userId, streamType: native.streamType, view: container.id, option: { fillMode: 'contain' } });
+          await trtc.startRemoteVideo({ userId: native.userId, streamType: native.streamType, view: container.id, option: { fillMode: "contain" } });
         } else {
           const mediaTrack = native?.mediaStreamTrack || native;
-          if (mediaTrack && mediaTrack.kind === 'video') attachStreamTrack(mediaTrack, container);
+          if (mediaTrack && mediaTrack.kind === "video") attachStreamTrack(mediaTrack, container);
         }
       },
       async detachVideo(track) {
         const native = track.native;
         if (native?.userId) await trtc.stopRemoteVideo({ userId: native.userId, streamType: native.streamType });
       },
-      async leave() { await trtc.exitRoom(); },
-      async dispose() { trtc.destroy?.(); },
+      async leave() {
+        await trtc.exitRoom();
+      },
+      async dispose() {
+        trtc.destroy?.();
+      },
       async getStats() {
         const statistics = session.lastTrtcStatistics;
         return statistics ? { uploadKbps: statistics.localVideo?.sendBitrate, downloadKbps: statistics.remoteVideo?.receiveBitrate, rttMs: statistics.rtt } : null;
-      },
+      }
     };
-    trtc.on(events.STATISTICS || 'statistics', (value) => { session.lastTrtcStatistics = value; });
+    trtc.on(events.STATISTICS || "statistics", (value) => {
+      session.lastTrtcStatistics = value;
+    });
     return session;
   }
 
-  function createArtcSession(session) {
-    const info = providerBlock(session, 'artc');
+  // src/media/artc-session.js
+  function createArtcSession(session, context) {
+    const { global, StageEvents, createSdkProcessedVideo, parsePayload, providerBlock, emit, emitState, addParticipant, removeParticipant, addVideoTrack, removeVideoTrack, emitMessage, publishSnapshot, reportError, createSession, join, leave, dispose, startStats, stopStats, effectsTrack, command, listDevices, makeVideoElement, attachStreamTrack, getTrackAttachment, requireSession } = context;
+    const info = providerBlock(session, "artc");
     const namespace = global.AliRtcEngine;
     const AliRtcEngine = namespace?.AliRtcEngine || namespace?.default || namespace;
     const profile = AliRtcEngine.AliRtcSdkChannelProfile;
@@ -965,14 +547,17 @@
     const engine = AliRtcEngine.createInstance ? AliRtcEngine.createInstance() : AliRtcEngine.getInstance();
     const cameraTrack = AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackCamera;
     const screenTrack = AliRtcEngine.AliRtcVideoTrack.AliRtcVideoTrackScreen;
-    const remoteVideo = new Map();
-    engine.on('connectionStatusChange', (status) => {
-      if (status === AliRtcEngine.AliRtcConnectionStatus.AliRtcConnectionStatusReconnecting) emitState(session, 'reconnecting');
-      if (status === AliRtcEngine.AliRtcConnectionStatus.AliRtcConnectionStatusConnected) emitState(session, 'connected');
+    const remoteVideo = /* @__PURE__ */ new Map();
+    engine.on("connectionStatusChange", (status) => {
+      if (status === AliRtcEngine.AliRtcConnectionStatus.AliRtcConnectionStatusReconnecting) emitState(session, "reconnecting");
+      if (status === AliRtcEngine.AliRtcConnectionStatus.AliRtcConnectionStatusConnected) emitState(session, "connected");
     });
-    engine.on('remoteUserOnLineNotify', (uid) => { addParticipant(session, uid); publishSnapshot(session); });
-    engine.on('remoteUserOffLineNotify', (uid) => removeParticipant(session, uid));
-    engine.on('remoteTrackAvailableNotify', (uid, audioTracks, videoTracks) => {
+    engine.on("remoteUserOnLineNotify", (uid) => {
+      addParticipant(session, uid);
+      publishSnapshot(session);
+    });
+    engine.on("remoteUserOffLineNotify", (uid) => removeParticipant(session, uid));
+    engine.on("remoteTrackAvailableNotify", (uid, audioTracks, videoTracks) => {
       const id = `artc:video:${uid}`;
       const screenId = `artc:screen:${uid}`;
       if (videoTracks & cameraTrack) {
@@ -981,32 +566,36 @@
       } else removeVideoTrack(session, id);
       if (videoTracks & screenTrack) {
         addVideoTrack(session, {
-          id: screenId, participantId: uid, isScreenShare: true,
-          native: { uid, track: screenTrack },
+          id: screenId,
+          participantId: uid,
+          isScreenShare: true,
+          native: { uid, track: screenTrack }
         });
       } else removeVideoTrack(session, screenId);
     });
-    engine.on('error', (error) => reportError(session, error));
+    engine.on("error", (error) => reportError(session, error));
     session.driver = {
       async join() {
-        if (session.role === 'participant') engine.setChannelProfile(profile.AliRtcSdkCommunication);
+        if (session.role === "participant") engine.setChannelProfile(profile.AliRtcSdkCommunication);
         else {
           engine.setChannelProfile(profile.AliRtcInteractiveLive);
-          await engine.setClientRole(session.role === 'viewer' ? roles.AliRtcSdkLive : roles.AliRtcSdkInteractive);
+          await engine.setClientRole(session.role === "viewer" ? roles.AliRtcSdkLive : roles.AliRtcSdkInteractive);
         }
         await engine.enableLocalVideo(false);
         await engine.publishLocalVideoStream(false);
         await engine.joinChannel(info.authInfo, session.payload.displayName || info.userId);
-        if (session.role !== 'viewer') {
-
+        if (session.role !== "viewer") {
           session.localMuted = false;
           session.localVideoEnabled = false;
-
         }
       },
       async command(name, args) {
-        if (name === 'setMuted') { engine.muteLocalMic(Boolean(args.muted)); session.localMuted = Boolean(args.muted); return; }
-        if (name === 'setVideoEnabled') {
+        if (name === "setMuted") {
+          engine.muteLocalMic(Boolean(args.muted));
+          session.localMuted = Boolean(args.muted);
+          return;
+        }
+        if (name === "setVideoEnabled") {
           const enabled = Boolean(args.enabled);
           if (session.processedTrack) {
             await engine.muteLocalCamera(!enabled);
@@ -1017,15 +606,19 @@
           }
           session.localVideoEnabled = enabled;
           if (!enabled) removeVideoTrack(session, `artc:video:${session.localParticipantId}`);
-          else addVideoTrack(session, {id: `artc:video:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, native: {uid: session.localParticipantId, track: cameraTrack}});
+          else addVideoTrack(session, { id: `artc:video:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, native: { uid: session.localParticipantId, track: cameraTrack } });
           return;
         }
-        if (name === 'setScreenShareEnabled') {
+        if (name === "setScreenShareEnabled") {
           if (args.enabled && !session.screenTrack) {
             await engine.startPreviewScreen();
-            try { await engine.publishLocalScreenShareStream(true); }
-            catch (error) { await engine.stopPreviewScreen(); throw error; }
-            session.screenTrack = {uid: session.localParticipantId, track: screenTrack};
+            try {
+              await engine.publishLocalScreenShareStream(true);
+            } catch (error) {
+              await engine.stopPreviewScreen();
+              throw error;
+            }
+            session.screenTrack = { uid: session.localParticipantId, track: screenTrack };
             addVideoTrack(session, { id: `artc:screen:${session.localParticipantId}`, participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: session.screenTrack });
           } else if (!args.enabled && session.screenTrack) {
             await engine.publishLocalScreenShareStream(false);
@@ -1035,7 +628,7 @@
           }
           return;
         }
-        if (name === 'switchCamera') {
+        if (name === "switchCamera") {
           const cameras = await AliRtcEngine.getCameraList();
           const current = engine.getCurrentCameraDeviceId?.();
           const index = cameras.findIndex((device) => device.deviceId === current);
@@ -1043,26 +636,26 @@
           if (next) await engine.switchCamera(next.deviceId);
           return;
         }
-        if (name === 'selectDevice') {
+        if (name === "selectDevice") {
           const selected = args.device || args;
-          if (selected.kind === 'camera') { engine.setCameraCapturerConfiguration({ deviceId: selected.id }); await engine.switchCamera(selected.id); }
-          if (selected.kind === 'microphone') engine.setMicrophoneDeviceId?.(selected.id);
+          if (selected.kind === "camera") {
+            engine.setCameraCapturerConfiguration({ deviceId: selected.id });
+            await engine.switchCamera(selected.id);
+          }
+          if (selected.kind === "microphone") engine.setMicrophoneDeviceId?.(selected.id);
           return;
         }
-        if (name === 'listDevices') return listDevices(session);
+        if (name === "listDevices") return listDevices(session);
         throw new Error(`ARTC does not support ${name}.`);
       },
       async attachProcessedTrack(track) {
-        // Pinned ARTC 7.3.5 ignores switchCamera's external track while capture
-        // is disabled. Its public enableLocalVideo(true) opens a raw camera.
-        // Set only the capture state before supplying the external track.
         const manager = engine.publisher?.streamManager;
-        if (!manager || !('cameraCaptureDisabled' in manager)) {
-          throw new Error('This ARTC SDK does not support the processed video input contract.');
+        if (!manager || !("cameraCaptureDisabled" in manager)) {
+          throw new Error("This ARTC SDK does not support the processed video input contract.");
         }
         manager.cameraCaptureDisabled = false;
         try {
-          await engine.switchCamera(undefined, track);
+          await engine.switchCamera(void 0, track);
           await engine.publishLocalVideoStream(session.localVideoEnabled);
         } catch (error) {
           await engine.enableLocalVideo(false);
@@ -1077,46 +670,57 @@
         const video = makeVideoElement(container);
         if (track.isLocal) await engine.setLocalViewConfig(video, track.isScreenShare ? screenTrack : cameraTrack);
         else engine.setRemoteViewConfig(video, track.participantId, track.isScreenShare ? screenTrack : cameraTrack);
-        video.style.objectFit = 'contain';
+        video.style.objectFit = "contain";
       },
       detachVideo(track) {
         if (track.isLocal) engine.setLocalViewConfig(null, track.isScreenShare ? screenTrack : cameraTrack);
         else engine.setRemoteViewConfig(null, track.participantId, track.isScreenShare ? screenTrack : cameraTrack);
       },
-      async leave() { await engine.leaveChannel(); },
-      async dispose() { await engine.destroy(); },
-      async getStats() { return session.lastArtcStats || null; },
+      async leave() {
+        await engine.leaveChannel();
+      },
+      async dispose() {
+        await engine.destroy();
+      },
+      async getStats() {
+        return session.lastArtcStats || null;
+      }
     };
-    engine.on('networkQuality', (stats) => {
+    engine.on("networkQuality", (stats) => {
       session.lastArtcStats = {
         rttMs: stats?.subscribe?.rtt,
-        downlinkPacketLossPercent: stats?.subscribe?.loss,
+        downlinkPacketLossPercent: stats?.subscribe?.loss
       };
-      emit(session, { type: 'stats', timestampMs: Date.now(), ...session.lastArtcStats });
+      emit(session, { type: "stats", timestampMs: Date.now(), ...session.lastArtcStats });
     });
     return session;
   }
 
-  function createIvsSession(session) {
-    const info = providerBlock(session, 'ivs');
+  // src/media/ivs-session.js
+  function createIvsSession(session, context) {
+    const { global, StageEvents, createSdkProcessedVideo, parsePayload, providerBlock, emit, emitState, addParticipant, removeParticipant, addVideoTrack, removeVideoTrack, emitMessage, publishSnapshot, reportError, createSession, join, leave, dispose, startStats, stopStats, effectsTrack, command, listDevices, makeVideoElement, attachStreamTrack, getTrackAttachment, requireSession } = context;
+    const info = providerBlock(session, "ivs");
     const sdk = global.IVSBroadcastClient;
     if (!sdk?.Stage || !sdk?.LocalStageStream) {
-      throw new Error('Amazon IVS Web Broadcast SDK is unavailable in this browser build.');
+      throw new Error("Amazon IVS Web Broadcast SDK is unavailable in this browser build.");
     }
-    const canPublish = session.role !== 'viewer' && info.capabilities?.includes('PUBLISH');
+    const canPublish = session.role !== "viewer" && info.capabilities?.includes("PUBLISH");
     const localStreams = [];
-    const remoteStreams = new Map();
+    const remoteStreams = /* @__PURE__ */ new Map();
     const stage = new sdk.Stage(info.token, {
       stageStreamsToPublish: () => localStreams,
       shouldPublishParticipant: () => Boolean(canPublish),
-      shouldSubscribeToParticipant: (participant) => participant.capabilities?.has('subscribe') ? sdk.SubscribeType.AUDIO_VIDEO : sdk.SubscribeType.NONE,
+      shouldSubscribeToParticipant: (participant) => participant.capabilities?.has("subscribe") ? sdk.SubscribeType.AUDIO_VIDEO : sdk.SubscribeType.NONE
     });
     stage.on(StageEvents.CONNECTION, (state) => {
-      if (state === sdk.StageConnectionState.CONNECTED) emitState(session, 'connected');
-      else if (state === sdk.StageConnectionState.CONNECTING) emitState(session, 'connecting');
-      else if (state === sdk.StageConnectionState.DISCONNECTED) emitState(session, 'disconnected');
+      if (state === sdk.StageConnectionState.CONNECTED) emitState(session, "connected");
+      else if (state === sdk.StageConnectionState.CONNECTING) emitState(session, "connecting");
+      else if (state === sdk.StageConnectionState.DISCONNECTED) emitState(session, "disconnected");
     });
-    stage.on(StageEvents.JOINED, (participant) => { addParticipant(session, participant.userId || participant.id, participant.userInfo?.displayName, participant.isLocal); publishSnapshot(session); });
+    stage.on(StageEvents.JOINED, (participant) => {
+      addParticipant(session, participant.userId || participant.id, participant.userInfo?.displayName, participant.isLocal);
+      publishSnapshot(session);
+    });
     stage.on(StageEvents.LEFT, (participant) => removeParticipant(session, participant.userId || participant.id));
     stage.on(StageEvents.STREAMS_ADDED, (participant, streams) => {
       const participantId = String(participant.userId || participant.id);
@@ -1128,12 +732,13 @@
       }
       for (const stream of streams) {
         if (stream.streamType === sdk.StreamType.AUDIO && !participant.isLocal) {
-          const audio = document.createElement('audio');
+          const audio = document.createElement("audio");
           audio.autoplay = true;
           audio.srcObject = new MediaStream([stream.mediaStreamTrack]);
           document.body.append(audio);
           stream.__audioElement = audio;
-          audio.play().catch(() => {});
+          audio.play().catch(() => {
+          });
         }
       }
     });
@@ -1151,13 +756,13 @@
       async join() {
         if (canPublish) {
           if (!navigator.mediaDevices?.getUserMedia) {
-            throw new Error('This browser cannot access camera or microphone media devices.');
+            throw new Error("This browser cannot access camera or microphone media devices.");
           }
           const media = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
           for (const track of media.getTracks()) {
             const localStream = new sdk.LocalStageStream(track);
             localStreams.push(localStream);
-            if (track.kind === 'video') {
+            if (track.kind === "video") {
               session.localVideoStream = localStream;
               session.localVideoEnabled = true;
               addVideoTrack(session, { id: `ivs:local:${track.id}`, participantId: session.localParticipantId, isLocal: true, native: localStream });
@@ -1168,41 +773,44 @@
         await stage.join();
       },
       async command(name, args) {
-        if (name === 'setMuted') {
+        if (name === "setMuted") {
           session.localMuted = Boolean(args.muted);
           if (session.localAudioStream) session.localAudioStream.setMuted(session.localMuted);
           return;
         }
-        if (name === 'setVideoEnabled') {
+        if (name === "setVideoEnabled") {
           session.localVideoEnabled = Boolean(args.enabled);
           if (session.localVideoStream) session.localVideoStream.setMuted(!session.localVideoEnabled);
           return;
         }
-        if (name === 'setScreenShareEnabled') {
+        if (name === "setScreenShareEnabled") {
           if (args.enabled && !session.screenTrack) {
-            // IVS needs a second Stage token for a simultaneous screen and
-            // camera video. In a single-token Demo, switch the video source.
             const media = await navigator.mediaDevices.getDisplayMedia({
-              video: { width: { max: 1280 }, height: { max: 720 } },
+              video: { width: { max: 1280 }, height: { max: 720 } }
             });
             const track = media.getVideoTracks()[0];
-            if (!track) throw new Error('Browser screen capture provided no video track.');
+            if (!track) throw new Error("Browser screen capture provided no video track.");
             let localStream;
-            try { localStream = new sdk.LocalStageStream(track); }
-            catch (error) { track.stop(); throw error; }
+            try {
+              localStream = new sdk.LocalStageStream(track);
+            } catch (error) {
+              track.stop();
+              throw error;
+            }
             const pausedCamera = session.localVideoStream;
             const cameraIndex = localStreams.indexOf(pausedCamera);
             if (cameraIndex >= 0) localStreams.splice(cameraIndex, 1);
             session.screenPausedCamera = cameraIndex >= 0 ? pausedCamera : null;
             if (cameraIndex >= 0) {
               removeVideoTrack(session, [...session.tracks.values()].find(
-                item => item.native === pausedCamera,
+                (item) => item.native === pausedCamera
               )?.id);
             }
             localStreams.push(localStream);
             session.screenTrack = localStream;
-            try { stage.refreshStrategy(); }
-            catch (error) {
+            try {
+              stage.refreshStrategy();
+            } catch (error) {
               localStreams.splice(localStreams.indexOf(localStream), 1);
               session.screenTrack = null;
               if (session.screenPausedCamera) {
@@ -1211,7 +819,8 @@
                 addVideoTrack(session, {
                   id: `ivs:local:${camera.mediaStreamTrack.id}`,
                   participantId: session.localParticipantId,
-                  isLocal: true, native: camera,
+                  isLocal: true,
+                  native: camera
                 });
                 session.screenPausedCamera = null;
                 stage.refreshStrategy();
@@ -1220,7 +829,8 @@
               throw error;
             }
             addVideoTrack(session, { id: `ivs:screen:${track.id}`, participantId: session.localParticipantId, isLocal: true, isScreenShare: true, native: localStream });
-            track.addEventListener('ended', () => this.command('setScreenShareEnabled', { enabled: false }).catch(() => {}), { once: true });
+            track.addEventListener("ended", () => this.command("setScreenShareEnabled", { enabled: false }).catch(() => {
+            }), { once: true });
           } else if (!args.enabled && session.screenTrack) {
             const track = session.screenTrack.mediaStreamTrack;
             track.stop();
@@ -1235,32 +845,31 @@
               addVideoTrack(session, {
                 id: `ivs:local:${camera.mediaStreamTrack.id}`,
                 participantId: session.localParticipantId,
-                isLocal: true, native: camera,
+                isLocal: true,
+                native: camera
               });
             }
             stage.refreshStrategy();
           }
           return;
         }
-        if (name === 'switchCamera') return;
-        if (name === 'selectDevice') {
+        if (name === "switchCamera") return;
+        if (name === "selectDevice") {
           const selected = args.device || args;
-          if (selected.kind !== 'camera' && selected.kind !== 'microphone') return;
-          const media = await navigator.mediaDevices.getUserMedia(selected.kind === 'camera' ? { video: { deviceId: { exact: selected.id } } } : { audio: { deviceId: { exact: selected.id } } });
+          if (selected.kind !== "camera" && selected.kind !== "microphone") return;
+          const media = await navigator.mediaDevices.getUserMedia(selected.kind === "camera" ? { video: { deviceId: { exact: selected.id } } } : { audio: { deviceId: { exact: selected.id } } });
           const track = media.getTracks()[0];
-          const old = selected.kind === 'camera' ? session.localVideoStream : session.localAudioStream;
+          const old = selected.kind === "camera" ? session.localVideoStream : session.localAudioStream;
           if (old) {
             old.mediaStreamTrack.stop();
             const index = localStreams.indexOf(old);
             if (index >= 0) localStreams.splice(index, 1);
           }
           const replacement = new sdk.LocalStageStream(track);
-          if (selected.kind === 'camera') {
+          if (selected.kind === "camera") {
             session.localVideoStream = replacement;
             if (old) removeVideoTrack(session, [...session.tracks.values()].find((item) => item.native === old)?.id);
             if (session.screenTrack) {
-              // A camera switch during a share changes what will be restored,
-              // not the sole video stream currently published to IVS.
               session.screenPausedCamera = replacement;
               return;
             }
@@ -1273,7 +882,7 @@
           stage.refreshStrategy();
           return;
         }
-        if (name === 'listDevices') return listDevices(session);
+        if (name === "listDevices") return listDevices(session);
         throw new Error(`IVS Real-Time does not support ${name}.`);
       },
       async attachProcessedTrack(track) {
@@ -1291,7 +900,7 @@
           return;
         }
         localStreams.push(replacement);
-        addVideoTrack(session, {id: `ivs:local:${track.id}`, participantId: session.localParticipantId, isLocal: true, native: replacement});
+        addVideoTrack(session, { id: `ivs:local:${track.id}`, participantId: session.localParticipantId, isLocal: true, native: replacement });
         stage.refreshStrategy();
       },
       async detachProcessedTrack() {
@@ -1305,55 +914,61 @@
         if (session.screenTrack) session.screenPausedCamera = null;
         stage.refreshStrategy();
       },
-      async attachVideo(track, container) { attachStreamTrack(track.native.mediaStreamTrack, container); },
-      detachVideo(_track, container) { container.replaceChildren(); },
+      async attachVideo(track, container) {
+        attachStreamTrack(track.native.mediaStreamTrack, container);
+      },
+      detachVideo(_track, container) {
+        container.replaceChildren();
+      },
       async leave() {
         stage.leave();
         for (const stream of [...localStreams]) stream.mediaStreamTrack.stop();
-        if (session.screenPausedCamera &&
-            !localStreams.includes(session.screenPausedCamera)) {
+        if (session.screenPausedCamera && !localStreams.includes(session.screenPausedCamera)) {
           session.screenPausedCamera.mediaStreamTrack.stop();
         }
         session.screenPausedCamera = null;
         localStreams.length = 0;
       },
-      async dispose() { stage.removeAllListeners?.(); },
+      async dispose() {
+        stage.removeAllListeners?.();
+      },
       async getStats() {
         const stats = await Promise.all(localStreams.map((stream) => stream.requestQualityStats?.()));
         const values = stats.flat().filter(Boolean);
         if (!values.length) return null;
-        const loss = values.map((item) => item.packetsLost && item.packetsSent ? (item.packetsLost / item.packetsSent) * 100 : 0).reduce((a, b) => a + b, 0) / values.length;
+        const loss = values.map((item) => item.packetsLost && item.packetsSent ? item.packetsLost / item.packetsSent * 100 : 0).reduce((a, b) => a + b, 0) / values.length;
         return { uplinkPacketLossPercent: loss };
-      },
+      }
     };
     return session;
   }
 
-  function createChimeSession(session) {
+  // src/media/chime-session.js
+  function createChimeSession(session, context) {
+    const { global, StageEvents, createSdkProcessedVideo, parsePayload, providerBlock, emit, emitState, addParticipant, removeParticipant, addVideoTrack, removeVideoTrack, emitMessage, publishSnapshot, reportError, createSession, join, leave, dispose, startStats, stopStats, effectsTrack, command, listDevices, makeVideoElement, attachStreamTrack, getTrackAttachment, requireSession } = context;
     const info = session.payload;
     const meeting = info.meeting || info.Meeting;
     const attendee = info.attendee || info.Attendee;
-    if (!meeting || !attendee) throw new Error('Chime join data must include meeting and attendee objects.');
+    if (!meeting || !attendee) throw new Error("Chime join data must include meeting and attendee objects.");
     const logger = new ChimeSDK.ConsoleLogger(`media-web-${session.id}`, ChimeSDK.LogLevel.WARN);
     const deviceController = new ChimeSDK.DefaultDeviceController(logger);
     const configuration = new ChimeSDK.MeetingSessionConfiguration(meeting, attendee);
     const meetingSession = new ChimeSDK.DefaultMeetingSession(configuration, logger, deviceController);
     const audioVideo = meetingSession.audioVideo;
-    const tiles = new Map();
+    const tiles = /* @__PURE__ */ new Map();
     const tileIdFor = (tile) => `chime:tile:${tile.tileId}`;
     let settleStart = null;
     const observer = {
       audioVideoDidStart() {
         settleStart?.(null);
-        emitState(session, 'connected');
+        emitState(session, "connected");
       },
       audioVideoDidStop(status) {
-        const code = typeof status?.statusCode === 'function'
-          ? status.statusCode() : status?.statusCode;
+        const code = typeof status?.statusCode === "function" ? status.statusCode() : status?.statusCode;
         if (settleStart) {
-          settleStart(new Error(`Chime connection stopped before joining (status ${code ?? 'unknown'}).`));
+          settleStart(new Error(`Chime connection stopped before joining (status ${code ?? "unknown"}).`));
         } else if (session.joined && code !== ChimeSDK.MeetingSessionStatusCode.Left) {
-          reportError(session, new Error(`Chime meeting disconnected (status ${code ?? 'unknown'}).`));
+          reportError(session, new Error(`Chime meeting disconnected (status ${code ?? "unknown"}).`));
         }
       },
       videoTileDidUpdate(tile) {
@@ -1367,17 +982,19 @@
         if (tile) removeVideoTrack(session, tileIdFor(tile));
         tiles.delete(tileId);
       },
-      connectionDidSuggestStop() { emitState(session, 'reconnecting', 'connection-did-suggest-stop'); },
+      connectionDidSuggestStop() {
+        emitState(session, "reconnecting", "connection-did-suggest-stop");
+      }
     };
     audioVideo.addObserver(observer);
     const presenceObserver = (attendeeId, present, externalUserId) => {
-      if (!attendeeId || attendeeId.includes('#')) return;
+      if (!attendeeId || attendeeId.includes("#")) return;
       if (present) {
         addParticipant(
           session,
           attendeeId,
           externalUserId || attendeeId,
-          attendeeId === session.localParticipantId,
+          attendeeId === session.localParticipantId
         );
         publishSnapshot(session);
       } else {
@@ -1385,14 +1002,14 @@
       }
     };
     audioVideo.realtimeSubscribeToAttendeeIdPresence(presenceObserver);
-    const dataTopic = 'chat';
+    const dataTopic = "chat";
     const dataObserver = (dataMessage) => {
-      let message = '';
+      let message = "";
       try {
-        if (typeof dataMessage.text === 'function') message = dataMessage.text();
+        if (typeof dataMessage.text === "function") message = dataMessage.text();
         else if (dataMessage.data) message = new TextDecoder().decode(dataMessage.data);
       } catch (_) {
-        message = '';
+        message = "";
       }
       emitMessage(session, {
         participantId: dataMessage.senderAttendeeId,
@@ -1400,31 +1017,29 @@
         message,
         topic: dataMessage.topic || dataTopic,
         timestampMs: dataMessage.timestampMs,
-        throttled: dataMessage.throttled,
+        throttled: dataMessage.throttled
       });
     };
     audioVideo.realtimeSubscribeToReceiveDataMessage(dataTopic, dataObserver);
     session.meetingSession = meetingSession;
     session.driver = {
       async join() {
-        // Device enumeration can reject on macOS WKWebView when the OS has not
-        // granted TCC permission or no physical input exists. Connecting to
-        // Chime is independent of capture; join muted and enable it later.
         let microphones = [];
-        try { microphones = await audioVideo.listAudioInputDevices(); }
-        catch (_) { /* Continue to the meeting without microphone access. */ }
-        if (microphones.length) {
-          try { await audioVideo.startAudioInput(microphones[0].deviceId); }
-          catch (_) { microphones = []; /* Capture failures are not join failures. */ }
+        try {
+          microphones = await audioVideo.listAudioInputDevices();
+        } catch (_) {
         }
-
-        // start() begins asynchronous signaling. Do not mark the attendee as
-        // connected until Chime actually fires audioVideoDidStart. Otherwise
-        // macOS can show a joined room while the service still reports 0 users.
+        if (microphones.length) {
+          try {
+            await audioVideo.startAudioInput(microphones[0].deviceId);
+          } catch (_) {
+            microphones = [];
+          }
+        }
         const connected = new Promise((resolve, reject) => {
           const timeout = global.setTimeout(() => {
-            settleStart?.(new Error('Chime signaling timed out after 30 seconds. Check network and AWS media region.'));
-          }, 30000);
+            settleStart?.(new Error("Chime signaling timed out after 30 seconds. Check network and AWS media region."));
+          }, 3e4);
           settleStart = (error) => {
             global.clearTimeout(timeout);
             settleStart = null;
@@ -1432,49 +1047,56 @@
             else resolve();
           };
         });
-        try { audioVideo.start(); }
-        catch (error) { settleStart?.(error); }
+        try {
+          audioVideo.start();
+        } catch (error) {
+          settleStart?.(error);
+        }
         await connected;
-
         session.localMuted = microphones.length === 0;
         session.localVideoEnabled = false;
         for (const tile of audioVideo.getAllVideoTiles()) observer.videoTileDidUpdate(tile.state());
       },
       async command(name, args) {
-        if (name === 'setMuted') {
-          if (args.muted) audioVideo.realtimeMuteLocalAudio(); else await audioVideo.realtimeUnmuteLocalAudio();
+        if (name === "setMuted") {
+          if (args.muted) audioVideo.realtimeMuteLocalAudio();
+          else await audioVideo.realtimeUnmuteLocalAudio();
           session.localMuted = Boolean(args.muted);
           return;
         }
-        if (name === 'setVideoEnabled') {
+        if (name === "setVideoEnabled") {
           if (args.enabled) {
             if (session.processedTrack) await audioVideo.startVideoInput(new MediaStream([session.processedTrack]));
-            else { const cameras = await audioVideo.listVideoInputDevices(); if (cameras[0]) await audioVideo.startVideoInput(cameras[0].deviceId); }
+            else {
+              const cameras = await audioVideo.listVideoInputDevices();
+              if (cameras[0]) await audioVideo.startVideoInput(cameras[0].deviceId);
+            }
             audioVideo.startLocalVideoTile();
           } else audioVideo.stopLocalVideoTile();
           session.localVideoEnabled = Boolean(args.enabled);
           return;
         }
-        if (name === 'setScreenShareEnabled') {
-          if (args.enabled) await audioVideo.startContentShareFromScreenCapture(); else audioVideo.stopContentShare();
+        if (name === "setScreenShareEnabled") {
+          if (args.enabled) await audioVideo.startContentShareFromScreenCapture();
+          else audioVideo.stopContentShare();
           return;
         }
-        if (name === 'selectDevice' || name === 'selectAudioOutput') {
+        if (name === "selectDevice" || name === "selectAudioOutput") {
           const selected = args.device || args;
-          if (selected.kind === 'microphone') await audioVideo.startAudioInput(selected.id);
-          if (selected.kind === 'camera') await audioVideo.startVideoInput(selected.id);
-          if (selected.kind === 'audioOutput') await audioVideo.chooseAudioOutput(selected.id);
+          if (selected.kind === "microphone") await audioVideo.startAudioInput(selected.id);
+          if (selected.kind === "camera") await audioVideo.startVideoInput(selected.id);
+          if (selected.kind === "audioOutput") await audioVideo.chooseAudioOutput(selected.id);
           return;
         }
-        if (name === 'listDevices') {
+        if (name === "listDevices") {
           const [microphones, cameras, outputs] = await Promise.all([audioVideo.listAudioInputDevices(), audioVideo.listVideoInputDevices(), audioVideo.listAudioOutputDevices()]);
-          return [...microphones.map((item) => ({ id: item.deviceId, label: item.label, groupId: item.groupId, kind: 'microphone' })), ...cameras.map((item) => ({ id: item.deviceId, label: item.label, groupId: item.groupId, kind: 'camera' })), ...outputs.map((item) => ({ id: item.deviceId, label: item.label, groupId: item.groupId, kind: 'audioOutput' }))];
+          return [...microphones.map((item) => ({ id: item.deviceId, label: item.label, groupId: item.groupId, kind: "microphone" })), ...cameras.map((item) => ({ id: item.deviceId, label: item.label, groupId: item.groupId, kind: "camera" })), ...outputs.map((item) => ({ id: item.deviceId, label: item.label, groupId: item.groupId, kind: "audioOutput" }))];
         }
-        if (name === 'sendMessage') {
+        if (name === "sendMessage") {
           const topic = String(args.topic || dataTopic);
-          const message = String(args.message || '');
-          const lifetimeMs = Number(args.lifetimeMs || 300000);
-          if (!message || !topic || lifetimeMs <= 0) throw new Error('Chime data message requires message, topic, and positive lifetimeMs.');
+          const message = String(args.message || "");
+          const lifetimeMs = Number(args.lifetimeMs || 3e5);
+          if (!message || !topic || lifetimeMs <= 0) throw new Error("Chime data message requires message, topic, and positive lifetimeMs.");
           audioVideo.realtimeSendDataMessage(topic, message, lifetimeMs);
           return;
         }
@@ -1492,17 +1114,545 @@
         const video = makeVideoElement(container);
         audioVideo.bindVideoElement(tile.tileId, video);
       },
-      detachVideo(track) { audioVideo.unbindVideoElement(track.native.tileId); },
-      async leave() { audioVideo.stop(); await deviceController.destroy?.(); },
+      detachVideo(track) {
+        audioVideo.unbindVideoElement(track.native.tileId);
+      },
+      async leave() {
+        audioVideo.stop();
+        await deviceController.destroy?.();
+      },
       async dispose() {
         audioVideo.removeObserver(observer);
         audioVideo.realtimeUnsubscribeToAttendeeIdPresence(presenceObserver);
         audioVideo.realtimeUnsubscribeFromReceiveDataMessage(dataTopic);
       },
-      async getStats() { return null; },
+      async getStats() {
+        return null;
+      }
     };
     return session;
   }
 
-  global.MediaProviderBridge = bridge;
-})(globalThis);
+  // src/bridge.js
+  (function installMediaProviderBridge(global) {
+    "use strict";
+    const sessions = /* @__PURE__ */ new Map();
+    const StageEvents = {
+      CONNECTION: "stageConnectionStateChanged",
+      JOINED: "stageParticipantJoined",
+      LEFT: "stageParticipantLeft",
+      STREAMS_ADDED: "stageParticipantStreamsAdded",
+      STREAMS_REMOVED: "stageParticipantStreamsRemoved",
+      ERROR: "stageError"
+    };
+    let nextPreviewSource = 0;
+    async function createSdkProcessedVideo({ effect = { type: "none" }, deviceId = null } = {}) {
+      const bridge2 = global.RealtimeVideoEffectsBridge;
+      if (!bridge2) return createRawPreview({ effect, deviceId });
+      const id = `provider-preview-${Date.now()}-${nextPreviewSource++}`;
+      await bridge2.createSource(id, { effect, cameraDeviceId: deviceId });
+      return {
+        get track() {
+          return bridge2.getTrack(id);
+        },
+        setEffect: (next) => bridge2.setEffect(id, next),
+        setCameraDevice: (next) => bridge2.selectCamera(id, next),
+        setEnabled: (enabled) => bridge2.setEnabled(id, enabled),
+        stop: () => bridge2.disposeSource(id)
+      };
+    }
+    async function createRawPreview({ effect, deviceId }) {
+      if (effect.type !== "none") throw new Error("preview.effects.unregistered");
+      let track = null;
+      let stopped = false;
+      async function setEnabled(enabled) {
+        if (!enabled) {
+          track?.stop();
+          track = null;
+          return;
+        }
+        if (stopped) throw new Error("preview.disposed");
+        if (track) return;
+        const stream = await global.navigator.mediaDevices.getUserMedia({ audio: false, video: deviceId ? { deviceId: { exact: deviceId } } : true });
+        if (stopped) {
+          stream.getTracks().forEach((item) => item.stop());
+          throw new Error("preview.disposed");
+        }
+        track = stream.getVideoTracks()[0];
+      }
+      await setEnabled(true);
+      return {
+        get track() {
+          return track;
+        },
+        setEnabled,
+        async setEffect(next) {
+          if (next.type !== "none") throw new Error("preview.effects.unregistered");
+        },
+        async setCameraDevice(next) {
+          deviceId = next;
+          if (track) {
+            await setEnabled(false);
+            await setEnabled(true);
+          }
+        },
+        async stop() {
+          stopped = true;
+          await setEnabled(false);
+        }
+      };
+    }
+    function parsePayload(value) {
+      return typeof value === "string" ? JSON.parse(value) : value;
+    }
+    function providerBlock(session, key = session.providerId) {
+      const payload = session.payload;
+      const block = payload[key];
+      return block && typeof block === "object" ? block : payload;
+    }
+    function emit(session, event) {
+      const callback = global.__flutterMediaProviderOnEvent;
+      if (typeof callback === "function") {
+        callback(session.id, JSON.stringify(event));
+      }
+    }
+    function emitState(session, state, reason) {
+      emit(session, { type: "state", state, reason });
+    }
+    function addParticipant(session, id, displayName, isLocal = false) {
+      if (!id) return null;
+      const current = session.participants.get(String(id)) || {};
+      const participant = {
+        ...current,
+        id: String(id),
+        displayName: displayName || current.displayName || String(id),
+        isLocal: Boolean(isLocal || current.isLocal),
+        isMuted: Boolean(current.isMuted),
+        isVideoEnabled: Boolean(current.isVideoEnabled)
+      };
+      session.participants.set(participant.id, participant);
+      return participant;
+    }
+    function removeParticipant(session, id) {
+      const participantId = String(id || "");
+      if (!participantId || participantId === session.localParticipantId) return;
+      session.participants.delete(participantId);
+      for (const [trackId, track] of session.tracks) {
+        if (track.participantId === participantId) session.tracks.delete(trackId);
+      }
+      publishSnapshot(session);
+    }
+    function addVideoTrack(session, { id, participantId, isLocal = false, isScreenShare = false, native }) {
+      if (!id || !participantId) return null;
+      const track = {
+        id: String(id),
+        participantId: String(participantId),
+        isLocal: Boolean(isLocal),
+        isScreenShare: Boolean(isScreenShare),
+        native
+      };
+      session.tracks.set(track.id, track);
+      const participant = addParticipant(session, participantId, null, isLocal);
+      participant.isVideoEnabled = true;
+      if (!isScreenShare) participant.videoTrackId = track.id;
+      publishSnapshot(session);
+      return track;
+    }
+    function removeVideoTrack(session, id) {
+      const track = session.tracks.get(String(id));
+      if (!track) return;
+      session.tracks.delete(String(id));
+      const participant = session.participants.get(track.participantId);
+      if (participant && ![...session.tracks.values()].some((item) => item.participantId === track.participantId)) {
+        participant.isVideoEnabled = false;
+        delete participant.videoTrackId;
+      } else if (participant && participant.videoTrackId === track.id) {
+        const replacement = [...session.tracks.values()].find(
+          (item) => item.participantId === track.participantId && !item.isScreenShare
+        );
+        participant.videoTrackId = replacement?.id;
+        if (!replacement) participant.isVideoEnabled = false;
+      }
+      publishSnapshot(session);
+    }
+    function emitMessage(session, { participantId, displayName, message, topic = "chat", timestampMs = Date.now(), throttled = false }) {
+      emit(session, {
+        type: "message",
+        participantId: String(participantId || ""),
+        displayName: String(displayName || participantId || ""),
+        message: String(message || ""),
+        topic: String(topic || "chat"),
+        timestampMs: Number(timestampMs || Date.now()),
+        throttled: Boolean(throttled)
+      });
+    }
+    function publishSnapshot(session) {
+      const participants = [...session.participants.values()];
+      emit(session, {
+        type: "snapshot",
+        localParticipantId: session.localParticipantId,
+        localMuted: session.localMuted,
+        localVideoEnabled: session.localVideoEnabled,
+        participants,
+        tracks: [...session.tracks.values()].map(({ native, ...track }) => track)
+      });
+    }
+    function reportError(session, error) {
+      emit(session, {
+        type: "error",
+        message: error && error.message ? error.message : String(error)
+      });
+    }
+    function createSession(providerId, id, payload) {
+      const context = { global, StageEvents, createSdkProcessedVideo, parsePayload, providerBlock, emit, emitState, addParticipant, removeParticipant, addVideoTrack, removeVideoTrack, emitMessage, publishSnapshot, reportError, createSession, join, leave, dispose, startStats, stopStats, effectsTrack, command, listDevices, makeVideoElement, attachStreamTrack, getTrackAttachment, requireSession };
+      const role = String(payload.role || "participant").toLowerCase();
+      const session = {
+        id,
+        providerId,
+        payload,
+        role,
+        localParticipantId: String(payload.participantId || ""),
+        localMuted: true,
+        localVideoEnabled: false,
+        joined: false,
+        participants: /* @__PURE__ */ new Map(),
+        tracks: /* @__PURE__ */ new Map(),
+        attachments: /* @__PURE__ */ new Map(),
+        timers: /* @__PURE__ */ new Set(),
+        screenTrack: null
+      };
+      addParticipant(session, session.localParticipantId, payload.displayName, true);
+      switch (providerId) {
+        case "agora":
+          return createAgoraSession(session, context);
+        case "chime":
+          return createChimeSession(session, context);
+        case "trtc":
+          return createTrtcSession(session, context);
+        case "artc":
+          return createArtcSession(session, context);
+        case "ivs":
+          return createIvsSession(session, context);
+        default:
+          throw new Error(`No browser SDK driver is registered for ${providerId}.`);
+      }
+    }
+    async function join(session) {
+      emitState(session, "connecting");
+      try {
+        await session.driver.join();
+      } catch (error) {
+        if (session.providerId === "chime") {
+          try {
+            await session.driver.leave();
+          } catch (_) {
+          }
+        }
+        throw error;
+      }
+      session.joined = true;
+      emitState(session, "connected");
+      publishSnapshot(session);
+      startStats(session);
+    }
+    async function leave(session) {
+      if (!session.joined) return;
+      stopStats(session);
+      await session.driver.leave();
+      session.processedTrack?.stop?.();
+      session.processedTrack = null;
+      session.processedSourceId = null;
+      session.joined = false;
+      session.tracks.clear();
+      session.participants.clear();
+      session.localParticipantId = "";
+      emitState(session, "ended");
+      publishSnapshot(session);
+    }
+    async function dispose(session) {
+      try {
+        await leave(session);
+      } finally {
+        stopStats(session);
+        if (session.driver.dispose) await session.driver.dispose();
+        sessions.delete(session.id);
+      }
+    }
+    function startStats(session) {
+      if (!session.driver.getStats || session.timers.size) return;
+      const timer = global.setInterval(async () => {
+        try {
+          const stats = await session.driver.getStats();
+          if (stats) emit(session, { type: "stats", timestampMs: Date.now(), ...stats });
+        } catch (_) {
+        }
+      }, 4e3);
+      session.timers.add(timer);
+    }
+    function stopStats(session) {
+      for (const timer of session.timers) global.clearInterval(timer);
+      session.timers.clear();
+    }
+    function effectsTrack(sourceId) {
+      const track = global.RealtimeProcessedVideoBridge?.getTrack(sourceId);
+      if (!track) throw new Error(`Unknown processed video source: ${sourceId}`);
+      return track;
+    }
+    async function command(session, name, args) {
+      if (!session.joined && name !== "listDevices") {
+        throw new Error(`Cannot run ${name} while the session is not connected.`);
+      }
+      args || (args = {});
+      if (session.role === "viewer" && [
+        "attachProcessedVideoSource",
+        "setProcessedVideoEffect",
+        "setScreenShareEnabled"
+      ].includes(name)) {
+        throw new Error("Viewers cannot publish camera or screen video.");
+      }
+      if (name === "attachProcessedVideoSource" && session.providerId !== "agora") {
+        const sourceId2 = String(args.sourceId || "");
+        if (session.processedSourceId === sourceId2) return "";
+        if (!session.driver.attachProcessedTrack) throw new Error("Provider has no processed video input.");
+        const sourceTrack = effectsTrack(sourceId2);
+        const track = sourceTrack.clone?.() || sourceTrack;
+        try {
+          await session.driver.attachProcessedTrack(track);
+        } catch (error) {
+          if (track !== sourceTrack) track.stop?.();
+          throw error;
+        }
+        session.processedTrack?.stop?.();
+        session.processedSourceId = sourceId2;
+        session.processedTrack = track;
+        publishSnapshot(session);
+        return "";
+      }
+      if (name === "detachProcessedVideoSource" && session.providerId !== "agora") {
+        await session.driver.command("setVideoEnabled", { enabled: false });
+        await session.driver.detachProcessedTrack?.();
+        session.processedTrack?.stop?.();
+        session.processedTrack = null;
+        session.processedSourceId = null;
+        publishSnapshot(session);
+        return "";
+      }
+      const sourceId = session.processedSourceId;
+      if (sourceId && name === "setProcessedVideoEffect") {
+        await global.RealtimeVideoEffectsBridge.setEffect(sourceId, JSON.stringify(args));
+        return "";
+      }
+      if (sourceId && name === "selectDevice" && (args.device || args).kind === "camera") {
+        await global.RealtimeProcessedVideoBridge.selectCamera(sourceId, (args.device || args).id);
+        return "";
+      }
+      if (sourceId && name === "switchCamera") {
+        const cameras = (await listDevices(session)).filter((d) => d.kind === "camera");
+        const next = cameras[(cameras.findIndex((d) => d.id === session.cameraId) + 1) % cameras.length];
+        if (next) {
+          await global.RealtimeProcessedVideoBridge.selectCamera(sourceId, next.id);
+          session.cameraId = next.id;
+        }
+        return "";
+      }
+      if (sourceId && name === "setVideoEnabled") {
+        await global.RealtimeProcessedVideoBridge.setEnabled(sourceId, Boolean(args.enabled));
+      }
+      const result = await session.driver.command(name, args);
+      publishSnapshot(session);
+      return result === void 0 ? "" : JSON.stringify(result);
+    }
+    async function listDevices(session) {
+      if (!global.navigator || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices.map((device) => ({
+        id: device.deviceId,
+        label: device.label,
+        groupId: device.groupId,
+        kind: device.kind === "audioinput" ? "microphone" : device.kind === "audiooutput" ? "audioOutput" : "camera"
+      }));
+    }
+    function makeVideoElement(container) {
+      const existing = container.querySelector("video");
+      if (existing) return existing;
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = false;
+      video.style.width = "100%";
+      video.style.height = "100%";
+      video.style.objectFit = "contain";
+      container.replaceChildren(video);
+      return video;
+    }
+    function attachStreamTrack(track, container) {
+      const video = makeVideoElement(container);
+      video.srcObject = new MediaStream([track]);
+      video.play().catch(() => {
+      });
+      return video;
+    }
+    function getTrackAttachment(session, trackId) {
+      return session.attachments.get(String(trackId));
+    }
+    const bridge = {
+      async createLocalPreview(providerId, previewId, serializedArgs) {
+        const args = parsePayload(serializedArgs || "{}") || {};
+        if (sessions.has(previewId)) {
+          throw new Error(`Duplicate local preview session ${previewId}.`);
+        }
+        let pipeline = null;
+        let creatingPipeline = null;
+        let effect = args.backgroundEffect || {
+          type: "none",
+          blurStrength: "medium"
+        };
+        let cameraId = args.cameraId || null;
+        const preview = {
+          id: previewId,
+          providerId,
+          payload: {},
+          role: String(args.role || "participant"),
+          localParticipantId: `preview:${previewId}`,
+          localMuted: !Boolean(args.microphoneEnabled),
+          localVideoEnabled: args.cameraEnabled === true,
+          joined: true,
+          participants: /* @__PURE__ */ new Map(),
+          tracks: /* @__PURE__ */ new Map(),
+          attachments: /* @__PURE__ */ new Map(),
+          timers: /* @__PURE__ */ new Set(),
+          screenTrack: null
+        };
+        const trackId = `preview:video:${previewId}`;
+        addParticipant(
+          preview,
+          preview.localParticipantId,
+          "Local preview",
+          true
+        );
+        async function ensurePipeline() {
+          if (pipeline) return pipeline;
+          if (creatingPipeline) return creatingPipeline;
+          creatingPipeline = (async () => {
+            const created = await createSdkProcessedVideo({ effect, deviceId: cameraId });
+            if (!preview.joined) {
+              await created.stop();
+              throw new Error("Local preview was disposed while enabling the camera.");
+            }
+            pipeline = created;
+            addVideoTrack(preview, {
+              id: trackId,
+              participantId: preview.localParticipantId,
+              isLocal: true,
+              native: { mediaStreamTrack: pipeline.track }
+            });
+            return pipeline;
+          })();
+          try {
+            return await creatingPipeline;
+          } finally {
+            creatingPipeline = null;
+          }
+        }
+        if (preview.localVideoEnabled) {
+          await (await ensurePipeline()).setEnabled(true);
+        }
+        preview.driver = {
+          async command(name, commandArgs) {
+            if (name === "setMuted") {
+              preview.localMuted = Boolean(commandArgs.muted);
+              return;
+            }
+            if (name === "setVideoEnabled") {
+              const enabled = Boolean(commandArgs.enabled);
+              const capture = enabled ? await ensurePipeline() : pipeline;
+              if (capture) await capture.setEnabled(enabled);
+              if (enabled && capture) addVideoTrack(preview, { id: trackId, participantId: preview.localParticipantId, isLocal: true, native: { mediaStreamTrack: capture.track } });
+              else removeVideoTrack(preview, trackId);
+              preview.localVideoEnabled = enabled;
+              return;
+            }
+            if (name === "setBackgroundEffect") {
+              effect = {
+                type: String(commandArgs.type || "none"),
+                blurStrength: String(commandArgs.blurStrength || "medium"),
+                imageBytes: commandArgs.imageBytes || null
+              };
+              if (pipeline) await pipeline.setEffect(effect);
+              return;
+            }
+            if (name === "selectDevice") {
+              const selected = commandArgs.device || commandArgs;
+              if (selected.kind === "camera") {
+                cameraId = selected.id;
+                if (pipeline) await pipeline.setCameraDevice(cameraId);
+              }
+              return;
+            }
+            if (name === "listDevices") return listDevices(preview);
+            throw new Error(`Local preview does not support ${name}.`);
+          },
+          async attachVideo(track, container) {
+            const mediaTrack = track.native?.mediaStreamTrack;
+            if (mediaTrack) attachStreamTrack(mediaTrack, container);
+          },
+          detachVideo(_track, container) {
+            container.replaceChildren();
+          },
+          async leave() {
+            preview.joined = false;
+            if (pipeline) await pipeline.stop();
+          }
+        };
+        sessions.set(previewId, preview);
+      },
+      async create(providerId, sessionId, serializedPayload) {
+        const payload = parsePayload(serializedPayload);
+        const session = createSession(providerId, sessionId, payload);
+        session.driver = session.driver || {};
+        sessions.set(sessionId, session);
+      },
+      async join(providerId, sessionId) {
+        const session = requireSession(providerId, sessionId);
+        await join(session);
+      },
+      async leave(providerId, sessionId) {
+        const session = sessions.get(sessionId);
+        if (session && session.providerId === providerId) await leave(session);
+      },
+      async dispose(providerId, sessionId) {
+        const session = sessions.get(sessionId);
+        if (session && session.providerId === providerId) await dispose(session);
+      },
+      async command(providerId, sessionId, name, serializedArgs) {
+        const session = requireSession(providerId, sessionId);
+        const result = await command(session, name, parsePayload(serializedArgs));
+        return typeof result === "string" ? result : JSON.stringify(result || {});
+      },
+      async attachVideo(providerId, sessionId, trackId, elementId) {
+        const session = requireSession(providerId, sessionId);
+        const track = session.tracks.get(String(trackId));
+        const container = document.getElementById(elementId);
+        if (!track || !container) return;
+        session.attachments.set(track.id, { elementId, container });
+        await session.driver.attachVideo(track, container);
+      },
+      detachVideo(providerId, sessionId, trackId, elementId) {
+        const session = sessions.get(sessionId);
+        if (!session || session.providerId !== providerId) return;
+        const track = session.tracks.get(String(trackId));
+        const attachment = session.attachments.get(String(trackId));
+        if (track && attachment && attachment.elementId === elementId && session.driver.detachVideo) {
+          session.driver.detachVideo(track, attachment.container);
+        }
+        session.attachments.delete(String(trackId));
+      }
+    };
+    function requireSession(providerId, sessionId) {
+      const session = sessions.get(sessionId);
+      if (!session || session.providerId !== providerId) throw new Error(`Unknown ${providerId} session ${sessionId}.`);
+      return session;
+    }
+    global.MediaProviderBridge = bridge;
+  })(globalThis);
+})();

@@ -12,19 +12,14 @@ let package = Package(
         .library(name: "flutter-realtime-video-effects", targets: ["flutter_realtime_video_effects"])
     ],
     dependencies: [
-        .package(name: "FlutterFramework", path: "../FlutterFramework")
+        .package(name: "FlutterFramework", path: "../FlutterFramework"),
+        .package(name: "flutter_realtime_processed_video", path: "../flutter_realtime_processed_video")
     ],
     targets: [
         .target(
-            name: "RealtimeNativeFrameSinks",
-            publicHeadersPath: "include",
-            cxxSettings: [.headerSearchPath("agora")],
-            linkerSettings: [.linkedFramework("CoreVideo")]
-        ),
-        .target(
             name: "flutter_realtime_video_effects",
             dependencies: [
-                "RealtimeNativeFrameSinks",
+                .product(name: "flutter-realtime-processed-video", package: "flutter_realtime_processed_video"),
                 .product(name: "FlutterFramework", package: "FlutterFramework")
             ],
             resources: [

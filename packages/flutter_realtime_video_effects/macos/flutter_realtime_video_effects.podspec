@@ -14,9 +14,7 @@ Native macOS camera, person-segmentation and processed-video frame bridge.
   s.author           = { 'OnePlusDream' => 'developers@oneplusdream.com' }
 
   s.source           = { :path => '.' }
-  s.source_files = 'flutter_realtime_video_effects/Sources/flutter_realtime_video_effects/**/*',
-    'flutter_realtime_video_effects/Sources/RealtimeNativeFrameSinks/**/*.{h,mm}'
-  s.public_header_files = 'flutter_realtime_video_effects/Sources/RealtimeNativeFrameSinks/include/*.h'
+  s.source_files = 'flutter_realtime_video_effects/Sources/flutter_realtime_video_effects/**/*'
 
   # If your plugin requires a privacy manifest, for example if it collects user
   # data, update the PrivacyInfo.xcprivacy file to describe your plugin's
@@ -25,12 +23,12 @@ Native macOS camera, person-segmentation and processed-video frame bridge.
   # s.resource_bundles = {'flutter_realtime_video_effects_privacy' => ['flutter_realtime_video_effects/Sources/flutter_realtime_video_effects/PrivacyInfo.xcprivacy']}
 
   s.dependency 'FlutterMacOS'
+  s.dependency 'flutter_realtime_processed_video'
   s.frameworks = 'AVFoundation', 'Vision', 'CoreImage', 'CoreVideo'
 
   s.platform = :osx, '12.0'
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
-    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/flutter_realtime_video_effects/Sources/RealtimeNativeFrameSinks/agora" "$(PODS_TARGET_SRCROOT)/flutter_realtime_video_effects/Sources/RealtimeNativeFrameSinks/include"',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17'
   }
   s.swift_version = '5.9'

@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'trtc_engine.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter_realtime_processed_video/flutter_realtime_processed_video.dart';
 import 'trtc_join_info.dart';
 import 'trtc_media_track.dart';
 
@@ -115,8 +115,8 @@ abstract class _TrtcSessionBase
       _processedSink.supports(source) &&
       source.platform ==
           (defaultTargetPlatform == TargetPlatform.android
-              ? VideoEffectsPlatform.android
-              : VideoEffectsPlatform.macos);
+              ? ProcessedVideoPlatform.android
+              : ProcessedVideoPlatform.macos);
   @override
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _requireConnected();
@@ -143,7 +143,7 @@ abstract class _TrtcSessionBase
       return const [];
     }
     return List.unmodifiable([
-      for (final camera in await VideoEffectsBridge().listCameras())
+      for (final camera in await ProcessedVideoBridge().listCameras())
         MediaDevice(
           id: camera.id,
           label: camera.label,

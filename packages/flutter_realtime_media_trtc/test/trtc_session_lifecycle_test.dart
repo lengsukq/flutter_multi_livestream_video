@@ -1,4 +1,3 @@
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
@@ -64,7 +63,7 @@ void main() {
       final commands = <MethodCall>[];
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      final channels = {const MethodChannel('flutter_realtime_video_effects')};
+      final channels = {const MethodChannel('flutter_realtime_processed_video/sources'), const MethodChannel('flutter_realtime_media_trtc/processed_video')};
       for (final channel in channels) {
         messenger.setMockMethodCallHandler(channel, (call) async {
           commands.add(call);
@@ -86,7 +85,7 @@ void main() {
       final sink = session as ProcessedVideoSink;
       const source = ProcessedVideoSource(
         id: 'shared-processed-frame-source',
-        platform: VideoEffectsPlatform.android,
+        platform: ProcessedVideoPlatform.android,
         kind: ProcessedVideoSourceKind.nativeFrameHub,
         width: 1280,
         height: 720,

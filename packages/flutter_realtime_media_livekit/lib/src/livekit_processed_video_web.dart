@@ -1,11 +1,11 @@
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'package:dart_webrtc/dart_webrtc.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter_realtime_processed_video/flutter_realtime_processed_video.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:web/web.dart' as web;
 
-@JS('RealtimeVideoEffectsBridge')
+@JS('RealtimeProcessedVideoBridge')
 external JSObject get _bridge;
 Future<lk.LocalVideoTrack> createProcessedLiveKitTrack(
   ProcessedVideoSource source,

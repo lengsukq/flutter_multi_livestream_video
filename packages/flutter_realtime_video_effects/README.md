@@ -58,7 +58,7 @@ Current regression entry points (using dependencies already installed locally):
 ```sh
 node --test packages/flutter_realtime_video_effects/test/web_bridge_test.mjs \
   packages/flutter_realtime_media_aws_desktop/test/aws_desktop_runtime_test.mjs \
-  packages/flutter_realtime_sdk/tool/provider_bridge/src/bridge.test.js
+  tool/provider_web_assets/src/bridge.test.js
 # macOS: real native frame encoding, local scheme decoding and canvas video output
 packages/flutter_realtime_media_aws_desktop/test/run_macos_native_frame_feed_test.sh
 cd example/android

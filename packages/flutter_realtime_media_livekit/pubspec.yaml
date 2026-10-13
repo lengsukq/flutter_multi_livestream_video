@@ -14,8 +14,8 @@ dependencies:
   flutter_webrtc: ^1.6.2
   flutter_realtime_media_core:
     path: ../flutter_realtime_media_core
-  flutter_realtime_video_effects:
-    path: ../flutter_realtime_video_effects
+  flutter_realtime_processed_video:
+    path: ../flutter_realtime_processed_video
   dart_webrtc: ^1.8.2
   web: ^1.1.1
   livekit_client: ^2.13.0

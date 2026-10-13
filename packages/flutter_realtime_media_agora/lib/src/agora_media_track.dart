@@ -1,6 +1,5 @@
 import 'package:agora_rtc_engine/agora_rtc_engine.dart' as agora;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 
 /// Renderable Agora camera track represented by channel + numeric UID.
 class AgoraMediaVideoTrack extends MediaVideoTrack {

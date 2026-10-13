@@ -35,8 +35,13 @@ optional_business = {
     'flutter_realtime_screen_annotation',
     'flutter_realtime_classroom_preset',
     'flutter_realtime_live_preset',
+    'flutter_realtime_shared_content_preset',
+    'flutter_realtime_video_effects',
 }
 assert not runtime.intersection(optional_business), f'Runtime must not require optional business packages: {runtime.intersection(optional_business)}'
+assert not closure('flutter_realtime_classroom_preset').intersection({'flutter_realtime_screen_annotation', 'flutter_realtime_shared_content_preset'}), 'Classroom must not acquire shared content or system permissions'
+assert not closure('flutter_realtime_room_ui').intersection(optional_business), 'Lean room UI must not acquire business presets or processing'
+assert not closure('flutter_realtime_processed_video').intersection(optional_business), 'Frame bridge must remain independent from processing and business'
 for preset in ('flutter_realtime_classroom_preset', 'flutter_realtime_live_preset'):
     assert 'flutter_realtime_sdk_runtime' in closure(preset), f'{preset} must adapt the generic runtime'
 sdk=closure('flutter_realtime_sdk')
@@ -48,7 +53,9 @@ assert (ROOT/'packages/flutter_realtime_sdk_runtime/lib/src/members/room_members
 assert not any('class RoomMembersController' in src.read_text() for src in (ROOT/'packages').glob('flutter_realtime_*_ui/lib/**/*.dart')), 'UI must not reimplement Runtime member management'
 for name in names:
     if name.endswith('_core'):
-        assert not [n for n in closure(name) if n.endswith('_ui')], name
+        assert not [n for n in closure(name) if n.endswith('_ui') or n.startswith('flutter_realtime_provider_') or n == 'flutter_realtime_sdk_runtime' or n == 'flutter_webrtc' or (n.startswith('flutter_realtime_media_') and n != 'flutter_realtime_media_core')], name
+        dependencies = (ROOT/'packages'/name/'pubspec.yaml').read_text().split('\ndependencies:\n',1)[-1].split('\ndev_dependencies:',1)[0]
+        assert not re.search(r'^  (agora_rtc_engine|livekit_client|tencent_rtc_sdk|tencent_cloud_chat_sdk|aliyun_rtc|flutter_aws_chime|flutter_webrtc):', dependencies, re.M), name
 assert not (ROOT/'lib/flutter_aws_chime.dart').exists(), 'Root Chime implementation still exists'
 assert not (ROOT/'packages/flutter_realtime_sdk_base').exists(), 'Obsolete base package still exists'
 allowed={'flutter_realtime_media_livekit/lib/src/livekit_processed_video_native.dart'}

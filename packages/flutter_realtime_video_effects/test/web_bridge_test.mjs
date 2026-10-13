@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
+const neutralRuntime = await readFile(new URL('../../flutter_realtime_processed_video/web/processed-video-bridge.js', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../web/video-effects-bridge.js', import.meta.url), 'utf8');
 function harness({model, mask = null, faces = [], imageSize = [1920,1080]} = {}) {
   const calls = [], cameras = [], videos = [], images = [], mattes = [];
@@ -38,6 +39,7 @@ function harness({model, mask = null, faces = [], imageSize = [1920,1080]} = {})
       }}},
     __flutterVideoEffectsOnError(id,error){calls.push(['error',id,error]);},
   });
+  vm.runInContext(neutralRuntime,context);
   vm.runInContext(runtime,context);
   return {bridge:context.RealtimeVideoEffectsBridge,calls,cameras,videos,output,images,mattes};
 }

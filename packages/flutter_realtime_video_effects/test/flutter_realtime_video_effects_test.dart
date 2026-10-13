@@ -7,7 +7,7 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 class _FakePlatform
     with MockPlatformInterfaceMixin
-    implements FlutterRealtimeVideoEffectsPlatform {
+    implements FlutterRealtimeProcessedVideoPlatform {
   final List<MediaBackgroundEffect> effects = [];
 
   @override
@@ -21,7 +21,7 @@ class _FakePlatform
     VideoEffectsSourceConfig config,
   ) async => ProcessedVideoSource(
     id: 'source-1',
-    platform: VideoEffectsPlatform.android,
+    platform: ProcessedVideoPlatform.android,
     kind: ProcessedVideoSourceKind.nativeFrameHub,
     width: config.width,
     height: config.height,
@@ -41,8 +41,8 @@ class _FakePlatform
   Future<void> selectCamera(String sourceId, String? deviceId) async {}
 
   @override
-  Future<List<VideoEffectsCameraDevice>> listCameras() async => const [
-    VideoEffectsCameraDevice(
+  Future<List<ProcessedVideoCameraDevice>> listCameras() async => const [
+    ProcessedVideoCameraDevice(
       id: 'front',
       label: 'Front camera',
       isFrontFacing: true,
@@ -54,7 +54,7 @@ class _FakePlatform
 }
 
 void main() {
-  final initialPlatform = FlutterRealtimeVideoEffectsPlatform.instance;
+  final initialPlatform = FlutterRealtimeProcessedVideoPlatform.instance;
 
   test('method channel is the default native implementation', () {
     expect(initialPlatform, isA<MethodChannelFlutterRealtimeVideoEffects>());
@@ -62,9 +62,9 @@ void main() {
 
   test('bridge creates source and applies provider-neutral effect', () async {
     final fake = _FakePlatform();
-    FlutterRealtimeVideoEffectsPlatform.instance = fake;
+    FlutterRealtimeProcessedVideoPlatform.instance = fake;
     addTearDown(() {
-      FlutterRealtimeVideoEffectsPlatform.instance = initialPlatform;
+      FlutterRealtimeProcessedVideoPlatform.instance = initialPlatform;
     });
 
     final bridge = VideoEffectsBridge();

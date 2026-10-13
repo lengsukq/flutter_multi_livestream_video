@@ -1,0 +1,13 @@
+group = "com.oneplusdream.flutter_realtime_media_trtc"
+version = "1.0-SNAPSHOT"
+apply plugin: "com.android.library"
+android {
+    namespace "com.oneplusdream.flutter_realtime_media_trtc"
+    compileSdk 37
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    defaultConfig { minSdk 24 }
+}
+dependencies {
+    implementation project(':flutter_realtime_processed_video')
+    compileOnly 'com.tencent.liteav:LiteAVSDK_Professional:13.5.0.20670'
+}

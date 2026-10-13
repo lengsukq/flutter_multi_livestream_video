@@ -1,4 +1,4 @@
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter_realtime_processed_video/flutter_realtime_processed_video.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -96,8 +96,8 @@ class ChimeMediaSession
       _processedSink.supports(source) &&
       source.platform ==
           (defaultTargetPlatform == TargetPlatform.android
-              ? VideoEffectsPlatform.android
-              : VideoEffectsPlatform.macos);
+              ? ProcessedVideoPlatform.android
+              : ProcessedVideoPlatform.macos);
   @override
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _ensureActive();
@@ -220,8 +220,8 @@ class ChimeMediaSession
     final cameras =
         capabilities.canEnumerateCameras &&
             requested.contains(MediaDeviceKind.camera)
-        ? await VideoEffectsBridge().listCameras()
-        : const <VideoEffectsCameraDevice>[];
+        ? await ProcessedVideoBridge().listCameras()
+        : const <ProcessedVideoCameraDevice>[];
     final devices = requested.contains(MediaDeviceKind.audioOutput)
         ? await listAudioDevices()
         : const <MediaAudioDevice>[];

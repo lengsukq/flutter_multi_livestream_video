@@ -63,6 +63,7 @@ Map<String, dynamic> _joinJson({
 };
 
 class _FakeStandaloneProvisioner implements StandaloneChatProvisioner {
+  @override void dispose() {}
   @override
   Future<ChatJoinInfo> create({
     required String userId,

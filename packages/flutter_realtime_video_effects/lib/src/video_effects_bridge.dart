@@ -1,16 +1,14 @@
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import '../flutter_realtime_video_effects_platform_interface.dart';
-import 'processed_video_source.dart';
 import 'video_effects_failure.dart';
-import 'video_effects_camera_device.dart';
 import 'video_effects_source_config.dart';
 
 class VideoEffectsBridge {
-  VideoEffectsBridge({FlutterRealtimeVideoEffectsPlatform? platform})
-    : _platform = platform ?? FlutterRealtimeVideoEffectsPlatform.instance;
+  VideoEffectsBridge({FlutterRealtimeProcessedVideoPlatform? platform})
+    : _platform = platform ?? FlutterRealtimeProcessedVideoPlatform.instance;
 
-  final FlutterRealtimeVideoEffectsPlatform _platform;
+  final FlutterRealtimeProcessedVideoPlatform _platform;
 
   Stream<VideoEffectsFailure> get failures => _platform.failures;
 
@@ -34,7 +32,7 @@ class VideoEffectsBridge {
   Future<void> selectCamera(ProcessedVideoSource source, String? deviceId) =>
       _platform.selectCamera(source.id, deviceId);
 
-  Future<List<VideoEffectsCameraDevice>> listCameras() =>
+  Future<List<ProcessedVideoCameraDevice>> listCameras() =>
       _platform.listCameras();
 
   Future<void> disposeSource(ProcessedVideoSource source) =>

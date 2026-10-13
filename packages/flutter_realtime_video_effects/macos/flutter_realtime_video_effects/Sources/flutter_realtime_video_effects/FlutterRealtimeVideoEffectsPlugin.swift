@@ -4,112 +4,7 @@ import CoreImage
 import CoreVideo
 import FlutterMacOS
 import Vision
-#if canImport(RealtimeNativeFrameSinks)
-import RealtimeNativeFrameSinks
-#endif
-
-@objc(FlutterRealtimeProcessedVideoFrame) @objcMembers public final class FlutterRealtimeProcessedVideoFrame: NSObject {
-  public let sourceId: String
-  public let pixelBuffer: CVPixelBuffer
-  public let timestamp: CMTime
-  public var width: Int { CVPixelBufferGetWidth(pixelBuffer) }
-  public var height: Int { CVPixelBufferGetHeight(pixelBuffer) }
-  public var rowStride: Int { CVPixelBufferGetBytesPerRow(pixelBuffer) }
-  public let rotationDegrees: Int = 0
-  public let mirrored: Bool = false
-  public let pixelFormat: String = "bgra8888"
-  public var timestampNs: Int64 { Int64(CMTimeGetSeconds(timestamp) * 1_000_000_000) }
-  public init(sourceId: String, pixelBuffer: CVPixelBuffer, timestamp: CMTime) {
-    self.sourceId = sourceId; self.pixelBuffer = pixelBuffer; self.timestamp = timestamp
-    super.init()
-  }
-}
-
-@objc(FlutterRealtimeProcessedVideoFrameSink) public protocol FlutterRealtimeProcessedVideoFrameSink: AnyObject {
-  func onProcessedVideoFrame(_ frame: FlutterRealtimeProcessedVideoFrame)
-}
-
-private final class WeakFrameSink {
-  weak var value: FlutterRealtimeProcessedVideoFrameSink?
-
-  init(_ value: FlutterRealtimeProcessedVideoFrameSink) {
-    self.value = value
-  }
-}
-
-/// Native-only frame fan-out used by provider sinks.
-///
-/// CVPixelBuffer frames never cross MethodChannel. A provider plugin subscribes
-/// with the same sourceId that Dart received from the effects bridge.
-@objc(FlutterRealtimeProcessedVideoFrameHub) public final class FlutterRealtimeProcessedVideoFrameHub: NSObject {
-  private static let lock = NSLock()
-  private static var sinks: [String: [ObjectIdentifier: WeakFrameSink]] = [:]
-  private static var activeSources: Set<String> = []
-
-  @objc(containsSourceId:) public static func contains(sourceId: String) -> Bool {
-    lock.lock(); defer { lock.unlock() }
-    return activeSources.contains(sourceId)
-  }
-
-  static func activate(_ sourceId: String) {
-    lock.lock(); defer { lock.unlock() }; activeSources.insert(sourceId)
-  }
-
-  @objc(registerWithSourceId:sink:) public static func register(
-    sourceId: String,
-    sink: FlutterRealtimeProcessedVideoFrameSink
-  ) {
-    lock.lock()
-    defer { lock.unlock() }
-    guard activeSources.contains(sourceId) else { return }
-    var current = sinks[sourceId] ?? [:]
-    current[ObjectIdentifier(sink)] = WeakFrameSink(sink)
-    sinks[sourceId] = current
-  }
-
-  @objc(unregisterWithSourceId:sink:) public static func unregister(
-    sourceId: String,
-    sink: FlutterRealtimeProcessedVideoFrameSink
-  ) {
-    lock.lock()
-    defer { lock.unlock() }
-    guard var current = sinks[sourceId] else { return }
-    current.removeValue(forKey: ObjectIdentifier(sink))
-    if current.isEmpty {
-      sinks.removeValue(forKey: sourceId)
-    } else {
-      sinks[sourceId] = current
-    }
-  }
-
-  static func clear(_ sourceId: String) {
-    lock.lock(); defer { lock.unlock() }
-    sinks.removeValue(forKey: sourceId)
-    activeSources.remove(sourceId)
-  }
-
-  static func publish(_ frame: FlutterRealtimeProcessedVideoFrame) {
-    lock.lock()
-    let current = sinks[frame.sourceId] ?? [:]
-    lock.unlock()
-    var stale: [ObjectIdentifier] = []
-    for (identifier, weakSink) in current {
-      guard let sink = weakSink.value else {
-        stale.append(identifier)
-        continue
-      }
-      sink.onProcessedVideoFrame(frame)
-    }
-    if !stale.isEmpty {
-      lock.lock()
-      if var stored = sinks[frame.sourceId] {
-        stale.forEach { stored.removeValue(forKey: $0) }
-        sinks[frame.sourceId] = stored
-      }
-      lock.unlock()
-    }
-  }
-}
+import flutter_realtime_processed_video
 
 private final class MacOSVideoEffectsSource: NSObject,
   AVCaptureVideoDataOutputSampleBufferDelegate,
@@ -625,8 +520,6 @@ public class FlutterRealtimeVideoEffectsPlugin: NSObject, FlutterPlugin {
   private let textureRegistry: FlutterTextureRegistry
   private var methodChannel: FlutterMethodChannel?
   private var sources: [String: MacOSVideoEffectsSource] = [:]
-  private var nativeSinks: [String: SdkNativeProviderSink] = [:]
-  private var nativeSinkSources: [String: String] = [:]
 
   private init(textureRegistry: FlutterTextureRegistry) {
     self.textureRegistry = textureRegistry
@@ -642,8 +535,6 @@ public class FlutterRealtimeVideoEffectsPlugin: NSObject, FlutterPlugin {
     )
     instance.methodChannel = channel
     registrar.addMethodCallDelegate(instance, channel: channel)
-    let providers = FlutterMethodChannel(name: "flutter_realtime_native_video/sinks", binaryMessenger: registrar.messenger)
-    registrar.addMethodCallDelegate(instance, channel: providers)
   }
 
   public func handle(
@@ -651,32 +542,6 @@ public class FlutterRealtimeVideoEffectsPlugin: NSObject, FlutterPlugin {
     result: @escaping FlutterResult
   ) {
     switch call.method {
-    case "attachProvider", "detachProvider":
-      let args = call.arguments as? [String: Any] ?? [:]
-      let bindingId = args["bindingId"] as? String ?? ""
-      guard !bindingId.isEmpty else {
-        result(FlutterError(code: "invalid_argument", message: "A provider binding ID is required.", details: nil)); return
-      }
-      nativeSinks.removeValue(forKey: bindingId)?.dispose()
-      nativeSinkSources.removeValue(forKey: bindingId)
-      if call.method == "detachProvider" { result(nil); return }
-      let sourceId = args["sourceId"] as? String ?? ""
-      guard let sink = SdkNativeProviderSink.attach(withSourceId: sourceId,
-        provider: args["providerId"] as? String ?? "",
-        engineHandle: (args["engineHandle"] as? NSNumber)?.int64Value ?? 0,
-        trackId: (args["trackId"] as? NSNumber)?.uint32Value ?? 0) else {
-        result(FlutterError(code: "attach_provider_failed", message: "Native provider video input is unavailable.", details: nil)); return
-      }
-      sink.onFailure = { [weak self] message in
-        DispatchQueue.main.async {
-          try? self?.sources[sourceId]?.setEnabled(false)
-          self?.sources[sourceId]?.onFailure?(NSError(domain: "flutter_realtime_video_effects", code: -1,
-            userInfo: [NSLocalizedDescriptionKey: message]))
-        }
-      }
-      nativeSinks[bindingId] = sink
-      nativeSinkSources[bindingId] = sourceId
-      result(nil)
     case "isSupported":
       result(true)
     case "createSource":
@@ -711,10 +576,6 @@ public class FlutterRealtimeVideoEffectsPlugin: NSObject, FlutterPlugin {
     case "disposeSource":
       let args = call.arguments as? [String: Any] ?? [:]
       let sourceId = args["sourceId"] as? String ?? ""
-      for bindingId in nativeSinkSources.keys.filter({ nativeSinkSources[$0] == sourceId }) {
-        nativeSinks.removeValue(forKey: bindingId)?.dispose()
-        nativeSinkSources.removeValue(forKey: bindingId)
-      }
       sources.removeValue(forKey: sourceId)?.dispose()
       result(nil)
     default:
@@ -768,6 +629,12 @@ public class FlutterRealtimeVideoEffectsPlugin: NSObject, FlutterPlugin {
     source.textureId = textureId
     sources[sourceId] = source
     FlutterRealtimeProcessedVideoFrameHub.activate(sourceId)
+    FlutterRealtimeProcessedVideoFrameHub.registerControl(sourceId,
+      enable: { [weak source] enabled in try source?.setEnabled(enabled) },
+      camera: { [weak source] id in try source?.selectCamera(id) },
+      failure: { [weak source] message in
+        DispatchQueue.main.async { try? source?.setEnabled(false); source?.onFailure?(NSError(domain: "processed.source", code: -1, userInfo: [NSLocalizedDescriptionKey: message])) }
+      })
     source.start { [weak self] error in
       if let error {
         self?.sources.removeValue(forKey: sourceId)
@@ -828,7 +695,6 @@ public class FlutterRealtimeVideoEffectsPlugin: NSObject, FlutterPlugin {
   }
 
   deinit {
-    nativeSinks.values.forEach { $0.dispose() }
     sources.values.forEach { $0.dispose() }
   }
 

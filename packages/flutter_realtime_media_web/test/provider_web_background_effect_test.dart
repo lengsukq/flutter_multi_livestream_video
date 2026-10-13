@@ -4,7 +4,6 @@ library;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_media_web/flutter_realtime_media_web.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

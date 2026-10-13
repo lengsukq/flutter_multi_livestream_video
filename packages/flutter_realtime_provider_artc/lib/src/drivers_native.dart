@@ -1,4 +1,3 @@
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
@@ -30,9 +29,6 @@ Future<MediaBackgroundCapabilities> _probeEffects(
       (!kIsWeb &&
           defaultTargetPlatform != TargetPlatform.android &&
           defaultTargetPlatform != TargetPlatform.macOS)) {
-    return const MediaBackgroundCapabilities.none();
-  }
-  if (!await VideoEffectsBridge().isSupported()) {
     return const MediaBackgroundCapabilities.none();
   }
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {

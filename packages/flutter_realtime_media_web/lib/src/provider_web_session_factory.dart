@@ -4,7 +4,6 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:web/web.dart' as web;
 
 import 'provider_web_bridge.dart';
@@ -626,7 +625,7 @@ abstract class ProviderWebSessionBase
   bool supportsProcessedVideoSourceInternal(ProcessedVideoSource source) =>
       const {'agora', 'trtc', 'artc', 'chime', 'ivs'}.contains(providerId) &&
       role != MediaRole.viewer &&
-      source.platform == VideoEffectsPlatform.web &&
+      source.platform == ProcessedVideoPlatform.web &&
       source.kind == ProcessedVideoSourceKind.mediaStreamTrack;
 
   Future<void> attachProcessedVideoSourceInternal(

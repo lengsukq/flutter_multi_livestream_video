@@ -10,8 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_realtime_video_effects:
-    path: ../flutter_realtime_video_effects
+  flutter_realtime_processed_video:
+    path: ../flutter_realtime_processed_video
   flutter_realtime_media_core:
     path: ../flutter_realtime_media_core
   tencent_rtc_sdk: ^13.5.1
@@ -20,3 +20,12 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   flutter_test:
     sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.oneplusdream.flutter_realtime_media_trtc
+        pluginClass: FlutterRealtimeMediaTrtcPlugin
+      macos:
+        pluginClass: FlutterRealtimeMediaTrtcPlugin

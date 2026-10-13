@@ -33,8 +33,6 @@ class FlutterRealtimeVideoEffectsPlugin :
         }
         cameraPermissionRequests.onPermissionResult(requestCode, granted)
     }
-    private val providerSinks = ConcurrentHashMap<String, NativeProviderSink>()
-    private val providerSinkSources = ConcurrentHashMap<String, String>()
     private val sources = ConcurrentHashMap<String, AndroidVideoEffectsSource>()
     private val pendingSourceStarts = ConcurrentHashMap<String, OnceMethodResult>()
 
@@ -52,27 +50,6 @@ class FlutterRealtimeVideoEffectsPlugin :
         when (call.method) {
             "isSupported" -> result.success(lifecycleOwner != null)
             "createSource" -> createSource(call, result)
-            "attachProvider" -> {
-                try {
-                    val sourceId = call.argument<String>("sourceId").orEmpty()
-                    require(sources.containsKey(sourceId)) { "Unknown video source: $sourceId" }
-                    val key = call.argument<String>("bindingId").orEmpty()
-                    removeProviderSink(key)
-                    val sink = when (call.argument<String>("providerId")) {
-                        "agora" -> AgoraProcessedSink(sourceId,
-                            call.argument<Number>("engineHandle")!!.toLong(), call.argument<Number>("trackId")!!.toInt())
-                        "trtc" -> TrtcProcessedSink(applicationContext, sourceId)
-                        else -> error("Unsupported processed video provider.")
-                    }
-                    providerSinkSources[key] = sourceId
-                    providerSinks[key] = sink
-                    result.success(null)
-                } catch (error: Throwable) { result.error("attach_provider_failed", error.message, null) }
-            }
-            "detachProvider" -> {
-                removeProviderSink(call.argument<String>("bindingId").orEmpty())
-                result.success(null)
-            }
             "setEffect" -> sourceCall(call, result) { source, args ->
                 val effect = args["effect"] as? Map<*, *> ?: emptyMap<String, Any?>()
                 source.setEffect(
@@ -105,7 +82,6 @@ class FlutterRealtimeVideoEffectsPlugin :
             }
             "disposeSource" -> {
                 val sourceId = call.argument<String>("sourceId").orEmpty()
-                removeProviderSinksForSource(sourceId)
                 pendingSourceStarts.remove(sourceId)?.error(
                     "source_creation_cancelled",
                     "Video source creation was cancelled before the source started.",
@@ -275,7 +251,6 @@ class FlutterRealtimeVideoEffectsPlugin :
         activity = null
         cameraPermissionRequests.cancelPending("Camera permission request was cancelled because the Activity detached.")
         cancelPendingSourceStarts("Video source creation was cancelled because the Activity detached.")
-        disposeProviderSinks()
         disposeSources()
         lifecycleOwner = null
     }
@@ -287,7 +262,6 @@ class FlutterRealtimeVideoEffectsPlugin :
         lifecycleOwner = null
         cameraPermissionRequests.cancelPending("Camera permission request was cancelled because the Flutter engine detached.")
         cancelPendingSourceStarts("Video source creation was cancelled because the Flutter engine detached.")
-        disposeProviderSinks()
         disposeSources()
         channel.setMethodCallHandler(null)
     }
@@ -300,27 +274,7 @@ class FlutterRealtimeVideoEffectsPlugin :
         else -> null
     }
 
-    private fun removeProviderSink(bindingId: String) {
-        providerSinkSources.remove(bindingId)
-        providerSinks.remove(bindingId)?.let(::disposeProviderSinkSafely)
-    }
 
-    private fun removeProviderSinksForSource(sourceId: String) {
-        providerSinkSources.entries
-            .filter { it.value == sourceId }
-            .forEach { (bindingId, ownerSourceId) ->
-                if (providerSinkSources.remove(bindingId, ownerSourceId)) {
-                    providerSinks.remove(bindingId)?.let(::disposeProviderSinkSafely)
-                }
-            }
-    }
-
-    private fun disposeProviderSinks() {
-        val sinks = providerSinks.values.toList()
-        providerSinks.clear()
-        providerSinkSources.clear()
-        sinks.forEach(::disposeProviderSinkSafely)
-    }
 
     private fun disposeSources() {
         val activeSources = sources.values.toList()
@@ -333,14 +287,6 @@ class FlutterRealtimeVideoEffectsPlugin :
             source.dispose()
         } catch (error: Throwable) {
             android.util.Log.e("VideoEffects", "Failed to dispose processed video source.", error)
-        }
-    }
-
-    private fun disposeProviderSinkSafely(sink: NativeProviderSink) {
-        try {
-            sink.dispose()
-        } catch (error: Throwable) {
-            android.util.Log.e("VideoEffects", "Failed to dispose provider frame sink.", error)
         }
     }
 

@@ -47,9 +47,7 @@ android {
 
     defaultConfig {
         minSdk = 24
-        externalNativeBuild { cmake { cppFlags.add("-std=c++17") } }
     }
-    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
 
     testOptions {
         unitTests {
@@ -78,7 +76,7 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.5.0")
     implementation("androidx.camera:camera-core:1.5.0")
     implementation("androidx.camera:camera-lifecycle:1.5.0")
-    compileOnly("com.tencent.liteav:LiteAVSDK_Professional:13.5.0.20670")
+    implementation(project(":flutter_realtime_processed_video"))
     implementation("com.google.mediapipe:tasks-vision:0.10.26")
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("junit:junit:4.12")

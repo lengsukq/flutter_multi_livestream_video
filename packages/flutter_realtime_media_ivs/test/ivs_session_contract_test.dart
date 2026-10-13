@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
@@ -114,7 +113,7 @@ void main() {
         const MethodChannel(
           'com.oneplusdream.flutter_realtime_media_ivs/methods',
         ),
-        const MethodChannel('flutter_realtime_video_effects'),
+        const MethodChannel('flutter_realtime_processed_video/sources'),
       };
       for (final channel in channels) {
         messenger.setMockMethodCallHandler(channel, (call) async {
@@ -137,7 +136,7 @@ void main() {
       final sink = session as ProcessedVideoSink;
       const source = ProcessedVideoSource(
         id: 'shared-processed-frame-source',
-        platform: VideoEffectsPlatform.android,
+        platform: ProcessedVideoPlatform.android,
         kind: ProcessedVideoSourceKind.nativeFrameHub,
         width: 1280,
         height: 720,

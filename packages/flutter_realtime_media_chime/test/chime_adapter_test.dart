@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter_aws_chime/flutter_aws_chime.dart' as chime;
 import 'package:flutter_realtime_media_chime/flutter_realtime_media_chime.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
@@ -144,7 +143,7 @@ void main() {
             TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
         for (final channel in [
           const MethodChannel('com.oneplusdream.aws.chime.methodChannel'),
-          const MethodChannel('flutter_realtime_video_effects'),
+          const MethodChannel('flutter_realtime_processed_video/sources'),
         ]) {
           messenger.setMockMethodCallHandler(channel, (call) async {
             commands.add(call);
@@ -155,7 +154,7 @@ void main() {
         await session.join(joinInfo);
         const source = ProcessedVideoSource(
           id: 'shared-processed-frame-source',
-          platform: VideoEffectsPlatform.android,
+          platform: ProcessedVideoPlatform.android,
           kind: ProcessedVideoSourceKind.nativeFrameHub,
           width: 1280,
           height: 720,

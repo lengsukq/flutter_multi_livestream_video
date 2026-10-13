@@ -1,4 +1,4 @@
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter_realtime_processed_video/flutter_realtime_processed_video.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -122,8 +122,8 @@ abstract class _ArtcMediaSession
       _processedSink.supports(source) &&
       source.platform ==
           (defaultTargetPlatform == TargetPlatform.android
-              ? VideoEffectsPlatform.android
-              : VideoEffectsPlatform.macos);
+              ? ProcessedVideoPlatform.android
+              : ProcessedVideoPlatform.macos);
   @override
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _requireActive();
@@ -151,7 +151,7 @@ abstract class _ArtcMediaSession
       return const [];
     }
     return List.unmodifiable([
-      for (final camera in await VideoEffectsBridge().listCameras())
+      for (final camera in await ProcessedVideoBridge().listCameras())
         MediaDevice(
           id: camera.id,
           label: camera.label,

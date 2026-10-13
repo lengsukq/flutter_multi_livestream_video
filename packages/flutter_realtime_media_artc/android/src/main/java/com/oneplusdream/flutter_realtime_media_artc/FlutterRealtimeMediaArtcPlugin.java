@@ -18,9 +18,9 @@ import androidx.core.app.ActivityCompat;
 import com.alivc.rtc.AliRtcEngine;
 import com.alivc.rtc.AliRtcEngineEventListener;
 import com.alivc.rtc.AliRtcEngineNotify;
-import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrame;
-import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameHub;
-import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameSink;
+import com.oneplusdream.flutter_realtime_processed_video.ProcessedVideoFrame;
+import com.oneplusdream.flutter_realtime_processed_video.ProcessedVideoFrameHub;
+import com.oneplusdream.flutter_realtime_processed_video.ProcessedVideoFrameSink;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;

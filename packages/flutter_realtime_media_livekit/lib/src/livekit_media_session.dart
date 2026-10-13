@@ -12,7 +12,7 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 import 'livekit_join_info.dart';
 import 'livekit_media_track.dart';
 import 'livekit_processed_video.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'package:flutter_realtime_processed_video/flutter_realtime_processed_video.dart';
 
 const _androidScreenShareChannel = MethodChannel(
   'flutter_realtime_media_livekit/screen_share',
@@ -938,13 +938,13 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
   bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
       capabilities.canBlurBackground &&
       (kIsWeb
-          ? source.platform == VideoEffectsPlatform.web &&
+          ? source.platform == ProcessedVideoPlatform.web &&
                 source.kind == ProcessedVideoSourceKind.mediaStreamTrack
           : source.kind == ProcessedVideoSourceKind.nativeFrameHub &&
                 ((defaultTargetPlatform == TargetPlatform.android &&
-                        source.platform == VideoEffectsPlatform.android) ||
+                        source.platform == ProcessedVideoPlatform.android) ||
                     (defaultTargetPlatform == TargetPlatform.macOS &&
-                        source.platform == VideoEffectsPlatform.macos)));
+                        source.platform == ProcessedVideoPlatform.macos)));
 
   @override
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
@@ -1002,7 +1002,7 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
     return List.unmodifiable([
       ...devices,
       if (requested.contains(MediaDeviceKind.camera))
-        for (final camera in await VideoEffectsBridge().listCameras())
+        for (final camera in await ProcessedVideoBridge().listCameras())
           MediaDevice(
             id: camera.id,
             label: camera.label,
@@ -1016,7 +1016,7 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
     _ensureActive();
     final source = _processedSource;
     if (source != null && device.kind == MediaDeviceKind.camera) {
-      await VideoEffectsBridge().selectCamera(source, device.id);
+      await ProcessedVideoBridge().selectCamera(source, device.id);
       return;
     }
     await super.selectMediaDevice(device);
@@ -1047,7 +1047,7 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
       if (processed == null) {
         await _requireLocalParticipant().setCameraEnabled(enabled);
       } else if (enabled) {
-        await VideoEffectsBridge().setEnabled(_processedSource!, true);
+        await ProcessedVideoBridge().setEnabled(_processedSource!, true);
         if (!_processedPublished) {
           await _requireLocalParticipant().publishVideoTrack(processed);
           _processedPublished = true;
@@ -1056,7 +1056,7 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
         }
       } else {
         await processed.mute(stopOnMute: false);
-        await VideoEffectsBridge().setEnabled(_processedSource!, false);
+        await ProcessedVideoBridge().setEnabled(_processedSource!, false);
       }
       _refreshSnapshot();
       _emit(MediaLocalMediaChanged(videoEnabled: enabled));
@@ -1101,7 +1101,7 @@ class LiveKitInteractiveSession extends LiveKitMediaSessionBase
     if (!capabilities.canSwitchCamera) _unsupported('camera switching');
     final source = _processedSource;
     if (source != null) {
-      await VideoEffectsBridge().selectCamera(
+      await ProcessedVideoBridge().selectCamera(
         source,
         position == MediaCameraPosition.front ? 'front' : 'back',
       );

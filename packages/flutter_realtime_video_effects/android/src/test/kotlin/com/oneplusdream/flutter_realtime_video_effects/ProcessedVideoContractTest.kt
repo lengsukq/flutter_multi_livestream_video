@@ -1,4 +1,7 @@
 package com.oneplusdream.flutter_realtime_video_effects
+import com.oneplusdream.flutter_realtime_processed_video.ProcessedFrameGeometry
+import com.oneplusdream.flutter_realtime_processed_video.*
+
 
 import java.nio.ByteBuffer
 import org.junit.Test

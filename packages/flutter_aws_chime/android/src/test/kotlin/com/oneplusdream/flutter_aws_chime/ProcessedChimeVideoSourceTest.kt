@@ -5,8 +5,8 @@ import com.amazonaws.services.chime.sdk.meetings.audiovideo.video.VideoFrame
 import com.amazonaws.services.chime.sdk.meetings.audiovideo.video.VideoRotation
 import com.amazonaws.services.chime.sdk.meetings.audiovideo.video.VideoSink
 import com.amazonaws.services.chime.sdk.meetings.audiovideo.video.buffer.VideoFrameI420Buffer
-import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrame
-import com.oneplusdream.flutter_realtime_video_effects.ProcessedVideoFrameHub
+import com.oneplusdream.flutter_realtime_processed_video.ProcessedVideoFrame
+import com.oneplusdream.flutter_realtime_processed_video.ProcessedVideoFrameHub
 import java.nio.ByteBuffer
 import org.junit.Test
 import kotlin.test.assertEquals

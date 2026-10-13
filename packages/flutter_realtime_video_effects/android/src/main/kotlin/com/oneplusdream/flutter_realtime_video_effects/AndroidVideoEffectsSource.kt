@@ -1,4 +1,6 @@
 package com.oneplusdream.flutter_realtime_video_effects
+import com.oneplusdream.flutter_realtime_processed_video.*
+
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -131,6 +133,8 @@ internal class AndroidVideoEffectsSource(
             throw error
         }
     }
+
+    init { ProcessedVideoSourceControls.register(sourceId, ::setEnabled, ::selectCamera) }
 
     fun start(onStarted: () -> Unit, onError: (Throwable) -> Unit) {
         // Size the preview surface synchronously, before anything draws into

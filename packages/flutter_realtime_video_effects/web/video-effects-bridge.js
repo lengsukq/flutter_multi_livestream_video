@@ -535,6 +535,12 @@
         onError: (error) => global.__flutterVideoEffectsOnError?.(id, String(error?.message || error)),
       });
       sources.set(id, source);
+      global.RealtimeProcessedVideoBridge.register(id, {
+        get track() { return source.track; },
+        setEnabled: (enabled) => source.setEnabled(enabled),
+        setCameraDevice: (deviceId) => source.setCameraDevice(deviceId),
+        attachPreviewElement: (element, fit) => global.RealtimeVideoEffectsBridge.attachPreviewElement(id, element, fit),
+      });
       return source.info;
     },
 
@@ -593,6 +599,7 @@
     },
 
     disposeSource(sourceId) {
+      global.RealtimeProcessedVideoBridge.unregister(sourceId);
       const id = String(sourceId || '');
       const source = sources.get(id);
       if (!source) return;
