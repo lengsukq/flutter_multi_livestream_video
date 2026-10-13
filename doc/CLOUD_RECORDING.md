@@ -10,10 +10,10 @@
 | LiveKit | `livekit-cloud-recording.ts` | LiveKit Egress API，配 LiveKit Cloud 服务 | S3 | 通过 S3 读取后由 Demo 下载 | ✅ **用户确认已可用（2026-10-12）** |
 | Tencent TRTC | `trtc-cloud-recording.ts` | 腾讯云 Create/Describe/DeleteCloudRecording | 默认腾讯 VOD；可选直接写入 AWS S3 | VOD HTTPS 转发，或从 S3 私有读取后由 Demo 下载 | ⏳ 真实环境待验收 |
 | Alibaba ARTC | `artc-vod-recording.ts`（默认）/ `artc-cloud-recording.ts`（旧 OSS） | 阿里云 Live RTC Start/Stop/DescribeRtcCloudRecordingFiles | 默认阿里云 VOD；旧 OSS 可显式启用；**不新增 AWS S3** | VOD GetPlayInfo MP4 HTTPS 转发；旧 OSS 流式下载 | ⏳ 真实环境待验收 |
-| AWS Chime SDK | `chime-cloud-recording.ts` | AWS Media Capture Pipeline + Media Concatenation Pipeline | S3 | 完成云端合成后从 S3 读取 MP4 | ⏳ 真实环境待验收 |
-| AWS IVS Real-Time | `ivs-cloud-recording.ts` | AWS IVS Composition（HLS）+ AWS MediaConvert（云端 MP4 转码） | S3 + IVS Encoder/Storage ARN + MediaConvert IAM Role | 等录制完成事件 → MediaConvert Job 完成 → S3 MP4 下载 | ⏳ 真实环境待验收 |
+| AWS Chime SDK | `chime-cloud-recording.ts` | AWS Media Capture Pipeline + Media Concatenation Pipeline | S3 | 完成云端合成后从 S3 读取 MP4 | ✅ **用户确认 Chime 云录制及文件下载可用（2026-10-13）**；音画质量及多布局仍待细项验收 |
+| AWS IVS Real-Time | `ivs-cloud-recording.ts` | AWS IVS Composition（HLS）+ AWS MediaConvert（云端 MP4 转码） | S3 + IVS Encoder/Storage ARN + MediaConvert IAM Role | 等录制完成事件 → MediaConvert Job 完成 → S3 MP4 下载 | ✅ **用户确认 IVS 云录制与 MP4 下载成功（2026-10-13）**；音画质量及多布局仍待细项验收 |
 
-接口已实现并通过模拟厂商 API 单测。**LiveKit Cloud 录制由项目使用者于 2026-10-12 确认可用**；该状态是使用者反馈，未在本次文档更新中独立重新执行真实云端 E2E，也不代表已逐平台验证全部布局、音轨或长时间录制。**其余供应商真实 E2E 仍待验收**；Agora 当前受 REST API `acquire` HTTP 401 阻断（与 RTC 入会、S3 文件下载属于不同环节）。
+接口已实现并通过模拟厂商 API 单测。**LiveKit Cloud 录制由项目使用者于 2026-10-12 确认可用；AWS Chime 会议云录制和下载由项目使用者于 2026-10-13 确认可用；AWS IVS 直播云录制及 MP4 下载也由项目使用者于 2026-10-13 确认成功。** IVS Demo 的 MP4 导出链路使用 AWS MediaConvert 转码后下载，因此本次用户反馈覆盖**实际取得 MP4 文件**；但未独立审阅 MediaConvert Job 日志或检查文件音画质量。上述状态属于用户实际使用反馈，本次文档更新未重新发起真实录制，也不代表已逐平台验证全部布局、音轨或长时间录制。其他尚未确认的供应商真实 E2E 仍待验收；Agora 当前受 REST API `acquire` HTTP 401 阻断（与 RTC 入会、S3 文件下载属于不同环节）。
 
 ## 填写方式：存储桶可以先留空
 
@@ -135,7 +135,7 @@ CHIME_RECORDING_S3_BUCKET=
 
 - `H264_720P_30` → Chime `Resolution=HD`；`H264_1080P_30` → `Resolution=FHD`。Chime composited video 没有按帧率单独设置的 API，录制帧率由 AWS 服务决定。
 - `grid` → Chime `GridView`，屏幕共享时 `PresenterOnly`；`speaker` → 屏幕共享时 `ActiveSpeakerOnly`。**没有屏幕共享时仍然是 GridView**，不是语音驱动的单人全屏布局。
-- 配置/授权检查通过**不代表**真实双人录制、云端文件产出与回放已验收。
+- **2026-10-13 使用验收：** 用户明确确认通过 **AWS Chime** 成功进行云端录制并下载录像到本地，记录为 **Chime 云录制与下载已可用（用户实测）**。尚未独立验证多种布局、不同画质、多人数/长时间录制及完整音画回放质量；不将这些细项标记为已验收。
 
 ### AWS IVS Cloud Composition + AWS MediaConvert（完全云端 MP4）
 
@@ -161,7 +161,7 @@ IVS 写入 S3 的 Bucket Policy、转码角色的 S3 权限和受限 `iam:PassRo
 
 - `H264_720P_30` 选择标准 Encoder ARN，`H264_1080P_30` 选择 `_1080P` ARN；未配 1080p Encoder 时返回明确配置错误，不伪装成 1080p。
 - `grid` 对应默认网格，`speaker` 对应 `featuredParticipantAttribute=isFeatured` 的突出显示网格；IVS 参与者 Token 由服务端根据 `role=host` 生成 `isFeatured=true`。**这是固定主持人/重点人物，不是实时语音激活切换。**
-- 存储配置留空时会显示明确的 `recordingAvailable: false`。真实 HLS 文件路径、不同编码/布局的音画质量仍 **尚未在 AWS 云服务上 E2E 验收**。IVS 产生的原始 HLS 文件不会在 MP4 下载后自动清理，建议设置 S3 生命周期过期规则。
+- 存储配置留空时会显示明确的 `recordingAvailable: false`。**2026-10-13 使用反馈：用户已确认 IVS 直播云录制成功，并成功下载 MP4 文件。** 按当前 Demo 实现，MP4 由 MediaConvert 云端转码生成；此次成功反馈说明整体录制、转码导出及下载路径可用，但未单独核对 AWS Job 详情。不同编码/布局、音画回放质量仍需独立 E2E 验收。IVS 产生的原始 HLS 文件不会在 MP4 下载后自动清理，建议设置 S3 生命周期过期规则。
 
 ## SDK 与 Demo 使用方式
 
@@ -197,6 +197,8 @@ if (status.metadata['canDownload'] == true) {
 
 Demo 云存储执行器在 MP4 传输**完整成功后**，尽力删除本次产生的 S3/OSS MP4 对象，避免长期占用示例 Bucket；删除失败会在服务器记录告警，不影响已经完成的下载。IVS 云端转码仍会留存原始 HLS，TRTC VOD 文件暂不由这个通用删除流程自动删除，建议配置供应商存储的自动过期规则。**正式项目需要决定更完整的留存策略和一段时间内允许重复下载的规则**。
 
+**2026-10-13 S3 清理记录（用户已确认录像下载完毕）：** 使用 `AWS_PROFILE=chime-demo` 检查 us-east-1 的专用 Bucket `flutter-realtime-recordings-3930-20261012-b4f3`。首次 `ListObjectsV2` 仅发现一份对象 `flutter-realtime-demo/EG_PCFMf52q746f.json`（387 字节，`application/json`，录制相关元数据），**没有发现 MP4/HLS 视频文件**。已通过 `DeleteObject` 删除这份 JSON 元数据，再次 `ListObjectsV2` 返回无 `Contents`，**当前可见对象为 0**。此验证仅对应该 Bucket 中当前可列出的对象；`chime-demo` 无 `s3:GetBucketVersioning` 权限，不能据此断言不存在历史版本或删除标记，也不代表所有其他云存储桶均为空。
+
 **单机 AWS 录制断点恢复（2026-10-13 新增）：** 可在 `demo-server/.env` 中配置：
 
 ```dotenv
@@ -219,6 +221,6 @@ cd ../packages/flutter_realtime_sdk_runtime
 flutter test --no-pub test/http_cloud_recording_session_test.dart test/recording_controller_test.dart
 ```
 
-单元测试使用可注入的云厂商响应和对象存储模拟，不涉及真实账号扣费。LiveKit 已有上述用户可用性确认；其他厂商以及 LiveKit 尚未单独确认的场景仍需分别验收 **真实用户入会 → 双人音视频 → 云端录制 → MP4 布局/声音回放 → 授权下载 → 清理**。
+单元测试使用可注入的云厂商响应和对象存储模拟，不涉及真实账号扣费。LiveKit、AWS Chime 与 AWS IVS 均已有上述用户可用性反馈；其中 **Chime 和 IVS 均已确认录制及下载可用，IVS 的 MP4 转码导出路径已由成功下载间接验证**。其他厂商以及已确认供应商的未覆盖场景，仍需分别验收 **真实用户入会 → 双人音视频 → 云端录制 → MP4 布局/声音回放 → 授权下载 → 清理**。
 
 官方参考：[Agora Cloud Recording REST](https://docs.agora.io/en/cloud-recording/get-started/getstarted)、[LiveKit Egress](https://docs.livekit.io/home/egress/overview/)、[Amazon Chime Media Pipelines](https://docs.aws.amazon.com/chime-sdk/latest/dg/create-concat-pipe-steps.html)、[Amazon IVS Stage Composition](https://docs.aws.amazon.com/ivs/latest/RealTimeUserGuide/rt-composite-recording.html)、[阿里云 RTC Cloud Record](https://help.aliyun.com/zh/document_detail/2703647.html)。

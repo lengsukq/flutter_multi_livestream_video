@@ -5,7 +5,7 @@
 S3 Bucket 导出 MP4 的流程；Flutter SDK / Demo **不保存 AWS AK/SK**。
 
 > 最近核对：2026-10-13。以下记录的是已配置的资源类型与权限范围；
-> **只读权限验证通过不代表真实双人录制、合成、转码和下载 E2E 已通过**。
+> **使用反馈（2026-10-13）：用户确认 AWS Chime 会议云录制与下载可用，同时确认 AWS IVS Real-Time 直播云录制及 MP4 下载成功。** IVS Demo 使用 AWS MediaConvert 生成 MP4 后供下载，因此用户反馈支持整个录制/导出/下载路径可用，但本次没有独立检查 AWS MediaConvert Job 明细或 MP4 实际音画内容。两种服务的不同画质、布局与多参与者音画质量仍需独立检查。只读权限验证本身不能代替真实使用验收。
 > JSON 中的 `<ACCOUNT_ID>`、`<BUCKET>` 必须替换为实际值，不能原样应用。
 > 不要将私有 `.env`、凭证文件、IAM 密钥或云端录制对象提交到 git。
 
@@ -267,10 +267,11 @@ aws mediaconvert list-jobs --region "$AWS_REGION"
 | MediaConvert `AccessDenied` / `PassRole` 失败 | 调用用户的 `mediaconvert:CreateJob` 与 `iam:PassRole`；MediaConvert 角色的信任策略与 S3 输入/输出权限 |
 | 已生成 MP4，但 Demo 下载失败 | `chime-demo` 对对象 `s3:GetObject` / `HeadObject` 的权限、MP4 Key、处理完成状态与 60 秒单次下载票据 |
 
-**验收边界：** 上述权限与只读资源检查通过后，还必须分别进行
-Chime 和 IVS 的真实 `创建房间 → 双端入会 → 开始录制 → 停止 →
-处理完成 → 下载 MP4 → 检查音视频 → 清理临时文件` 测试，
-才能标记 AWS 云录制为完成。真实录制与转码会产生费用。
+**2026-10-13 存储清理验证：** 用户确认已下载录制文件后，使用 `chime-demo` 查询专用 Bucket `flutter-realtime-recordings-3930-20261012-b4f3`：仅有 `flutter-realtime-demo/EG_PCFMf52q746f.json`（387 字节的元数据），未列出 MP4/HLS。已删除此对象；随后 `ListObjectsV2` 无 `Contents`，当前可见对象数量为 0。Bucket 已配置短期对象过期规则，但不依赖生命周期任务来验证本次清理。由于缺少 `s3:GetBucketVersioning` 权限，**不声称历史版本也已经清理**。
+
+**验收边界：** Chime 和 IVS 均已获用户确认录制与下载可用；按 Demo 实现，IVS 下载 MP4 前需要经过 MediaConvert，因此其录制/导出/下载主路径已得到用户实测反馈。两者的多人数、不同布局/画质及完整音画回放质量仍待进一步验收；如需更严格确认，可另外检查 IVS
+`MediaConvert Job 完成状态 → MP4 文件内容 → S3 临时文件清理`。
+真实录制与转码会产生费用。
 
 AWS 官方文档：
 [Chime 创建媒体管线的前置条件](https://docs.aws.amazon.com/chime-sdk/latest/dg/create-pipeline.html)、
