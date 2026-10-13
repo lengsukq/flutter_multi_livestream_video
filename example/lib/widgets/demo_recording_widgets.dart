@@ -89,10 +89,12 @@ class _DemoRecordingButtonState extends State<DemoRecordingButton> {
       }.contains(widget.room.engineProviderId);
 
   void _showCloudResult() {
-    unawaited(showDialog<void>(
-      context: context,
-      builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
-    ));
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
+      ),
+    );
   }
 
   Future<void> _toggle() async {

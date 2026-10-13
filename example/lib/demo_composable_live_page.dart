@@ -97,111 +97,117 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
   void _openMobileSheet(_LiveSidePanel panel) {
     final strings = RealtimeStrings.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    unawaited(showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => RealtimeRoomUiScope(
-        room: widget.room,
-        child: Container(
-          height: MediaQuery.of(sheetContext).size.height * 0.68,
-          decoration: BoxDecoration(
-            color: isDark
-                ? const Color(0xFF0F172A).withValues(alpha: 0.94)
-                : Colors.white.withValues(alpha: 0.97),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.15)
-                    : const Color(0xFFE2E8F0),
-                width: 1,
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => RealtimeRoomUiScope(
+          room: widget.room,
+          child: Container(
+            height: MediaQuery.of(sheetContext).size.height * 0.68,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF0F172A).withValues(alpha: 0.94)
+                  : Colors.white.withValues(alpha: 0.97),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
               ),
+              border: Border(
+                top: BorderSide(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.15)
+                      : const Color(0xFFE2E8F0),
+                  width: 1,
+                ),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 24,
+                  offset: const Offset(0, -6),
+                ),
+              ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.35),
-                blurRadius: 24,
-                offset: const Offset(0, -6),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4.5,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(2.5),
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4.5,
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(2.5),
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color:
-                            (panel == _LiveSidePanel.chat
-                                    ? const Color(0xFF0284C7)
-                                    : const Color(0xFFE11D48))
-                                .withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color:
+                              (panel == _LiveSidePanel.chat
+                                      ? const Color(0xFF0284C7)
+                                      : const Color(0xFFE11D48))
+                                  .withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          panel == _LiveSidePanel.chat
+                              ? Icons.chat_bubble_rounded
+                              : Icons.people_alt_rounded,
+                          size: 16,
+                          color: panel == _LiveSidePanel.chat
+                              ? const Color(0xFF0284C7)
+                              : const Color(0xFFE11D48),
+                        ),
                       ),
-                      child: Icon(
+                      const SizedBox(width: 10),
+                      Text(
                         panel == _LiveSidePanel.chat
-                            ? Icons.chat_bubble_rounded
-                            : Icons.people_alt_rounded,
-                        size: 16,
-                        color: panel == _LiveSidePanel.chat
-                            ? const Color(0xFF0284C7)
-                            : const Color(0xFFE11D48),
+                            ? strings.chat
+                            : strings.participants,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: isDark
+                              ? Colors.white
+                              : const Color(0xFF0F172A),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      panel == _LiveSidePanel.chat
-                          ? strings.chat
-                          : strings.participants,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => Navigator.pop(sheetContext),
                       ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => Navigator.pop(sheetContext),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Divider(
-                height: 1,
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.10)
-                    : const Color(0xFFE2E8F0),
-              ),
-              Expanded(
-                child: panel == _LiveSidePanel.chat
-                    ? const RealtimeChatPanel()
-                    : const RealtimeManagedParticipantList(),
-              ),
-            ],
+                Divider(
+                  height: 1,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.10)
+                      : const Color(0xFFE2E8F0),
+                ),
+                Expanded(
+                  child: panel == _LiveSidePanel.chat
+                      ? const RealtimeChatPanel()
+                      : const RealtimeManagedParticipantList(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ));
+    );
   }
 
   void _openHostToolsSheet(BuildContext context) {

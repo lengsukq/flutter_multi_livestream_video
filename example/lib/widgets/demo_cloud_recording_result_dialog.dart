@@ -108,8 +108,10 @@ class _DemoCloudRecordingResultDialogState
               Text('大小：${_result!.fileSizeBytes} 字节'),
             if (unavailableReason != null) ...[
               const SizedBox(height: 8),
-              Text(unavailableReason,
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                unavailableReason,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ],
             if (state == 'processing')
               const Text('停止录制后，服务器还需要封装 MP4 文件。准备好后才能下载。'),

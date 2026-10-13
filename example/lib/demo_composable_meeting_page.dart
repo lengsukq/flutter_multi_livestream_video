@@ -135,18 +135,20 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   void _openClassroomTools(BuildContext context) {
     final classroom = widget.room.classroom;
     if (classroom == null) return;
-    unawaited(showRealtimeGlassBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.75,
-        child: ClassroomToolsPanel(
-          classroom: classroom,
-          showHeader: true,
-          onClose: () => Navigator.maybeOf(sheetContext)?.pop(),
+    unawaited(
+      showRealtimeGlassBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (sheetContext) => SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.75,
+          child: ClassroomToolsPanel(
+            classroom: classroom,
+            showHeader: true,
+            onClose: () => Navigator.maybeOf(sheetContext)?.pop(),
+          ),
         ),
       ),
-    ));
+    );
   }
 
   @override
@@ -370,7 +372,9 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                         ? (isZh ? '录制中' : 'Recording')
                                         : (isCloud
                                               ? (isZh ? '云端录制' : 'Cloud')
-                                              : (isZh ? '录制不可用' : 'Unavailable')),
+                                              : (isZh
+                                                    ? '录制不可用'
+                                                    : 'Unavailable')),
                                     isDanger: isRecording,
                                     showBadgeDot: isRecording,
                                     onTap: () =>
@@ -446,127 +450,130 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   void _openMobileSheet(_DemoSidePanel panel) {
     final strings = RealtimeStrings.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    unawaited(showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final viewInsets = MediaQuery.viewInsetsOf(sheetContext);
-        return Padding(
-          padding: EdgeInsets.only(bottom: viewInsets.bottom),
-          child: RealtimeRoomUiScope(
-            room: widget.room,
-            child: Container(
-              height: MediaQuery.of(sheetContext).size.height * 0.72,
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) {
+          final viewInsets = MediaQuery.viewInsetsOf(sheetContext);
+          return Padding(
+            padding: EdgeInsets.only(bottom: viewInsets.bottom),
+            child: RealtimeRoomUiScope(
+              room: widget.room,
+              child: Container(
+                height: MediaQuery.of(sheetContext).size.height * 0.72,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.35),
+                      blurRadius: 24,
+                      offset: const Offset(0, -6),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    blurRadius: 24,
-                    offset: const Offset(0, -6),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Center(
-                    child: Container(
-                      width: 38,
-                      height: 4.5,
-                      margin: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(2.5),
+                child: Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 38,
+                        height: 4.5,
+                        margin: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(2.5),
+                        ),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 6,
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: (switch (panel) {
-                              _DemoSidePanel.chat => const Color(0xFF0284C7),
-                              _DemoSidePanel.classroom => const Color(
-                                0xFF8B5CF6,
-                              ),
-                              _ => const Color(0xFF3B82F6),
-                            }).withValues(alpha: 0.15),
-                            shape: BoxShape.circle,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: (switch (panel) {
+                                _DemoSidePanel.chat => const Color(0xFF0284C7),
+                                _DemoSidePanel.classroom => const Color(
+                                  0xFF8B5CF6,
+                                ),
+                                _ => const Color(0xFF3B82F6),
+                              }).withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              switch (panel) {
+                                _DemoSidePanel.chat =>
+                                  Icons.chat_bubble_outline_rounded,
+                                _DemoSidePanel.classroom =>
+                                  Icons.school_outlined,
+                                _ => Icons.people_outline_rounded,
+                              },
+                              size: 16,
+                              color: switch (panel) {
+                                _DemoSidePanel.chat => const Color(0xFF0284C7),
+                                _DemoSidePanel.classroom => const Color(
+                                  0xFF8B5CF6,
+                                ),
+                                _ => const Color(0xFF3B82F6),
+                              },
+                            ),
                           ),
-                          child: Icon(
+                          const SizedBox(width: 10),
+                          Text(
                             switch (panel) {
-                              _DemoSidePanel.chat =>
-                                Icons.chat_bubble_outline_rounded,
-                              _DemoSidePanel.classroom => Icons.school_outlined,
-                              _ => Icons.people_outline_rounded,
+                              _DemoSidePanel.chat => strings.chat,
+                              _DemoSidePanel.classroom => strings.classroom,
+                              _ => strings.participants,
                             },
-                            size: 16,
-                            color: switch (panel) {
-                              _DemoSidePanel.chat => const Color(0xFF0284C7),
-                              _DemoSidePanel.classroom => const Color(
-                                0xFF8B5CF6,
-                              ),
-                              _ => const Color(0xFF3B82F6),
-                            },
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF0F172A),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          switch (panel) {
-                            _DemoSidePanel.chat => strings.chat,
-                            _DemoSidePanel.classroom => strings.classroom,
-                            _ => strings.participants,
-                          },
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: isDark
-                                ? Colors.white
-                                : const Color(0xFF0F172A),
+                          const Spacer(),
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => Navigator.pop(sheetContext),
                           ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => Navigator.pop(sheetContext),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Divider(
-                    height: 1,
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : const Color(0xFFE2E8F0),
-                  ),
-                  Expanded(
-                    child: switch (panel) {
-                      _DemoSidePanel.chat => const RealtimeChatPanel(),
-                      _DemoSidePanel.classroom => RealtimeClassroomPanel(
-                        showHeader: false,
-                        onClose: () => Navigator.pop(sheetContext),
+                        ],
                       ),
-                      _ => const RealtimeManagedParticipantList(),
-                    },
-                  ),
-                ],
+                    ),
+                    Divider(
+                      height: 1,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                    Expanded(
+                      child: switch (panel) {
+                        _DemoSidePanel.chat => const RealtimeChatPanel(),
+                        _DemoSidePanel.classroom => RealtimeClassroomPanel(
+                          showHeader: false,
+                          onClose: () => Navigator.pop(sheetContext),
+                        ),
+                        _ => const RealtimeManagedParticipantList(),
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        );
-      },
-    ));
+          );
+        },
+      ),
+    );
   }
 
   Widget _sidePanel() {
@@ -688,13 +695,19 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
 
     final isZh = Localizations.localeOf(context).languageCode == 'zh';
     if (!isCloud || !widget.room.media.isLogicalOwner) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-        content: Text(!isCloud
-            ? (isZh ? '当前没有可用的云录制后端；本地录制已移除。'
-                : 'Cloud recording is unavailable; local recording was removed.')
-            : (isZh ? '只有房主可以操作云录制。'
-                : 'Only the room owner can control cloud recording.')),
-      ));
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            !isCloud
+                ? (isZh
+                      ? '当前没有可用的云录制后端；本地录制已移除。'
+                      : 'Cloud recording is unavailable; local recording was removed.')
+                : (isZh
+                      ? '只有房主可以操作云录制。'
+                      : 'Only the room owner can control cloud recording.'),
+          ),
+        ),
+      );
       return;
     }
     setState(() => _recordingBusy = true);
@@ -702,10 +715,12 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
       if (widget.room.recordingStatus == RecordingStatus.recording) {
         await widget.room.stopRecording();
         if (!mounted || !context.mounted) return;
-        unawaited(showDialog<void>(
-          context: context,
-          builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
-        ));
+        unawaited(
+          showDialog<void>(
+            context: context,
+            builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
+          ),
+        );
       } else {
         final chosen = await showDialog<RecordingLayout>(
           context: context,
@@ -735,19 +750,25 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
           RecordingOptions.cloud(layout: chosen),
         );
         if (mounted && context.mounted) {
-          unawaited(showDialog<void>(
-            context: context,
-            builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
-          ));
+          unawaited(
+            showDialog<void>(
+              context: context,
+              builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
+            ),
+          );
         }
       }
     } catch (error) {
       if (mounted && context.mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-          content: Text(isZh ? '云录制操作失败：$error' : 'Cloud recording failed: $error'),
-          duration: const Duration(seconds: 8),
-          showCloseIcon: true,
-        ));
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              isZh ? '云录制操作失败：$error' : 'Cloud recording failed: $error',
+            ),
+            duration: const Duration(seconds: 8),
+            showCloseIcon: true,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _recordingBusy = false);
@@ -755,10 +776,12 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   }
 
   void _showCloudResultDialog(BuildContext context) {
-    unawaited(showDialog<void>(
-      context: context,
-      builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
-    ));
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
+      ),
+    );
   }
 }
 

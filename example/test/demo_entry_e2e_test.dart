@@ -217,10 +217,9 @@ void main() {
       await _confirmPreJoin(tester);
       await tester.pumpAndSettle();
       expect(find.byType(DemoComposablePreJoinPage), findsOneWidget);
-      expect(
-        find.textContaining('simulated connection failure'),
-        findsOneWidget,
-      );
+      // Raw transport errors are normalized while the retry keeps its room code.
+      expect(find.textContaining('simulated connection failure'), findsNothing);
+      expect(find.textContaining('The SDK operation failed'), findsOneWidget);
       await tester.tap(find.text('Join meeting').last);
       await tester.pumpAndSettle();
       expect(attempts, 2);

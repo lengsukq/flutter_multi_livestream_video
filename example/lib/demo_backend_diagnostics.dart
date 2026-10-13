@@ -4,6 +4,8 @@ import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 /// Observed state of the Demo backend. No Flutter widget owns the request.
 class DemoBackendDiagnostics extends ChangeNotifier {
+  final _diagnostics = <RealtimeException>[];
+  List<RealtimeException> get diagnostics => List.unmodifiable(_diagnostics);
   bool? online;
   String? providerInfo;
   String? mediaProviderId;
@@ -54,7 +56,10 @@ class DemoBackendDiagnostics extends ChangeNotifier {
         report.activeProvider,
         report.activeChatProvider,
       );
-    } catch (_) {
+    } catch (error, stack) {
+      final failure = normalizeRealtimeException(error, domain: 'demo.backend', operation: 'diagnose', stackTrace: stack);
+      if (_diagnostics.length == 32) _diagnostics.removeAt(0);
+      _diagnostics.add(failure);
       if (!_disposed && currentUrl() == url && generation == _generation) {
         _setStatus(false, 'Unreachable', null, null);
       }

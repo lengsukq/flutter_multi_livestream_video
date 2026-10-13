@@ -64,15 +64,31 @@ class _LiteExampleState extends State<LiteExample> {
         room: room,
         child: Scaffold(
           appBar: AppBar(title: Text(room.roomCode)),
-          body: Column(children: [
-            const Expanded(child: RealtimeVideoGrid()),
-            const RealtimeMediaActionButton(action: RealtimeRoomUiAction.microphone, label: 'Microphone', icon: Icons.mic),
-            const RealtimeMediaActionButton(action: RealtimeRoomUiAction.camera, label: 'Camera', icon: Icons.videocam),
-            FilledButton(onPressed: () async {
-              try { await _connection?.dispose(); }
-              finally { if (mounted) setState(() => _connection = null); }
-            }, child: const Text('Leave')),
-          ]),
+          body: Column(
+            children: [
+              const Expanded(child: RealtimeVideoGrid()),
+              const RealtimeMediaActionButton(
+                action: RealtimeRoomUiAction.microphone,
+                label: 'Microphone',
+                icon: Icons.mic,
+              ),
+              const RealtimeMediaActionButton(
+                action: RealtimeRoomUiAction.camera,
+                label: 'Camera',
+                icon: Icons.videocam,
+              ),
+              FilledButton(
+                onPressed: () async {
+                  try {
+                    await _connection?.dispose();
+                  } finally {
+                    if (mounted) setState(() => _connection = null);
+                  }
+                },
+                child: const Text('Leave'),
+              ),
+            ],
+          ),
         ),
       );
     }

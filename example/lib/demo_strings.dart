@@ -18,6 +18,18 @@ class DemoStrings {
   /// exception class names to users. All screens share the same guidance.
   String displayRealtimeError(Object error) {
     if (error is! RealtimeException) return error.toString();
+    final details = error.details;
+    final backendCode = details is Map ? details['backendCode'] : null;
+    if (backendCode == 'room-exists') {
+      return isZh
+          ? '房间号已经存在。上次创建可能已成功但入会失败；请尝试“加入会议”或使用新的房间号创建。'
+          : 'Room code already exists. A previous create may have succeeded even though joining failed. Join the existing room or choose another code.';
+    }
+    if (backendCode == 'room-closing') {
+      return isZh
+          ? '房间正在关闭或清理中，请稍后重试；如果仍失败，请检查后端房间状态。'
+          : 'The room is closing or being cleaned up. Try again shortly or inspect its backend state.';
+    }
     final provider = error.providerId;
     final action = switch (error.suggestedAction) {
       'retry' => isZh ? '请重试。' : 'Please retry.',

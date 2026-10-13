@@ -1,3 +1,4 @@
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'dart:math';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +8,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// No widget state, navigator, backend token or provider dependency belongs
 /// here; UI state simply reads and writes the values.
 class DemoIdentityStore {
+  DemoIdentityStore({this.onError});
+  final void Function(RealtimeException error)? onError;
+  final _diagnostics = <RealtimeException>[];
+  List<RealtimeException> get diagnostics => List.unmodifiable(_diagnostics);
+  void _report(Object error, StackTrace stack) {
+    final failure = normalizeRealtimeException(
+      error,
+      domain: 'demo.identity',
+      operation: 'persist',
+      stackTrace: stack,
+    );
+    if (_diagnostics.length == 32) _diagnostics.removeAt(0);
+    _diagnostics.add(failure);
+    onError?.call(failure);
+  }
+
   static const deviceIdKey = 'realtime_media_demo_device_id';
   static const displayNameKey = 'realtime_media_demo_display_name';
 
@@ -18,7 +35,8 @@ class DemoIdentityStore {
       final id = generateDeviceId();
       await prefs.setString(deviceIdKey, id);
       return id;
-    } catch (_) {
+    } catch (error, stack) {
+      _report(error, stack);
       return generateDeviceId();
     }
   }
@@ -36,7 +54,8 @@ class DemoIdentityStore {
       final saved = prefs.getString(displayNameKey)?.trim();
       if (saved != null && saved.isNotEmpty) return saved;
       await prefs.setString(displayNameKey, fallback);
-    } catch (_) {
+    } catch (error, stack) {
+      _report(error, stack);
       // Demo identity is still usable if local persistence is unavailable.
     }
     return fallback;
@@ -48,7 +67,8 @@ class DemoIdentityStore {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(displayNameKey, name);
-    } catch (_) {
+    } catch (error, stack) {
+      _report(error, stack);
       // Persistence is optional; never prevent joining a media room.
     }
   }

@@ -1,3 +1,8 @@
+import 'demo_server_settings_panel.dart';
+import 'demo_identity_settings_panel.dart';
+import 'demo_join_coordinator.dart';
+import 'demo_realtime_configuration.dart';
+import 'demo_meeting_room_page.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,21 +10,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
-import 'demo_provider_catalog.dart';
 import 'demo_background.dart';
-import 'demo_composable_meeting_page.dart';
-import 'demo_composable_live_page.dart';
 import 'demo_composable_pre_join_page.dart';
 import 'demo_backend_diagnostics.dart';
 import 'demo_available_rooms.dart';
 import 'demo_room_directory.dart';
 import 'demo_home_hero.dart';
 import 'demo_identity_store.dart';
-import 'demo_room_flow.dart';
 import 'demo_strings.dart';
 import 'standalone_chat_demo.dart';
-
-enum _JoinFormError { backendMissing, roomCodeMissing, invalidRoomCode }
 
 const String _defaultBackendUrl = String.fromEnvironment(
   'MEDIA_BACKEND_URL',
@@ -76,22 +75,22 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   final _joinCodeController = TextEditingController();
   final _displayNameController = TextEditingController();
 
-  bool _busy = false;
+  DemoEntryPhase _entryPhase = DemoEntryPhase.idle;
+  bool get _busy => _entryPhase != DemoEntryPhase.idle;
   String? _error;
-  _JoinFormError? _formError;
+  DemoJoinFormError? _formError;
   MediaRoomMode _createRoomMode = MediaRoomMode.meeting;
   MediaRoomMode _joinRoomMode = MediaRoomMode.meeting;
 
   // Backend connection status: null = untested, true = online, false = offline
   bool? get _serverOnline => _diagnostics.online;
-  String? get _serverProviderInfo => _diagnostics.providerInfo;
   String? get _serverMediaProviderId => _diagnostics.mediaProviderId;
   String? get _serverChatProviderId => _diagnostics.chatProviderId;
   bool get _testingServer => _diagnostics.testing;
   Timer? _serverStatusTimer;
   List<MediaRoomSummary> get _availableRooms => _roomDirectory.rooms;
   String? get _roomListError => _roomDirectory.error;
-  final Map<String, String> _roomOwnerCredentials = {};
+  late final _entryCoordinator = DemoJoinCoordinator(_identityStore);
 
   @override
   void initState() {
@@ -100,7 +99,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     _roomDirectory.addListener(_notifyBackendChanged);
     _demoTabs = TabController(length: 2, vsync: this);
     _roomTabs = TabController(length: 3, vsync: this);
-    _deviceIdFuture = _identityStore.loadDeviceId();
+    _deviceIdFuture = _entryCoordinator.deviceId;
     unawaited(_loadDisplayName());
     _serverController.text = widget.initialBackendUrl ?? _defaultBackendUrl;
     unawaited(_testConnection());
@@ -152,7 +151,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     if (mounted) setState(() {});
   }
 
-  void _showFormError(_JoinFormError error) {
+  void _showFormError(DemoJoinFormError error) {
     setState(() {
       _formError = error;
       _error = null;
@@ -162,9 +161,9 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   String? _displayError(BuildContext context) {
     final strings = DemoStrings.of(context);
     return switch (_formError) {
-      _JoinFormError.backendMissing => strings.enterBackendUrl,
-      _JoinFormError.roomCodeMissing => strings.enterRoomCode,
-      _JoinFormError.invalidRoomCode => strings.invalidRoomCode,
+      DemoJoinFormError.backendMissing => strings.enterBackendUrl,
+      DemoJoinFormError.roomCodeMissing => strings.enterRoomCode,
+      DemoJoinFormError.invalidRoomCode => strings.invalidRoomCode,
       null => _error,
     };
   }
@@ -175,16 +174,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     if (!mounted) return;
     _displayNameController.text = name;
     setState(() {});
-  }
-
-  Future<String> _resolveDisplayName(String deviceId) async {
-    var value = _displayNameController.text.trim();
-    if (value.isEmpty) {
-      value = _identityStore.defaultDisplayName(deviceId);
-      _displayNameController.text = value;
-    }
-    await _identityStore.saveDisplayName(value);
-    return value;
   }
 
   Future<void> _persistDisplayName(String value) =>
@@ -212,122 +201,77 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     }
   }
 
-  Future<void> _createRoom() async {
-    if (_server.isEmpty) {
-      _showFormError(_JoinFormError.backendMissing);
-      return;
-    }
-    final requestedCode = _createCodeController.text.trim();
-    if (requestedCode.isNotEmpty &&
-        !RegExp(r'^[A-Za-z0-9]{4,12}$').hasMatch(requestedCode)) {
-      _showFormError(_JoinFormError.invalidRoomCode);
-      return;
-    }
-    final roomLabel = requestedCode.isEmpty
-        ? DemoStrings.of(context).createAndJoin
-        : requestedCode;
-    final realtime = _newRealtime();
-    final flow = DemoRoomFlow(
-      open: realtime.open,
-      ownerCredentials: _roomOwnerCredentials,
-    );
-    final mode = _createRoomMode;
-    final role = mode == MediaRoomMode.broadcast
-        ? MediaRole.host
-        : MediaRole.participant;
-    final deviceId = await _deviceIdFuture;
-    final displayName = await _resolveDisplayName(deviceId);
-    await _runPreJoin(
-      realtime,
-      role: role,
-      displayName: displayName,
-      roomLabel: roomLabel,
-      onEnter: (preJoinContext, settings) async {
-        final connection = await flow.create(
-          mode: mode,
-          deviceId: deviceId,
-          displayName: displayName,
-          roomCode: requestedCode.isEmpty ? null : requestedCode,
-        );
-        if (!preJoinContext.mounted) {
-          await connection.dispose();
-          return;
-        }
-        await _openMeeting(
-          preJoinContext,
-          connection,
-          initialMediaSettings: settings,
-          roomMode: mode,
-        );
-      },
-    );
-  }
-
-  Future<void> _joinRoom({String? providerId, MediaRoomMode? roomMode}) async {
-    if (_server.isEmpty) {
-      _showFormError(_JoinFormError.backendMissing);
-      return;
-    }
-    final code = _joinCodeController.text.trim();
-    if (code.isEmpty) {
-      _showFormError(_JoinFormError.roomCodeMissing);
-      return;
-    }
-    final realtime = _newRealtime();
-    final flow = DemoRoomFlow(
-      open: realtime.open,
-      ownerCredentials: _roomOwnerCredentials,
-    );
-    final targetMode =
+  Future<void> _createRoom() => _prepareEntry(
+    DemoRoomEntryKind.create,
+    _createRoomMode,
+    _createCodeController.text,
+  );
+  Future<void> _joinRoom({String? providerId, MediaRoomMode? roomMode}) =>
+      _prepareEntry(
+        DemoRoomEntryKind.join,
         roomMode ??
-        _availableRooms
-            .where((r) => r.roomCode == code)
-            .firstOrNull
-            ?.roomMode ??
-        _joinRoomMode;
-    final role = targetMode == MediaRoomMode.broadcast
-        ? MediaRole.viewer
-        : MediaRole.participant;
-    final deviceId = await _deviceIdFuture;
-    final displayName = await _resolveDisplayName(deviceId);
-    await _runPreJoin(
-      realtime,
-      role: role,
-      providerId: providerId,
-      roomCode: code,
-      displayName: displayName,
-      roomLabel: code,
-      onEnter: (preJoinContext, settings) async {
-        final connection = await flow.join(
-          code: code,
-          mode: targetMode,
-          deviceId: deviceId,
-          displayName: displayName,
-        );
-        if (!preJoinContext.mounted) {
-          await connection.dispose();
-          return;
-        }
-        await _openMeeting(
-          preJoinContext,
-          connection,
-          initialMediaSettings: settings,
-          roomMode: targetMode,
-        );
-      },
-    );
+            _availableRooms
+                .where((r) => r.roomCode == _joinCodeController.text.trim())
+                .firstOrNull
+                ?.roomMode ??
+            _joinRoomMode,
+        _joinCodeController.text,
+        providerId: providerId,
+      );
+
+  Future<void> _prepareEntry(
+    DemoRoomEntryKind kind,
+    MediaRoomMode mode,
+    String code, {
+    String? providerId,
+  }) async {
+    if (_busy) return;
+    setState(() => _entryPhase = DemoEntryPhase.preparing);
+    try {
+      final result = await _entryCoordinator.prepare(
+        kind: kind,
+        backendUrl: _server,
+        code: code,
+        displayName: _displayNameController.text,
+        mode: mode,
+        createRealtime: (url) =>
+            widget.realtimeFactory?.call(url) ??
+            createDemoRealtime(url, appToken: _appToken),
+      );
+      if (!mounted) return;
+      switch (result) {
+        case DemoJoinRejected(:final reason):
+          _showFormError(reason);
+        case DemoJoinFailed(:final error):
+          setState(() => _error = error.message);
+        case DemoJoinPrepared(:final entry):
+          _displayNameController.text = entry.user.name;
+          await _runPreJoin(
+            entry.realtime,
+            role: entry.role,
+            providerId: providerId,
+            roomCode: kind == DemoRoomEntryKind.join ? entry.roomCode : null,
+            displayName: entry.user.name,
+            roomLabel: entry.roomCode ?? DemoStrings.of(context).createAndJoin,
+            onEnter: (preJoinContext, settings) async {
+              final connection = await entry.connect();
+              await _openMeeting(
+                preJoinContext,
+                connection,
+                initialMediaSettings: settings,
+                roomMode: entry.mode,
+              );
+            },
+          );
+      }
+    } finally {
+      if (mounted) setState(() => _entryPhase = DemoEntryPhase.idle);
+    }
   }
 
   Realtime _newRealtime() =>
       widget.realtimeFactory?.call(_server) ??
-      Realtime(
-        providers: createDemoProviders(),
-        backendUrl: _server,
-        tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
-        // Demo elects to showcase prebuilt business features. SDK consumers
-        // omitting this list get plain Meeting/Live/Chat and Interaction.
-        featurePlugins: const [ClassroomPreset(), SharedContentPreset(), SystemAnnotationPreset(), LivePreset()],
-      );
+      createDemoRealtime(_server, appToken: _appToken);
 
   Future<void> _runPreJoin(
     Realtime realtime, {
@@ -338,8 +282,8 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     String? providerId,
     String? roomCode,
   }) async {
-    if (_busy) return;
-    setState(() => _busy = true);
+    if (_entryPhase == DemoEntryPhase.preJoin) return;
+    setState(() => _entryPhase = DemoEntryPhase.preJoin);
     try {
       final backgroundPresets =
           await (widget.backgroundPresets?.call() ?? DemoBackground.presets);
@@ -370,7 +314,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
         ),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _entryPhase = DemoEntryPhase.idle);
     }
   }
 
@@ -704,337 +648,80 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   );
 
   void _showServerAndIdentitySheet() {
-    unawaited(showRealtimeGlassBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) {
-          final style = RealtimeStyle.of(sheetContext);
-          final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 580),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(18, 6, 18, 16 + bottomInset),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.tune_rounded,
-                            size: 20,
-                            color: style.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              DemoStrings.of(
-                                sheetContext,
-                              ).serverAndIdentitySettings,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: style.text,
+    unawaited(
+      showRealtimeGlassBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (sheetContext, _) {
+            final style = RealtimeStyle.of(sheetContext);
+            final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 580),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(18, 6, 18, 16 + bottomInset),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.tune_rounded,
+                              size: 20,
+                              color: style.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                DemoStrings.of(
+                                  sheetContext,
+                                ).serverAndIdentitySettings,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: style.text,
+                                ),
                               ),
                             ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              Icons.close_rounded,
-                              color: style.textMuted,
+                            IconButton(
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: style.textMuted,
+                              ),
+                              onPressed: () => Navigator.of(sheetContext).pop(),
                             ),
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _buildServerSettingsSection(setSheetState),
-                      const SizedBox(height: 12),
-                      _buildIdentitySettingsSection(setSheetState),
-                      const SizedBox(height: 16),
-                      RealtimeGlassButton(
-                        onPressed: () => Navigator.of(sheetContext).pop(),
-                        child: Text(DemoStrings.of(sheetContext).done),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    ));
-  }
-
-  Widget _buildServerSettingsSection([StateSetter? setSheetState]) {
-    final style = RealtimeStyle.of(context);
-    return RealtimeGlassSurface(
-      radius: RealtimeUiTokens.cardRadius,
-      padding: const EdgeInsets.all(16),
-      shadow: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  DemoStrings.of(context).backendServiceEndpoint,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: style.text,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              RealtimePill(
-                label: DemoStrings.of(context).backendStatus(
-                  _serverProviderInfo,
-                  checkingNow: _testingServer,
-                ),
-                leadingDotColor: _testingServer
-                    ? style.primary
-                    : _serverOnline == true
-                    ? style.success
-                    : _serverOnline == false
-                    ? style.danger
-                    : const Color(0xFF94A3B8),
-                foreground: _serverOnline == true
-                    ? style.success
-                    : _serverOnline == false
-                    ? style.danger
-                    : style.textMuted,
-                background: _serverOnline == true
-                    ? style.successSubtle
-                    : _serverOnline == false
-                    ? style.dangerSubtle
-                    : style.surfaceSubtle,
-                borderColor: _serverOnline == true
-                    ? (style.isDark
-                          ? style.success
-                          : RealtimeUiTokens.successBorder)
-                    : _serverOnline == false
-                    ? (style.isDark
-                          ? style.danger
-                          : RealtimeUiTokens.dangerBorder)
-                    : style.border,
-                onTap: _testingServer
-                    ? null
-                    : () async {
-                        await _testConnection();
-                        if (setSheetState != null && mounted) {
-                          setSheetState(() {});
-                        }
-                      },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          RealtimeGlassTextField(
-            controller: _serverController,
-            label: DemoStrings.of(context).demoBackendUrl,
-            hintText: 'http://192.168.31.8:3000',
-            prefixIcon: Icons.dns_outlined,
-            keyboardType: TextInputType.url,
-            onChanged: (_) {
-              _diagnostics.clear();
-              if (setSheetState != null) {
-                setSheetState(() {});
-              }
-            },
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _serverPresetChip(
-                DemoStrings.of(context).defaultServer,
-                _defaultBackendUrl,
-                setSheetState,
-              ),
-              _serverPresetChip(
-                'localhost:3000',
-                'http://localhost:3000',
-                setSheetState,
-              ),
-              _serverPresetChip(
-                'Android 10.0.2.2',
-                'http://10.0.2.2:3000',
-                setSheetState,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _serverPresetChip(
-    String label,
-    String url, [
-    StateSetter? setSheetState,
-  ]) {
-    final style = RealtimeStyle.of(context);
-    final selected = _server == url;
-    return RealtimePill(
-      label: label,
-      foreground: selected ? Colors.white : style.textMuted,
-      background: selected ? style.primary : style.surfaceSubtle,
-      borderColor: selected ? style.primary : style.border,
-      onTap: () async {
-        _serverController.text = url;
-        await _testConnection();
-        if (setSheetState != null && mounted) {
-          setSheetState(() {});
-        }
-      },
-    );
-  }
-
-  Widget _buildIdentitySettingsSection([StateSetter? setSheetState]) {
-    final style = RealtimeStyle.of(context);
-    return RealtimeGlassSurface(
-      radius: RealtimeUiTokens.cardRadius,
-      padding: const EdgeInsets.all(16),
-      shadow: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.badge_outlined, color: style.primary, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      DemoStrings.of(context).demoIdentity,
-                      style: TextStyle(
-                        color: style.text,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      DemoStrings.of(context).demoIdentityDescription,
-                      style: TextStyle(
-                        color: style.textMuted,
-                        fontSize: 12.5,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          FutureBuilder<String>(
-            future: _deviceIdFuture,
-            builder: (context, snapshot) {
-              final deviceId = snapshot.data ?? '…';
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 11,
-                ),
-                decoration: BoxDecoration(
-                  color: style.surface,
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.controlRadius,
-                  ),
-                  border: Border.all(color: style.border),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.fingerprint_rounded,
-                      size: 18,
-                      color: style.textMuted,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            DemoStrings.of(context).userId,
-                            style: TextStyle(
-                              color: style.textMuted,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            deviceId,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: style.text,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (snapshot.hasData)
-                      IconButton(
-                        tooltip: DemoStrings.of(context).copy,
-                        iconSize: 16,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 28,
-                          minHeight: 28,
+                          ],
                         ),
-                        icon: Icon(Icons.copy_rounded, color: style.textMuted),
-                        onPressed: () {
-                          unawaited(Clipboard.setData(ClipboardData(text: deviceId)));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                DemoStrings.of(context).copySuccess,
-                              ),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                      ),
-                  ],
+                        const SizedBox(height: 10),
+                        _buildServerSettingsSection(),
+                        const SizedBox(height: 12),
+                        _buildIdentitySettingsSection(),
+                        const SizedBox(height: 16),
+                        RealtimeGlassButton(
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          child: Text(DemoStrings.of(sheetContext).done),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              );
-            },
-          ),
-          const SizedBox(height: 10),
-          RealtimeGlassTextField(
-            controller: _displayNameController,
-            label: DemoStrings.of(context).displayName,
-            hintText: DemoStrings.of(context).displayNameExample,
-            prefixIcon: Icons.person_outline_rounded,
-            onChanged: (value) {
-              unawaited(_persistDisplayName(value));
-              setState(() {});
-              if (setSheetState != null) {
-                setSheetState(() {});
-              }
-            },
-          ),
-        ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
+
+  Widget _buildServerSettingsSection() => DemoServerSettingsPanel(
+    controller: _serverController, diagnostics: _diagnostics,
+    defaultBackendUrl: _defaultBackendUrl, onTest: _testConnection);
+  Widget _buildIdentitySettingsSection() => DemoIdentitySettingsPanel(
+    deviceId: _deviceIdFuture, displayNameController: _displayNameController,
+    onNameChanged: (value) { unawaited(_persistDisplayName(value)); setState(() {}); });
 
   Widget _buildActionTabsCard() {
     final style = RealtimeStyle.of(context);
@@ -1327,38 +1014,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Demo room view driven entirely by the room and capability objects returned
-/// by the high-level SDK.
-class MeetingRoomPage extends StatelessWidget {
-  const MeetingRoomPage({
-    super.key,
-    required this.room,
-    required this.initialMediaSettings,
-    this.roomMode,
-  });
-
-  final RealtimeRoom room;
-  final MediaLocalPreviewSettings initialMediaSettings;
-  final MediaRoomMode? roomMode;
-
-  @override
-  Widget build(BuildContext context) {
-    // Both Meeting and Live layouts are now owned by the Demo. The default
-    // RealtimeRoomView remains available for quick SDK integration.
-    if (roomMode == MediaRoomMode.broadcast ||
-        room.media.role == MediaRole.viewer) {
-      return DemoComposableLivePage(
-        room: room,
-        initialSettings: initialMediaSettings,
-      );
-    }
-    return DemoComposableMeetingPage(
-      room: room,
-      initialSettings: initialMediaSettings,
     );
   }
 }
