@@ -4,6 +4,83 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 void main() {
+  testWidgets('student dock exposes raise and lower directly', (tester) async {
+    final repository = _ClassroomRepository(ClassroomRole.student);
+    final room = await _initializedRoom(tester, repository);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(body: RealtimeDockRaiseHandButton()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Raise hand'), findsOneWidget);
+    await tester.tap(find.text('Raise hand'));
+    await tester.pumpAndSettle();
+    expect(repository.actions, contains('hand.raise'));
+    expect(find.text('Hand raised'), findsOneWidget);
+    await tester.tap(find.text('Hand raised'));
+    await tester.pumpAndSettle();
+    expect(repository.actions, contains('hand.lower'));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(room.dispose);
+  });
+
+  testWidgets('teacher dock shows hand count and panel opens on hands tab', (
+    tester,
+  ) async {
+    final repository = _ClassroomRepository(ClassroomRole.teacher);
+    final room = await _initializedRoom(tester, repository);
+    addTearDown(room.dispose);
+    var opened = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: Scaffold(
+            body: Column(
+              children: [
+                RealtimeDockHandQueueButton(onPressed: () => opened = true),
+                const Expanded(child: RealtimeClassroomPanel(initialTab: 1)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Allow'), findsOneWidget);
+    await tester.tap(find.byTooltip('Hand requests: 1'));
+    expect(opened, isTrue);
+    await tester.tap(find.text('Allow'));
+    await tester.pump();
+    expect(repository.actions, contains('speak.grant'));
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(room.dispose);
+  });
+
+  testWidgets('hand queue dock is not shown for students', (tester) async {
+    final repository = _ClassroomRepository(ClassroomRole.student);
+    final room = await _initializedRoom(tester, repository);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: Scaffold(body: RealtimeDockHandQueueButton(onPressed: () {})),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RealtimeDockItem), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(room.dispose);
+  });
+
   testWidgets('student hand raise, question and feedback use SDK commands', (
     tester,
   ) async {

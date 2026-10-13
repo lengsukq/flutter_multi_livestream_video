@@ -35,6 +35,8 @@ void main() {
 
       expect(find.byType(RealtimeRoomUiScope), findsOneWidget);
       expect(find.byType(RealtimeVideoGrid), findsOneWidget);
+      expect(find.byType(RealtimeDockRaiseHandButton), findsOneWidget);
+      expect(find.byType(RealtimeDockHandQueueButton), findsOneWidget);
       final leave = tester.getRect(find.byType(RealtimeLeaveButton));
       final page = tester.getRect(find.byType(DemoComposableMeetingPage));
       final scaffold = tester.getRect(find.byType(Scaffold).first);

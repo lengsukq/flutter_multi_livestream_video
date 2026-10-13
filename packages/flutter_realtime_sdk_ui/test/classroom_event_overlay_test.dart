@@ -3,6 +3,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 void main() {
+  testWidgets('student gets a microphone reminder after speaking grant', (
+    tester,
+  ) async {
+    final repo = _TestRepository()..role = ClassroomRole.student;
+    final session = ClassroomSession(
+      repo,
+      pollInterval: const Duration(hours: 1),
+    );
+    await session.start();
+    await tester.pumpWidget(_app(session));
+
+    repo.canSpeak = true;
+    repo.revision++;
+    await session.refresh();
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Teacher allowed you to speak. Turn on your microphone.'),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await session.dispose();
+  });
+
   testWidgets('renders named hand-raise events only after initial state', (
     tester,
   ) async {
@@ -93,14 +117,16 @@ Widget _app(ClassroomSession classroom) => MaterialApp(
 
 class _TestRepository implements ClassroomRepository {
   bool raised = false;
+  bool canSpeak = false;
+  ClassroomRole role = ClassroomRole.teacher;
   int revision = 0;
   ClassroomTimer? timer;
   final List<ClassroomHomework> homework = [];
 
   ClassroomState _snapshot() => ClassroomState(
     roomCode: 'test-room',
-    role: ClassroomRole.teacher,
-    selfUserId: 'teacher',
+    role: role,
+    selfUserId: role == ClassroomRole.teacher ? 'teacher' : 'student-1',
     revision: revision,
     students: [
       ClassroomStudent(
@@ -109,7 +135,7 @@ class _TestRepository implements ClassroomRepository {
         displayName: 'Student',
         online: true,
         handRaised: raised,
-        canSpeak: false,
+        canSpeak: canSpeak,
       ),
     ],
     questions: const [],

@@ -32,7 +32,15 @@ class RealtimeDockRaiseHandButton extends StatelessWidget {
           onPressed: controller.isPending(RealtimeRoomUiAction.classroom)
               ? null
               : () async {
-                  await controller.setHandRaised(!raised);
+                  try {
+                    await controller.setHandRaised(!raised);
+                  } catch (error) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                        SnackBar(content: Text(error.toString())),
+                      );
+                    }
+                  }
                 },
         );
       },

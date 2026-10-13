@@ -19,6 +19,35 @@ The Demo explicitly registers `ClassroomPreset` and composes existing SDK UI
 components in its own meeting layout. It contains no duplicate classroom
 business logic; hosts may omit the preset and use a plain meeting.
 
+## Raise-hand flow in the Demo
+
+The meeting dock provides a dedicated `RealtimeDockRaiseHandButton` for
+students. It reflects authoritative classroom state, toggles
+`ClassroomSession.raiseHand/lowerHand`, blocks duplicate requests while
+pending and displays failed requests. The reactions sheet can still offer
+the same action, but is not the only way to raise a hand.
+
+For teachers, `RealtimeDockHandQueueButton` displays the current number of
+raised hands. Its host callback opens `RealtimeClassroomPanel(initialTab: 1)`
+on the hand queue, where the teacher can allow or revoke speaking. Both
+widgets are independent: an application may put either one in another toolbar
+or use only its own headless UI.
+
+The reference backend authenticates student requests and teacher grants.
+Teachers receive classroom change notifications and a visible queue counter.
+On approval, the server asks the RTC provider to update microphone publishing
+permission where supported, then publishes the new classroom revision. The
+student receives a speaking-granted notification and **must turn on their
+microphone manually**; approving a request does not silently unmute anyone.
+The same flow supports both LiveKit and other providers through the classroom
+API; permission enforcement remains provider-dependent.
+
+Manual two-client check: join the same Meeting as teacher and student; raise,
+cancel, raise again, grant, enable the student microphone, and revoke. Verify
+the queue badge, participant notification, microphone gating and error
+feedback, including on a narrow mobile layout. Component tests cover the
+direct controls; a real RTC end-to-end permission check still needs devices.
+
 ## Usage
 
 Create or join a Meeting using `Realtime` with an explicitly selected

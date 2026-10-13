@@ -4,6 +4,7 @@ export 'realtime_dock_microphone_button.dart';
 export 'realtime_dock_camera_button.dart';
 export 'realtime_dock_shared_content_button.dart';
 export 'realtime_dock_raise_hand_button.dart';
+export 'realtime_dock_hand_queue_button.dart';
 export 'realtime_dock_feedback_button.dart';
 export 'realtime_dock_reaction_action.dart';
 export 'realtime_dock_reactions_button.dart';

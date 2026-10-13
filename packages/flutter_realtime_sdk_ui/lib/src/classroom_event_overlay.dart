@@ -107,17 +107,25 @@ class _RealtimeClassroomEventOverlayState
         : question?.displayName.isNotEmpty == true
         ? question!.displayName
         : event.userId;
+    final selfPermissionChange =
+        !state.isTeacher &&
+        event.userId == state.selfUserId &&
+        (event.kind == ClassroomStateEventKind.speakGranted ||
+            event.kind == ClassroomStateEventKind.speakRevoked);
     final (zh, en) = switch (event.kind) {
       ClassroomStateEventKind.handRaised => ('举手了', 'raised a hand'),
       ClassroomStateEventKind.handLowered => ('取消了举手', 'lowered a hand'),
-      ClassroomStateEventKind.speakGranted => (
-        '获得发言权限',
-        'was allowed to speak',
-      ),
-      ClassroomStateEventKind.speakRevoked => (
-        '发言权限已撤销',
-        'lost speaking permission',
-      ),
+      ClassroomStateEventKind.speakGranted =>
+        selfPermissionChange
+            ? (
+                '老师已允许你发言，请打开麦克风',
+                'Teacher allowed you to speak. Turn on your microphone.',
+              )
+            : ('获得发言权限', 'was allowed to speak'),
+      ClassroomStateEventKind.speakRevoked =>
+        selfPermissionChange
+            ? ('老师已收回你的发言权限', 'Your speaking permission was revoked.')
+            : ('发言权限已撤销', 'lost speaking permission'),
       ClassroomStateEventKind.questionAsked => ('提出了问题', 'asked a question'),
       ClassroomStateEventKind.questionAnswered => (
         '问题获得回答',
@@ -137,7 +145,10 @@ class _RealtimeClassroomEventOverlayState
         'sent classroom feedback',
       ),
     };
-    _show('$name $zh', '$name $en');
+    _show(
+      selfPermissionChange ? zh : '$name $zh',
+      selfPermissionChange ? en : '$name $en',
+    );
   }
 
   void _onNotification(ClassroomNotification notice) {

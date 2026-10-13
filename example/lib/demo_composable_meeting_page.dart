@@ -33,6 +33,8 @@ enum _DemoSidePanel { closed, chat, participants, classroom }
 class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   late Future<void> _videoEffectsReady;
   _DemoSidePanel _panel = _DemoSidePanel.closed;
+  int _classroomTab = 0;
+  int _classroomPanelVisit = 0;
   bool _recordingBusy = false;
 
   @override
@@ -53,6 +55,8 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
         oldWidget.initialSettings != widget.initialSettings) {
       _videoEffectsReady = _prepare();
       _panel = _DemoSidePanel.closed;
+      _classroomTab = 0;
+      _classroomPanelVisit = 0;
     }
   }
 
@@ -267,6 +271,11 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                         mediaGroup: [
                           RealtimeDockMicrophoneButton(showLabel: wide),
                           RealtimeDockCameraButton(showLabel: wide),
+                          RealtimeDockRaiseHandButton(showLabel: wide),
+                          RealtimeDockHandQueueButton(
+                            showLabel: wide,
+                            onPressed: () => _openClassroomHands(isWide: wide),
+                          ),
                         ],
                         collaborationGroup: [
                           RealtimeDockSharedContentButton(showLabel: wide),
@@ -443,11 +452,28 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
       return;
     }
     setState(() {
+      if (panel == _DemoSidePanel.classroom) {
+        _classroomTab = 0;
+        _classroomPanelVisit++;
+      }
       _panel = _panel == panel ? _DemoSidePanel.closed : panel;
     });
   }
 
-  void _openMobileSheet(_DemoSidePanel panel) {
+  void _openClassroomHands({required bool isWide}) {
+    if (!isWide) {
+      _openMobileSheet(_DemoSidePanel.classroom, classroomTab: 1);
+      return;
+    }
+    setState(() {
+      _classroomTab = 1;
+      // Reopen on the queue even when the panel already shows another tab.
+      _classroomPanelVisit++;
+      _panel = _DemoSidePanel.classroom;
+    });
+  }
+
+  void _openMobileSheet(_DemoSidePanel panel, {int classroomTab = 0}) {
     final strings = RealtimeStrings.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     unawaited(
@@ -561,6 +587,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                         _DemoSidePanel.chat => const RealtimeChatPanel(),
                         _DemoSidePanel.classroom => RealtimeClassroomPanel(
                           showHeader: false,
+                          initialTab: classroomTab,
                           onClose: () => Navigator.pop(sheetContext),
                         ),
                         _ => const RealtimeManagedParticipantList(),
@@ -669,7 +696,9 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
             child: switch (_panel) {
               _DemoSidePanel.chat => const RealtimeChatPanel(),
               _DemoSidePanel.classroom => RealtimeClassroomPanel(
+                key: ValueKey(_classroomPanelVisit),
                 showHeader: false,
+                initialTab: _classroomTab,
                 onClose: () => setState(() => _panel = _DemoSidePanel.closed),
               ),
               _ => const RealtimeManagedParticipantList(),

@@ -11,7 +11,16 @@ class MeetingDockRealtimeClassroomPanelState
   late final TabController _tabController = TabController(
     length: 4,
     vsync: this,
+    initialIndex: widget.initialTab,
   );
+
+  @override
+  void didUpdateWidget(covariant RealtimeClassroomPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialTab != oldWidget.initialTab) {
+      _tabController.animateTo(widget.initialTab);
+    }
+  }
 
   @override
   void dispose() {
