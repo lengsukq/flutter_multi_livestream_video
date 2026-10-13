@@ -135,7 +135,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   void _openClassroomTools(BuildContext context) {
     final classroom = widget.room.classroom;
     if (classroom == null) return;
-    showRealtimeGlassBottomSheet<void>(
+    unawaited(showRealtimeGlassBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) => SizedBox(
@@ -146,7 +146,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
           onClose: () => Navigator.maybeOf(sheetContext)?.pop(),
         ),
       ),
-    );
+    ));
   }
 
   @override
@@ -446,7 +446,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   void _openMobileSheet(_DemoSidePanel panel) {
     final strings = RealtimeStrings.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet<void>(
+    unawaited(showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -566,7 +566,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
           ),
         );
       },
-    );
+    ));
   }
 
   Widget _sidePanel() {
@@ -702,10 +702,10 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
       if (widget.room.recordingStatus == RecordingStatus.recording) {
         await widget.room.stopRecording();
         if (!mounted || !context.mounted) return;
-        showDialog<void>(
+        unawaited(showDialog<void>(
           context: context,
           builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
-        );
+        ));
       } else {
         final chosen = await showDialog<RecordingLayout>(
           context: context,
@@ -735,10 +735,10 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
           RecordingOptions.cloud(layout: chosen),
         );
         if (mounted && context.mounted) {
-          showDialog<void>(
+          unawaited(showDialog<void>(
             context: context,
             builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
-          );
+          ));
         }
       }
     } catch (error) {
@@ -755,10 +755,10 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
   }
 
   void _showCloudResultDialog(BuildContext context) {
-    showDialog<void>(
+    unawaited(showDialog<void>(
       context: context,
       builder: (_) => DemoCloudRecordingResultDialog(room: widget.room),
-    );
+    ));
   }
 }
 

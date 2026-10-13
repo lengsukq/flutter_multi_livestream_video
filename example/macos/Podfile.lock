@@ -11,6 +11,9 @@ PODS:
     - FlutterMacOS
   - flutter_realtime_chat_agora (0.1.0):
     - FlutterMacOS
+  - flutter_realtime_media_agora (0.1.0):
+    - flutter_realtime_processed_video
+    - FlutterMacOS
   - flutter_realtime_media_artc (0.1.0):
     - FlutterMacOS
   - flutter_realtime_media_aws_desktop (0.1.0):
@@ -19,9 +22,15 @@ PODS:
     - FlutterMacOS
   - flutter_realtime_media_livekit (0.1.0):
     - FlutterMacOS
+  - flutter_realtime_media_trtc (0.1.0):
+    - flutter_realtime_processed_video
+    - FlutterMacOS
+  - flutter_realtime_processed_video (0.1.0):
+    - FlutterMacOS
   - flutter_realtime_screen_annotation (0.1.0):
     - FlutterMacOS
   - flutter_realtime_video_effects (0.0.1):
+    - flutter_realtime_processed_video
     - FlutterMacOS
   - flutter_webrtc (1.6.2):
     - FlutterMacOS
@@ -55,10 +64,13 @@ DEPENDENCIES:
   - connectivity_plus (from `Flutter/ephemeral/.symlinks/plugins/connectivity_plus/macos`)
   - device_info_plus (from `Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos`)
   - flutter_realtime_chat_agora (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_chat_agora/macos`)
+  - flutter_realtime_media_agora (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_agora/macos`)
   - flutter_realtime_media_artc (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_artc/macos`)
   - flutter_realtime_media_aws_desktop (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_aws_desktop/macos`)
   - flutter_realtime_media_core (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_core/macos`)
   - flutter_realtime_media_livekit (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_livekit/macos`)
+  - flutter_realtime_media_trtc (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_trtc/macos`)
+  - flutter_realtime_processed_video (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_processed_video/macos`)
   - flutter_realtime_screen_annotation (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_screen_annotation/macos`)
   - flutter_realtime_video_effects (from `Flutter/ephemeral/.symlinks/plugins/flutter_realtime_video_effects/macos`)
   - flutter_webrtc (from `Flutter/ephemeral/.symlinks/plugins/flutter_webrtc/macos`)
@@ -88,6 +100,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/device_info_plus/macos
   flutter_realtime_chat_agora:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_chat_agora/macos
+  flutter_realtime_media_agora:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_agora/macos
   flutter_realtime_media_artc:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_artc/macos
   flutter_realtime_media_aws_desktop:
@@ -96,6 +110,10 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_core/macos
   flutter_realtime_media_livekit:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_livekit/macos
+  flutter_realtime_media_trtc:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_media_trtc/macos
+  flutter_realtime_processed_video:
+    :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_processed_video/macos
   flutter_realtime_screen_annotation:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_realtime_screen_annotation/macos
   flutter_realtime_video_effects:
@@ -124,12 +142,15 @@ SPEC CHECKSUMS:
   connectivity_plus: 4adf20a405e25b42b9c9f87feff8f4b6fde18a4e
   device_info_plus: 4fb280989f669696856f8b129e4a5e3cd6c48f76
   flutter_realtime_chat_agora: be5633842da785001a7cba516b6ce5df45b238f5
+  flutter_realtime_media_agora: ebe82a3793c7519864e2e751a03f38e1898c77d9
   flutter_realtime_media_artc: 1083f386ce52be5acc3be19571771cc29352b38d
   flutter_realtime_media_aws_desktop: 29711d54614b4c2fc6e2aacb5e1b824629327343
   flutter_realtime_media_core: 0cff617853c3bf5415dd91a0d06cffc155edaabb
   flutter_realtime_media_livekit: 5e989e66c656679b9cee49b3314470b8ce5626d0
+  flutter_realtime_media_trtc: 33c57b5d8e55054fa9bb42ec398ca94416fe4f09
+  flutter_realtime_processed_video: 687ce7b3d4706a04b024d75d54075453c248e1c9
   flutter_realtime_screen_annotation: aabde0dd9359db732f70926368ef893499386cac
-  flutter_realtime_video_effects: 7d9938b48849212e669e4f76a986662581964fce
+  flutter_realtime_video_effects: 6392239d51cf00e4c0dc204f0ec025a5dd9846d9
   flutter_webrtc: af708ba091a5d71e101f9f631a9f96c107581a3d
   FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
   HydraAsync: 8d589bd725b0224f899afafc9a396327405f8063

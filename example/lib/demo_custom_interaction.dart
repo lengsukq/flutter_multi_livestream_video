@@ -99,7 +99,7 @@ class _DemoWaveOverlayState extends State<DemoWaveOverlay> {
     super.didUpdateWidget(oldWidget);
     if (identical(oldWidget.room, widget.room)) return;
     _timeout?.cancel();
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     _sender = null;
     _subscribe();
   }
@@ -107,7 +107,7 @@ class _DemoWaveOverlayState extends State<DemoWaveOverlay> {
   @override
   void dispose() {
     _timeout?.cancel();
-    _subscription?.cancel();
+    unawaited(_subscription?.cancel());
     super.dispose();
   }
 

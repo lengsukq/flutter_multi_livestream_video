@@ -1,6 +1,25 @@
-part of 'classroom_panel.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
+import 'classroom_strings.dart';
+import 'classroom_command_presenter.dart';
+import 'classroom_feedback_presentation.dart';
+class ClassroomStudentPanel extends StatefulWidget {
+ const ClassroomStudentPanel({super.key, required this.classroom, required this.snapshot, this.onActionError});
+ final ClassroomSession classroom;
+ final ClassroomState snapshot;
+ final void Function(RealtimeException error)? onActionError;
+ @override State<ClassroomStudentPanel> createState() => _ClassroomStudentPanelState();
+}
+class _ClassroomStudentPanelState extends State<ClassroomStudentPanel> {
 
-extension _ClassroomStudentPanel on _ClassroomPanelState {
+late final _commands = ClassroomCommandPresenter(onChanged: () { if (mounted) setState(() {}); }, onError: (error) => widget.onActionError?.call(error));
+ bool get _busy => _commands.pending;
+ Future<void> _run(Future<void> Function() task) => _commands.run(task);
+@override void dispose() {  _commands.dispose(); super.dispose(); }
+@override Widget build(BuildContext context) => _student(widget.snapshot);
+
   Widget _student(ClassroomState state) {
     final strings = ClassroomStrings.of(context);
     ClassroomStudent? self;
@@ -517,4 +536,5 @@ extension _ClassroomStudentPanel on _ClassroomPanelState {
       ),
     );
   }
+
 }

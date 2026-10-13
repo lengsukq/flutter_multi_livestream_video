@@ -47,6 +47,7 @@ void main() {
       repo,
       pollInterval: const Duration(hours: 1),
     );
+    await session.start();
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('zh', 'CN'),
@@ -95,6 +96,7 @@ void main() {
       repo,
       pollInterval: const Duration(hours: 1),
     );
+    await session.start();
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('zh', 'CN'),
@@ -147,6 +149,7 @@ void main() {
       repo,
       pollInterval: const Duration(hours: 1),
     );
+    await session.start();
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('en'),
@@ -211,6 +214,7 @@ void main() {
         FakeClassroom(room),
         pollInterval: const Duration(hours: 1),
       );
+      await session.start();
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(body: ClassroomPanel(classroom: session)),
@@ -263,6 +267,7 @@ void main() {
       repo,
       pollInterval: const Duration(hours: 1),
     );
+    await session.start();
     await tester.pumpWidget(
       MaterialApp(
         locale: const Locale('zh', 'CN'),

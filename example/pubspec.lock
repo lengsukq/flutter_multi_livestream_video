@@ -423,6 +423,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_processed_video:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_processed_video"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_provider_agora:
     dependency: "direct main"
     description:
@@ -479,8 +486,15 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
-  flutter_realtime_screen_annotation:
+  flutter_realtime_room_ui:
     dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_room_ui"
+      relative: true
+    source: path
+    version: "0.1.0"
+  flutter_realtime_screen_annotation:
+    dependency: "direct main"
     description:
       path: "../packages/flutter_realtime_screen_annotation"
       relative: true
@@ -507,8 +521,15 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_shared_content_preset:
+    dependency: "direct main"
+    description:
+      path: "../packages/flutter_realtime_shared_content_preset"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_video_effects:
-    dependency: transitive
+    dependency: "direct main"
     description:
       path: "../packages/flutter_realtime_video_effects"
       relative: true

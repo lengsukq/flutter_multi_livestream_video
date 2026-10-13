@@ -1,4 +1,5 @@
-import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
+import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_provider_livekit/flutter_realtime_provider_livekit.dart';
@@ -51,7 +52,7 @@ class _LiteExampleState extends State<LiteExample> {
   void dispose() {
     _code.dispose();
     _name.dispose();
-    _connection?.dispose();
+    unawaited(_connection?.dispose());
     super.dispose();
   }
 
@@ -59,9 +60,20 @@ class _LiteExampleState extends State<LiteExample> {
   Widget build(BuildContext context) {
     final room = _connection?.mediaRoom;
     if (room != null) {
-      return RealtimeRoomView(
+      return RealtimeRoomUiScope(
         room: room,
-        onLeave: () => setState(() => _connection = null),
+        child: Scaffold(
+          appBar: AppBar(title: Text(room.roomCode)),
+          body: Column(children: [
+            const Expanded(child: RealtimeVideoGrid()),
+            const RealtimeMediaActionButton(action: RealtimeRoomUiAction.microphone, label: 'Microphone', icon: Icons.mic),
+            const RealtimeMediaActionButton(action: RealtimeRoomUiAction.camera, label: 'Camera', icon: Icons.videocam),
+            FilledButton(onPressed: () async {
+              try { await _connection?.dispose(); }
+              finally { if (mounted) setState(() => _connection = null); }
+            }, child: const Text('Leave')),
+          ]),
+        ),
       );
     }
     return Scaffold(

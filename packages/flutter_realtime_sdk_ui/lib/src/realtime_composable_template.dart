@@ -1,3 +1,5 @@
+import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart' show RealtimeRoomInfo, RealtimeConnectionIndicator, RealtimeVideoGrid;
+import 'package:flutter_realtime_shared_content_preset/flutter_realtime_shared_content_preset.dart';
 import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
@@ -8,7 +10,6 @@ import 'room_classroom_interactions.dart';
 import 'room_classroom_activities.dart';
 import 'room_control_components.dart';
 import 'room_live_components.dart';
-import 'room_media_components.dart';
 import 'room_ui_controller.dart';
 
 /// Optional quick-start room page that uses only publicly exported components.

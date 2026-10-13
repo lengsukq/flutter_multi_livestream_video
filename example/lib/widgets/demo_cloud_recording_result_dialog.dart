@@ -27,8 +27,8 @@ class _DemoCloudRecordingResultDialogState
     super.initState();
     unawaited(_refresh());
     _poll = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (_result?.metadata['state'] != 'completed' &&
-          _result?.metadata['state'] != 'failed') {
+      if (_result?.taskState != RecordingTaskState.completed &&
+          _result?.taskState != RecordingTaskState.failed) {
         unawaited(_refresh());
       }
     });
@@ -75,7 +75,7 @@ class _DemoCloudRecordingResultDialogState
 
   @override
   Widget build(BuildContext context) {
-    final state = _result?.metadata['state']?.toString() ?? 'loading';
+    final state = _result?.taskState.name ?? 'loading';
     final canDownload = _result?.metadata['canDownload'] == true;
     final unavailableReason = _result?.metadata['recordingAvailable'] == false
         ? _result?.metadata['recordingUnavailableReason']?.toString()

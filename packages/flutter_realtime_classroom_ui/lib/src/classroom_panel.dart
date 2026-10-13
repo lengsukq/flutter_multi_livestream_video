@@ -1,28 +1,16 @@
+import 'classroom_students_panel.dart';
+import 'classroom_feedback_presentation.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'classroom_strings.dart';
 import 'classroom_tools_panel.dart';
-part 'classroom_student_panel.dart';
-part 'classroom_questions.dart';
-part 'classroom_roster.dart';
-part 'classroom_header.dart';
-part 'classroom_feedback.dart';
-
-Color _avatarColor(String name) {
-  if (name.isEmpty) return RealtimeUiTokens.primary;
-  final hash = name.codeUnits.fold(0, (acc, c) => acc + c);
-  const hues = [
-    Color(0xFF4F46E5),
-    Color(0xFF0D9488),
-    Color(0xFFD97706),
-    Color(0xFFE11D48),
-    Color(0xFF7C3AED),
-    Color(0xFF2563EB),
-  ];
-  return hues[hash % hues.length];
-}
+import 'classroom_student_panel.dart';
+import 'classroom_questions.dart';
+import 'classroom_roster.dart';
+import 'classroom_header.dart';
+import 'classroom_feedback.dart';
 
 /// Optional SDK-owned classroom UI styled to match Realtime SDK design tokens.
 class ClassroomPanel extends StatefulWidget {
@@ -42,61 +30,9 @@ class ClassroomPanel extends StatefulWidget {
 }
 
 class _ClassroomPanelState extends State<ClassroomPanel> {
-  final _question = TextEditingController();
-  final _studentSearch = TextEditingController();
-  final _questionSearch = TextEditingController();
-  ClassroomQuestionStatus? _questionFilter;
-  Object? _error;
-  bool _busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(
-      widget.classroom.start().catchError((Object e) {
-        if (mounted) setState(() => _error = e);
-      }),
-    );
-  }
-
-  @override
-  void dispose() {
-    _question.dispose();
-    _studentSearch.dispose();
-    _questionSearch.dispose();
-    super.dispose();
-  }
-
-  void _update(VoidCallback action) => setState(action);
-
-  Future<void> _run(Future<void> Function() task) async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await task();
-    } catch (error) {
-      if (mounted) setState(() => _error = error);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _answer(ClassroomQuestion question) async {
-    final strings = ClassroomStrings.of(context);
-    final answer = await showDialog<String>(
-      context: context,
-      useRootNavigator: true,
-      builder: (ctx) => _ClassroomAnswerDialog(
-        initialValue: question.answer ?? '',
-        strings: strings,
-      ),
-    );
-    if (answer != null && answer.isNotEmpty && mounted) {
-      await _run(() => widget.classroom.answerQuestion(question.id, answer));
-    }
+  RealtimeException? _error;
+  void _onActionError(RealtimeException error) {
+    if (mounted) setState(() => _error = error);
   }
 
   @override
@@ -116,7 +52,10 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildHeader(context, s, strings),
+          ClassroomHeader(
+            snapshot: s,
+            showCloseButton: widget.showCloseButton ?? false,
+          ),
           if (_error != null)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -314,10 +253,34 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                   Expanded(
                     child: TabBarView(
                       children: [
-                        s.isTeacher ? _hands(s) : _student(s),
-                        _questions(s),
-                        if (s.isTeacher) _students(s),
-                        if (s.capabilities.canViewFeedback) _feedback(s),
+                        s.isTeacher
+                            ? ClassroomRaisedHandsPanel(
+                                classroom: widget.classroom,
+                                snapshot: s,
+                                onActionError: _onActionError,
+                              )
+                            : ClassroomStudentPanel(
+                                classroom: widget.classroom,
+                                snapshot: s,
+                                onActionError: _onActionError,
+                              ),
+                        ClassroomQuestionsPanel(
+                          classroom: widget.classroom,
+                          snapshot: s,
+                          onActionError: _onActionError,
+                        ),
+                        if (s.isTeacher)
+                          ClassroomStudentsPanel(
+                            classroom: widget.classroom,
+                            snapshot: s,
+                            onActionError: _onActionError,
+                          ),
+                        if (s.capabilities.canViewFeedback)
+                          ClassroomFeedbackPanel(
+                            classroom: widget.classroom,
+                            snapshot: s,
+                            onActionError: _onActionError,
+                          ),
                         if (s.tools != null)
                           ClassroomToolsPanel(classroom: widget.classroom),
                       ],
@@ -331,239 +294,6 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
       );
     },
   );
-
-  Widget _students(ClassroomState state) {
-    final strings = ClassroomStrings.of(context);
-    final search = _studentSearch.text.trim().toLowerCase();
-    final students = state.students
-        .where(
-          (s) =>
-              s.role == ClassroomRole.student &&
-              (search.isEmpty ||
-                  s.userId.toLowerCase().contains(search) ||
-                  s.displayName.toLowerCase().contains(search)),
-        )
-        .toList();
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-          child: TextField(
-            controller: _studentSearch,
-            onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              isDense: true,
-              filled: true,
-              fillColor: RealtimeUiTokens.surfaceSubtle,
-              prefixIcon: const Icon(Icons.search, size: 19),
-              hintText: strings.t('search'),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 9,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.compactRadius,
-                ),
-                borderSide: const BorderSide(color: RealtimeUiTokens.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.compactRadius,
-                ),
-                borderSide: const BorderSide(color: RealtimeUiTokens.border),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-            itemCount: students.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final s = students[index];
-              final mic = s.microphoneOn == null
-                  ? strings.t('micUnknown')
-                  : (s.microphoneOn!
-                        ? strings.t('micOn')
-                        : strings.t('micOff'));
-              final camera = s.cameraOn == null
-                  ? strings.t('cameraUnknown')
-                  : (s.cameraOn!
-                        ? strings.t('cameraOn')
-                        : strings.t('cameraOff'));
-              final avatarLetter = s.displayName.isNotEmpty
-                  ? s.displayName.substring(0, 1).toUpperCase()
-                  : 'S';
-
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: RealtimeUiTokens.surface,
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.compactRadius,
-                  ),
-                  border: Border.all(
-                    color: s.canSpeak
-                        ? RealtimeUiTokens.successBorder
-                        : (s.handRaised
-                              ? RealtimeUiTokens.warning.withValues(alpha: 0.3)
-                              : RealtimeUiTokens.border),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.025),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: _avatarColor(s.displayName),
-                      child: Text(
-                        avatarLetter,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                s.displayName,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: RealtimeUiTokens.text,
-                                ),
-                              ),
-                              if (s.handRaised) ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 1.5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: RealtimeUiTokens.warningSubtle,
-                                    borderRadius: BorderRadius.circular(
-                                      RealtimeUiTokens.pillRadius,
-                                    ),
-                                    border: Border.all(
-                                      color: RealtimeUiTokens.warning
-                                          .withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.pan_tool_rounded,
-                                        size: 10,
-                                        color: RealtimeUiTokens.warning,
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Text(
-                                        strings.t('hands'),
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                          color: RealtimeUiTokens.warning,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 3),
-                          Row(
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: s.online
-                                      ? RealtimeUiTokens.success
-                                      : RealtimeUiTokens.textMuted,
-                                ),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                "${s.online ? strings.t('online') : strings.t('offline')} · $mic · $camera",
-                                style: const TextStyle(
-                                  fontSize: 11.5,
-                                  color: RealtimeUiTokens.textMuted,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (s.canSpeak)
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: RealtimeUiTokens.danger,
-                          side: const BorderSide(
-                            color: RealtimeUiTokens.dangerBorder,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(
-                              RealtimeUiTokens.compactRadius,
-                            ),
-                          ),
-                        ),
-                        onPressed: _busy
-                            ? null
-                            : () => _run(
-                                () => widget.classroom.revokeSpeak(s.userId),
-                              ),
-                        child: Text(strings.t('revoke')),
-                      )
-                    else if (s.handRaised)
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: RealtimeUiTokens.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(
-                              RealtimeUiTokens.compactRadius,
-                            ),
-                          ),
-                        ),
-                        onPressed: _busy
-                            ? null
-                            : () => _run(
-                                () => widget.classroom.grantSpeak(s.userId),
-                              ),
-                        child: Text(strings.t('allow')),
-                      ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 /// Helper method to open the unified classroom panel bottom sheet.
@@ -608,7 +338,7 @@ class _ClassroomControlButtonState extends State<ClassroomControlButton> {
   StreamSubscription<ClassroomNotification>? _subscription;
   int _unread = 0;
   bool _panelOpen = false;
-  final _feedbackBubble = _ClassroomFeedbackBubble();
+  final _feedbackBubble = ClassroomFeedbackBubble();
 
   @override
   void initState() {
@@ -631,7 +361,6 @@ class _ClassroomControlButtonState extends State<ClassroomControlButton> {
         )?.showSnackBar(SnackBar(content: Text(notice.text)));
       }
     });
-    unawaited(widget.classroom.start().catchError((Object _) {}));
   }
 
   @override
@@ -758,7 +487,7 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
   StreamSubscription<ClassroomNotification>? _subscription;
   int _unread = 0;
   bool _panelOpen = false;
-  final _feedbackBubble = _ClassroomFeedbackBubble();
+  final _feedbackBubble = ClassroomFeedbackBubble();
 
   @override
   void initState() {
@@ -781,7 +510,6 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
         )?.showSnackBar(SnackBar(content: Text(notice.text)));
       }
     });
-    unawaited(widget.classroom.start().catchError((Object _) {}));
   }
 
   @override
@@ -861,69 +589,4 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
       ),
     );
   }
-}
-
-class _ClassroomAnswerDialog extends StatefulWidget {
-  const _ClassroomAnswerDialog({
-    required this.initialValue,
-    required this.strings,
-  });
-
-  final String initialValue;
-  final ClassroomStrings strings;
-
-  @override
-  State<_ClassroomAnswerDialog> createState() => _ClassroomAnswerDialogState();
-}
-
-class _ClassroomAnswerDialogState extends State<_ClassroomAnswerDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.initialValue,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => RealtimeGlassDialog(
-    icon: Icons.question_answer_rounded,
-    title: Text(widget.strings.t('answer')),
-    content: TextField(
-      controller: _controller,
-      maxLength: 500,
-      maxLines: 3,
-      decoration: InputDecoration(
-        hintText: widget.strings.t('answer'),
-        filled: true,
-        fillColor: RealtimeUiTokens.surfaceSubtle,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-          borderSide: const BorderSide(color: RealtimeUiTokens.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-          borderSide: const BorderSide(color: RealtimeUiTokens.border),
-        ),
-      ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: Text(widget.strings.t('cancel')),
-      ),
-      FilledButton(
-        style: FilledButton.styleFrom(
-          backgroundColor: RealtimeUiTokens.primary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
-          ),
-        ),
-        onPressed: () => Navigator.pop(context, _controller.text.trim()),
-        child: Text(widget.strings.t('submit')),
-      ),
-    ],
-  );
 }

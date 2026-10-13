@@ -72,11 +72,13 @@ void main() {
         revisionTransport: _Transport(store),
         pollInterval: const Duration(hours: 1),
       );
+      await teacher.start();
       final student = ClassroomSession(
         studentRepo,
         revisionTransport: _Transport(store),
         pollInterval: const Duration(hours: 1),
       );
+      await student.start();
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -133,6 +135,7 @@ void main() {
       repo,
       pollInterval: const Duration(hours: 1),
     );
+    await session.start();
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(body: ClassroomPanel(classroom: session)),
@@ -180,6 +183,7 @@ void main() {
         _Repository(store, teacher: true),
         pollInterval: const Duration(hours: 1),
       );
+      await teacher.start();
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -237,6 +241,7 @@ void main() {
       repo,
       pollInterval: const Duration(hours: 1),
     );
+    await session.start();
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(body: ClassroomPanel(classroom: session)),

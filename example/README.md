@@ -89,9 +89,9 @@ open the printed URL in a supported browser.
 ### Regenerate bundled browser SDK assets
 
 The checked-in runtime assets are built from pinned dependencies and source in
-`../packages/flutter_realtime_sdk/tool/provider_bridge`. SDK maintainers can
+`../tool/provider_web_assets`. SDK maintainers can
 install those locked development dependencies with
-`npm ci --prefix ../packages/flutter_realtime_sdk/tool/provider_bridge`, then
+`npm ci --prefix ../tool/provider_web_assets`, then
 run `../scripts/build_provider_web_assets.sh`. This is only needed when updating
 a pinned browser SDK or bridge source; normal app builds use the bundled files
 directly.

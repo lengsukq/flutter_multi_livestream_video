@@ -326,7 +326,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
         tokenProvider: _appToken.trim().isEmpty ? null : () async => _appToken,
         // Demo elects to showcase prebuilt business features. SDK consumers
         // omitting this list get plain Meeting/Live/Chat and Interaction.
-        featurePlugins: const [ClassroomPreset(), LivePreset()],
+        featurePlugins: const [ClassroomPreset(), SharedContentPreset(), SystemAnnotationPreset(), LivePreset()],
       );
 
   Future<void> _runPreJoin(
@@ -704,7 +704,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   );
 
   void _showServerAndIdentitySheet() {
-    showRealtimeGlassBottomSheet<void>(
+    unawaited(showRealtimeGlassBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       builder: (sheetContext) => StatefulBuilder(
@@ -767,7 +767,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           );
         },
       ),
-    );
+    ));
   }
 
   Widget _buildServerSettingsSection([StateSetter? setSheetState]) {
@@ -1001,7 +1001,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                         ),
                         icon: Icon(Icons.copy_rounded, color: style.textMuted),
                         onPressed: () {
-                          Clipboard.setData(ClipboardData(text: deviceId));
+                          unawaited(Clipboard.setData(ClipboardData(text: deviceId)));
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(

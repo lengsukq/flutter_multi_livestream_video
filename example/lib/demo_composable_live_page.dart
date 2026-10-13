@@ -97,7 +97,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
   void _openMobileSheet(_LiveSidePanel panel) {
     final strings = RealtimeStrings.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    showModalBottomSheet<void>(
+    unawaited(showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -201,7 +201,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   void _openHostToolsSheet(BuildContext context) {

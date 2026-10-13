@@ -21,3 +21,6 @@ export 'package:flutter_realtime_classroom_ui/flutter_realtime_classroom_ui.dart
 export 'package:flutter_realtime_live_ui/flutter_realtime_live_ui.dart';
 export 'package:flutter_realtime_whiteboard_ui/flutter_realtime_whiteboard_ui.dart';
 export 'package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart';
+export 'package:flutter_realtime_shared_content_preset/flutter_realtime_shared_content_preset.dart';
+export 'package:flutter_realtime_screen_annotation/flutter_realtime_screen_annotation.dart';
+export 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart' hide RealtimeRoomUiController, RealtimeRoomUiScope;

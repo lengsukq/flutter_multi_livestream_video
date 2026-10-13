@@ -32,7 +32,7 @@ android {
         // SDK requires Android 9 / API 28. Individual provider packages retain
         // their own lower minimums when IVS is not installed.
         minSdk 28
-        targetSdk 31
+        targetSdk flutter.targetSdkVersion
         versionCode flutter.versionCode
         versionName flutter.versionName
     }

@@ -9,10 +9,13 @@ import agora_rtc_engine
 import connectivity_plus
 import device_info_plus
 import flutter_realtime_chat_agora
+import flutter_realtime_media_agora
 import flutter_realtime_media_artc
 import flutter_realtime_media_aws_desktop
 import flutter_realtime_media_core
 import flutter_realtime_media_livekit
+import flutter_realtime_media_trtc
+import flutter_realtime_processed_video
 import flutter_realtime_screen_annotation
 import flutter_realtime_video_effects
 import flutter_webrtc
@@ -28,10 +31,13 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   ConnectivityPlusPlugin.register(with: registry.registrar(forPlugin: "ConnectivityPlusPlugin"))
   DeviceInfoPlusMacosPlugin.register(with: registry.registrar(forPlugin: "DeviceInfoPlusMacosPlugin"))
   AgoraChatMacOSPlugin.register(with: registry.registrar(forPlugin: "AgoraChatMacOSPlugin"))
+  FlutterRealtimeMediaAgoraPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaAgoraPlugin"))
   FlutterRealtimeMediaArtcPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaArtcPlugin"))
   FlutterRealtimeMediaAwsDesktopPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaAwsDesktopPlugin"))
   FlutterRealtimeMediaCorePlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaCorePlugin"))
   FlutterRealtimeMediaLivekitPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaLivekitPlugin"))
+  FlutterRealtimeMediaTrtcPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeMediaTrtcPlugin"))
+  FlutterRealtimeProcessedVideoPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeProcessedVideoPlugin"))
   FlutterRealtimeScreenAnnotationPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeScreenAnnotationPlugin"))
   FlutterRealtimeVideoEffectsPlugin.register(with: registry.registrar(forPlugin: "FlutterRealtimeVideoEffectsPlugin"))
   FlutterWebRTCPlugin.register(with: registry.registrar(forPlugin: "FlutterWebRTCPlugin"))

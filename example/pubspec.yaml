@@ -16,6 +16,12 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  flutter_realtime_video_effects:
+    path: ../packages/flutter_realtime_video_effects
+  flutter_realtime_shared_content_preset:
+    path: ../packages/flutter_realtime_shared_content_preset
+  flutter_realtime_screen_annotation:
+    path: ../packages/flutter_realtime_screen_annotation
   flutter:
     sdk: flutter
   flutter_realtime_sdk:
