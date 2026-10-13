@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 class _MockBackendTransport implements MediaBackendTransport {
   final requests = <Map<String, dynamic>>[];
   final replies = <MediaBackendTransportResponse>[];
+  bool closed = false;
   @override
   Future<MediaBackendTransportResponse> send({
     required String method,
@@ -23,7 +25,7 @@ class _MockBackendTransport implements MediaBackendTransport {
   }
 
   @override
-  void close() {}
+  void close() => closed = true;
 
   void respond(int status, Map<String, dynamic> data) => replies.add(
     MediaBackendTransportResponse(statusCode: status, body: jsonEncode(data)),
@@ -44,6 +46,60 @@ void main() {
       tokenProvider: () async => 'demo-bearer',
       transport: backend,
     );
+  });
+  tearDown(() => session.dispose());
+
+  test('preserves a failed cloud task reason for presentation', () async {
+    backend.respond(200, {
+      'provider': 'chime',
+      'recordingId': 'task-failed',
+      'state': 'failed',
+      'error': 'Recording media pipeline was interrupted',
+      'canDownload': false,
+    });
+    final result = await session.queryCloudRecording();
+    expect(result.taskState, RecordingTaskState.failed);
+    expect(result.metadata['error'], 'Recording media pipeline was interrupted');
+    expect(result.metadata['canDownload'], false);
+  });
+
+  test('HTTP status survives an HTML failure without exposing its body', () async {
+    backend.replies.add(const MediaBackendTransportResponse(statusCode: 503, body: '<html>private backend details</html>'));
+    await expectLater(session.queryCloudRecording(), throwsA(isA<RealtimeException>()
+      .having((error) => error.code, 'code', RealtimeErrorCode.serverError)
+      .having((error) => error.message, 'sanitized message', isNot(contains('private backend')))));
+  });
+
+  test('authentication deadline prevents a late recording write', () async {
+    final token = Completer<String?>();
+    final recorder = HttpCloudRecordingSession(
+      backendUrl: 'https://demo.example.com', roomCode: 'r',
+      participantId: 'p', participantCredential: null,
+      tokenProvider: () => token.future, transport: backend,
+      requestTimeout: const Duration(milliseconds: 10),
+    );
+    await expectLater(recorder.startCloudRecording(RecordingOptions.cloud()), throwsA(isA<RealtimeException>()
+      .having((error) => error.code, 'code', RealtimeErrorCode.timeout)));
+    token.complete('late-token');
+    await Future<void>.delayed(Duration.zero);
+    expect(backend.requests, isEmpty);
+    recorder.dispose();
+    expect(backend.closed, isFalse, reason: 'Injected transports belong to the host');
+  });
+
+  test('dispose while authenticating prevents a late recording write', () async {
+    final token = Completer<String?>();
+    final recorder = HttpCloudRecordingSession(
+      backendUrl: 'https://demo.example.com', roomCode: 'r',
+      participantId: 'p', participantCredential: null,
+      tokenProvider: () => token.future, transport: backend,
+    );
+    final pending = recorder.startCloudRecording(RecordingOptions.cloud());
+    recorder.dispose();
+    token.complete('late-token');
+    await expectLater(pending, throwsA(isA<RealtimeException>()
+      .having((error) => error.code, 'code', RealtimeErrorCode.cancelled)));
+    expect(backend.requests, isEmpty);
   });
 
   test(
@@ -82,7 +138,7 @@ void main() {
       );
       expect(result.mode, RecordingMode.cloud);
       expect(result.recordingId, 'EG_123');
-      expect(result.metadata['state'], 'starting');
+      expect(result.taskState, RecordingTaskState.starting);
       final sent = backend.requests.single;
       expect(sent['method'], 'POST');
       expect((sent['uri'] as Uri).path, '/rooms/A1234/recording/start');
@@ -120,7 +176,7 @@ void main() {
         'downloadUrl': '/rooms/A1234/recording/export/single-use-token',
       });
       final stopped = await session.stopCloudRecording();
-      expect(stopped.metadata['state'], 'processing');
+      expect(stopped.taskState, RecordingTaskState.processing);
       expect(stopped.fileSizeBytes, 0);
       final ready = await session.queryCloudRecording();
       expect(ready.metadata['canDownload'], true);
@@ -140,7 +196,7 @@ void main() {
       backend.respond(200, {'state': 'starting'});
       await expectLater(
         session.startCloudRecording(RecordingOptions.cloud()),
-        throwsStateError,
+        throwsA(isA<RealtimeException>()),
       );
       backend.respond(409, {
         'error': {'message': 'Cloud recording is still processing'},
@@ -150,7 +206,7 @@ void main() {
         throwsA(isA<RealtimeException>()),
       );
       backend.respond(200, {'downloadUrl': 'http://non-tls.test/file'});
-      await expectLater(session.cloudRecordingDownloadUrl(), throwsStateError);
+      await expectLater(session.cloudRecordingDownloadUrl(), throwsA(isA<RealtimeException>()));
     },
   );
 
@@ -174,7 +230,7 @@ void main() {
         ),
       );
       backend.respond(200, {'downloadUrl': 'http://other-host.local/steal'});
-      await expectLater(local.cloudRecordingDownloadUrl(), throwsStateError);
+      await expectLater(local.cloudRecordingDownloadUrl(), throwsA(isA<RealtimeException>()));
     },
   );
 }

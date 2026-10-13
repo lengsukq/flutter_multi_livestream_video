@@ -14,10 +14,6 @@ dependencies:
     path: ../flutter_realtime_classroom_core
   flutter_realtime_interaction_core:
     path: ../flutter_realtime_interaction_core
-  flutter_realtime_whiteboard_core:
-    path: ../flutter_realtime_whiteboard_core
-  flutter_realtime_screen_annotation:
-    path: ../flutter_realtime_screen_annotation
   flutter_realtime_media_core:
     path: ../flutter_realtime_media_core
 dev_dependencies:

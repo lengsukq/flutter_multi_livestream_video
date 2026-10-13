@@ -18,39 +18,42 @@ class _Media implements MediaSession {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-class _SlowStartingPlugin extends _Plugin
-    implements RealtimeStartingFeaturePlugin {
+class _SlowStartingPlugin extends _Plugin {
   _SlowStartingPlugin(super.id, super.log, {required super.gate});
   @override
-  Future<void> start(Object feature) async {
+  Future<void> start(String feature) async {
     log.add('start:$id');
   }
 }
 
-class _SyncPlugin implements RealtimeFeaturePlugin {
+class _SyncPlugin extends RealtimeFeaturePlugin<String> {
   _SyncPlugin(this.id, this.log);
   @override
   final String id;
+  @override
+  RealtimeFeatureKey<String> get key => RealtimeFeatureKey<String>(id);
   final List<String> log;
   @override
-  Object attach(RealtimeFeatureContext context) {
+  String attach(RealtimeFeatureContext context) {
     log.add('attach:$id:${context.roomCode}');
     return id;
   }
 
   @override
-  void detach(Object feature) => log.add('detach:$id');
+  void detach(String feature) => log.add('detach:$id');
 }
 
-class _Plugin implements RealtimeFeaturePlugin {
+class _Plugin extends RealtimeFeaturePlugin<String> {
   _Plugin(this.id, this.log, {this.failure = false, this.gate});
   @override
   final String id;
+  @override
+  RealtimeFeatureKey<String> get key => RealtimeFeatureKey<String>(id);
   final List<String> log;
   final bool failure;
   final Completer<void>? gate;
   @override
-  Future<Object> attach(RealtimeFeatureContext context) async {
+  Future<String> attach(RealtimeFeatureContext context) async {
     log.add('attach:$id:${context.roomCode}');
     await gate?.future;
     if (failure) throw StateError('broken $id');
@@ -58,9 +61,29 @@ class _Plugin implements RealtimeFeaturePlugin {
   }
 
   @override
-  Future<void> detach(Object feature) async {
+  Future<void> detach(String feature) async {
     log.add('detach:$id');
   }
+}
+
+class _RecoveringPlugin extends RealtimeFeaturePlugin<String> {
+  static const featureKey = RealtimeFeatureKey<String>('recovering');
+  @override RealtimeFeatureKey<String> get key => featureKey;
+  int starts = 0;
+  int attachments = 0;
+  int releases = 0;
+  @override String attach(RealtimeFeatureContext context) { attachments++; return 'feature'; }
+  @override void start(String feature) {
+    starts++;
+    if (starts == 1) throw StateError('initial start failed');
+  }
+  @override void detach(String feature) { releases++; }
+}
+
+class _DependentPlugin extends _SyncPlugin {
+  _DependentPlugin(super.id, super.log, this.dependencies);
+  final List<RealtimeFeatureKey<Object>> dependencies;
+  @override List<RealtimeFeatureKey<Object>> get requiredFeatures => dependencies;
 }
 
 void main() {
@@ -90,8 +113,8 @@ void main() {
         _SyncPlugin('classroom', log),
       ]);
       final initialization = registry.initialize(context);
-      expect(registry.get<String>('classroom'), 'classroom');
-      expect(registry.get<String>('slow'), isNull);
+      expect(registry.get(const RealtimeFeatureKey<String>('classroom')), 'classroom');
+      expect(registry.get(const RealtimeFeatureKey<String>('slow')), isNull);
       await registry.dispose();
       gate.complete();
       await initialization;
@@ -138,6 +161,42 @@ void main() {
     },
   );
 
+  test('failed startup is observable and retry releases the old instance', () async {
+    final plugin = _RecoveringPlugin();
+    final registry = RealtimeFeatureRegistry([plugin]);
+    await registry.initialize(context);
+    await registry.startAttached();
+    expect(registry.states['recovering'], isA<RealtimeFeatureFailed>());
+    final snapshot = registry.states;
+    await registry.retry(_RecoveringPlugin.featureKey);
+    expect(registry.states['recovering'], isA<RealtimeFeatureReady>());
+    expect(snapshot['recovering'], isA<RealtimeFeatureFailed>(), reason: 'Public state maps are immutable snapshots');
+    expect(plugin.attachments, 2);
+    expect(plugin.releases, 1);
+    await registry.dispose();
+    expect(plugin.releases, 2);
+  });
+
+  test('missing dependencies and dependency cycles are rejected before attachment', () {
+    expect(() => RealtimeFeatureRegistry([_DependentPlugin('a', [], const [RealtimeFeatureKey<String>('missing')])]), throwsArgumentError);
+    expect(() => RealtimeFeatureRegistry([
+      _DependentPlugin('a', [], const [RealtimeFeatureKey<String>('b')]),
+      _DependentPlugin('b', [], const [RealtimeFeatureKey<String>('a')]),
+    ]), throwsArgumentError);
+  });
+
+  test('dependencies attach first and dispose after their dependents', () async {
+    final log = <String>[];
+    final registry = RealtimeFeatureRegistry([
+      _DependentPlugin('dependent', log, const [RealtimeFeatureKey<String>('base')]),
+      _SyncPlugin('base', log),
+    ]);
+    await registry.initialize(context);
+    await registry.startAttached();
+    await registry.dispose();
+    expect(log, ['attach:base:demo-1', 'attach:dependent:demo-1', 'detach:dependent', 'detach:base']);
+  });
+
   test(
     'attaches explicitly opted-in features and disposes in reverse order',
     () async {
@@ -147,9 +206,9 @@ void main() {
         _Plugin('live', log),
       ]);
       await registry.initialize(context);
-      expect(registry.get<String>('classroom'), 'classroom');
-      expect(registry.get<String>('live'), 'live');
-      expect(registry.get<int>('live'), isNull);
+      expect(registry.get(const RealtimeFeatureKey<String>('classroom')), 'classroom');
+      expect(registry.get(const RealtimeFeatureKey<String>('live')), 'live');
+      expect(() => registry.get(const RealtimeFeatureKey<int>('live')), throwsA(isA<RealtimeException>()));
       await registry.dispose();
       expect(log, [
         'attach:classroom:demo-1',

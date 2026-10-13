@@ -1,3 +1,4 @@
+import 'dart:async';
 // ignore_for_file: prefer_initializing_formals
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
@@ -41,7 +42,7 @@ class RealtimeConnection {
     required this.experience,
     this.mediaRoom,
     this.chatRoom,
-    void Function()? disposeAuxiliary,
+    FutureOr<void> Function()? disposeAuxiliary,
   }) : _disposeAuxiliary = disposeAuxiliary;
 
   factory RealtimeConnection.media({
@@ -51,7 +52,7 @@ class RealtimeConnection {
 
   factory RealtimeConnection.chat({
     required RealtimeChatRoom room,
-    void Function()? disposeAuxiliary,
+    FutureOr<void> Function()? disposeAuxiliary,
   }) => RealtimeConnection._(
     experience: RealtimeExperience.chat,
     chatRoom: room,
@@ -61,7 +62,7 @@ class RealtimeConnection {
   final RealtimeExperience experience;
   final RealtimeRoom? mediaRoom;
   final RealtimeChatRoom? chatRoom;
-  final void Function()? _disposeAuxiliary;
+  final FutureOr<void> Function()? _disposeAuxiliary;
   Future<void>? _disposeFuture;
   Duration cleanupTimeout = const Duration(seconds: 10);
 
@@ -116,8 +117,8 @@ class RealtimeConnection {
         await chatRoom!.dispose();
       }
     });
-    await cleanup.run('connection.auxiliary', () {
-      _disposeAuxiliary?.call();
+    await cleanup.run('connection.auxiliary', () async {
+      await _disposeAuxiliary?.call();
     });
     cleanup.finish(domain: 'connection');
   }

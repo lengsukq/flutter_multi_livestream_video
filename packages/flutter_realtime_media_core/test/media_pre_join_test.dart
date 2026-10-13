@@ -6,6 +6,7 @@ import 'support/fake_media_session.dart';
 import 'support/fake_transport.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'desktop permissions are unknown, never reported as missing devices',
     () async {

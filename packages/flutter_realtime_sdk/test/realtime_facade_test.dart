@@ -2,12 +2,28 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_provider_livekit/flutter_realtime_provider_livekit.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_media_session.dart';
 
 void main() {
   group('Realtime facade', () {
+    test('media bundles restore video effects by default', () {
+      final realtime = Realtime(providers: [createLivekitProvider()]);
+      expect(realtime.sdk.services.videoEffectsFactory, isNotNull);
+      expect(realtime.sdk.createClient().videoEffects, isNotNull);
+    });
+
+    test('explicit room video effects factory overrides provider defaults', () {
+      final factory = () => throw StateError('host selected effects');
+      final realtime = Realtime(
+        providers: [createLivekitProvider()],
+        services: RealtimeRoomServices(videoEffectsFactory: factory),
+      );
+      expect(realtime.sdk.services.videoEffectsFactory, same(factory));
+    });
+
     test(
       'direct meeting resolves public AWS provider to meeting engine',
       () async {
@@ -25,7 +41,7 @@ void main() {
             type: RealtimeExperience.meeting,
             user: const RealtimeUser(id: 'user-1', name: 'Leo'),
             roomCode: 'room-1',
-            source: const RealtimeSource.credentials(
+            source: RealtimeSource.credentials(
               media: RealtimeCredentials(
                 providerId: 'aws',
                 payload: <String, dynamic>{},
@@ -60,7 +76,7 @@ void main() {
           type: RealtimeExperience.live,
           user: const RealtimeUser(id: 'viewer-1', name: 'Viewer'),
           roomCode: 'live-1',
-          source: const RealtimeSource.credentials(
+          source: RealtimeSource.credentials(
             media: RealtimeCredentials(
               providerId: 'aws',
               payload: <String, dynamic>{},
@@ -113,7 +129,7 @@ void main() {
             type: RealtimeExperience.meeting,
             user: const RealtimeUser(id: 'user-1', name: 'Leo'),
             roomCode: 'room-1',
-            source: const RealtimeSource.credentials(
+            source: RealtimeSource.credentials(
               media: RealtimeCredentials(
                 providerId: 'media',
                 payload: <String, dynamic>{},
@@ -160,7 +176,7 @@ void main() {
           type: RealtimeExperience.chat,
           user: const RealtimeUser(id: 'user-1', name: 'Leo'),
           roomCode: 'chat-1',
-          source: const RealtimeSource.credentials(
+          source: RealtimeSource.credentials(
             chat: RealtimeCredentials(
               providerId: 'product-chat',
               payload: <String, dynamic>{},
@@ -320,7 +336,7 @@ void main() {
           RealtimeRequest.create(
             type: RealtimeExperience.meeting,
             user: const RealtimeUser(id: 'user-1', name: 'Leo'),
-            source: const RealtimeSource.credentials(
+            source: RealtimeSource.credentials(
               media: RealtimeCredentials(
                 providerId: 'fake',
                 payload: <String, dynamic>{},
@@ -365,7 +381,7 @@ void main() {
               type: RealtimeExperience.meeting,
               user: const RealtimeUser(id: 'user-1', name: 'Leo'),
               roomCode: 'room-1',
-              source: const RealtimeSource.credentials(
+              source: RealtimeSource.credentials(
                 media: RealtimeCredentials(
                   providerId: 'mobile-only',
                   payload: <String, dynamic>{},
@@ -496,6 +512,7 @@ class _FakeMediaProvisioner implements MediaRoomProvisioner {
 }
 
 class _FakeStandaloneChatProvisioner implements StandaloneChatProvisioner {
+  @override void dispose() {}
   _FakeStandaloneChatProvisioner(this.providerId);
 
   final String providerId;

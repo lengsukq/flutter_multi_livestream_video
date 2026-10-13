@@ -1,3 +1,6 @@
+import 'realtime_video_effects.dart';
+import 'realtime_room_services.dart';
+import 'http_cloud_recording_session.dart';
 import 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
 // ignore_for_file: prefer_initializing_formals
 
@@ -10,7 +13,7 @@ import 'realtime_room.dart';
 import 'realtime_requirements.dart';
 import 'realtime_chat_room.dart';
 import 'interaction_revision_transport.dart';
-import 'realtime_feature_registry.dart';
+import 'realtime_feature_plugin.dart';
 
 typedef RealtimeTokenProvider = Future<String?> Function();
 typedef RealtimeMediaClientFactory = MediaClient Function();
@@ -28,6 +31,8 @@ class RealtimeClient {
     this.backendUrl,
     this.requestTimeout,
     this.effectsProbe,
+    this.videoEffects,
+    RealtimeRecordingSessionFactory? recordingSessionFactory,
     required this.mediaAdapters,
     ChatRegistry? chatRegistry,
     RealtimeTokenProvider? tokenProvider,
@@ -35,14 +40,28 @@ class RealtimeClient {
     RealtimeChatClientFactory? chatClientFactory,
     RealtimePublicProviderResolver? publicProviderResolver,
     this.interactionControlPlaneFactory,
-    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
+    Iterable<RealtimeFeaturePlugin<Object>> featurePlugins = const [],
   }) : chatRegistry = chatRegistry ?? ChatRegistry(),
        featurePlugins = List.unmodifiable(featurePlugins),
        _tokenProvider = tokenProvider,
        _mediaClientFactory = mediaClientFactory,
        _chatClientFactory = chatClientFactory,
-       _publicProviderResolver = publicProviderResolver;
+       _publicProviderResolver = publicProviderResolver,
+       recordingSessionFactory = recordingSessionFactory ??
+           (backendUrl == null
+               ? null
+               : (room) => HttpCloudRecordingSession(
+                   backendUrl: backendUrl,
+                   roomCode: room.roomCode,
+                   participantId: room.participantId,
+                   participantCredential: room.participantCredential,
+                   roomOwnerCredential: room.roomOwnerCredential,
+                   tokenProvider: tokenProvider,
+                   requestTimeout: requestTimeout ?? const Duration(seconds: 15),
+                 ));
 
+  final RealtimeVideoEffects? videoEffects;
+  final RealtimeRecordingSessionFactory? recordingSessionFactory;
   final String? backendUrl;
   final Duration? requestTimeout;
   final Future<MediaBackgroundCapabilities> Function(String, MediaRole)?
@@ -54,7 +73,7 @@ class RealtimeClient {
   final RealtimeChatClientFactory? _chatClientFactory;
   final RealtimePublicProviderResolver? _publicProviderResolver;
   final InteractionControlPlaneFactory? interactionControlPlaneFactory;
-  final List<RealtimeFeaturePlugin> featurePlugins;
+  final List<RealtimeFeaturePlugin<Object>> featurePlugins;
 
   ChatClient newChatClient({ChatProvisioner? provisioner}) =>
       _chatClientFactory?.call() ??
@@ -337,6 +356,8 @@ class RealtimeClient {
           const MediaBackgroundCapabilities.none();
       final resolved = RealtimeRoom(
         effectsCapabilities: effects,
+        videoEffects: videoEffects,
+        cloudRecordingSession: recordingSessionFactory?.call(room),
         media: room,
         publicProviderId:
             _publicProviderResolver?.call(room.providerId) ?? room.providerId,

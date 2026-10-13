@@ -248,7 +248,7 @@ void main() {
             canBlur: true,
             canReplaceImage: true,
           ),
-          videoEffectsBridge: bridge,
+          videoEffects: DefaultRealtimeVideoEffects(bridge: bridge),
         );
 
         await room.prepareVideoEffects(
@@ -302,18 +302,18 @@ void main() {
   });
 
   group('SDK processed-video capability probes', () {
-    late FlutterRealtimeVideoEffectsPlatform originalEffectsPlatform;
+    late FlutterRealtimeProcessedVideoPlatform originalEffectsPlatform;
     late _FakeEffectsPlatform effectsPlatform;
 
     setUp(() {
-      originalEffectsPlatform = FlutterRealtimeVideoEffectsPlatform.instance;
+      originalEffectsPlatform = FlutterRealtimeProcessedVideoPlatform.instance;
       effectsPlatform = _FakeEffectsPlatform();
-      FlutterRealtimeVideoEffectsPlatform.instance = effectsPlatform;
+      FlutterRealtimeProcessedVideoPlatform.instance = effectsPlatform;
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     });
 
     tearDown(() {
-      FlutterRealtimeVideoEffectsPlatform.instance = originalEffectsPlatform;
+      FlutterRealtimeProcessedVideoPlatform.instance = originalEffectsPlatform;
       debugDefaultTargetPlatformOverride = null;
     });
 
@@ -1065,6 +1065,10 @@ void main() {
       expect(room.state.isConnected, isTrue);
       expect(room.capabilities.canChat, isTrue);
       expect(factory.createdSessions.single.joinCount, 1);
+
+      // Advanced RealtimeClient users retain the same backend cloud recording
+      // capability as the high-level RealtimeSdk entry point.
+      expect(room.recording.cloudRecordingSession, isA<HttpCloudRecordingSession>());
 
       final eventFuture = room.events.firstWhere(
         (event) => event is RealtimeMediaEvent,
@@ -2127,7 +2131,7 @@ class _FakeProcessedMediaSession extends FakeMediaSession
   }
 }
 
-class _FakeEffectsPlatform extends FlutterRealtimeVideoEffectsPlatform {
+class _FakeEffectsPlatform extends FlutterRealtimeProcessedVideoPlatform {
   int createCalls = 0;
   bool supported = true;
   Completer<void>? createGate;
@@ -2158,7 +2162,7 @@ class _FakeEffectsPlatform extends FlutterRealtimeVideoEffectsPlatform {
     lastConfig = config;
     return const ProcessedVideoSource(
       id: 'effects-source-1',
-      platform: VideoEffectsPlatform.web,
+      platform: ProcessedVideoPlatform.web,
       kind: ProcessedVideoSourceKind.mediaStreamTrack,
       width: 1280,
       height: 720,
@@ -2180,7 +2184,7 @@ class _FakeEffectsPlatform extends FlutterRealtimeVideoEffectsPlatform {
   Future<void> selectCamera(String sourceId, String? deviceId) async {}
 
   @override
-  Future<List<VideoEffectsCameraDevice>> listCameras() async => const [];
+  Future<List<ProcessedVideoCameraDevice>> listCameras() async => const [];
 
   @override
   Future<void> disposeSource(String sourceId) async {
@@ -2190,6 +2194,7 @@ class _FakeEffectsPlatform extends FlutterRealtimeVideoEffectsPlatform {
 
 RealtimeSdk _sdkWithProbeFactory(FakeMediaSessionFactory factory) =>
     RealtimeSdk.standard(
+      services: RealtimeRoomServices(videoEffectsFactory: DefaultRealtimeVideoEffects.new),
       platformResolver: () => RealtimeRuntimePlatform.macos,
       drivers: [
         RealtimeProviderDriver(
@@ -2244,5 +2249,5 @@ RealtimeRoom _effectsRoom(
     canBlur: true,
     canReplaceImage: true,
   ),
-  videoEffectsBridge: VideoEffectsBridge(platform: platform),
+  videoEffects: DefaultRealtimeVideoEffects(bridge: VideoEffectsBridge(platform: platform)),
 );

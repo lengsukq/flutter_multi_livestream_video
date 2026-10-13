@@ -153,6 +153,7 @@ class HttpStandaloneChatProvisioner
         .toList(growable: false);
   }
 
+  @override
   void dispose() => _backend.dispose();
 
   @override

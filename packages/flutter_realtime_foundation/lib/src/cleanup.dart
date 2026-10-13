@@ -11,12 +11,14 @@ class CleanupFailure {
 /// Performs dependent steps in order without skipping resources after failures.
 class Cleanup {
   Cleanup({this.timeout = const Duration(seconds: 10)});
-  final Duration timeout;
+  final Duration? timeout;
   final List<CleanupFailure> _failures = [];
 
   Future<void> run(String stage, FutureOr<void> Function() release) async {
     try {
-      await Future<void>.sync(release).timeout(timeout);
+      final pending = Future<void>.sync(release);
+      final deadline = timeout;
+      if (deadline == null) { await pending; } else { await pending.timeout(deadline); }
     } catch (error, stack) {
       _failures.add(CleanupFailure(stage, error, stack));
     }

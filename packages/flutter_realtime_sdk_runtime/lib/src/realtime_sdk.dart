@@ -1,22 +1,22 @@
+import 'realtime_room_services.dart';
 import 'realtime_platform_reports.dart';
 import 'realtime_credentials_parser.dart';
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
+import 'realtime_video_effects.dart';
 
 import 'provider_driver.dart';
 import 'provider_plugin.dart';
 import 'provider_web_assets.dart';
 import 'provider_web_session_wrapper.dart';
 import 'realtime_client.dart';
-import 'realtime_feature_registry.dart';
+import 'realtime_feature_plugin.dart';
 import 'realtime_error.dart';
 import 'realtime_room.dart';
 import 'realtime_chat_room.dart';
 import 'runtime_platform.dart';
-import 'video_effects_local_preview.dart';
 
 typedef RealtimeClientFactory = RealtimeClient Function();
 
@@ -28,11 +28,12 @@ class RealtimeSdk {
   RealtimeSdk({
     this.backendUrl,
     this.requestTimeout,
+    this.services = const RealtimeRoomServices(),
     required Iterable<RealtimeProviderPlugin> plugins,
     RealtimeTokenProvider? tokenProvider,
     RealtimeClientFactory? clientFactory,
     this.interactionControlPlaneFactory,
-    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
+    Iterable<RealtimeFeaturePlugin<Object>> featurePlugins = const [],
     this.driverRegistry,
     RealtimeProviderWebAssetsLoader? webAssetsLoader,
     Future<void> Function(String providerId)? chatAssetsLoader,
@@ -49,16 +50,50 @@ class RealtimeSdk {
        featurePlugins = List.unmodifiable(featurePlugins),
        _clientFactory = clientFactory;
 
+  factory RealtimeSdk.standard({
+    String? backendUrl,
+    Duration? requestTimeout,
+    RealtimeRoomServices services = const RealtimeRoomServices(),
+    RealtimeTokenProvider? tokenProvider,
+    RealtimeClientFactory? clientFactory,
+    InteractionControlPlaneFactory? interactionControlPlaneFactory,
+    Iterable<RealtimeFeaturePlugin<Object>> featurePlugins = const [],
+    RealtimePlatformResolver platformResolver = resolveRealtimeRuntimePlatform,
+    Iterable<RealtimeProviderPlugin> additionalPlugins = const [],
+    Iterable<RealtimeProviderDriver> drivers = const [],
+    RealtimeProviderWebAssetsLoader? webAssetsLoader,
+  }) {
+    final registry = RealtimeDriverRegistry(
+      drivers,
+      platformResolver: platformResolver,
+    );
+    return RealtimeSdk(
+      backendUrl: backendUrl,
+      requestTimeout: requestTimeout,
+      services: services,
+      plugins: registry.resolvePlugins(additionalPlugins: additionalPlugins),
+      tokenProvider: tokenProvider,
+      clientFactory: clientFactory,
+      interactionControlPlaneFactory: interactionControlPlaneFactory,
+      featurePlugins: featurePlugins,
+      driverRegistry: registry,
+      webAssetsLoader: webAssetsLoader,
+    );
+  }
+
   final String? backendUrl;
   final Duration? requestTimeout;
+  final RealtimeRoomServices services;
   final RealtimePluginRegistry plugins;
   final RealtimeDriverRegistry? driverRegistry;
   final RealtimeTokenProvider? _tokenProvider;
   final RealtimeClientFactory? _clientFactory;
   final InteractionControlPlaneFactory? interactionControlPlaneFactory;
-  final List<RealtimeFeaturePlugin> featurePlugins;
+  final List<RealtimeFeaturePlugin<Object>> featurePlugins;
   RealtimeRuntimePlatform get platform =>
       driverRegistry?.platform ?? resolveRealtimeRuntimePlatform();
+
+  late final RealtimeVideoEffects? _videoEffects = services.videoEffectsFactory?.call();
 
   final Map<String, MediaBackgroundCapabilities> _effectsSupport = {};
   final Map<String, Future<MediaBackgroundCapabilities>> _effectsPending = {};
@@ -71,16 +106,17 @@ class RealtimeSdk {
   ) async {
     final id = providerId?.trim().toLowerCase();
     final probe = id == null ? null : plugins.lookup(id)?.effectsProbe;
-    if (probe == null || role == MediaRole.viewer) {
+    if (_videoEffects == null || probe == null || role == MediaRole.viewer) {
       return const MediaBackgroundCapabilities.none();
     }
     final key = '$id:${role.name}';
     final cached = _effectsSupport[key];
     if (cached != null) return cached;
     try {
-      final result = await (_effectsPending[key] ??= probe(
-        role,
-      ).timeout(const Duration(seconds: 10)));
+      final result = await (_effectsPending[key] ??= (() async {
+        if (!await _videoEffects.isSupported()) return const MediaBackgroundCapabilities.none();
+        return probe(role);
+      })().timeout(const Duration(seconds: 10)));
       _effectsSupport[key] = result;
       return result;
     } catch (error, stack) {
@@ -101,7 +137,6 @@ class RealtimeSdk {
   }
 
   Future<bool> _supportsVideoEffectsForProvider({
-    required VideoEffectsBridge bridge,
     required String? providerId,
     MediaRole role = MediaRole.participant,
   }) async => (await _probeEffects(providerId, role)).isSupported;
@@ -132,17 +167,15 @@ class RealtimeSdk {
         ) ??
         providerId.trim().toLowerCase();
     if (role != MediaRole.viewer) {
-      final effects = VideoEffectsBridge();
-      if (await _supportsVideoEffectsForProvider(
-        bridge: effects,
+      final effects = _videoEffects;
+      if (effects != null && await _supportsVideoEffectsForProvider(
         providerId: engineProvider,
         role: role,
       )) {
         try {
-          return await VideoEffectsLocalPreviewSession.create(
+          return await effects.createPreview(
             providerId: engineProvider,
             role: role,
-            bridge: effects,
           );
         } catch (error, stack) {
           if (_diagnostics.length == 64) _diagnostics.removeAt(0);
@@ -168,12 +201,16 @@ class RealtimeSdk {
       RealtimeClient(
         backendUrl: backendUrl,
         requestTimeout: requestTimeout,
-        effectsProbe: _probeEffects,
+        effectsProbe: _videoEffects == null ? null : _probeEffects,
+        videoEffects: _videoEffects,
+        mediaClientFactory: services.mediaClientFactory,
+        chatClientFactory: services.chatClientFactory,
+        recordingSessionFactory: services.recordingSessionFactory,
         mediaAdapters: plugins.media,
         chatRegistry: plugins.chat,
         tokenProvider: _tokenProvider,
         publicProviderResolver: driverRegistry?.publicProviderForEngine,
-        interactionControlPlaneFactory: interactionControlPlaneFactory,
+        interactionControlPlaneFactory: services.interactionControlPlaneFactory ?? interactionControlPlaneFactory,
         featurePlugins: featurePlugins,
       );
 
@@ -357,10 +394,8 @@ class RealtimeSdk {
           .toLowerCase();
       result = _applyPlatformSupportToPreJoin(result);
       if (role != MediaRole.viewer) {
-        final effects = VideoEffectsBridge();
         try {
           if (await _supportsVideoEffectsForProvider(
-            bridge: effects,
             providerId: effectsProvider,
             role: role,
           )) {

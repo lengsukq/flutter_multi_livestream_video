@@ -5,12 +5,10 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
         RealtimeFeatureContext,
         RealtimeFeaturePlugin,
         RealtimeRoom,
-        RealtimeStartingFeaturePlugin,
+        RealtimeFeatureKey,
         ChatInteractionRevisionTransport,
         MediaInteractionRevisionTransport;
 import 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
-import 'shared_content_controller.dart';
-import 'room_annotation_coordinator.dart';
 
 typedef ClassroomRepositoryFactory =
     ClassroomRepository Function(RealtimeFeatureContext context);
@@ -21,7 +19,7 @@ typedef ClassroomRepositoryFactory =
 /// supplied by the host, or the existing reference HTTP repository is used.
 /// The media room must declare meeting mode in its backend metadata.
 class ClassroomPreset
-    implements RealtimeFeaturePlugin, RealtimeStartingFeaturePlugin {
+    extends RealtimeFeaturePlugin<ClassroomSession> {
   const ClassroomPreset({
     this.repositoryFactory,
     this.pollInterval = const Duration(seconds: 2),
@@ -29,6 +27,9 @@ class ClassroomPreset
   });
 
   static const featureId = 'classroom';
+  static const featureKey = RealtimeFeatureKey<ClassroomSession>(featureId);
+  @override
+  RealtimeFeatureKey<ClassroomSession> get key => featureKey;
   @override
   String get id => featureId;
 
@@ -39,7 +40,7 @@ class ClassroomPreset
   final bool enableForDirectRooms;
 
   @override
-  ClassroomRoomFeature? attach(RealtimeFeatureContext context) {
+  ClassroomSession? attach(RealtimeFeatureContext context) {
     final media = context.media;
     if (media.backendMetadata['roomMode'] != 'meeting' &&
         !(enableForDirectRooms && repositoryFactory != null)) {
@@ -101,59 +102,23 @@ class ClassroomPreset
       chatMessages: () => chat?.messages.length ?? 0,
       revisionTransport: _ClassroomRevisionHints(signal),
     );
-    return ClassroomRoomFeature(session, context);
+    return session;
   }
 
   @override
-  Future<void> start(Object feature) =>
-      (feature as ClassroomRoomFeature).session.start();
+  Future<void> start(ClassroomSession feature) =>
+      feature.start();
 
   @override
-  Future<void> detach(Object feature) =>
-      (feature as ClassroomRoomFeature).dispose();
-}
-
-/// A complete opt-in classroom room contribution, including the previously
-/// SDK-owned whiteboard/shared-content/annotation controllers. None of these
-/// objects exist for apps that do not register ClassroomPreset.
-class ClassroomRoomFeature {
-  ClassroomRoomFeature(this.session, RealtimeFeatureContext context) {
-    sharedContent = SharedContentController(
-      media: context.media.session,
-      classroom: session,
-    );
-    annotations = RoomAnnotationCoordinator(
-      context.media.session,
-      session,
-      (error) => context.reportError?.call(error, StackTrace.current),
-    );
-  }
-
-  final ClassroomSession session;
-  late final SharedContentController sharedContent;
-  late final RoomAnnotationCoordinator annotations;
-
-  Future<void> dispose() async {
-    // Every feature owns its own presentation/control objects and backend
-    // session, in dependency-safe order; the host room still owns media.
-    try {
-      await annotations.dispose();
-    } finally {
-      try {
-        await sharedContent.dispose();
-      } finally {
-        await session.dispose();
-      }
-    }
-  }
+  Future<void> detach(ClassroomSession feature) =>
+      feature.dispose();
 }
 
 /// Typed access remains opt-in and is no longer compiled into RealtimeRoom.
 extension RealtimeRoomClassroomExtension on RealtimeRoom {
-  ClassroomRoomFeature? get classroomFeature =>
-      features.get<ClassroomRoomFeature>(ClassroomPreset.featureId);
-  ClassroomSession? get classroom => classroomFeature?.session;
-  SharedContentController? get sharedContent => classroomFeature?.sharedContent;
+  ClassroomSession? get classroomFeature =>
+      features.get(ClassroomPreset.featureKey);
+  ClassroomSession? get classroom => classroomFeature;
 }
 
 class _ClassroomRevisionHints implements ClassroomRevisionTransport {

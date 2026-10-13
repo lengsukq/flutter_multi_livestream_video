@@ -149,6 +149,7 @@ class _FakeFactory extends ChatSessionFactory {
 }
 
 class _FakeStandaloneProvisioner implements StandaloneChatProvisioner {
+  @override void dispose() {}
   int createCalls = 0;
   int joinCalls = 0;
   int provisionCalls = 0;

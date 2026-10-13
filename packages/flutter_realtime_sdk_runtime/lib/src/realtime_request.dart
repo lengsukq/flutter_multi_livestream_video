@@ -39,7 +39,8 @@ class RealtimeUser {
 }
 
 class RealtimeCredentials {
-  const RealtimeCredentials({required this.providerId, required this.payload});
+  RealtimeCredentials({required this.providerId, required Map<String, dynamic> payload})
+    : payload = freezeJson(payload) as Map<String, dynamic>;
 
   final String providerId;
   final Map<String, dynamic> payload;

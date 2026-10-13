@@ -29,7 +29,11 @@ class RoomRecordingController implements MediaRecordingController {
   Timer? _durationTimer;
   DateTime? _startedAt;
   RecordingOptions? _currentOptions;
-  bool _cloudRecordingActive = false;
+  RecordingTaskState _taskState = RecordingTaskState.idle;
+  RecordingTaskState get taskState => _taskState;
+  bool get _cloudRecordingActive => _taskState == RecordingTaskState.recording || _taskState == RecordingTaskState.starting;
+  bool get _cloudStateUnknown => _taskState == RecordingTaskState.unknown;
+  Duration cleanupTimeout = const Duration(seconds: 10);
   bool _disposed = false;
   bool _disposing = false;
   Completer<void>? _startCompleted;
@@ -54,6 +58,7 @@ class RoomRecordingController implements MediaRecordingController {
   Future<RecordingResult> startRecording([RecordingOptions? options]) async {
     if (_disposed ||
         _disposing ||
+        _cloudStateUnknown ||
         _status == RecordingStatus.recording ||
         _status == RecordingStatus.starting ||
         _status == RecordingStatus.stopping) {
@@ -79,34 +84,29 @@ class RoomRecordingController implements MediaRecordingController {
     try {
       final result = await cloud.startCloudRecording(opts);
       if (_disposing) {
-        try {
-          await cloud.stopCloudRecording();
-        } catch (_) {}
+        final cleanup = Cleanup(timeout: cleanupTimeout);
+        await cleanup.run('recording.rollback', cloud.stopCloudRecording);
+        cleanup.finish(domain: 'recording', cause: const RealtimeException(
+          code: RealtimeErrorCode.cancelled, message: 'recording.start.cancelled',
+        ));
         throw RealtimeException(
           code: RealtimeErrorCode.invalidState,
           message: 'Room was disposed while cloud recording was starting.',
           providerId: providerId,
         );
       }
-      _cloudRecordingActive = true;
+      _taskState = RecordingTaskState.recording;
       _startDurationTicker();
       _setStatus(RecordingStatus.recording);
       return result;
     } catch (error, stack) {
-      _cloudRecordingActive = false;
-      _currentOptions = null;
-      _setStatus(RecordingStatus.failed);
-      onFailure?.call(
-        error is RealtimeException
-            ? error
-            : RealtimeException(
-                code: RealtimeErrorCode.unknown,
-                message: 'Unable to start cloud recording: $error',
-                providerId: providerId,
-                details: stack.toString(),
-              ),
-      );
-      rethrow;
+      final failure = normalizeRealtimeException(error, domain: 'recording', operation: 'start', providerId: providerId, stackTrace: stack);
+      final uncertain = failure.code == RealtimeErrorCode.timeout || failure.code == RealtimeErrorCode.network || failure.code == RealtimeErrorCode.cancelled || failure.code == RealtimeErrorCode.cleanupFailed;
+      _taskState = uncertain ? RecordingTaskState.unknown : RecordingTaskState.failed;
+      if (!_cloudStateUnknown) _currentOptions = null;
+      _setStatus(_cloudStateUnknown ? RecordingStatus.unknown : RecordingStatus.failed);
+      onFailure?.call(failure);
+      Error.throwWithStackTrace(failure, stack);
     } finally {
       _startCompleted?.complete();
       _startCompleted = null;
@@ -123,7 +123,14 @@ class RoomRecordingController implements MediaRecordingController {
         providerId: providerId,
       );
     }
-    return cloud.queryCloudRecording();
+    try {
+      final result = await cloud.queryCloudRecording();
+      _taskState = result.taskState;
+      _setStatus(RecordingStatus.values.byName(_taskState.name));
+      return result;
+    } catch (error, stack) {
+      Error.throwWithStackTrace(normalizeRealtimeException(error, domain: 'recording', operation: 'query', providerId: providerId, stackTrace: stack), stack);
+    }
   }
 
   @override
@@ -136,12 +143,17 @@ class RoomRecordingController implements MediaRecordingController {
         providerId: providerId,
       );
     }
-    return cloud.cloudRecordingDownloadUrl();
+    try {
+      return await cloud.cloudRecordingDownloadUrl();
+    } catch (error, stack) {
+      Error.throwWithStackTrace(normalizeRealtimeException(error, domain: 'recording', operation: 'download', providerId: providerId, stackTrace: stack), stack);
+    }
   }
 
   @override
   Future<RecordingResult?> stopRecording() async {
     if (_disposed || _status == RecordingStatus.idle) return null;
+    if (_cloudStateUnknown) await queryCloudRecording();
     if (_status != RecordingStatus.recording || !_cloudRecordingActive) {
       throw RealtimeException(
         code: RealtimeErrorCode.invalidState,
@@ -154,26 +166,20 @@ class RoomRecordingController implements MediaRecordingController {
     _stopDurationTicker();
     try {
       final result = await cloudRecordingSession!.stopCloudRecording();
-      _cloudRecordingActive = false;
+      _taskState = RecordingTaskState.processing;
       _currentOptions = null;
       _duration = Duration.zero;
-      _setStatus(RecordingStatus.idle);
+      _taskState = result.taskState;
+      _setStatus(RecordingStatus.values.byName(_taskState.name));
       return result; // Cloud processing may continue after recording stops.
     } catch (error, stack) {
-      _cloudRecordingActive = false;
-      _currentOptions = null;
-      _setStatus(RecordingStatus.failed);
-      onFailure?.call(
-        error is RealtimeException
-            ? error
-            : RealtimeException(
-                code: RealtimeErrorCode.unknown,
-                message: 'Failed to stop cloud recording: $error',
-                providerId: providerId,
-                details: stack.toString(),
-              ),
-      );
-      rethrow;
+      // A failed stop never proves the remote task stopped. Retain its options
+      // and require an authoritative read before attempting another stop.
+      _taskState = RecordingTaskState.unknown;
+      _setStatus(RecordingStatus.unknown);
+      final failure = normalizeRealtimeException(error, domain: 'recording', operation: 'stop', providerId: providerId, stackTrace: stack);
+      onFailure?.call(failure);
+      Error.throwWithStackTrace(failure, stack);
     } finally {
       _stopCompleted?.complete();
       _stopCompleted = null;
@@ -213,17 +219,17 @@ class RoomRecordingController implements MediaRecordingController {
 
   Future<void> _dispose() async {
     _disposing = true;
-    await _startCompleted?.future;
-    if (_status == RecordingStatus.recording && _cloudRecordingActive) {
-      try {
-        await stopRecording();
-      } catch (_) {}
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('recording.start', () async { await _startCompleted?.future; });
+    await cleanup.run('recording.pendingStop', () async { await _stopCompleted?.future; });
+    if (_cloudRecordingActive || _cloudStateUnknown) {
+      await cleanup.run('recording.stop', () async { await stopRecording(); });
     }
-    await _stopCompleted?.future;
     _disposed = true;
-    cloudRecordingSession?.dispose();
     _stopDurationTicker();
-    await _statusController.close();
-    await _durationController.close();
+    await cleanup.run('recording.session', () { cloudRecordingSession?.dispose(); });
+    await cleanup.run('recording.statuses', _statusController.close);
+    await cleanup.run('recording.durations', _durationController.close);
+    cleanup.finish(domain: 'recording');
   }
 }

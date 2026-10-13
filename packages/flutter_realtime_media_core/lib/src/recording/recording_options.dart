@@ -1,11 +1,16 @@
+import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
+
 /// Recording execution is handled by the configured cloud provider backend.
 enum RecordingMode { cloud }
 
 /// Layout mode for composited multi-party cloud recording.
 enum RecordingLayout { grid, speaker, screenShare, custom }
 
-/// Cloud recording lifecycle state.
-enum RecordingStatus { idle, starting, recording, stopping, failed }
+/// Authoritative task state returned by the cloud control plane.
+enum RecordingTaskState { idle, starting, recording, processing, completed, failed, unknown }
+
+/// Local recording operation state.
+enum RecordingStatus { idle, starting, recording, stopping, processing, completed, unknown, failed }
 
 enum RecordingStreamType { both, audioOnly, videoOnly }
 
@@ -75,17 +80,19 @@ class RecordingOptions {
 
 /// Backend recording task result. The backend may still be processing files.
 class RecordingResult {
-  const RecordingResult({
+  RecordingResult({
     required this.mode,
+    required this.taskState,
     this.fileName,
     this.mimeType,
     this.recordingId,
     this.duration = Duration.zero,
     this.fileSizeBytes = 0,
-    this.metadata = const {},
-  });
+    Map<String, dynamic> metadata = const {},
+  }) : metadata = freezeJson(metadata) as Map<String, dynamic>;
 
   final RecordingMode mode;
+  final RecordingTaskState taskState;
   final String? fileName;
   final String? mimeType;
   final String? recordingId;
@@ -98,6 +105,7 @@ class RecordingResult {
     if (recordingId != null) 'recordingId': recordingId,
     if (fileName != null) 'fileName': fileName,
     if (mimeType != null) 'mimeType': mimeType,
+    'taskState': taskState.name,
     'durationSeconds': duration.inSeconds,
     'fileSizeBytes': fileSizeBytes,
     if (metadata.isNotEmpty) 'metadata': metadata,

@@ -59,3 +59,7 @@ export 'src/session/media_session_factory.dart';
 export 'src/view/media_track_view.dart';
 
 export 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
+export 'src/processed/processed_video_source.dart';
+export 'src/processed/processed_video_sink.dart';
+export 'src/processed/processed_video_track.dart';
+export 'src/processed/processed_video_camera_device.dart';

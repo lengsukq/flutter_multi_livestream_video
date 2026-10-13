@@ -1,7 +1,7 @@
+import 'package:flutter_realtime_shared_content_preset/flutter_realtime_shared_content_preset.dart';
 import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart'
     show
         ClassroomPreset,
-        ClassroomRoomFeature,
         RealtimeRoomClassroomExtension,
         ClassroomRepository,
         ClassroomState,
@@ -106,7 +106,7 @@ class _LiveRepository implements LiveInteractionRepository {
 
 RealtimeRoom _room({
   Map<String, dynamic> metadata = const {},
-  Iterable<RealtimeFeaturePlugin> plugins = const [],
+  Iterable<RealtimeFeaturePlugin<Object>> plugins = const [],
 }) => RealtimeRoom(
   media: MediaRoomSession.attach(
     roomCode: 'lesson-1',
@@ -119,7 +119,7 @@ RealtimeRoom _room({
     heartbeatInterval: Duration.zero,
   ),
   renderer: const _Renderer(),
-  videoEffectsBridge: _Bridge(),
+  videoEffects: DefaultRealtimeVideoEffects(bridge: _Bridge()),
   featurePlugins: plugins,
   disposeClients: () {},
 );
@@ -157,11 +157,11 @@ void main() {
       await room.readyFeatures();
       expect(
         room.classroom,
-        same(room.features.get<ClassroomRoomFeature>('classroom')?.session),
+        same(room.features.get(ClassroomPreset.featureKey)),
       );
       await room.initialize();
       expect(repository.reads, 1);
-      expect(room.sharedContent, isNotNull);
+      expect(room.sharedContent, isNull, reason: 'Classroom does not imply shared content or system annotation');
       expect(room.liveInteractions, isNull);
       await room.dispose();
       expect(repository.closed, isTrue);
@@ -182,7 +182,7 @@ void main() {
     await room.initialize();
     expect(
       room.liveInteractions,
-      same(room.features.get<LiveInteractionSession>('live')),
+      same(room.features.get(LivePreset.featureKey)),
     );
     expect(repository.reads, 1);
     await room.liveInteractions!.sendLike();

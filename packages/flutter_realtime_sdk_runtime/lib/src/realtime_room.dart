@@ -1,16 +1,14 @@
-import 'room_video_effects_controller.dart';
+import 'realtime_video_effects.dart';
 import 'members/room_members_controller.dart';
 import 'room_recording_controller.dart';
 import 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
 import 'dart:async';
-import 'http_cloud_recording_session.dart';
 
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_rtc/flutter_realtime_chat_rtc.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
-import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 
 import 'realtime_error.dart';
 import 'realtime_event.dart';
@@ -18,6 +16,8 @@ import 'realtime_room_state.dart';
 import 'realtime_moderation.dart';
 import 'interaction_runtime.dart';
 import 'realtime_feature_registry.dart';
+import 'realtime_feature_plugin.dart';
+import 'realtime_feature_context.dart';
 
 /// A fully resolved room containing media, rendering and optional chat.
 class RealtimeRoom implements MediaBackgroundEffectsController {
@@ -31,11 +31,12 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     this.featureBackendUrl,
     this.featureTokenProvider,
     this.featureRequestTimeout,
-    Iterable<RealtimeFeaturePlugin> featurePlugins = const [],
+    Iterable<RealtimeFeaturePlugin<Object>> featurePlugins = const [],
     ChatRoomSession? productChatRoom,
     RtcDataChatSession? rtcChatRoom,
     required void Function() disposeClients,
-    VideoEffectsBridge? videoEffectsBridge,
+    RealtimeVideoEffects? videoEffects,
+    MediaCloudRecordingSession? cloudRecordingSession,
     MediaBackgroundCapabilities effectsCapabilities =
         const MediaBackgroundCapabilities.none(),
   }) : publicProviderId = publicProviderId ?? media.providerId,
@@ -54,26 +55,11 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
         ),
       ),
     );
-    _effects = RoomVideoEffectsController(
-      media: media,
-      effectsCapabilities: effectsCapabilities,
-      providerId: providerId,
-      bridge: videoEffectsBridge,
-      onFailure: _reportFailure,
-    );
+    _effects = videoEffects?.createController(media: media, capabilities: effectsCapabilities, reportError: _reportFailure);
     recording = RoomRecordingController(
       media: media,
       providerId: providerId,
-      cloudRecordingSession: featureBackendUrl == null
-          ? null
-          : HttpCloudRecordingSession(
-              backendUrl: featureBackendUrl!,
-              roomCode: media.roomCode,
-              participantId: media.participantId,
-              participantCredential: media.participantCredential,
-              roomOwnerCredential: media.roomOwnerCredential,
-              tokenProvider: featureTokenProvider,
-            ),
+      cloudRecordingSession: cloudRecordingSession,
       onFailure: _reportFailure,
     );
     _mediaEventSubscription = media.session.events.listen(_onMediaEvent);
@@ -212,17 +198,19 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     media: media.session.capabilities,
     chat: chat?.capabilities,
   );
-  late final RoomVideoEffectsController _effects;
+  late final RealtimeVideoEffectsController? _effects;
   @override
   MediaBackgroundCapabilities get backgroundCapabilities =>
-      _effects.backgroundCapabilities;
+      _effects?.backgroundCapabilities ?? const MediaBackgroundCapabilities.none();
   @override
-  MediaBackgroundEffect get backgroundEffect => _effects.backgroundEffect;
+  MediaBackgroundEffect get backgroundEffect => _effects?.backgroundEffect ?? const MediaBackgroundEffect.none();
   Future<void> prepareVideoEffects(MediaLocalPreviewSettings settings) =>
-      _effects.prepareVideoEffects(settings);
+      _effects?.prepareVideoEffects(settings) ?? Future<void>.value();
   @override
   Future<void> setBackgroundEffect(MediaBackgroundEffect effect) =>
-      _effects.setBackgroundEffect(effect);
+      _effects?.setBackgroundEffect(effect) ?? (effect.enabled
+        ? Future<void>.error(const RealtimeException(code: RealtimeErrorCode.unsupportedFeature, message: 'videoEffects.unregistered'))
+        : Future<void>.value());
 
   List<MediaParticipant> get participants =>
       List.unmodifiable(media.snapshot.participants);
@@ -284,19 +272,21 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
       return;
     }
     unawaited(
-      _effects.release().catchError((Object error, StackTrace stack) {
-        if (!_disposed) {
-          _eventController.add(
-            RealtimeBackendFailure(
-              mapRealtimeException(error, providerId: providerId),
-            ),
-          );
-        }
+      (_effects?.release() ?? Future<void>.value()).catchError((Object error, StackTrace stack) {
+        _reportFailure(normalizeRealtimeException(error, domain: 'room.effects.release', stackTrace: stack));
       }),
     );
   }
 
+  final List<RealtimeException> _diagnostics = [];
+  List<RealtimeException> get diagnostics => List.unmodifiable(_diagnostics);
+
+  /// Retains late failures even after room event streams have closed.
+  void reportLifecycleFailure(RealtimeException error) => _reportFailure(error);
+
   void _reportFailure(RealtimeException error) {
+    if (_diagnostics.length == 64) _diagnostics.removeAt(0);
+    _diagnostics.add(error);
     if (!_disposed) _eventController.add(RealtimeBackendFailure(error));
   }
 
@@ -323,13 +313,13 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
 
   Future<void> _dispose() async {
     _disposed = true;
-    _effects.beginDisposal();
+    _effects?.beginDisposal();
     final cleanup = Cleanup(timeout: cleanupTimeout);
     // Startup may be waiting on a remote snapshot indefinitely; disposal
     // must cancel/close the auxiliary sessions without waiting for that read.
     // Late startup errors are ignored once _disposed is set.
     await cleanup.run('recording', recording.dispose);
-    await cleanup.run('video.effects', _effects.dispose);
+    await cleanup.run('video.effects', () async { await _effects?.dispose(); });
     await cleanup.run('features', features.dispose);
     await cleanup.run('interactions', () async {
       await _interactions?.dispose();

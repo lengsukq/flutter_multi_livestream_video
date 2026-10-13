@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../session/chat_join_info.dart';
 import '../model/chat_role.dart';
 import '../model/chat_room_context.dart';
@@ -35,6 +36,9 @@ abstract interface class StandaloneChatProvisioner implements ChatProvisioner {
   });
 
   Future<List<ChatRoomSummary>> listRooms();
+
+  /// Releases factory-owned resources; borrowed underlying clients remain host-owned.
+  FutureOr<void> dispose();
 }
 
 typedef ChatProvisionCallback =

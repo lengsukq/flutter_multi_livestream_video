@@ -5,52 +5,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 
-/// Availability of an actual system overlay, distinct from in-app annotation.
-class SystemAnnotationCapabilities {
-  const SystemAnnotationCapabilities({
-    required this.supported,
-    this.permissionRequired = false,
-    this.reason = '',
-  });
-  final bool supported, permissionRequired;
-  final String reason;
-}
-
-/// A normalized overlay viewport on the primary shared display. Hosts sharing
-/// one window may supply its display-relative rectangle instead.
-class SystemAnnotationViewport {
-  const SystemAnnotationViewport({
-    this.x = 0,
-    this.y = 0,
-    this.width = 1,
-    this.height = 1,
-  });
-  final double x, y, width, height;
-  Map<String, double> toJson() {
-    if (![x, y, width, height].every((v) => v.isFinite) ||
-        x < 0 ||
-        y < 0 ||
-        width <= 0 ||
-        height <= 0 ||
-        x + width > 1 ||
-        y + height > 1) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.invalidArgument,
-        message: 'Viewport must be inside the primary display.',
-      );
-    }
-    return {'x': x, 'y': y, 'width': width, 'height': height};
-  }
-}
-
 /// Provider-neutral bridge to system drawing windows. The host owns screen
 /// capture and supplies an authoritative [AnnotationController].
-class SystemScreenAnnotationController {
+class SystemScreenAnnotationController implements SystemAnnotationBridge {
   SystemScreenAnnotationController({required this.annotations});
   final AnnotationController annotations;
   static const _channel = MethodChannel('flutter_realtime_screen_annotation');
   static SystemScreenAnnotationController? _owner;
   final _states = StreamController<void>.broadcast();
+  @override
   Stream<void> get changes => _states.stream;
   StreamSubscription<AnnotationCanvas>? _canvasSub;
   final _pending = <String, (AnnotationShape, bool)>{};
@@ -66,12 +29,17 @@ class SystemScreenAnnotationController {
   bool _clearOnClose = false;
   Object? _error;
   String _canvasId = '', _sessionId = '';
+  @override
   bool get active => _active;
+  @override
   Object? get error => _error;
   static final _random = math.Random.secure();
   void _emit() {
     if (!_disposed) _states.add(null);
   }
+
+  @override
+  Future<SystemAnnotationCapabilities> probe() => capabilities();
 
   static Future<SystemAnnotationCapabilities> capabilities() async {
     if (kIsWeb ||
@@ -123,6 +91,7 @@ class SystemScreenAnnotationController {
 
   /// Request overlay access on user intent, before optional backend setup.
   /// Android opens its system settings only when access has not been granted.
+  @override
   Future<void> requestPermission() => _serial(() async {
     if (_disposed) {
       throw RealtimeException(
@@ -172,6 +141,7 @@ class SystemScreenAnnotationController {
     }
   });
 
+  @override
   Future<void> start({
     SystemAnnotationViewport viewport = const SystemAnnotationViewport(),
     String languageCode = 'en',
@@ -452,6 +422,7 @@ class SystemScreenAnnotationController {
     }
   }
 
+  @override
   Future<void> stop() {
     if (!_active && _owner == this) {
       // Cancel a settings request without waiting for the lifecycle queue it
@@ -497,6 +468,7 @@ class SystemScreenAnnotationController {
     _emit();
   }
 
+  @override
   Future<void> dispose() => _disposeFuture ??= _dispose();
   Future<void> _dispose() async {
     _disposed = true;

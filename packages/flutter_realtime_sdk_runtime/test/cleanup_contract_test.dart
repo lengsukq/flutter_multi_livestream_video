@@ -1,3 +1,4 @@
+import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
@@ -24,7 +25,7 @@ void main() {
             pollInterval: const Duration(days: 1),
           ),
         ],
-        videoEffectsBridge: _Bridge(),
+        videoEffects: DefaultRealtimeVideoEffects(bridge: _Bridge()),
         disposeClients: () {},
       );
       await room.initialize();
@@ -53,7 +54,7 @@ void main() {
             repositoryFactory: (_) => _Repository(),
           ),
         ],
-        videoEffectsBridge: _Bridge(),
+        videoEffects: DefaultRealtimeVideoEffects(bridge: _Bridge()),
         disposeClients: () {
           clients++;
         },
@@ -61,9 +62,11 @@ void main() {
       final first = room.dispose();
       final second = room.dispose();
       expect(identical(first, second), true);
-      // The feature registry isolates teardown errors; media and clients must
-      // still be released, rather than surfacing a partial-room failure.
-      await first;
+      // Functional fix: every resource is attempted, while failed feature
+      // teardown is retained rather than being reported as successful release.
+      await expectLater(first, throwsA(isA<RealtimeException>().having(
+        (error) => error.code, 'code', RealtimeErrorCode.cleanupFailed,
+      )));
       expect(media.releases, 1);
       expect(clients, 1);
       expect(identical(room.dispose(), first), true);

@@ -1,11 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_realtime_sdk/src/video_effects_local_preview.dart';
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 
 void main() {
   test(
@@ -120,7 +119,7 @@ void main() {
   );
 }
 
-class _PreviewPlatform extends FlutterRealtimeVideoEffectsPlatform {
+class _PreviewPlatform extends FlutterRealtimeProcessedVideoPlatform {
   final errors = StreamController<VideoEffectsFailure>.broadcast();
   final enabled = <bool>[];
   final effects = <MediaBackgroundEffect>[];
@@ -139,7 +138,7 @@ class _PreviewPlatform extends FlutterRealtimeVideoEffectsPlatform {
     await pending;
     return const ProcessedVideoSource(
       id: 'camera',
-      platform: VideoEffectsPlatform.android,
+      platform: ProcessedVideoPlatform.android,
       kind: ProcessedVideoSourceKind.nativeFrameHub,
       width: 1280,
       height: 720,
@@ -160,7 +159,7 @@ class _PreviewPlatform extends FlutterRealtimeVideoEffectsPlatform {
   @override
   Future<void> selectCamera(String sourceId, String? deviceId) async {}
   @override
-  Future<List<VideoEffectsCameraDevice>> listCameras() async => const [];
+  Future<List<ProcessedVideoCameraDevice>> listCameras() async => const [];
   @override
   Future<void> disposeSource(String sourceId) async {
     disposed.add(sourceId);

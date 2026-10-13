@@ -1,0 +1,18 @@
+name: flutter_realtime_shared_content_preset
+description: Optional room shared-content and whiteboard coordination.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.47.0"
+dependencies:
+  flutter_realtime_sdk_runtime:
+    path: ../flutter_realtime_sdk_runtime
+  flutter_realtime_classroom_preset:
+    path: ../flutter_realtime_classroom_preset
+  flutter_realtime_classroom_core:
+    path: ../flutter_realtime_classroom_core
+  flutter_realtime_media_core:
+    path: ../flutter_realtime_media_core
+  flutter_realtime_whiteboard_core:
+    path: ../flutter_realtime_whiteboard_core

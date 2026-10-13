@@ -1,3 +1,4 @@
+import 'http_live_interaction_repository.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_live_core/flutter_realtime_live_core.dart';
 import 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
@@ -6,7 +7,7 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
         RealtimeFeatureContext,
         RealtimeFeaturePlugin,
         RealtimeRoom,
-        RealtimeStartingFeaturePlugin,
+        RealtimeFeatureKey,
         ChatInteractionRevisionTransport,
         MediaInteractionRevisionTransport;
 
@@ -16,7 +17,7 @@ typedef LiveRepositoryFactory =
 /// Optional, headless likes/gifts backed by the existing trusted repository.
 /// Gift events are demonstration features, NOT payment or currency settlement.
 class LivePreset
-    implements RealtimeFeaturePlugin, RealtimeStartingFeaturePlugin {
+    extends RealtimeFeaturePlugin<LiveInteractionSession> {
   const LivePreset({
     this.repositoryFactory,
     this.pollInterval = const Duration(seconds: 2),
@@ -24,6 +25,9 @@ class LivePreset
   });
 
   static const featureId = 'live';
+  static const featureKey = RealtimeFeatureKey<LiveInteractionSession>(featureId);
+  @override
+  RealtimeFeatureKey<LiveInteractionSession> get key => featureKey;
   @override
   String get id => featureId;
 
@@ -80,12 +84,12 @@ class LivePreset
   }
 
   @override
-  Future<void> start(Object feature) =>
-      (feature as LiveInteractionSession).start();
+  Future<void> start(LiveInteractionSession feature) =>
+      feature.start();
 
   @override
-  Future<void> detach(Object feature) =>
-      (feature as LiveInteractionSession).dispose();
+  Future<void> detach(LiveInteractionSession feature) =>
+      feature.dispose();
 }
 
 /// Legacy revision hint adapters have no authority and can be safely wrapped.
@@ -104,5 +108,5 @@ class _LiveRevisionHints implements LiveRevisionTransport {
 /// base RealtimeRoom. Apps that omit this package have no gifting surface.
 extension RealtimeRoomLiveExtension on RealtimeRoom {
   LiveInteractionSession? get liveInteractions =>
-      features.get<LiveInteractionSession>(LivePreset.featureId);
+      features.get(LivePreset.featureKey);
 }

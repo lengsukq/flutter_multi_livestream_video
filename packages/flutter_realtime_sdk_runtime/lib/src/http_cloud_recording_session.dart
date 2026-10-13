@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 /// Backend-neutral HTTP implementation of the cloud recording contract.
@@ -12,10 +10,9 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
     required this.participantCredential,
     this.roomOwnerCredential,
     this.tokenProvider,
-    MediaBackendTransport? transport,
-  }) : _baseUrl = Uri.parse(backendUrl),
-       _transport = transport ?? createDefaultMediaBackendTransport(),
-       _ownsTransport = transport == null;
+    this.transport,
+    this.requestTimeout = const Duration(seconds: 15),
+  }) : _baseUrl = Uri.parse(backendUrl);
 
   final Uri _baseUrl;
   final String roomCode;
@@ -23,74 +20,69 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
   final String? participantCredential;
   final String? roomOwnerCredential;
   final Future<String?> Function()? tokenProvider;
-  final MediaBackendTransport _transport;
-  final bool _ownsTransport;
+  final MediaBackendTransport? transport;
+  final Duration requestTimeout;
+  final RealtimeHttpExecutor _executor = RealtimeHttpExecutor();
 
   Future<Map<String, dynamic>> _request(
     String action, [
     Map<String, dynamic> options = const {},
   ]) async {
-    final token = await tokenProvider?.call();
-    final response = await _transport.send(
-      method: 'POST',
-      uri: _baseUrl.resolve(
-        '/rooms/${Uri.encodeComponent(roomCode)}/recording/$action',
-      ),
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Media-Backend-Contract': '1',
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      },
-      body: jsonEncode({
-        'requesterParticipantId': participantId,
-        if (participantCredential != null)
-          'participantCredential': participantCredential,
-        if (roomOwnerCredential != null)
-          'roomOwnerCredential': roomOwnerCredential,
-        ...options,
-      }),
+    final uri = _baseUrl.resolve(
+      '/rooms/${Uri.encodeComponent(roomCode)}/recording/$action',
     );
-    Map<String, dynamic> json;
-    try {
-      json = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
-    } catch (_) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.invalidResponse,
-        message: 'Cloud recording backend returned invalid JSON.',
-      );
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final details = json['error'];
-      final text = details is Map ? details['message'] : details;
-      throw RealtimeException(
-        code: response.statusCode == 403
-            ? RealtimeErrorCode.permissionDenied
-            : response.statusCode == 400
-            ? RealtimeErrorCode.unsupportedFeature
-            : RealtimeErrorCode.invalidState,
-        message: 'Cloud recording: ${text ?? 'HTTP ${response.statusCode}'}',
-      );
-    }
-    return json;
+    final transport = this.transport;
+    return _executor.request(
+      method: 'POST',
+      uri: uri,
+      timeout: requestTimeout,
+      domain: 'recording',
+      headers: () async {
+        final token = await tokenProvider?.call();
+        return {
+          'Content-Type': 'application/json',
+          'X-Media-Backend-Contract': '1',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        };
+      },
+      body: {
+        'requesterParticipantId': participantId,
+        if (participantCredential != null) 'participantCredential': participantCredential,
+        if (roomOwnerCredential != null) 'roomOwnerCredential': roomOwnerCredential,
+        ...options,
+      },
+      transport: transport == null ? null : (headers, body, abort) async {
+        final response = await transport.send(
+          method: 'POST', uri: uri, headers: headers, body: body,
+        );
+        return (response.statusCode, response.body);
+      },
+    );
   }
 
   RecordingResult _result(Map<String, dynamic> data) {
-    final id = data['recordingId'] as String?;
+    final reader = JsonReader(data);
+    final stateName = reader.required<String>('state');
+    final taskState = RecordingTaskState.values.where((state) => state.name == stateName).firstOrNull;
+    if (taskState == null) throw const RealtimeException(code: RealtimeErrorCode.invalidResponse, message: 'recording.state');
+    final id = reader.optional<String>('recordingId');
     return RecordingResult(
       mode: RecordingMode.cloud,
+      taskState: taskState,
       recordingId: id,
-      fileName: data['fileName'] as String?,
+      fileName: reader.optional<String>('fileName'),
       mimeType: 'video/mp4',
-      fileSizeBytes: (data['fileSizeBytes'] as num?)?.toInt() ?? 0,
+      fileSizeBytes: reader.optional<num>('fileSizeBytes')?.toInt() ?? 0,
       metadata: {
-        'provider': data['provider'] ?? 'livekit',
-        'state': data['state'] ?? 'idle',
+        if (data['provider'] != null) 'provider': reader.required<String>('provider'),
         'canDownload': data['canDownload'] == true,
         if (data['recordingAvailable'] is bool)
           'recordingAvailable': data['recordingAvailable'],
         if (data['recordingUnavailableReason'] is String)
           'recordingUnavailableReason': data['recordingUnavailableReason'],
-        if (data['error'] != null) 'error': data['error'],
+        // Backend recorder failures are part of the public recording result:
+        // the Demo needs the reason even when the remote task has failed.
+        if (data['error'] is String) 'error': data['error'],
         if (data['layout'] != null) 'layout': data['layout'],
         if (data['preset'] != null) 'preset': data['preset'],
       },
@@ -100,11 +92,11 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
   @override
   Future<RecordingResult> startCloudRecording(RecordingOptions options) async {
     if (options.mode != RecordingMode.cloud) {
-      throw ArgumentError('Expected cloud recording options.');
+      throw const RealtimeException(code: RealtimeErrorCode.invalidArgument, message: 'recording.start.options');
     }
     if (options.containerFormat != RecordingContainerFormat.mp4 ||
         options.streamType != RecordingStreamType.both) {
-      throw UnsupportedError('Cloud V1 supports composite MP4 audio/video.');
+      throw const RealtimeException(code: RealtimeErrorCode.unsupportedFeature, message: 'recording.start.format');
     }
     final response = await _request('start', {
       'layout': options.layout.name,
@@ -119,7 +111,7 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
     });
     final result = _result(response);
     if (result.recordingId == null || result.recordingId!.isEmpty) {
-      throw StateError('Cloud recorder did not return a real recording id.');
+      throw const RealtimeException(code: RealtimeErrorCode.invalidResponse, message: 'recording.start.id');
     }
     return result;
   }
@@ -137,7 +129,7 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
     final reply = await _request('download');
     final raw = reply['downloadUrl'];
     if (raw is! String) {
-      throw StateError('Cloud recording is not ready to download.');
+      throw const RealtimeException(code: RealtimeErrorCode.invalidResponse, message: 'recording.download.url');
     }
     final parsed = Uri.tryParse(raw);
     final url = parsed == null ? null : _baseUrl.resolveUri(parsed);
@@ -149,13 +141,13 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
         url.port != _baseUrl.port ||
         url.scheme != _baseUrl.scheme ||
         (url.scheme != 'http' && url.scheme != 'https')) {
-      throw StateError('Cloud backend returned an invalid download URL.');
+      throw const RealtimeException(code: RealtimeErrorCode.invalidResponse, message: 'recording.download.origin');
     }
     return url;
   }
 
   @override
   void dispose() {
-    if (_ownsTransport) _transport.close();
+    _executor.close();
   }
 }

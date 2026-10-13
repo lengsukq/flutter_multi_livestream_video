@@ -32,5 +32,11 @@ export 'src/bundled_web_script.dart';
 
 export 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
 
-export 'src/video_effects_local_preview.dart';
+export 'src/realtime_video_effects.dart';
 export 'src/provider_web_session_wrapper.dart' show wrapWebProviderPlugins;
+
+export 'src/realtime_feature_key.dart';
+export 'src/realtime_feature_state.dart';
+export 'src/realtime_feature_context.dart';
+export 'src/realtime_feature_plugin.dart';
+export 'src/realtime_room_services.dart';
