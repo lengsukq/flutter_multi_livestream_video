@@ -30,6 +30,8 @@ export function eventTagClass(type) {
 
     export function renderEvents() {
       const ev = document.getElementById('events');
+      const badge = document.getElementById('event-badge-count');
+      if (badge) badge.textContent = (store.events || []).length;
       let filtered = store.events;
       if (store.eventFilter !== 'all') {
         filtered = store.events.filter(e => {
@@ -47,6 +49,6 @@ export function eventTagClass(type) {
           </div>
         `).join('');
       } else {
-        ev.innerHTML = '<div class="event-line"><span class="event-msg" style="color: var(--text-tertiary);">' + esc(t('暂无对应事件流记录')) + '</span></div>';
+        ev.innerHTML = '<div class="event-line"><span class="event-msg" style="color: #94a3b8;">' + esc(t('暂无对应事件流记录')) + '</span></div>';
       }
     }

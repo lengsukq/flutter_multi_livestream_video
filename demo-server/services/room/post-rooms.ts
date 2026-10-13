@@ -13,8 +13,8 @@ import { createRoomProvisioner } from '../../services/room-creation.ts';
 import type { RoomApplicationDependencies } from './dependencies.ts';
 import { fail, reply, replyStatus, type ApplicationInput, type ApplicationReply } from '../application-protocol.ts';
 
-export async function postRooms(input: ApplicationInput, dependencies: Pick<RoomApplicationDependencies, 'roomDirectory' | 'chatProviderRegistry' | 'classroomDirectory' | 'currentProvider' | 'currentChatProvider' | 'withRoomOperation' | 'assertRoomOpen' | 'bindLogicalIdentity' | 'normalizeRoomCode' | 'normalizeDeviceId' | 'normalizeUserId' | 'parseRole' | 'parseRoomMode' | 'creatorRoleForMode' | 'generateRoomCode' | 'engineProviderForSelection' | 'publicProviderId' | 'exposeVendorResponse' | 'registerRoom' | 'assertRole' | 'mediaManagementCapabilities' | 'logEvent'>): Promise<ApplicationReply> {
-const { roomDirectory, chatProviderRegistry, classroomDirectory, currentProvider, currentChatProvider, withRoomOperation, assertRoomOpen, bindLogicalIdentity, normalizeRoomCode, normalizeDeviceId, normalizeUserId, parseRole, parseRoomMode, creatorRoleForMode, generateRoomCode, engineProviderForSelection, publicProviderId, exposeVendorResponse, registerRoom, assertRole, mediaManagementCapabilities, logEvent } = dependencies;
+export async function postRooms(input: ApplicationInput, dependencies: Pick<RoomApplicationDependencies, 'roomDirectory' | 'chatProviderRegistry' | 'classroomDirectory' | 'currentProvider' | 'currentChatProvider' | 'withRoomOperation' | 'assertRoomOpen' | 'bindLogicalIdentity' | 'normalizeRoomCode' | 'normalizeDeviceId' | 'normalizeUserId' | 'parseRole' | 'parseRoomMode' | 'creatorRoleForMode' | 'generateRoomCode' | 'engineProviderForSelection' | 'publicProviderId' | 'exposeVendorResponse' | 'registerRoom' | 'assertRole' | 'mediaManagementCapabilities' | 'closeRoomUnlocked' | 'logEvent'>): Promise<ApplicationReply> {
+const { roomDirectory, chatProviderRegistry, classroomDirectory, currentProvider, currentChatProvider, withRoomOperation, assertRoomOpen, bindLogicalIdentity, normalizeRoomCode, normalizeDeviceId, normalizeUserId, parseRole, parseRoomMode, creatorRoleForMode, generateRoomCode, engineProviderForSelection, publicProviderId, exposeVendorResponse, registerRoom, assertRole, mediaManagementCapabilities, closeRoomUnlocked, logEvent } = dependencies;
 const provisionRoom = createRoomProvisioner({
     chatProviderRegistry,
     publicProviderId,
@@ -73,6 +73,7 @@ const provisionRoom = createRoomProvisioner({
     });
 
     return await withRoomOperation(created.entry, async () => {
+      try {
       assertRoomOpen(created.entry);
       if (!rawNickname) return reply(exposeVendorResponse(created.response));
 
@@ -112,6 +113,16 @@ const provisionRoom = createRoomProvisioner({
     }
     logEvent('join', `${response.displayName} created+joined room ${roomCode} via ${provider.displayName}`);
     return reply(exposeVendorResponse(response));
+      } catch (error) {
+        // Creation already reserved the code. A failed initial participant
+        // join must release both the provider room and local directory entry.
+        try {
+          await closeRoomUnlocked(created.entry, 'initial creator join failed');
+        } catch (rollbackError) {
+          console.error('new room rollback failed', rollbackError);
+        }
+        throw error;
+      }
     });
   } catch (error) {
     if (error instanceof ProviderOperationError) throw error;

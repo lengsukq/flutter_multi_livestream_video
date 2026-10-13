@@ -10,12 +10,33 @@ import { generateRandomCode, renderRoomsTable, renderStandaloneChatRoomsTable, c
 import { eventTagClass, setEventFilter, renderEvents } from './events.js';
 import { showLogin, showDashboard, login, logout, initialize } from './auth.js';
 
+export function switchWorkspaceTab(tabName) {
+      const panels = {
+        'rooms': 'workspace-panel-rooms',
+        'chat-rooms': 'workspace-panel-chat-rooms',
+        'events': 'workspace-panel-events',
+      };
+      const targetId = panels[tabName] || panels.rooms;
+      document.querySelectorAll('[data-workspace-tab]').forEach(btn => {
+        const isMatch = btn.dataset.workspaceTab === tabName;
+        btn.classList.toggle('active', isMatch);
+        btn.setAttribute('aria-selected', isMatch ? 'true' : 'false');
+      });
+      Object.values(panels).forEach(panelId => {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        const isActive = panelId === targetId;
+        panel.classList.toggle('active', isActive);
+        panel.hidden = !isActive;
+      });
+    }
+
 export async function refresh() {
       const refreshBtn = document.getElementById('refresh-btn');
       refreshBtn.style.opacity = '0.6';
       try {
         const d = await api('/api/overview');
-        store.providerSelectionEnabled = d.store.providerSelectionEnabled !== false;
+        store.providerSelectionEnabled = d.providerSelectionEnabled !== false;
         const providerList = d.providerList || Object.values(d.providers || {});
         const chatProviderList = d.chatProviderList || Object.values(d.chatProviders || {});
         store.providers = new Map(providerList.map(provider => [provider.id, provider]));
@@ -97,7 +118,7 @@ export async function refresh() {
       renderRoomsTable(); renderStandaloneChatRoomsTable(); renderEvents();
       if (!document.getElementById('dashboard-root').classList.contains('auth-hidden')) void refresh();
     });
-Object.assign(window, { setLanguage, switchProvider, switchChatProvider, providerInfo, providerLabel, chatProviderInfo, chatProviderLabel, providerHue, capabilityStateLabel, getCapabilityTooltipElement, updateCapabilityTooltip, renderCapabilityMatrix, renderProviderCapabilityMatrix, renderChatProviderCapabilityMatrix, renderProviderSwitcher, renderChatProviderSwitcher, generateRandomCode, renderRoomsTable, renderStandaloneChatRoomsTable, createRoom, promptCloseRoom, promptCloseChatRoom, closeConfirmModal, executeCloseRoom, executeCloseChatRoom, copyRoom, copyLink, eventTagClass, setEventFilter, renderEvents, showLogin, showDashboard, login, logout, initialize });
+Object.assign(window, { setLanguage, switchWorkspaceTab, switchProvider, switchChatProvider, providerInfo, providerLabel, chatProviderInfo, chatProviderLabel, providerHue, capabilityStateLabel, getCapabilityTooltipElement, updateCapabilityTooltip, renderCapabilityMatrix, renderProviderCapabilityMatrix, renderChatProviderCapabilityMatrix, renderProviderSwitcher, renderChatProviderSwitcher, generateRandomCode, renderRoomsTable, renderStandaloneChatRoomsTable, createRoom, promptCloseRoom, promptCloseChatRoom, closeConfirmModal, executeCloseRoom, executeCloseChatRoom, copyRoom, copyLink, eventTagClass, setEventFilter, renderEvents, showLogin, showDashboard, login, logout, initialize });
     // Enter key creates room
     document.getElementById('new-code').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') createRoom();

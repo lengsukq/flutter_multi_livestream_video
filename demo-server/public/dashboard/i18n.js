@@ -155,6 +155,10 @@ const translationPairs = [
       ['<strong>连接服务已开启。</strong> 如需暂停公网入会，请在 Vercel 项目环境变量中将 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>false</code> 并重新部署。', '<strong>Connections are enabled.</strong> To pause public room access, set <code>MEDIA_CONNECTIONS_ENABLED</code> to <code>false</code> in Vercel and redeploy.'],
       ['<strong>连接服务已暂停。</strong> 房间创建、加入、续期和心跳请求都会返回 503。恢复时将 Vercel 环境变量 <code>MEDIA_CONNECTIONS_ENABLED</code> 设为 <code>true</code> 并重新部署。', '<strong>Connections are paused.</strong> Room creation, joining, credential refresh, and heartbeat requests return 503. To resume, set <code>MEDIA_CONNECTIONS_ENABLED</code> to <code>true</code> in Vercel and redeploy.'],
       ['尚未配置 Amazon IVS Chat。请通过 IVS_CHAT_REGION、AWS_REGION、AWS_DEFAULT_REGION 或当前 AWS profile 设置区域，并通过服务器 IAM 凭证链提供 AWS 凭证。', 'Amazon IVS Chat is not configured. Set an AWS region through IVS_CHAT_REGION, AWS_REGION, AWS_DEFAULT_REGION, or the active AWS profile, and provide AWS credentials through the server IAM credential chain.'],
+      ['实时记录房间创建、成员进出、通道切换与强制关闭操作', 'Live audit trail of room creation, participant joins/leaves, provider routing, and closures'],
+      ['系统核心指标', 'System telemetry metrics'],
+      ['双轴通道调度中枢', 'Dual-axis provider routing control'],
+      ['会话与系统日志工作区', 'Sessions and audit log workspace'],
     ];
     const zhToEn = new Map(translationPairs);
     const enToZh = new Map(translationPairs.map(([zh, en]) => [en, zh]));

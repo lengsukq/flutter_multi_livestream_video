@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { toast } from './feedback.js';
 import { requestRefresh } from './refresh-signal.js';
 import { esc, formatTime } from './format.js';
-import { providerInfo, providerLabel, chatProviderInfo, chatProviderLabel } from './providers.js';
+import { providerInfo, providerLabel, chatProviderInfo, chatProviderLabel, providerHue } from './providers.js';
 
 export function generateRandomCode() {
       const code = String(Math.floor(100000 + Math.random() * 900000));
