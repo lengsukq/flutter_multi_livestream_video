@@ -250,7 +250,7 @@
           if (!processedSourceId) {
             throw new Error("No SDK processed video source is attached.");
           }
-          const effectsBridge = global.RealtimeProcessedVideoBridge;
+          const effectsBridge = global.RealtimeVideoEffectsBridge;
           if (!effectsBridge?.setEffect) {
             throw new Error("RealtimeProcessedVideoBridge is unavailable.");
           }

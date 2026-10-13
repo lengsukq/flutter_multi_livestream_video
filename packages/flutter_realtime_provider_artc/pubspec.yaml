@@ -10,8 +10,6 @@ dependencies:
     sdk: flutter
   flutter_realtime_processed_video:
     path: ../flutter_realtime_processed_video
-  flutter_realtime_video_effects:
-    path: ../flutter_realtime_video_effects
   flutter_realtime_sdk_runtime:
     path: ../flutter_realtime_sdk_runtime
   flutter_realtime_media_artc:

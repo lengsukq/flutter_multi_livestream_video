@@ -57,14 +57,28 @@ class ProviderWebBridge {
     final callback = ((JSString sessionId, JSString payload) {
       final handler = _handlers[sessionId.toDart];
       if (handler == null) return;
+      late final Map<String, dynamic> event;
       try {
         final decoded = jsonDecode(payload.toDart);
-        if (decoded is Map<String, dynamic>) {
-          handler(sessionId.toDart, decoded);
+        if (decoded is! Map<String, dynamic>) {
+          throw const RealtimeException(
+            code: RealtimeErrorCode.invalidResponse,
+            message: 'web.bridge.event.decode',
+          );
         }
-      } catch (_) {
-        // Malformed vendor events must not break the browser event loop.
+        event = decoded;
+      } catch (error, stack) {
+        event = {
+          'type': 'error',
+          'error': normalizeRealtimeException(
+            error,
+            domain: 'media.web',
+            operation: 'bridge.event.decode',
+            stackTrace: stack,
+          ),
+        };
       }
+      handler(sessionId.toDart, event);
     }).toJS;
     _globalThis['__flutterMediaProviderOnEvent'] = callback;
     _listenerInstalled = true;
@@ -251,7 +265,7 @@ class ProviderWebBridge {
         : RealtimeErrorCode.providerError;
     return RealtimeException(
       code: code,
-      message: '$fallback $message',
+      message: fallback,
       details: error,
       providerId: providerId,
     );

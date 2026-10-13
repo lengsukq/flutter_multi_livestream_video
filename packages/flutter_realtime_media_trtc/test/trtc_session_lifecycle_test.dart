@@ -63,7 +63,10 @@ void main() {
       final commands = <MethodCall>[];
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      final channels = {const MethodChannel('flutter_realtime_processed_video/sources'), const MethodChannel('flutter_realtime_media_trtc/processed_video')};
+      final channels = {
+        const MethodChannel('flutter_realtime_processed_video/sources'),
+        const MethodChannel('flutter_realtime_media_trtc/processed_video'),
+      };
       for (final channel in channels) {
         messenger.setMockMethodCallHandler(channel, (call) async {
           commands.add(call);
