@@ -11,7 +11,7 @@ features**, not as rewritten Demo-only logic.
 | --- | --- | --- |
 | `media_core` `MediaSessionDataControl` | RTC Data send/receive and provider feature flags | Reuse as low-level transport; never claim all providers support data |
 | `chat_core` `ChatSystemMessaging` | Chat-mediated revision hints | Reuse for hints only, not authenticated business commands |
-| `classroom_core` `ClassroomSession`/`HttpClassroomRepository` | Hand raise, Q&A, speak grants, homework, announcements, timers | Preserve implementation as opt-in Classroom prebuilt feature |
+| `classroom_core` `ClassroomSession`; `classroom_preset` `HttpClassroomRepository` | Hand raise, Q&A, speak grants, homework, announcements, timers | Preserve implementation as opt-in Classroom prebuilt feature |
 | `live_core` `LiveInteractionSession`/`HttpLiveInteractionRepository` | Likes, gifts, catalog and counters | Preserve implementation as opt-in Live prebuilt feature |
 | `sdk_runtime` `RealtimeClient` | Always recognizes `roomMode=meeting` and `liveInteractions=true` metadata, creates business sessions; depends directly on both cores | Explicitly selected features; make core independent of prebuilt business modules |
 | `sdk_ui`, `classroom_ui`, `live_ui` | Composable room controls, overlays and panels | Entirely optional; no fixed navigation or UI required for headless features |

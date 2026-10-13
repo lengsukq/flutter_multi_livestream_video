@@ -30,23 +30,31 @@ session factories and sessions also accept it. RTC fallback retains its existing
 200 default. Limits must be positive. Eviction removes only local session history;
 it does not delete server messages. Snapshot lists remain immutable.
 
-Web vendor files belong to their selected bundle. Media bridge code is shared in
-the base. Agora, IVS and Tencent Chat use separate runtime bundles; effects load
-from the effects package only when a processed source/device preview needs them.
-All files are locally packaged; hosts do not need CDN tags.
+Web vendor files belong to their selected bundle. The shared media protocol
+belongs to `flutter_realtime_media_web`, while processed-track registration and
+rendering belong to `flutter_realtime_processed_video`. Agora, IVS and Tencent
+Chat use separate runtime bundles. All files are locally packaged; hosts do not
+need CDN tags or repository tooling.
 
-Bundled media providers also supply the default video-effects implementation.
-`Realtime(providers: [createLivekitProvider(), ...])` therefore retains background
-blur/image replacement support without requiring an additional `services` argument.
-An explicit `RealtimeRoomServices(videoEffectsFactory: ...)` takes precedence.
-For custom driver-only `Realtime.standard(drivers: ...)` integrations, supply the
-factory through `services` because those drivers do not declare a provider bundle.
+Media bundles do not install video effects. A host that wants blur/image
+replacement adds `flutter_realtime_video_effects` and explicitly supplies
+`RealtimeRoomServices(videoEffectsFactory: DefaultRealtimeVideoEffects.new)`.
+The Demo uses this configuration. Ordinary media, independent Chat and lean room
+UI do not instantiate or probe effects and do not bundle effects models.
+
+`flutter_realtime_room_ui` supplies room scope, video layouts and media controls.
+It has no Classroom, Live, shared-content or system-annotation dependency.
+`flutter_realtime_sdk_ui` remains the complete UI composition entry point.
+Register Classroom, shared content, system annotation and Live independently.
+Only the last two layers of the shared-content dependency chain acquire system
+annotation implementations when `SystemAnnotationPreset` is explicitly added.
 
 With `backendUrl` configured, both the standard SDK and directly constructed
 `RealtimeClient` instances use an HTTP cloud recording session by default;
-`recordingSessionFactory` overrides that default. Failed cloud recording results
-preserve the backend's `error` string in `RecordingResult.metadata['error']` so
-the host can display the recording task's failure reason.
+`recordingSessionFactory` overrides that default. `RecordingResult.taskState` carries the authoritative cloud task state;
+`RecordingStatus` describes local controller operations. A failed stop remains
+uncertain until a trusted query confirms the task state. Display only sanitized
+service messages, and send diagnostics through the host's error channel.
 
 The existing `example/` Demo demonstrates freely arranging optional UI
 components. No separate Headless example project is required or maintained;

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "releaseRef": null,
   "gitFetchVerified": false,
-  "preparedFromHead": "fae11a6379bb4c03be9d3135a7c03595684de913",
+  "preparedFromHead": "5729a55d7a6368b3fa56c26f92c1f0ef5f945ed6",
   "workingTreeSnapshot": true,
   "packages": [
     {
@@ -184,7 +184,7 @@
       "path": "packages/flutter_realtime_media_web",
       "license": "packages/flutter_realtime_media_web/LICENSE",
       "resourceSha256": {
-        "packages/flutter_realtime_media_web/assets/media-provider-bridge.js": "f8cbadd28325cf481216b01d115464094ff78da1c16819e12f878f3fc32e7af5"
+        "packages/flutter_realtime_media_web/assets/media-provider-bridge.js": "d23c875f3e44ba44ccd2b7bd7a41b3d71ae337bae5acd632a5ba93eaf6066d91"
       }
     },
     {

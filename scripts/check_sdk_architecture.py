@@ -42,6 +42,9 @@ assert not runtime.intersection(optional_business), f'Runtime must not require o
 assert not closure('flutter_realtime_classroom_preset').intersection({'flutter_realtime_screen_annotation', 'flutter_realtime_shared_content_preset'}), 'Classroom must not acquire shared content or system permissions'
 assert not closure('flutter_realtime_room_ui').intersection(optional_business), 'Lean room UI must not acquire business presets or processing'
 assert not closure('flutter_realtime_processed_video').intersection(optional_business), 'Frame bridge must remain independent from processing and business'
+for name in names:
+    if name.startswith(('flutter_realtime_provider_', 'flutter_realtime_media_')) and name not in {'flutter_realtime_media_core', 'flutter_realtime_media_ui'}:
+        assert 'flutter_realtime_video_effects' not in closure(name), f'{name} must use neutral processed-video contracts, not the effects implementation'
 for preset in ('flutter_realtime_classroom_preset', 'flutter_realtime_live_preset'):
     assert 'flutter_realtime_sdk_runtime' in closure(preset), f'{preset} must adapt the generic runtime'
 sdk=closure('flutter_realtime_sdk')

@@ -173,14 +173,11 @@ jobs:
       - name: Resolve package dependencies
         run: flutter pub get
 
-      - name: Enable Swift Package Manager
-        run: flutter config --enable-swift-package-manager
-
       - name: Build iOS device target without codesigning
         working-directory: flutter_aws_chime/example
         run: |
           flutter pub get
-          flutter build ios --release --no-codesign
+          python3 ../scripts/flutter_ios.py build ios --release --no-codesign
 
       - name: Validate CocoaPods podspec
         run: >-

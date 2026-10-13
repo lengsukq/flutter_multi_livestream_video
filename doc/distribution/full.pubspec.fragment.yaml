@@ -22,6 +22,11 @@ dependencies:
       url: https://github.com/lengsukq/flutter_multi_livestream_video.git
       ref: REPLACE_WITH_40_CHARACTER_RELEASE_COMMIT_SHA
       path: packages/flutter_realtime_sdk_ui
+  flutter_realtime_room_ui:
+    git:
+      url: https://github.com/lengsukq/flutter_multi_livestream_video.git
+      ref: REPLACE_WITH_40_CHARACTER_RELEASE_COMMIT_SHA
+      path: packages/flutter_realtime_room_ui
   flutter_realtime_video_effects:
     git:
       url: https://github.com/lengsukq/flutter_multi_livestream_video.git

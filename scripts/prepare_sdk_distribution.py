@@ -16,7 +16,7 @@ COMBINATIONS = {
     'media': ['flutter_realtime_sdk', 'flutter_realtime_provider_livekit'],
     'chat': ['flutter_realtime_sdk', 'flutter_realtime_provider_ivs_chat'],
     'room_ui': ['flutter_realtime_sdk', 'flutter_realtime_provider_livekit', 'flutter_realtime_room_ui'],
-    'full': ['flutter_realtime_sdk', 'flutter_realtime_provider_livekit', 'flutter_realtime_provider_ivs_chat', 'flutter_realtime_sdk_ui', 'flutter_realtime_video_effects', 'flutter_realtime_classroom_preset', 'flutter_realtime_shared_content_preset', 'flutter_realtime_screen_annotation', 'flutter_realtime_live_preset'],
+    'full': ['flutter_realtime_sdk', 'flutter_realtime_provider_livekit', 'flutter_realtime_provider_ivs_chat', 'flutter_realtime_sdk_ui', 'flutter_realtime_room_ui', 'flutter_realtime_video_effects', 'flutter_realtime_classroom_preset', 'flutter_realtime_shared_content_preset', 'flutter_realtime_screen_annotation', 'flutter_realtime_live_preset'],
 }
 
 
@@ -93,7 +93,8 @@ def create_host(destination: Path, combo: str) -> Path:
     effects = ''
     if combo == 'full':
         imports += ["import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';"]
-        effects = ', services: RealtimeRoomServices(videoEffectsFactory: () => DefaultRealtimeVideoEffects())'
+        imports += [f"import 'package:{name}/{name}.dart';" for name in ['flutter_realtime_classroom_preset', 'flutter_realtime_shared_content_preset', 'flutter_realtime_screen_annotation', 'flutter_realtime_live_preset']]
+        effects = ', services: RealtimeRoomServices(videoEffectsFactory: () => DefaultRealtimeVideoEffects()), featurePlugins: const [ClassroomPreset(), SharedContentPreset(), SystemAnnotationPreset(), LivePreset()]'
     widgets = ''
     if combo in ['full','room_ui']:
         imports += ["import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart';"]
