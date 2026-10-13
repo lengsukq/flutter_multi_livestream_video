@@ -5,7 +5,8 @@ import 'room_classroom_interactions.dart';
 import 'room_ui_controller.dart';
 import 'realtime_classroom_panel.dart';
 
-class MeetingDockRealtimeClassroomPanelState extends State<RealtimeClassroomPanel>
+class MeetingDockRealtimeClassroomPanelState
+    extends State<RealtimeClassroomPanel>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController = TabController(
     length: 4,

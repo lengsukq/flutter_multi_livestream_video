@@ -305,14 +305,19 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
           width: 20,
           height: 20,
           decoration: BoxDecoration(
-            color: (isPending ? RealtimeUiTokens.textMuted : RealtimeUiTokens.danger)
-                .withValues(alpha: 0.14),
+            color:
+                (isPending
+                        ? RealtimeUiTokens.textMuted
+                        : RealtimeUiTokens.danger)
+                    .withValues(alpha: 0.14),
             shape: BoxShape.circle,
           ),
           child: Icon(
             isPending ? Icons.help_outline_rounded : Icons.close_rounded,
             size: 13,
-            color: isPending ? RealtimeUiTokens.textMuted : RealtimeUiTokens.danger,
+            color: isPending
+                ? RealtimeUiTokens.textMuted
+                : RealtimeUiTokens.danger,
           ),
         ),
       ),
@@ -438,9 +443,11 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
                   if (camBlocked) {
                     unawaited(controller.openAppSettings());
                   } else {
-                    unawaited(controller.requestPermissionAndEnable(
-                      MediaPermissionKind.camera,
-                    ));
+                    unawaited(
+                      controller.requestPermissionAndEnable(
+                        MediaPermissionKind.camera,
+                      ),
+                    );
                   }
                   return;
                 }

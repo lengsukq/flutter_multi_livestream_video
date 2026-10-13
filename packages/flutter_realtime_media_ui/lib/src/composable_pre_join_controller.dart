@@ -1,3 +1,4 @@
+import 'realtime_pre_join_state.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -22,24 +23,31 @@ class RealtimePreJoinController extends ChangeNotifier {
   RealtimePreJoinController({
     required this.runCheck,
     required this.openPreview,
+    this.onError,
     MediaPermissionRequester permissionRequester =
         const DefaultMediaPermissionProbe(),
   }) : _permissions = PreJoinPermissionCoordinator(permissionRequester);
 
   final RealtimePreJoinCheck runCheck;
   final RealtimePreJoinOpenPreview openPreview;
+  final void Function(RealtimeException error)? onError;
+  final List<RealtimeException> _diagnostics = [];
+  List<RealtimeException> get diagnostics => List.unmodifiable(_diagnostics);
   final PreJoinPermissionCoordinator _permissions;
   final _owner = PreJoinPreviewOwner();
   final _setup = PreJoinMediaSetupController();
 
   MediaPreJoinResult? _result;
   Map<MediaPermissionKind, MediaPermissionState> _permissionStates = const {};
-  Object? _error;
-  Object? _previewError;
-  Object? _joinError;
+  RealtimeException? _error;
+  RealtimeException? _previewError;
+  RealtimeException? _joinError;
   MediaLocalPreviewSettings? _retrySettings;
-  bool _loading = false;
-  bool _joining = false;
+  RealtimePreJoinState _state = const RealtimePreJoinIdle();
+  RealtimePreJoinState get state => _state;
+  bool get _loading => _state is RealtimePreJoinChecking;
+  bool get _joining => _state is RealtimePreJoinEntering;
+  bool get cancelling => _state is RealtimePreJoinCancelling;
   bool _disposed = false;
   int _generation = 0;
 
@@ -49,12 +57,12 @@ class RealtimePreJoinController extends ChangeNotifier {
       Map.unmodifiable(_permissionStates);
   List<MediaDevice> get devices => _setup.devices;
   MediaBackgroundEffect get backgroundEffect => _setup.backgroundEffect;
-  Object? get error => _error;
+  RealtimeException? get error => _error;
   Object? get previewError => _previewError ?? _setup.deviceError;
-  Object? get joinError => _joinError;
+  RealtimeException? get joinError => _joinError;
   bool get loading => _loading;
   bool get joining => _joining;
-  bool get busy => _loading || _joining;
+  bool get busy => _loading || _joining || cancelling;
   bool get canEnter => !_disposed && !busy && _result?.isReady == true;
   bool get updatingBackground => _setup.updatingBackground;
 
@@ -67,7 +75,7 @@ class RealtimePreJoinController extends ChangeNotifier {
   Future<void> initialize() async {
     if (_disposed || _joining) return;
     final generation = ++_generation;
-    _loading = true;
+    _state = const RealtimePreJoinChecking();
     _result = null;
     _error = _previewError = _joinError = null;
     _retrySettings = null;
@@ -86,11 +94,14 @@ class RealtimePreJoinController extends ChangeNotifier {
       _permissionStates = statuses;
       _notify();
       await _openLocalPreview(check, generation);
-    } catch (error) {
-      if (_valid(generation)) _error = error;
+    } catch (error, stack) {
+      final failure = _recordFailure(error, stack);
+      if (_valid(generation)) _error = failure;
     } finally {
       if (_valid(generation)) {
-        _loading = false;
+        _state = _error == null
+            ? const RealtimePreJoinReady()
+            : RealtimePreJoinFailed(_error!);
         _notify();
       }
     }
@@ -110,8 +121,9 @@ class RealtimePreJoinController extends ChangeNotifier {
       _owner.bind(
         preview,
         onFailure: (error) {
+          final failure = _recordFailure(error, StackTrace.current);
           if (!_valid(generation)) return;
-          _previewError = error;
+          _previewError = failure;
           _notify();
         },
       );
@@ -126,9 +138,10 @@ class RealtimePreJoinController extends ChangeNotifier {
       if (!_valid(generation)) return;
       await _setup.loadDevices(preview);
       if (_valid(generation)) _notify();
-    } catch (error) {
+    } catch (error, stack) {
+      final failure = _recordFailure(error, stack);
       if (_valid(generation)) {
-        _previewError = error;
+        _previewError = failure;
         _notify();
       }
     }
@@ -172,9 +185,10 @@ class RealtimePreJoinController extends ChangeNotifier {
           preview == null) {
         await retryPreview();
       }
-    } catch (error) {
+    } catch (error, stack) {
+      final failure = _recordFailure(error, stack);
       if (_valid(generation)) {
-        _previewError = error;
+        _previewError = failure;
         _notify();
       }
     }
@@ -184,7 +198,8 @@ class RealtimePreJoinController extends ChangeNotifier {
   /// the requested capture track without requiring a second click.
   Future<void> requestPermissionAndEnable(MediaPermissionKind kind) async {
     await requestPermission(kind);
-    if (_disposed || busy ||
+    if (_disposed ||
+        busy ||
         _permissionStates[kind] != MediaPermissionState.granted) {
       return;
     }
@@ -196,7 +211,50 @@ class RealtimePreJoinController extends ChangeNotifier {
     }
   }
 
-  Future<bool> openAppSettings() => _permissions.openAppSettings();
+  bool get canOpenAppSettings => _permissions.canOpenAppSettings;
+  Future<bool> openAppSettings() async {
+    try {
+      return await _permissions.openAppSettings();
+    } catch (error, stack) {
+      _recordFailure(error, stack);
+      return false;
+    }
+  }
+
+  RealtimeException _recordFailure(Object error, StackTrace stack) {
+    final failure = normalizeRealtimeException(
+      error,
+      domain: 'media.prejoin',
+      stackTrace: stack,
+    );
+    if (_diagnostics.length == 32) _diagnostics.removeAt(0);
+    _diagnostics.add(failure);
+    onError?.call(failure);
+    return failure;
+  }
+
+  Future<bool> cancel() async {
+    if (_disposed || _joining || cancelling) return false;
+    ++_generation;
+    _state = const RealtimePreJoinCancelling();
+    _notify();
+    try {
+      await _owner.release();
+      if (!_disposed) {
+        _state = const RealtimePreJoinIdle();
+        _notify();
+      }
+      return true;
+    } catch (error, stack) {
+      final failure = _recordFailure(error, stack);
+      if (!_disposed) {
+        _error = failure;
+        _state = RealtimePreJoinFailed(failure);
+        _notify();
+      }
+      return false;
+    }
+  }
 
   MediaPreJoinResult _withPermissionStates(
     MediaPreJoinResult result,
@@ -243,8 +301,9 @@ class RealtimePreJoinController extends ChangeNotifier {
       await preview.setMicrophoneEnabled(enabled);
       _retrySettings = null;
       _previewError = null;
-    } catch (error) {
-      _previewError = error;
+    } catch (error, stack) {
+      final failure = _recordFailure(error, stack);
+      _previewError = failure;
     }
     _notify();
   }
@@ -256,8 +315,9 @@ class RealtimePreJoinController extends ChangeNotifier {
       await preview.setCameraEnabled(enabled);
       _retrySettings = null;
       _previewError = null;
-    } catch (error) {
-      _previewError = error;
+    } catch (error, stack) {
+      final failure = _recordFailure(error, stack);
+      _previewError = failure;
     }
     _notify();
   }
@@ -277,8 +337,9 @@ class RealtimePreJoinController extends ChangeNotifier {
       await update;
       _retrySettings = null;
       _previewError = null;
-    } catch (error) {
-      _previewError = error;
+    } catch (error, stack) {
+      final failure = _recordFailure(error, stack);
+      _previewError = failure;
     }
     _notify();
   }
@@ -296,32 +357,45 @@ class RealtimePreJoinController extends ChangeNotifier {
                 const MediaLocalPreviewSettings())
             .copyWith(backgroundEffect: _setup.backgroundEffect);
     _retrySettings = selected;
-    _joining = true;
+    _state = const RealtimePreJoinEntering();
     _joinError = null;
     _notify();
     try {
       await _owner.release();
       if (!_valid(generation)) return;
       await onEnter(selected);
-    } catch (error) {
+    } catch (error, stack) {
+      final failure = _recordFailure(error, stack);
       if (!_valid(generation)) return;
-      _joinError = error;
+      _joinError = failure;
       // Preserve settings for a retry even when reopening preview fails.
       if (_result != null) await _openLocalPreview(_result!, generation);
     } finally {
       if (_valid(generation)) {
-        _joining = false;
+        _state = const RealtimePreJoinReady();
         _notify();
       }
     }
   }
 
+  Future<void>? _closing;
+  Future<void> close() {
+    dispose();
+    return _closing!;
+  }
+
   @override
   void dispose() {
+    if (_disposed) return;
     ++_generation;
     _disposed = true;
     _setup.dispose();
-    unawaited(_owner.release());
+    _closing = _owner.dispose();
+    observeDetached(
+      _closing!,
+      onFailure: (error) =>
+          _recordFailure(error, error.stackTrace ?? StackTrace.current),
+    );
     super.dispose();
   }
 }

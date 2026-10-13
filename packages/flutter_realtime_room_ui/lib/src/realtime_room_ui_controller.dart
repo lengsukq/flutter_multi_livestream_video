@@ -26,7 +26,6 @@ class RealtimeRoomUiController extends ChangeNotifier {
       _chatUi = ChatUiController(chat, moderation: room.chatModeration);
       _chatUi!.addListener(_onChatChanged);
     }
-
   }
 
   /// Shares the same partially-successful bulk moderation service as the
@@ -187,6 +186,7 @@ class RealtimeRoomUiController extends ChangeNotifier {
       room.reportLifecycleFailure(failure);
     }
   }
+
   MediaCameraPosition get cameraPosition => _cameraPosition;
   bool isPending(RealtimeRoomUiAction action) => _pending.contains(action);
 
@@ -196,8 +196,7 @@ class RealtimeRoomUiController extends ChangeNotifier {
       : null;
 
   bool get canUseMicrophone =>
-      _interactive != null &&
-      _snapshot.capabilities.canPublishAudio;
+      _interactive != null && _snapshot.capabilities.canPublishAudio;
 
   bool get canUseCamera =>
       _interactive != null && _snapshot.capabilities.canPublishVideo;
@@ -264,7 +263,11 @@ class RealtimeRoomUiController extends ChangeNotifier {
     try {
       await command();
     } catch (error, stack) {
-      final failure = normalizeRealtimeException(error, domain: 'room.ui', stackTrace: stack);
+      final failure = normalizeRealtimeException(
+        error,
+        domain: 'room.ui',
+        stackTrace: stack,
+      );
       if (!_disposed) _error = failure;
       Error.throwWithStackTrace(failure, stack);
     } finally {
@@ -345,7 +348,9 @@ class RealtimeRoomUiController extends ChangeNotifier {
   Future<void> releaseResources() async {
     // Local subscription cancellation has no external I/O or acquisition.
     final cleanup = Cleanup(timeout: null);
-    final mediaRelease = cleanup.run('room.ui.media', () async { await _mediaSubscription?.cancel(); });
+    final mediaRelease = cleanup.run('room.ui.media', () async {
+      await _mediaSubscription?.cancel();
+    });
     final chatRelease = cleanup.run('room.ui.chat', () {
       _chatUi?.removeListener(_onChatChanged);
       _chatUi?.dispose();
@@ -360,8 +365,11 @@ class RealtimeRoomUiController extends ChangeNotifier {
     _disposed = true;
     super.dispose();
     _disposal = releaseResources();
-    observeDetached(_disposal!, onFailure: (error) {
-      room.reportLifecycleFailure(error);
-    });
+    observeDetached(
+      _disposal!,
+      onFailure: (error) {
+        room.reportLifecycleFailure(error);
+      },
+    );
   }
 }

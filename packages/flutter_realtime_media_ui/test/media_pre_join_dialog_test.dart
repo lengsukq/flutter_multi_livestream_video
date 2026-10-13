@@ -18,7 +18,7 @@ void main() {
       await Future.wait([owner.release(), owner.release()]);
       expect(preview.disposeCalls, 1);
       expect(owner.session, isNull);
-      owner.dispose();
+      await owner.dispose();
     },
   );
 
@@ -275,7 +275,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Join meeting'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Token expired'), findsOneWidget);
+    // Raw host exceptions are normalized; native/token payloads stay out of UI.
+    expect(find.textContaining('Token expired'), findsNothing);
+    expect(find.textContaining('The SDK operation failed'), findsOneWidget);
     expect(find.text('Join meeting'), findsOneWidget);
     expect(find.text('Open preparation'), findsNothing);
     expect(previews.first.disposeCalls, 1);

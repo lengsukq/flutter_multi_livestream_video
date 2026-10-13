@@ -1,5 +1,19 @@
+import 'live_room_danmaku.dart';
+import 'live_room_dock.dart';
+import 'live_room_header.dart';
+import 'meeting_room_dock.dart';
+import 'meeting_room_header.dart';
+import 'media_room_waiting_view.dart';
+import 'media_meeting_video_stage.dart';
+import 'media_live_video_stage.dart';
+import 'media_room_view_config.dart';
+import 'media_room_layout_mode.dart';
+import 'media_participant_builder.dart';
+import 'room_members_panel.dart';
+import 'room_members_presentation_controller.dart';
+import 'room_chat_panel.dart';
+import 'room_chat_presentation_controller.dart';
 export 'media_participant_tile.dart' show MediaParticipantTile;
-import 'room_members_controller.dart';
 import 'room_chat_events_controller.dart';
 import 'room_auxiliary_subscriptions.dart';
 import 'room_rtc_data_panel.dart';
@@ -7,7 +21,7 @@ import 'initial_media_settings_controller.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show listEquals, ValueListenable;
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
@@ -16,57 +30,13 @@ import 'media_provider_label.dart';
 import 'live_likes_controller.dart';
 import 'live_reactions_controller.dart';
 import 'live_reaction_particle.dart';
-import 'media_participant_tile.dart';
-import 'media_room_layout_host.dart';
 import 'meeting_room_layout.dart';
 import 'live_room_layout.dart';
 import 'room_regions.dart';
 import 'background_effect_selector.dart';
-import 'media_background_image_preset.dart';
 import 'realtime_strings.dart';
 import 'realtime_style.dart';
 import 'realtime_ui_style.dart';
-
-part 'room_members_panel.dart';
-part 'room_members_actions.dart';
-part 'room_chat_panel.dart';
-part 'room_controls.dart';
-part 'legacy_room_media_stage.dart';
-
-typedef MediaParticipantBuilder =
-    Widget Function(
-      BuildContext context,
-      MediaParticipant participant,
-      MediaTrackRenderer renderer,
-    );
-
-/// Layout modes supported in the room view.
-enum MediaRoomLayoutMode { grid, speaker, presentation }
-
-class MediaRoomViewConfig {
-  const MediaRoomViewConfig({
-    this.showProvider = false,
-    this.showChat = true,
-    this.showRtcDataMessages = false,
-    this.confirmBeforeLeave = true,
-    this.initialMediaSettings,
-    this.backgroundImageBytes,
-    this.backgroundImagePresets = const [],
-    this.roomMode,
-  });
-  final bool showProvider;
-  final bool showChat;
-  final bool showRtcDataMessages;
-  final bool confirmBeforeLeave;
-  final MediaLocalPreviewSettings? initialMediaSettings;
-  final Uint8List? backgroundImageBytes;
-  final List<MediaBackgroundImagePreset> backgroundImagePresets;
-
-  /// Optional explicitly configured room mode.
-  /// When not provided, [MediaRoomView] deduces meeting vs live from the
-  /// participant role and attached interactions.
-  final MediaRoomMode? roomMode;
-}
 
 class MediaRoomView extends StatefulWidget {
   const MediaRoomView({
@@ -80,6 +50,7 @@ class MediaRoomView extends StatefulWidget {
     this.header,
     this.participantBuilder,
     this.onLeave,
+    this.onActionError,
     this.backgroundEffects,
     this.canEnableMicrophone,
     this.microphonePermissionUpdates,
@@ -101,6 +72,7 @@ class MediaRoomView extends StatefulWidget {
   final Widget? header;
   final MediaParticipantBuilder? participantBuilder;
   final VoidCallback? onLeave;
+  final ValueChanged<RealtimeException>? onActionError;
   final MediaBackgroundEffectsController? backgroundEffects;
 
   /// Optional SDK-layer advisory classroom microphone gate.
@@ -134,51 +106,41 @@ class MediaRoomView extends StatefulWidget {
   State<MediaRoomView> createState() => _MediaRoomViewState();
 }
 
-class _MediaRoomViewState extends State<MediaRoomView>
-    with _LegacyRoomMediaStage
-    implements MediaRoomLayoutHost {
-  final _message = TextEditingController();
-  final _liveChatInput = TextEditingController();
-  final _liveChatInputFocus = FocusNode();
-  final _chatScroll = ScrollController();
+class _MediaRoomViewState extends State<MediaRoomView> {
   final _auxiliarySubscriptions = RoomAuxiliarySubscriptions();
   Widget? _cachedMediaStage;
   List<Object?> _mediaStageKey = [];
-  final _memberRevision = ValueNotifier<int>(0);
   final _controlRevision = ValueNotifier<int>(0);
   final _liveReactions = LiveReactionsController();
   ValueNotifier<int> get _likeRevision => _liveReactions.revision;
   final _chatEvents = RoomChatEventsController();
+  late final _chatPresentation = RoomChatPresentationController(
+    onSent: () {
+      if (mounted) setState(() => _error = null);
+    },
+    onError: (error) {
+      widget.onActionError?.call(error);
+      if (mounted) setState(() => _error = error.message);
+    },
+  );
   final _chatRevision = ValueNotifier<int>(0);
-  final _members = RoomMembersController();
+  late final _membersPresentation = RoomMembersPresentationController(
+    onError: (error) => widget.onActionError?.call(error),
+  );
   final _initialSettings = InitialMediaSettingsController();
-  final Set<String> _visibleChatIds = {};
-  bool _chatTimelineInitialized = false;
-  bool _hasNewChatMessages = false;
   Timer? _copyTimer;
   int get _unreadChatCount => _chatEvents.unread;
   bool _chatOpen = false;
   bool _participantsOpen = false;
-  bool _chatSending = false;
   bool _rtcDataOpen = false;
   bool _liveChatInputOpen = false;
-  bool _liveChatSending = false;
   bool _copied = false;
   bool _initialSettingsApplied = false;
-  @override
-  String? _focusedParticipantId;
   String? _error;
-  List<_ManagedRoomMember>? _roomMembers;
-  Object? _roomMembersError;
-  bool _loadingRoomMembers = false;
-  @override
   MediaRoomLayoutMode _layoutMode = MediaRoomLayoutMode.grid;
   bool _cleanScreen = false;
   int get _likeCount => _liveReactions.totalLikes;
   List<LiveReactionHeart> get _floatingHearts => _liveReactions.hearts;
-  bool _mutingAll = false;
-  final Map<MediaParticipant, Object> _muteFailures = {};
-  @override
   MediaSession get session => widget.room.session;
   MediaBackgroundEffectsController get _backgroundEffects =>
       widget.backgroundEffects ?? widget.room;
@@ -202,6 +164,11 @@ class _MediaRoomViewState extends State<MediaRoomView>
   @override
   void initState() {
     super.initState();
+    _membersPresentation.bind(
+      widget.room,
+      widget.chatSession,
+      widget.chatModeration,
+    );
     _liveReactions.totalsRevision.addListener(_onLikeTotalChanged);
     _watchUnreadChat();
     _watchMicPermission();
@@ -218,24 +185,17 @@ class _MediaRoomViewState extends State<MediaRoomView>
         !identical(oldWidget.chatSession, widget.chatSession) ||
         !identical(oldWidget.chatModeration, widget.chatModeration);
     if (rosterSourceChanged) {
-      _roomMembers = null;
-      _roomMembersError = null;
-      _loadingRoomMembers = false;
-      if (_participantsOpen) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) unawaited(_refreshRoomMembers());
-        });
-      }
+      _membersPresentation.bind(
+        widget.room,
+        widget.chatSession,
+        widget.chatModeration,
+      );
+      if (_participantsOpen) unawaited(_membersPresentation.refresh());
     }
     if (oldWidget.room != widget.room) {
       _initialSettingsApplied = false;
-      _muteFailures.clear();
-      _mutingAll = false;
-      _focusedParticipantId = null;
-      _message.clear();
-      _liveChatInput.clear();
+      _chatPresentation.reset();
       _liveChatInputOpen = false;
-      _liveChatSending = false;
     }
     if (oldWidget.liveLikes != widget.liveLikes ||
         oldWidget.room != widget.room) {
@@ -296,23 +256,10 @@ class _MediaRoomViewState extends State<MediaRoomView>
         _chatRevision.value++;
       },
     );
-    _visibleChatIds.clear();
-    _chatTimelineInitialized = false;
-    _hasNewChatMessages = false;
-    _chatSending = false;
+    _chatPresentation.reset();
   }
 
   void _updateRoom(VoidCallback update) => setState(update);
-  void _updateChat(VoidCallback update) {
-    update();
-    _chatRevision.value++;
-  }
-
-  void _updateMembers(VoidCallback update) {
-    update();
-    _memberRevision.value++;
-  }
-
   Future<void> _applyInitialSettings() async {
     if (_initialSettingsApplied) return;
     _initialSettingsApplied = true;
@@ -338,15 +285,12 @@ class _MediaRoomViewState extends State<MediaRoomView>
     _liveReactions.totalsRevision.removeListener(_onLikeTotalChanged);
     _auxiliarySubscriptions.dispose();
     _copyTimer?.cancel();
-    _memberRevision.dispose();
+    _membersPresentation.dispose();
     _controlRevision.dispose();
     _liveReactions.dispose();
     _chatEvents.dispose();
     _chatRevision.dispose();
-    _message.dispose();
-    _liveChatInput.dispose();
-    _liveChatInputFocus.dispose();
-    _chatScroll.dispose();
+    _chatPresentation.dispose();
     super.dispose();
   }
 
@@ -354,8 +298,14 @@ class _MediaRoomViewState extends State<MediaRoomView>
     try {
       await action();
       if (mounted) setState(() => _error = null);
-    } on Object catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+    } on Object catch (error, stack) {
+      final failure = normalizeRealtimeException(
+        error,
+        domain: 'room.ui',
+        stackTrace: stack,
+      );
+      widget.onActionError?.call(failure);
+      if (mounted) setState(() => _error = failure.message);
     }
   }
 
@@ -452,7 +402,6 @@ class _MediaRoomViewState extends State<MediaRoomView>
     return widget.room.role == MediaRole.viewer;
   }
 
-  @override
   void setLayoutMode(MediaRoomLayoutMode mode) {
     setState(() => _layoutMode = mode);
   }
@@ -613,38 +562,12 @@ class _MediaRoomViewState extends State<MediaRoomView>
     if (widget.chatSession == null) return;
     setState(() => _liveChatInputOpen = true);
     _controlRevision.value++;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _liveChatInputOpen) _liveChatInputFocus.requestFocus();
-    });
   }
 
   void _hideLiveChatInput() {
     if (!_liveChatInputOpen) return;
     setState(() => _liveChatInputOpen = false);
     _controlRevision.value++;
-    _liveChatInputFocus.unfocus();
-  }
-
-  Future<void> _sendLiveChat() async {
-    final chat = widget.chatSession;
-    if (chat == null || _liveChatSending) return;
-    final trimmed = _liveChatInput.text.trim();
-    if (trimmed.isEmpty) return;
-    setState(() => _liveChatSending = true);
-    try {
-      await chat.sendMessage(trimmed);
-      if (!mounted || chat != widget.chatSession) return;
-      _liveChatInput.clear();
-      _hideLiveChatInput();
-    } on Object catch (error) {
-      if (mounted && chat == widget.chatSession) {
-        setState(() => _error = error.toString());
-      }
-    } finally {
-      if (mounted && chat == widget.chatSession) {
-        setState(() => _liveChatSending = false);
-      }
-    }
   }
 
   void _showLiveGiftSheet() {
@@ -817,20 +740,12 @@ class _MediaRoomViewState extends State<MediaRoomView>
 
       if (isLive) {
         return LayoutBuilder(
-          builder: (context, constraints) => LiveRoomViewLayout(
-            host: this,
-            snapshot: value,
-            constraints: constraints,
-          ),
+          builder: (context, constraints) => _liveLayout(value, constraints),
         );
       }
 
       return LayoutBuilder(
-        builder: (context, constraints) => MeetingRoomViewLayout(
-          host: this,
-          snapshot: value,
-          constraints: constraints,
-        ),
+        builder: (context, constraints) => _meetingLayout(value, constraints),
       );
     },
   );
@@ -923,49 +838,38 @@ class _MediaRoomViewState extends State<MediaRoomView>
     ),
   );
 
-  Widget _participantsList(MediaSnapshot value) =>
-      _RoomMembersPanel(host: this, snapshot: value);
-
-  Future<void> _runMemberManagement(Future<void> Function() action) async {
-    final room = widget.room;
-    try {
-      await action();
-      if (mounted && room == widget.room) await _refreshRoomMembers();
-    } on Object catch (error) {
-      if (mounted && room == widget.room) {
-        _updateMembers(() => _roomMembersError = error);
-      }
-    }
+  Widget _participantsList(MediaSnapshot value) => RoomMembersPanel(
+    presentation: _membersPresentation,
+    room: widget.room,
+    snapshot: value,
+    chatSession: widget.chatSession,
+    chatModeration: widget.chatModeration,
+    onCloseRoom: _closeRoomForEveryone,
+  );
+  void _openParticipants() {
+    final opening = !_participantsOpen;
+    _updateRoom(() {
+      _participantsOpen = opening;
+      _chatOpen = false;
+    });
+    if (opening) unawaited(_membersPresentation.refresh());
   }
 
-  Widget _memberActionButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback? onPressed,
-    bool danger = false,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: danger
-            ? RealtimeUiTokens.danger
-            : (isDark ? Colors.white : RealtimeUiTokens.text),
-        side: BorderSide(
-          color: danger
-              ? RealtimeUiTokens.dangerBorder
-              : (isDark
-                    ? Colors.white.withValues(alpha: 0.20)
-                    : RealtimeUiTokens.border),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        visualDensity: VisualDensity.compact,
-        minimumSize: const Size(0, 30),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      icon: Icon(icon, size: 15),
-      label: Text(label, style: const TextStyle(fontSize: 11)),
-    );
+  Future<void> _closeRoomForEveryone() async {
+    try {
+      await widget.room.closeRoom();
+    } catch (error) {
+      if (mounted) _updateRoom(() => _error = error.toString());
+      return;
+    }
+    if (!mounted) return;
+    await widget.chatSession?.dispose();
+    await widget.room.dispose();
+    if (!mounted) return;
+    widget.onLeave?.call();
+    if (widget.onLeave == null && Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
   }
 
   Widget _floatingHeartsOverlay() => Positioned.fill(
@@ -984,7 +888,6 @@ class _MediaRoomViewState extends State<MediaRoomView>
   Widget _mediaStage(MediaSnapshot value) {
     final key = <Object?>[
       _layoutMode,
-      _focusedParticipantId,
       _cleanScreen,
       value.state,
       value.localVideoEnabled,
@@ -1003,222 +906,33 @@ class _MediaRoomViewState extends State<MediaRoomView>
     return _cachedMediaStage = _buildMediaStage(value);
   }
 
-  Widget _buildMediaStage(MediaSnapshot value) {
-    final style = RealtimeStyle.of(context);
-    final isLive = this.isLive;
-    if (isLive) {
-      return ColoredBox(color: style.background, child: _buildLiveStage(value));
-    }
-    final customContent = widget.contentStageBuilder?.call(context, value);
-    final stageContent = customContent != null
-        ? Column(
-            children: [
-              Expanded(child: customContent),
-              if (value.participants.isNotEmpty)
-                SizedBox(height: 116, child: _participantStrip(value)),
-            ],
+  Widget _buildMediaStage(MediaSnapshot value) => ColoredBox(
+    color: RealtimeStyle.of(context).background,
+    child: isLive
+        ? MediaLiveVideoStage(
+            snapshot: value,
+            role: widget.room.role,
+            participantId: widget.room.participantId,
+            roomCode: widget.room.roomCode,
+            renderer: widget.renderer,
+            participantBuilder: widget.participantBuilder,
           )
-        : widget.contentStageBuilder != null &&
-              widget.contentControlsBuilder?.call(context) != null
-        ? (value.participants.isEmpty ? _waiting() : _grid(value))
-        : value.contentShareTrack == null &&
-              _layoutMode != MediaRoomLayoutMode.presentation
-        ? value.participants.isEmpty
-              ? _waiting()
-              : _grid(value)
-        : Column(
-            children: [
-              Expanded(child: _screenShare(value)),
-              if (value.participants.isNotEmpty)
-                SizedBox(height: 116, child: _participantStrip(value)),
-            ],
-          );
-
-    return ColoredBox(color: style.background, child: stageContent);
-  }
-
-  Widget _buildLiveStage(MediaSnapshot value) {
-    final strings = RealtimeStrings.of(context);
-    final style = RealtimeStyle.of(context);
-    final isLocalHost = widget.room.role == MediaRole.host;
-
-    // In livestream / broadcast, resolve the single host participant.
-    final MediaParticipant? hostParticipant = isLocalHost
-        ? (value.participants.where((p) => p.isLocal).firstOrNull ??
-              (value.localParticipantId != null
-                  ? value.participants
-                        .where((p) => p.id == value.localParticipantId)
-                        .firstOrNull
-                  : null) ??
-              MediaParticipant(
-                id: widget.room.participantId,
-                displayName: widget.room.participantId,
-                isLocal: true,
-                isVideoEnabled: value.localVideoEnabled,
-              ))
-        : (value.participants
-                  .where(
-                    (p) =>
-                        !p.isLocal &&
-                        (p.isVideoEnabled || p.videoTrack != null),
-                  )
-                  .firstOrNull ??
-              value.participants.where((p) => !p.isLocal).firstOrNull ??
-              value.participants.firstOrNull);
-
-    // If custom participant builder provided, honor it.
-    if (widget.participantBuilder != null && hostParticipant != null) {
-      return widget.participantBuilder!(
-        context,
-        hostParticipant,
-        widget.renderer,
-      );
-    }
-
-    if (hostParticipant == null) {
-      return Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: RealtimeGlassSurface(
-            radius: RealtimeUiTokens.cardRadius,
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const RoomWaitingPulse(
-                  child: SizedBox(
-                    width: 72,
-                    height: 72,
-                    child: Icon(
-                      Icons.sensors_rounded,
-                      size: 32,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  strings.waitingForHost,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: style.text,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  widget.room.roomCode,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: style.textMuted,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+        : MediaMeetingVideoStage(
+            key: ValueKey(widget.room),
+            snapshot: value,
+            renderer: widget.renderer,
+            layoutMode: _layoutMode,
+            participantBuilder: widget.participantBuilder,
+            screenShareOverlayBuilder: widget.screenShareOverlayBuilder,
+            contentStageBuilder: widget.contentStageBuilder,
+            hasContentControls:
+                widget.contentControlsBuilder?.call(context) != null,
+            waiting: MediaRoomWaitingView(
+              roomCode: widget.room.roomCode,
+              copied: _copied,
+              onCopy: _copyCode,
             ),
           ),
-        ),
-      );
-    }
-
-    final hasVideo =
-        hostParticipant.videoTrack != null &&
-        (isLocalHost
-            ? value.localVideoEnabled
-            : hostParticipant.isVideoEnabled);
-
-    if (hasVideo) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final isPortrait = constraints.maxHeight > constraints.maxWidth;
-          return Center(
-            child: MediaTrackView(
-              renderer: widget.renderer,
-              track: hostParticipant.videoTrack,
-              fit: isPortrait ? BoxFit.cover : BoxFit.contain,
-              placeholder: _buildLiveHostOffCameraPlaceholder(
-                hostParticipant,
-                strings,
-                style,
-              ),
-            ),
-          );
-        },
-      );
-    }
-
-    return _buildLiveHostOffCameraPlaceholder(hostParticipant, strings, style);
-  }
-
-  Widget _buildLiveHostOffCameraPlaceholder(
-    MediaParticipant host,
-    RealtimeStrings strings,
-    RealtimeStyle style,
-  ) {
-    final name = host.displayName.isEmpty ? host.id : host.displayName;
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: RealtimeGlassSurface(
-          radius: RealtimeUiTokens.sheetRadius,
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 36),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 44,
-                backgroundColor: style.primarySubtle,
-                child: Text(
-                  name.isNotEmpty ? name.characters.first.toUpperCase() : '?',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: style.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                name,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: style.text,
-                ),
-              ),
-              const SizedBox(height: 8),
-              RealtimePill(
-                label: strings.cameraOff,
-                icon: Icons.videocam_off_rounded,
-                foreground: style.danger,
-                background: style.dangerSubtle,
-                borderColor: style.isDark
-                    ? const Color(0xFF7F1D1D)
-                    : const Color(0xFFFECDD3),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _participantStrip(MediaSnapshot value) => ListView.separated(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    scrollDirection: Axis.horizontal,
-    itemCount: value.participants.length,
-    separatorBuilder: (_, _) => const SizedBox(width: 8),
-    itemBuilder: (context, index) => SizedBox(
-      width: 144,
-      child: _buildParticipantWidget(
-        value.participants[index],
-        isFocused: false,
-        canFocus: true,
-      ),
-    ),
   );
 
   Widget _providerBadge(String id) {
@@ -1324,156 +1038,26 @@ class _MediaRoomViewState extends State<MediaRoomView>
     );
   }
 
-  Widget _waiting() {
-    final strings = RealtimeStrings.of(context);
-    final style = RealtimeStyle.of(context);
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: RealtimeGlassSurface(
-          radius: RealtimeUiTokens.sheetRadius,
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
-          opacity: 0.84,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const RoomWaitingPulse(
-                child: SizedBox(
-                  width: 88,
-                  height: 88,
-                  child: Icon(
-                    Icons.wifi_tethering_rounded,
-                    size: 36,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                strings.onlyOneHere,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  color: style.text,
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                strings.shareRoomCode,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: style.textMuted, fontSize: 13.5),
-              ),
-              const SizedBox(height: 18),
-              RealtimeGlassButton(
-                onPressed: _copyCode,
-                icon: _copied ? Icons.check_rounded : Icons.copy_rounded,
-                child: Text(
-                  _copied
-                      ? strings.copied
-                      : strings.copyRoom(widget.room.roomCode),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _productChat(ChatSession chat, {bool showHeader = true}) =>
-      _RoomChatPanel(host: this, chat: chat, showHeader: showHeader);
-
-  bool _isOwnChatMessage(ChatSession chat, ChatMessage message) {
-    if (chat is ChatSessionIdentity) {
-      final identity = chat as ChatSessionIdentity;
-      final localUserId = identity.localUserId.trim();
-      if (localUserId.isNotEmpty && message.userId == localUserId) return true;
-      final localParticipantId = identity.localParticipantId.trim();
-      if (localParticipantId.isNotEmpty &&
-          message.attributes['participantId'] == localParticipantId) {
-        return true;
-      }
-    }
-    if (message.attributes['local'] == 'true') return true;
-    return message.userId == widget.room.participantId;
-  }
-
-  String _formatChatTime(DateTime timestamp) {
-    final local = timestamp.toLocal();
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$hour:$minute';
-  }
-
-  void _syncChatScroll(List<ChatMessage> messages) {
-    final first = !_chatTimelineInitialized;
-    final added = messages.any((m) => !_visibleChatIds.contains(m.id));
-    _chatTimelineInitialized = true;
-    _visibleChatIds
-      ..clear()
-      ..addAll(messages.map((m) => m.id));
-    if (!first && !added) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_chatScroll.hasClients) return;
-      final nearLatest = first || _chatScroll.position.pixels <= 72;
-      if (nearLatest) {
-        _chatScroll.animateTo(
-          0,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-        );
-      } else {
-        _hasNewChatMessages = true;
-        _chatRevision.value++;
-      }
-    });
-  }
-
+      RoomChatPanel(
+        controller: _chatPresentation,
+        events: _chatEvents,
+        chat: chat,
+        participantId: widget.room.participantId,
+        onClose: _toggleChat,
+        showHeader: showHeader,
+      );
+  bool _isOwnChatMessage(ChatSession chat, ChatMessage message) =>
+      isOwnRoomChatMessage(chat, message, widget.room.participantId);
   void _toggleChat() {
     setState(() {
       _chatOpen = !_chatOpen;
       _participantsOpen = false;
       if (_chatOpen) {
         _chatEvents.markRead();
-        _hasNewChatMessages = false;
+        _chatPresentation.opened();
       }
     });
-    if (_chatOpen) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_chatScroll.hasClients) _chatScroll.jumpTo(0);
-      });
-    }
-  }
-
-  Future<void> _sendChat(ChatSession chat) async {
-    final text = _message.text.trim();
-    if (text.isEmpty || _chatSending) return;
-    _updateChat(() => _chatSending = true);
-    try {
-      await chat.sendMessage(text);
-      if (!mounted || chat != widget.chatSession) return;
-      _message.clear();
-      _updateChat(() => _error = null);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && chat == widget.chatSession && _chatScroll.hasClients) {
-          _chatScroll.animateTo(
-            0,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-    } on Object catch (error) {
-      if (mounted && chat == widget.chatSession) {
-        _updateChat(() => _error = error.toString());
-      }
-    } finally {
-      if (mounted && chat == widget.chatSession) {
-        _updateChat(() => _chatSending = false);
-      }
-    }
   }
 
   Widget _rtcData() => RoomRtcDataPanel(
@@ -1533,86 +1117,120 @@ class _MediaRoomViewState extends State<MediaRoomView>
     );
   }
 
-  // Presentation facade: no Meeting/Live component can access private State.
-  @override
-  MediaRoomView get view => widget;
-  @override
-  MediaBackgroundEffectsController get backgroundEffects => _backgroundEffects;
-  @override
-  bool get chatOpen => _chatOpen;
-  @override
-  bool get participantsOpen => _participantsOpen;
-  @override
-  bool get rtcDataOpen => _rtcDataOpen;
-  @override
-  bool get copied => _copied;
-  @override
-  bool get cleanScreen => _cleanScreen;
-  @override
-  int get unreadChatCount => _unreadChatCount;
-  @override
-  int get likeCount => _likeCount;
-  @override
-  Object? get error => _error;
-  @override
-  MediaRoomLayoutMode get layoutMode => _layoutMode;
-  @override
-  ValueNotifier<int> get chatRevision => _chatRevision;
-  @override
-  ValueListenable<List<ChatMessage>> get chatMessages => _chatEvents.danmaku;
-  @override
-  ValueNotifier<int> get likeRevision => _likeRevision;
-  @override
-  ValueNotifier<int> get controlRevision => _controlRevision;
-  @override
-  bool get liveChatInputOpen => _liveChatInputOpen;
-  @override
-  Widget connectionBanner(MediaSessionState state) => _connectionBanner(state);
-  @override
-  Widget errorView() => _errorView();
-  @override
-  Widget rtcData() => _rtcData();
-  @override
-  Widget mediaStage(MediaSnapshot value) => _mediaStage(value);
-  @override
-  Widget sidePanel(MediaSnapshot value) => _sidePanel(value);
-  @override
-  Widget providerBadge(String id) => _providerBadge(id);
-  @override
-  Widget floatingHeartsOverlay() => _floatingHeartsOverlay();
-  @override
-  void copyCode() => _copyCode();
-  @override
-  void openParticipants() => _openParticipants();
-  @override
-  void toggleChat() => _toggleChat();
-  @override
-  void toggleCleanScreen() => _toggleCleanScreen();
-  @override
-  void sendLike() => _sendLike();
-  @override
-  void showLiveChatInputSheet() => _showLiveChatInputSheet();
-  @override
-  void hideLiveChatInput() => _hideLiveChatInput();
-  @override
-  Future<void> sendLiveChat() => _sendLiveChat();
-  @override
-  void showLiveGiftSheet() => _showLiveGiftSheet();
-  @override
-  void showMeetingMoreSheet(
+  InteractiveMediaSession? get _interactive =>
+      session is InteractiveMediaSession
+      ? session as InteractiveMediaSession
+      : null;
+  Widget? _banner(MediaSnapshot snapshot) => switch (snapshot.state) {
+    MediaSessionState.reconnecting ||
+    MediaSessionState.failed ||
+    MediaSessionState.ended => _connectionBanner(snapshot.state),
+    _ => null,
+  };
+  Widget _meetingLayout(
     MediaSnapshot value,
-    InteractiveMediaSession? interactive,
-  ) => _showMeetingMoreSheet(value, interactive);
-  @override
-  Future<void> showMeetingLeaveConfirmation() =>
-      _showMeetingLeaveConfirmation();
-  @override
-  Future<void> showLiveHostLeaveConfirmation() =>
-      _showLiveHostLeaveConfirmation();
-  @override
-  Future<void> leave() => _leave();
-  @override
-  Future<void> openBackgroundEffects() => _openBackgroundEffects();
-  @override
-  Future<void> runAction(Future<void> Function() action) => _run(action);
+    BoxConstraints constraints,
+  ) => MeetingRoomViewLayout(
+    constraints: constraints,
+    panelOpen: _chatOpen || _participantsOpen,
+    participantsOpen: _participantsOpen,
+    topBar: MeetingRoomHeader(
+      snapshot: value,
+      compact: constraints.maxWidth < 520,
+      roomCode: widget.room.roomCode,
+      copied: _copied,
+      onCopy: _copyCode,
+      providerBadge: widget.config.showProvider
+          ? _providerBadge(widget.room.providerId)
+          : null,
+      layoutMode: _layoutMode,
+      onLayoutMode: setLayoutMode,
+      hasContentControls: widget.contentControlsBuilder?.call(context) != null,
+      onLeave: () => observeDetached(_showMeetingLeaveConfirmation()),
+    ),
+    header: widget.header,
+    connectionBanner: _banner(value),
+    errorBanner: RoomRegion(
+      revision: _chatRevision,
+      builder: (_) => _error == null ? const SizedBox.shrink() : _errorView(),
+    ),
+    stage: _mediaStage(value),
+    sidePanel: _sidePanel(value),
+    rtcData: _rtcDataOpen ? _rtcData() : null,
+    dock: RoomRegion(
+      revision: _controlRevision,
+      builder: (_) => MeetingRoomDock(
+        snapshot: value,
+        compact: constraints.maxWidth < 520,
+        interactive: _interactive,
+        canEnableMicrophone: widget.canEnableMicrophone,
+        runAction: _run,
+        contentControls: widget.contentControlsBuilder?.call(context),
+        extraControls: widget.extraControlsBuilder?.call(context) ?? const [],
+        participantsOpen: _participantsOpen,
+        onParticipants: _openParticipants,
+        showChat: widget.config.showChat && widget.chatSession != null,
+        chatOpen: _chatOpen,
+        unreadChatCount: _unreadChatCount,
+        onChat: _toggleChat,
+        onMore: () => _showMeetingMoreSheet(value, _interactive),
+        onLeave: () => observeDetached(_showMeetingLeaveConfirmation()),
+      ),
+    ),
+  );
+  Widget _liveLayout(MediaSnapshot value, BoxConstraints constraints) =>
+      LiveRoomViewLayout(
+        constraints: constraints,
+        cleanScreen: _cleanScreen,
+        onCleanScreen: _toggleCleanScreen,
+        onLike: _sendLike,
+        stage: _mediaStage(value),
+        hearts: RoomRegion(
+          revision: _likeRevision,
+          builder: (_) => Stack(children: [_floatingHeartsOverlay()]),
+        ),
+        topBar: LiveRoomHeader(
+          snapshot: value,
+          isHost: widget.room.role == MediaRole.host,
+          roomCode: widget.room.roomCode,
+          onCleanScreen: _toggleCleanScreen,
+          onLeave: () => observeDetached(
+            widget.room.role == MediaRole.host
+                ? _showLiveHostLeaveConfirmation()
+                : _leave(),
+          ),
+        ),
+        header: widget.header,
+        connectionBanner: _banner(value),
+        danmaku: LiveRoomDanmaku(
+          chat: widget.chatSession,
+          messages: _chatEvents.danmaku,
+          participantId: widget.room.participantId,
+          isHost: widget.room.role == MediaRole.host,
+        ),
+        dock: RoomRegion(
+          revision: _controlRevision,
+          builder: (_) => LiveRoomDock(
+            snapshot: value,
+            isHost: widget.room.role == MediaRole.host,
+            interactive: _interactive,
+            chatSession: widget.chatSession,
+            inputOpen: _liveChatInputOpen,
+            chatController: _chatPresentation,
+            onOpenInput: _showLiveChatInputSheet,
+            onCloseInput: _hideLiveChatInput,
+            runAction: _run,
+            backgroundCapabilities: _backgroundEffects.backgroundCapabilities,
+            backgroundEffect: _backgroundEffects.backgroundEffect,
+            onBackground: () => observeDetached(_openBackgroundEffects()),
+            showGift:
+                widget.liveGiftPanelOpener != null ||
+                widget.extraControlsBuilder != null,
+            onGift: _showLiveGiftSheet,
+            showLikes: widget.liveLikes != null,
+            likeCount: _likeCount,
+            onLike: _sendLike,
+          ),
+        ),
+      );
 }

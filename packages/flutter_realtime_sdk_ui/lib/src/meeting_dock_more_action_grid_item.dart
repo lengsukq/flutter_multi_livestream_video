@@ -3,7 +3,10 @@ import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'realtime_dock_more_item.dart';
 
 class MeetingDockMoreActionGridItem extends StatelessWidget {
-  const MeetingDockMoreActionGridItem({required this.item, required this.onTap});
+  const MeetingDockMoreActionGridItem({
+    required this.item,
+    required this.onTap,
+  });
 
   final RealtimeDockMoreItem item;
   final VoidCallback onTap;

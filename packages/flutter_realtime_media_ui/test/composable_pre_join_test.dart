@@ -55,7 +55,14 @@ void main() {
         expect(previews.first.disposeCount, 1);
         throw StateError('join failed');
       });
-      expect(controller.joinError, isA<StateError>());
+      expect(
+        controller.joinError,
+        isA<RealtimeException>().having(
+          (e) => e.code,
+          'code',
+          RealtimeErrorCode.invalidState,
+        ),
+      );
       expect(controller.joining, isFalse);
       expect(previews, hasLength(2), reason: 'failure reopens the preview');
       await controller.enter((settings) async {
@@ -195,7 +202,8 @@ void main() {
     },
   );
 
-  testWidgets('pending macOS-style permission is requested on switch tap and track enabled',
+  testWidgets(
+    'pending macOS-style permission is requested on switch tap and track enabled',
     (tester) async {
       final requester = _GrantOnRequest();
       final controller = RealtimePreJoinController(
@@ -205,23 +213,29 @@ void main() {
       );
       addTearDown(controller.dispose);
       await controller.initialize();
-      await tester.pumpWidget(MaterialApp(
-        home: RealtimePreJoinScope(
-          controller: controller,
-          child: const Scaffold(body: RealtimePreJoinMediaControls()),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RealtimePreJoinScope(
+            controller: controller,
+            child: const Scaffold(body: RealtimePreJoinMediaControls()),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       expect(find.byIcon(Icons.help_outline_rounded), findsNWidgets(2));
       await tester.tap(find.byType(CupertinoSwitch).first);
       await tester.pumpAndSettle();
-      expect(controller.permissions[MediaPermissionKind.microphone],
-          MediaPermissionState.granted);
+      expect(
+        controller.permissions[MediaPermissionKind.microphone],
+        MediaPermissionState.granted,
+      );
       expect(controller.preview!.settings.microphoneEnabled, isTrue);
       await tester.tap(find.byType(CupertinoSwitch).last);
       await tester.pumpAndSettle();
-      expect(controller.permissions[MediaPermissionKind.camera],
-          MediaPermissionState.granted);
+      expect(
+        controller.permissions[MediaPermissionKind.camera],
+        MediaPermissionState.granted,
+      );
       expect(controller.preview!.settings.cameraEnabled, isTrue);
       expect(find.byIcon(Icons.help_outline_rounded), findsNothing);
     },
@@ -237,8 +251,9 @@ class _GrantOnRequest implements MediaPermissionRequester {
   Future<bool> openAppSettings() async => true;
   @override
   Future<MediaPermissionState> status(MediaPermissionKind kind) async =>
-      _granted.contains(kind) ? MediaPermissionState.granted
-          : MediaPermissionState.unknown;
+      _granted.contains(kind)
+      ? MediaPermissionState.granted
+      : MediaPermissionState.unknown;
   @override
   Future<MediaPermissionState> request(MediaPermissionKind kind) async {
     _granted.add(kind);

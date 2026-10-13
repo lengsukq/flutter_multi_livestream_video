@@ -21,3 +21,11 @@ export 'src/room_members_controller.dart'
         RoomMembersController,
         RoomMediaMemberAction,
         mergeRoomMembers;
+
+export 'src/realtime_pre_join_state.dart';
+
+export 'src/media_participant_builder.dart';
+export 'src/media_room_layout_mode.dart';
+export 'src/media_room_view_config.dart';
+export 'src/media_live_video_stage.dart';
+export 'src/media_meeting_video_stage.dart';

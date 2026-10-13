@@ -52,7 +52,13 @@ class _RealtimeRoomUiScopeState extends State<RealtimeRoomUiScope> {
 
   void _initialize() {
     _ownsController = widget.controller == null;
-    _controller = widget.controller ?? widget.controllerFactory?.call(widget.room) ?? RealtimeRoomUiController(widget.room, onActionError: widget.onActionError);
+    _controller =
+        widget.controller ??
+        widget.controllerFactory?.call(widget.room) ??
+        RealtimeRoomUiController(
+          widget.room,
+          onActionError: widget.onActionError,
+        );
     assert(identical(_controller.room, widget.room));
   }
 

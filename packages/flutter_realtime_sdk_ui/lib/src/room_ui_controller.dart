@@ -1,12 +1,18 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart' as room_ui;
-import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart' show RealtimeRoomUiAction;
+import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart'
+    as room_ui;
+import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart'
+    show RealtimeRoomUiAction;
 import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
 import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 
 class RealtimeRoomUiController extends room_ui.RealtimeRoomUiController {
-  RealtimeRoomUiController(super.room, {super.initialCameraPosition, super.onActionError}) {
+  RealtimeRoomUiController(
+    super.room, {
+    super.initialCameraPosition,
+    super.onActionError,
+  }) {
     _classroomSubscription = room.classroom?.states
         .map<Object?>((_) => null)
         .listen((_) {
@@ -31,7 +37,8 @@ class RealtimeRoomUiController extends room_ui.RealtimeRoomUiController {
   int _receivedLikeCount = 0;
   LiveInteractionState? get liveState => _liveState;
   int get receivedLikeCount => _receivedLikeCount;
-  @override bool get canUseMicrophone => super.canUseMicrophone && _canSpeak;
+  @override
+  bool get canUseMicrophone => super.canUseMicrophone && _canSpeak;
   bool get _canSpeak {
     final classroom = room.classroom;
     if (classroom == null || !snapshot.localMuted) return true;
@@ -148,25 +155,45 @@ class RealtimeRoomUiController extends room_ui.RealtimeRoomUiController {
     await execute(RealtimeRoomUiAction.liveLike, live.sendLike);
   }
 
-
-  @override Future<void> releaseResources() async {
+  @override
+  Future<void> releaseResources() async {
     // Local subscription cancellation has no external I/O or acquisition.
     final cleanup = Cleanup(timeout: null);
-    final classroomRelease = cleanup.run('room.ui.classroom', () async { await _classroomSubscription?.cancel(); });
-    final liveRelease = cleanup.run('room.ui.live', () async { await _liveSubscription?.cancel(); });
-    final likeRelease = cleanup.run('room.ui.likes', () async { await _likeSubscription?.cancel(); });
+    final classroomRelease = cleanup.run('room.ui.classroom', () async {
+      await _classroomSubscription?.cancel();
+    });
+    final liveRelease = cleanup.run('room.ui.live', () async {
+      await _liveSubscription?.cancel();
+    });
+    final likeRelease = cleanup.run('room.ui.likes', () async {
+      await _likeSubscription?.cancel();
+    });
     final baseRelease = cleanup.run('room.ui.base', super.releaseResources);
-    await Future.wait([classroomRelease, liveRelease, likeRelease, baseRelease]);
+    await Future.wait([
+      classroomRelease,
+      liveRelease,
+      likeRelease,
+      baseRelease,
+    ]);
     cleanup.finish(domain: 'room.ui');
   }
-
 }
 
 /// Full-UI scope adds only the explicitly selected business presentation.
 class RealtimeRoomUiScope extends room_ui.RealtimeRoomUiScope {
-  RealtimeRoomUiScope({super.key, required super.room, required super.child,
-    RealtimeRoomUiController? controller, super.onActionError,
-  }) : super(controller: controller, controllerFactory: (room) => RealtimeRoomUiController(room, onActionError: onActionError));
-  static RealtimeRoomUiController of(BuildContext context) => room_ui.RealtimeRoomUiScope.of(context) as RealtimeRoomUiController;
-  static RealtimeRoomUiController? maybeOf(BuildContext context) => room_ui.RealtimeRoomUiScope.maybeOf(context) as RealtimeRoomUiController?;
+  RealtimeRoomUiScope({
+    super.key,
+    required super.room,
+    required super.child,
+    RealtimeRoomUiController? controller,
+    super.onActionError,
+  }) : super(
+         controller: controller,
+         controllerFactory: (room) =>
+             RealtimeRoomUiController(room, onActionError: onActionError),
+       );
+  static RealtimeRoomUiController of(BuildContext context) =>
+      room_ui.RealtimeRoomUiScope.of(context) as RealtimeRoomUiController;
+  static RealtimeRoomUiController? maybeOf(BuildContext context) =>
+      room_ui.RealtimeRoomUiScope.maybeOf(context) as RealtimeRoomUiController?;
 }

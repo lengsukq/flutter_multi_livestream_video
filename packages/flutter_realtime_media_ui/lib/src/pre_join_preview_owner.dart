@@ -10,6 +10,7 @@ class PreJoinPreviewOwner {
   MediaLocalPreviewSession? _session;
   StreamSubscription<RealtimeException>? _failures;
   Future<void>? _releaseFuture;
+  Future<void>? _disposeFuture;
 
   MediaLocalPreviewSession? get session => _session;
 
@@ -17,6 +18,12 @@ class PreJoinPreviewOwner {
     MediaLocalPreviewSession? preview, {
     required void Function(RealtimeException error) onFailure,
   }) {
+    if (_disposeFuture != null) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'prejoin.preview.bind',
+      );
+    }
     if (_session != null || _failures != null || _releaseFuture != null) {
       throw StateError('Release the current local preview before rebinding.');
     }
@@ -51,15 +58,19 @@ class PreJoinPreviewOwner {
     return releasing;
   }
 
+  Future<void> dispose() => _disposeFuture ??= release();
+
   Future<void> _releaseAssets(
     StreamSubscription<RealtimeException>? failures,
     MediaLocalPreviewSession? preview,
-  ) {
+  ) async {
+    final cleanup = Cleanup();
     if (failures != null) {
-      return failures.cancel().then((_) => preview?.dispose());
+      await cleanup.run('prejoin.failures', failures.cancel);
     }
-    return preview?.dispose() ?? Future<void>.value();
+    await cleanup.run('prejoin.preview', () async {
+      await preview?.dispose();
+    });
+    cleanup.finish(domain: 'media.prejoin');
   }
-
-  void dispose() => unawaited(release());
 }

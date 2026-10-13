@@ -1,4 +1,5 @@
-import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart' show RealtimeRoomUiAction;
+import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart'
+    show RealtimeRoomUiAction;
 import 'package:flutter_realtime_shared_content_preset/flutter_realtime_shared_content_preset.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';

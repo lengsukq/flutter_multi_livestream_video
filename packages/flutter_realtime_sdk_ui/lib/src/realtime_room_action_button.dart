@@ -1,5 +1,6 @@
 import 'realtime_room_action_button_builder.dart';
-import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart' show RealtimeRoomUiAction;
+import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart'
+    show RealtimeRoomUiAction;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
@@ -104,7 +105,9 @@ class RealtimeRoomActionButton extends StatelessWidget {
             RealtimeRoomUiAction.liveLike => controller.sendLiveLike(),
           };
           unawaited(
-            task().catchError((Object error) => controller.reportActionError(error)),
+            task().catchError(
+              (Object error) => controller.reportActionError(error),
+            ),
           );
         }
 

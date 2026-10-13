@@ -2,7 +2,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class MeetingDockMeetingDockModalSheet extends StatelessWidget {
-  const MeetingDockMeetingDockModalSheet({required this.title, required this.child});
+  const MeetingDockMeetingDockModalSheet({
+    required this.title,
+    required this.child,
+  });
 
   final String title;
   final Widget child;

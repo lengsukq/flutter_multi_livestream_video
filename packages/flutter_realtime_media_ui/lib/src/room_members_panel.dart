@@ -1,17 +1,143 @@
-part of 'media_room_view.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
+import 'room_members_controller.dart';
+import 'room_members_presentation_controller.dart';
+import 'realtime_strings.dart';
+import 'realtime_ui_style.dart';
 
-class _RoomMembersPanel extends StatelessWidget {
-  const _RoomMembersPanel({required this.host, required this.snapshot});
-  final _MediaRoomViewState host;
+class RoomMembersPanel extends StatefulWidget {
+  const RoomMembersPanel({
+    super.key,
+    required this.presentation,
+    required this.room,
+    required this.snapshot,
+    required this.onCloseRoom,
+    this.chatSession,
+    this.chatModeration,
+  });
+  final RoomMembersPresentationController presentation;
+  final MediaRoomSession room;
   final MediaSnapshot snapshot;
+  final ChatSession? chatSession;
+  final ChatModeration? chatModeration;
+  final Future<void> Function() onCloseRoom;
   @override
-  Widget build(BuildContext context) => RoomRegion(
-    revision: host._memberRevision,
-    builder: (_) => host._buildParticipantsList(snapshot),
-  );
+  State<RoomMembersPanel> createState() => _RoomMembersPanelState();
 }
 
-extension _RoomMembersRendering on _MediaRoomViewState {
+class _RoomMembersPanelState extends State<RoomMembersPanel> {
+  bool _confirmingMute = false;
+  bool get _mutingAll => widget.presentation.muting;
+  Map<MediaParticipant, Object> get _muteFailures =>
+      widget.presentation.muteFailures;
+  List<RoomManagedMember> get _roomMembers => widget.presentation.state.members;
+  bool get _loadingRoomMembers =>
+      widget.presentation.state is RoomMemberDirectoryLoading;
+  RealtimeException? get _roomMembersError =>
+      switch (widget.presentation.state) {
+        RoomMemberDirectoryFailed(:final error) => error,
+        _ => null,
+      };
+  MediaSession get session => widget.room.session;
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.presentation,
+    builder: (context, _) => _buildParticipantsList(widget.snapshot),
+  );
+  Future<void> _closeChatRoom() => widget.presentation.run(() async {
+    await widget.chatModeration?.closeRoom();
+  });
+  Future<void> _muteAllParticipants({bool retry = false}) async {
+    if (_mutingAll || _confirmingMute) return;
+    final strings = RealtimeStrings.of(context);
+    final targetRoom = widget.room;
+    final targets = retry
+        ? _muteFailures.keys.toList()
+        : session.snapshot.participants.where((p) => !p.isLocal).toList();
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(strings.noMuteTargets)));
+      return;
+    }
+    setState(() => _confirmingMute = true);
+    if (!retry) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        useRootNavigator: true,
+        builder: (ctx) => RealtimeGlassDialog(
+          icon: Icons.volume_off_rounded,
+          title: Text(strings.muteAll),
+          content: Text(strings.muteAllConfirmation),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(strings.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(strings.muteAll),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || targetRoom != widget.room) return;
+      if (confirmed != true) {
+        setState(() => _confirmingMute = false);
+        return;
+      }
+    }
+    if (mounted) setState(() => _confirmingMute = false);
+    final result = await widget.presentation.mute(targets);
+    if (!mounted || result == null || !result.completed) return;
+    final failures = result.failures;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          failures.isEmpty
+              ? strings.muteAllSuccess
+              : strings.muteSummary(
+                  targets.length - failures.length,
+                  failures.length,
+                ),
+        ),
+      ),
+    );
+    await widget.presentation.refresh();
+  }
+
+  Widget _memberActionButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    bool danger = false,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: danger
+            ? RealtimeUiTokens.danger
+            : (isDark ? Colors.white : RealtimeUiTokens.text),
+        side: BorderSide(
+          color: danger
+              ? RealtimeUiTokens.dangerBorder
+              : (isDark
+                    ? Colors.white.withValues(alpha: 0.20)
+                    : RealtimeUiTokens.border),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        visualDensity: VisualDensity.compact,
+        minimumSize: const Size(0, 30),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      icon: Icon(icon, size: 15),
+      label: Text(label, style: const TextStyle(fontSize: 11)),
+    );
+  }
+
   Widget _buildParticipantsList(MediaSnapshot value) {
     final strings = RealtimeStrings.of(context);
     final capabilities = widget.room.managementCapabilities;
@@ -20,14 +146,14 @@ extension _RoomMembersRendering on _MediaRoomViewState {
         ? (chatModeration as ChatModerationCapabilitySource)
               .moderationCapabilities
         : const ChatManagementCapabilities();
-    final members = [...?_roomMembers];
+    final members = [..._roomMembers];
     for (final participant in value.participants) {
       final alreadyListed = members.any(
         (member) => member.media?.participantId == participant.id,
       );
       if (alreadyListed) continue;
       members.add(
-        _ManagedRoomMember(
+        RoomManagedMember(
           userId: '',
           displayName: participant.displayName.isEmpty
               ? participant.id
@@ -65,7 +191,7 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                   tooltip: strings.refresh,
                   onPressed: _loadingRoomMembers
                       ? null
-                      : () => unawaited(_refreshRoomMembers()),
+                      : () => unawaited(widget.presentation.refresh()),
                   visualDensity: VisualDensity.compact,
                   icon: _loadingRoomMembers
                       ? const SizedBox.square(
@@ -278,13 +404,16 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             icon: Icons.person_remove_outlined,
                                             danger: true,
                                             onPressed: () =>
-                                                _runMemberManagement(
-                                                  () => _members.manageMedia(
-                                                    widget.room,
-                                                    media.participantId,
-                                                    RoomMediaMemberAction
-                                                        .remove,
-                                                  ),
+                                                widget.presentation.run(
+                                                  () => widget
+                                                      .presentation
+                                                      .service
+                                                      .manageMedia(
+                                                        widget.room,
+                                                        media.participantId,
+                                                        RoomMediaMemberAction
+                                                            .remove,
+                                                      ),
                                                 ),
                                           ),
                                         if (canMuteMedia)
@@ -292,12 +421,16 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             label: strings.muteParticipant,
                                             icon: Icons.mic_off_outlined,
                                             onPressed: () =>
-                                                _runMemberManagement(
-                                                  () => _members.manageMedia(
-                                                    widget.room,
-                                                    media.participantId,
-                                                    RoomMediaMemberAction.mute,
-                                                  ),
+                                                widget.presentation.run(
+                                                  () => widget
+                                                      .presentation
+                                                      .service
+                                                      .manageMedia(
+                                                        widget.room,
+                                                        media.participantId,
+                                                        RoomMediaMemberAction
+                                                            .mute,
+                                                      ),
                                                 ),
                                           ),
                                         if (canStopVideo)
@@ -305,13 +438,16 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             label: strings.stopParticipantVideo,
                                             icon: Icons.videocam_off_outlined,
                                             onPressed: () =>
-                                                _runMemberManagement(
-                                                  () => _members.manageMedia(
-                                                    widget.room,
-                                                    media.participantId,
-                                                    RoomMediaMemberAction
-                                                        .stopVideo,
-                                                  ),
+                                                widget.presentation.run(
+                                                  () => widget
+                                                      .presentation
+                                                      .service
+                                                      .manageMedia(
+                                                        widget.room,
+                                                        media.participantId,
+                                                        RoomMediaMemberAction
+                                                            .stopVideo,
+                                                      ),
                                                 ),
                                           ),
                                         if (canGrantHost)
@@ -319,13 +455,16 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             label: strings.grantHost,
                                             icon: Icons.shield_outlined,
                                             onPressed: () =>
-                                                _runMemberManagement(
-                                                  () => _members.manageMedia(
-                                                    widget.room,
-                                                    media.participantId,
-                                                    RoomMediaMemberAction
-                                                        .grantHost,
-                                                  ),
+                                                widget.presentation.run(
+                                                  () => widget
+                                                      .presentation
+                                                      .service
+                                                      .manageMedia(
+                                                        widget.room,
+                                                        media.participantId,
+                                                        RoomMediaMemberAction
+                                                            .grantHost,
+                                                      ),
                                                 ),
                                           ),
                                         if (canRemoveChat)
@@ -334,9 +473,11 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                                             icon: Icons.forum_outlined,
                                             danger: true,
                                             onPressed: () =>
-                                                _runMemberManagement(
-                                                  () =>
-                                                      _members.removeChatMember(
+                                                widget.presentation.run(
+                                                  () => widget
+                                                      .presentation
+                                                      .service
+                                                      .removeChatMember(
                                                         chatModeration,
                                                         chat.userId,
                                                         session:
@@ -366,13 +507,13 @@ extension _RoomMembersRendering on _MediaRoomViewState {
                 children: [
                   if (canCloseChat)
                     OutlinedButton.icon(
-                      onPressed: _closeChatRoomForEveryone,
+                      onPressed: _closeChatRoom,
                       icon: const Icon(Icons.forum_outlined, size: 17),
                       label: Text(strings.closeChatRoom),
                     ),
                   if (canCloseMedia)
                     OutlinedButton.icon(
-                      onPressed: _closeRoomForEveryone,
+                      onPressed: widget.onCloseRoom,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: RealtimeUiTokens.danger,
                         side: const BorderSide(
@@ -390,8 +531,6 @@ extension _RoomMembersRendering on _MediaRoomViewState {
     );
   }
 }
-
-typedef _ManagedRoomMember = RoomManagedMember;
 
 extension _RoomManagedMemberLabels on RoomManagedMember {
   String roleLabel(RealtimeStrings strings) {

@@ -36,7 +36,7 @@ void main() {
     }
     final closing = controller.close();
     expect(identical(closing, controller.close()), isTrue);
-    await closing;
+    await tester.runAsync(() => closing);
     expect(media.disposeCalls, 0);
     await tester.runAsync(room.dispose);
     expect(media.disposeCalls, 1);
@@ -82,7 +82,7 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
     expect(controller.isPending(RealtimeRoomUiAction.microphone), isFalse);
     await tester.pumpWidget(const SizedBox());
-    await controller.close();
+    await tester.runAsync(controller.close);
     await tester.runAsync(room.dispose);
   });
 }
@@ -95,7 +95,7 @@ class _FakeRenderer extends MediaTrackRenderer {
 }
 
 class _FakeMediaSession extends InteractiveMediaSession {
-  _FakeMediaSession({this._role = MediaRole.participant});
+  _FakeMediaSession({required MediaRole role}) : _role = role;
   final MediaRole _role;
   final _snapshots = StreamController<MediaSnapshot>.broadcast();
   final _states = StreamController<MediaSessionState>.broadcast();

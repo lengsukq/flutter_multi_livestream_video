@@ -1,22 +1,43 @@
-part of 'media_room_view.dart';
+import 'realtime_style.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+import 'room_chat_events_controller.dart';
+import 'room_chat_presentation_controller.dart';
+import 'realtime_strings.dart';
+import 'realtime_ui_style.dart';
 
-class _RoomChatPanel extends StatelessWidget {
-  const _RoomChatPanel({
-    required this.host,
+class RoomChatPanel extends StatefulWidget {
+  const RoomChatPanel({
+    super.key,
+    required this.controller,
     required this.chat,
-    required this.showHeader,
+    required this.events,
+    required this.participantId,
+    required this.onClose,
+    this.showHeader = true,
   });
-  final _MediaRoomViewState host;
+  final RoomChatPresentationController controller;
+  final RoomChatEventsController events;
   final ChatSession chat;
+  final String participantId;
+  final VoidCallback onClose;
   final bool showHeader;
   @override
-  Widget build(BuildContext context) => RoomRegion(
-    revision: host._chatRevision,
-    builder: (_) => host._renderProductChat(chat, showHeader: showHeader),
-  );
+  State<RoomChatPanel> createState() => _RoomChatPanelState();
 }
 
-extension _RoomChatRendering on _MediaRoomViewState {
+class _RoomChatPanelState extends State<RoomChatPanel> {
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.controller,
+    builder: (context, _) =>
+        _renderProductChat(widget.chat, showHeader: widget.showHeader),
+  );
+  String _formatChatTime(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
   Widget _renderProductChat(
     ChatSession chat, {
     bool showHeader = true,
@@ -27,9 +48,9 @@ extension _RoomChatRendering on _MediaRoomViewState {
     builder: (context, stateSnapshot) {
       final connectionState = stateSnapshot.data ?? chat.state;
       return ValueListenableBuilder<List<ChatMessage>>(
-        valueListenable: _chatEvents.danmaku,
+        valueListenable: widget.events.danmaku,
         builder: (context, messages, _) {
-          _syncChatScroll(messages);
+          widget.controller.syncMessages(messages);
           return RealtimeGlassSurface(
             radius: RealtimeUiTokens.cardRadius,
             opacity: .90,
@@ -44,7 +65,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
                       ? _emptyChat()
                       : ListView.builder(
                           key: const ValueKey('chat-message-list'),
-                          controller: _chatScroll,
+                          controller: widget.controller.scroll,
                           reverse: true,
                           padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                           itemCount: messages.length,
@@ -65,15 +86,14 @@ extension _RoomChatRendering on _MediaRoomViewState {
                           },
                         ),
                 ),
-                if (_hasNewChatMessages)
+                if (widget.controller.hasNewMessages)
                   TextButton.icon(
                     icon: const Icon(Icons.arrow_downward_rounded),
                     label: Text(RealtimeStrings.of(context).newMessages),
                     onPressed: () {
-                      _hasNewChatMessages = false;
-                      _chatRevision.value++;
-                      if (_chatScroll.hasClients) {
-                        _chatScroll.animateTo(
+                      widget.controller.revealLatest();
+                      if (widget.controller.scroll.hasClients) {
+                        widget.controller.scroll.animateTo(
                           0,
                           duration: const Duration(milliseconds: 180),
                           curve: Curves.easeOut,
@@ -163,7 +183,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
           IconButton(
             tooltip: RealtimeStrings.of(context).closeChat,
             visualDensity: VisualDensity.compact,
-            onPressed: _toggleChat,
+            onPressed: widget.onClose,
             icon: Icon(Icons.close_rounded, size: 19, color: style.textMuted),
           ),
         ],
@@ -235,7 +255,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
       );
     }
 
-    final own = _isOwnChatMessage(chat, message);
+    final own = isOwnRoomChatMessage(chat, message, widget.participantId);
     final sameSenderAsPrevious =
         previousMessage != null && previousMessage.userId == message.userId;
     final displayName = message.displayName.trim().isEmpty
@@ -330,7 +350,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
     final enabled =
         connectionState.isConnected &&
         chat.capabilities.canSendMessage &&
-        !_chatSending;
+        !widget.controller.sending;
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       decoration: BoxDecoration(
@@ -351,7 +371,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
               ),
               child: TextField(
                 key: const ValueKey('chat-message-input'),
-                controller: _message,
+                controller: widget.controller.message,
                 enabled: enabled,
                 minLines: 1,
                 maxLines: 3,
@@ -376,7 +396,9 @@ extension _RoomChatRendering on _MediaRoomViewState {
                     vertical: 10,
                   ),
                 ),
-                onSubmitted: enabled ? (_) => _sendChat(chat) : null,
+                onSubmitted: enabled
+                    ? (_) => widget.controller.send(chat)
+                    : null,
               ),
             ),
           ),
@@ -386,7 +408,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
             height: 40,
             child: FilledButton(
               key: const ValueKey('chat-send-button'),
-              onPressed: enabled ? () => _sendChat(chat) : null,
+              onPressed: enabled ? () => widget.controller.send(chat) : null,
               style: FilledButton.styleFrom(
                 padding: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
@@ -395,7 +417,7 @@ extension _RoomChatRendering on _MediaRoomViewState {
                   ),
                 ),
               ),
-              child: _chatSending
+              child: widget.controller.sending
                   ? const SizedBox(
                       width: 15,
                       height: 15,
