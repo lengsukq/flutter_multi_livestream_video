@@ -6,6 +6,8 @@ This script never alters SDK source, Xcode project settings, or signing keys.
 """
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import os
 import platform
 import plistlib
@@ -25,10 +27,91 @@ else:
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+LOCK_RELATIVE_PATH = Path('example/.dart_tool/macos-arm64-package.lock')
+BUILD_DATABASE_RELATIVE_PATH = Path('example/build/macos/Build/Intermediates.noindex/XCBuildData/build.db')
 
 
 class PackagingError(RuntimeError):
     """A package or install precondition was not met."""
+
+
+@contextmanager
+def package_lock(repository: Path):
+    """Prevent simultaneous runs without deleting a potentially active lock.
+
+    The lock file must survive `flutter clean`; removing it while acquired
+    would allow a second process to obtain a lock on a different inode.
+    """
+    path = repository / LOCK_RELATIVE_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('a+', encoding='utf-8') as lock_file:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            lock_file.seek(0)
+            owner = lock_file.readline().strip()
+            detail = f' (PID {owner})' if owner.isdecimal() else ''
+            raise PackagingError(
+                '另一个 macOS Demo 一键打包任务仍在运行' + detail +
+                '。请等待其结束，不要重复双击。'
+            ) from error
+        try:
+            lock_file.seek(0)
+            lock_file.truncate()
+            lock_file.write(f'{os.getpid()}\n')
+            lock_file.flush()
+            yield
+        finally:
+            lock_file.seek(0)
+            lock_file.truncate()
+            lock_file.flush()
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def check_build_database(repository: Path, *, invoke=subprocess.run) -> None:
+    """Refuse to race an externally started Flutter/Xcode build if detectable."""
+    database = repository / BUILD_DATABASE_RELATIVE_PATH
+    if not database.is_file():
+        return
+    command = shutil.which('lsof')
+    if command is None:
+        print('提示：未找到 lsof，无法预先检查外部 Xcode 构建进程。', file=sys.stderr)
+        return
+    try:
+        result = invoke(
+            [command, '-nP', '-Fpc', str(database)],
+            capture_output=True, text=True, check=False, timeout=6,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        print(f'提示：无法检查 Xcode build.db 的占用情况：{error}', file=sys.stderr)
+        return
+    if result.returncode == 1 and not result.stdout.strip():
+        return  # lsof: no process has this database open.
+    if result.returncode != 0:
+        print(f'提示：lsof 返回代码 {result.returncode}，无法确定 build.db 是否被占用。', file=sys.stderr)
+        return
+    owners = []
+    pid = ''
+    for line in result.stdout.splitlines():
+        if line.startswith('p') and line[1:].isdecimal():
+            pid = line[1:]
+            owners.append([pid, '未知进程'])
+        elif line.startswith('c') and owners and pid:
+            owners[-1][1] = line[1:120]
+    if owners:
+        names = ', '.join(f'{name} (PID {process_id})' for process_id, name in owners)
+        raise PackagingError(
+            f'Xcode build.db 正被其他进程使用：{names}。'
+            '请等待对应构建完成，或先停止你启动的重复构建；'
+            '不要在构建仍运行时删除 build.db。'
+        )
+
+
+def check_build_tools() -> None:
+    """Give an actionable error before starting a time-consuming build."""
+    for binary in ('flutter', 'xcodebuild', 'pod'):
+        if shutil.which(binary) is None:
+            raise PackagingError(f'未找到构建工具 {binary}。请确认 Flutter、Xcode 和 CocoaPods 已安装且在 PATH 中。')
 
 
 def run(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -155,30 +238,41 @@ def main(argv: list[str] | None = None, *, repository: Path = REPOSITORY) -> int
     try:
         if platform.system() != 'Darwin' or platform.machine() != 'arm64':
             raise PackagingError('Build this Apple Silicon package on an arm64 Mac with Xcode installed.')
-        app, bundle_id = release_app(repository)
-        if not options.skip_build:
-            run([
-                sys.executable, str(repository / 'scripts/build_flutter_macos.py'),
-                '--release', '--no-pub',
-            ], cwd=repository)
-        version = verify_arm64(app, bundle_id)
-        # Fail before generating/installing the DMG if a provider's Flutter
-        # package JS asset was omitted by the build.
-        verify_assets(app, repository)
-        dmg = repository / 'dist/macos' / f'{app.stem}-{version}-arm64.dmg'
-        make_dmg(app, dmg)
-        print(f'DMG: {dmg}')
-        if options.install:
-            try:
-                installed = install_app(app, bundle_id, options.applications_dir, replace=options.replace)
-            except PermissionError as error:
-                raise PackagingError(
-                    f'Cannot write to {options.applications_dir}. Grant access or choose '
-                    '--applications-dir ~/Applications. The DMG was created successfully.'
-                ) from error
-            print(f'Installed: {installed}')
-            if options.open:
-                run(['open', '-a', str(installed)])
+        with package_lock(repository):
+            app, bundle_id = release_app(repository)
+            if not options.skip_build:
+                check_build_tools()
+                check_build_database(repository)
+                try:
+                    run([
+                        sys.executable, str(repository / 'scripts/build_flutter_macos.py'),
+                        '--release', '--no-pub',
+                    ], cwd=repository)
+                except subprocess.CalledProcessError as error:
+                    raise PackagingError(
+                        'macOS 编译失败。如果日志含 "build.db: database is locked"，'
+                        '先检查是否有其他 Xcode 构建正在运行；'
+                        '如果是 iris_method_channel / SwiftPM 模块解析错误，'
+                        '则属于另外的构建依赖问题，清理 build.db 无法解决。'
+                    ) from error
+            version = verify_arm64(app, bundle_id)
+            # Fail before generating/installing the DMG if a provider's Flutter
+            # package JS asset was omitted by the build.
+            verify_assets(app, repository)
+            dmg = repository / 'dist/macos' / f'{app.stem}-{version}-arm64.dmg'
+            make_dmg(app, dmg)
+            print(f'DMG: {dmg}')
+            if options.install:
+                try:
+                    installed = install_app(app, bundle_id, options.applications_dir, replace=options.replace)
+                except PermissionError as error:
+                    raise PackagingError(
+                        f'Cannot write to {options.applications_dir}. Grant access or choose '
+                        '--applications-dir ~/Applications. The DMG was created successfully.'
+                    ) from error
+                print(f'Installed: {installed}')
+                if options.open:
+                    run(['open', '-a', str(installed)])
         return 0
     except (PackagingError, RuntimeError, subprocess.CalledProcessError, OSError) as error:
         print(f'macOS packaging failed: {error}', file=sys.stderr)

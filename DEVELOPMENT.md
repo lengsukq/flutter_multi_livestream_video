@@ -102,6 +102,15 @@ The command builds `example/` in Release mode through
 `scripts/build_flutter_macos.py --release --no-pub` (temporarily using CocoaPods
 without changing global Flutter settings), validates that the main executable
 contains an **arm64 slice**, and writes a compressed DMG under `dist/macos/`.
+The macOS Runner uses **CocoaPods only**: the generated Flutter SwiftPM product
+was removed from `example/macos/Runner.xcodeproj`, avoiding Xcode 27 errors
+resolving `iris_method_channel_objc` and `RealtimeNativeFrameSinks` when the
+same plugins are provided by CocoaPods. The helper also removes those generated
+Runner references again if Flutter recreates them after dependency changes.
+The project-level `enable-swift-package-manager: true` setting remains in
+`example/pubspec.yaml` **for iOS IVS Media/Chat**; macOS builds temporarily
+disable it and restore it afterwards. For macOS, prefer this helper over a
+direct `flutter build macos` command so both platforms keep working.
 The DMG contains the `.app` and an `Applications` shortcut for drag-and-drop.
 The default `.command` invocation copies the `.app` into `/Applications` and
 replaces existing installations of the same application. Replacement is refused for a
@@ -115,6 +124,28 @@ will request authorization if necessary) or pass
 `./build_macos_arm64.command --applications-dir ~/Applications` after creating
 that directory.
 Do not run the Flutter build itself with `sudo`.
+
+### macOS build lock troubleshooting
+
+The one-click packager holds an advisory lock at
+`example/.dart_tool/macos-arm64-package.lock` for its full build/package/install
+run. Starting another `.command` while the first is active exits with the
+current packager PID instead of letting two builds contend for Xcode's
+`XCBuildData/build.db`. The lock is automatically released on normal exit,
+failure, or process termination; **do not delete the lock file** (it is
+deliberately persistent to avoid races). `--skip-build` also takes this lock
+to avoid two installers replacing the same `.app` simultaneously.
+
+Before compiling, the script checks for external builders currently holding
+`example/build/macos/Build/Intermediates.noindex/XCBuildData/build.db` via
+`lsof` and reports the process names/PIDs. It never kills processes or clears
+build files automatically. To diagnose an unexpected `database is locked`
+error, stop or wait for the other Flutter/Xcode build first. Once **all**
+builds have exited, you may remove only the generated `XCBuildData` directory
+and retry; it is unsafe to remove it while Xcode still holds it open. The
+`iris_method_channel` / `RealtimeNativeFrameSinks` module resolution errors
+are unrelated Swift Package Manager/CocoaPods integration problems and will
+not be fixed by deleting `build.db`.
 
 This is a **development DMG**, not a signed/notarized public distribution.
 macOS Gatekeeper may require additional approval on other machines. Build

@@ -17,6 +17,47 @@ let package = Package(
 )
 '''
 
+# Flutter may re-add its generated SwiftPM dependency to Runner when `flutter
+# pub get` is run with SwiftPM enabled for the project's iOS plugins. macOS
+# builds must use only CocoaPods: every macOS plugin has a podspec, while
+# linking both copies makes Xcode 27 fail to resolve iris_method_channel_objc.
+# These are the Flutter-generated Xcode project IDs, not user-owned packages.
+GENERATED_SWIFTPM_IDS = frozenset({
+    '78A318202AECB46A00862997',  # Swift package in Frameworks build phase
+    '78E0A7A72DC9AD7400C4905E',  # Swift package file reference
+    '781AD8BC2B33823900A9FFBB',  # Local Swift package reference
+    '78A3181F2AECB46A00862997',  # Swift package product dependency
+})
+
+
+def without_generated_swiftpm_dependency(project_file: str) -> str:
+    """Remove only Flutter's generated SwiftPM reference from macOS Runner.
+
+    This is intentionally persistent: Flutter pub get may regenerate the Xcode
+    project, and the next macOS build must repair it again. Keep the project's
+    iOS SwiftPM configuration intact. Never modify unrelated Xcode objects.
+    """
+    matched = set()
+    result = []
+    drop_object = False
+    for line in project_file.splitlines(keepends=True):
+        if drop_object:
+            if line.startswith('\t\t};'):
+                drop_object = False
+            continue
+        found = [item for item in GENERATED_SWIFTPM_IDS if item in line]
+        if found:
+            matched.update(found)
+            if line.startswith('\t\t') and ' = {' in line and not line.rstrip().endswith('};'):
+                drop_object = True
+            continue
+        result.append(line)
+    if drop_object:
+        raise ValueError('Unexpected generated SwiftPM object layout in Runner.')
+    if matched and matched != GENERATED_SWIFTPM_IDS:
+        raise ValueError('Incomplete generated SwiftPM wiring in Runner; refusing partial removal.')
+    return ''.join(result)
+
 
 def build(project: Path, args: list[str], run=subprocess.run) -> int:
     manifest = project / 'pubspec.yaml'
@@ -28,9 +69,20 @@ def build(project: Path, args: list[str], run=subprocess.run) -> int:
     if count == 0 and not re.search(r'enable-swift-package-manager:\s*false', original):
         raise ValueError('Expected the Demo SwiftPM setting; refusing to rewrite an unknown manifest.')
 
-    # Flutter retains a generated SwiftPM package after disabling SwiftPM.
-    # Its empty product keeps the Xcode project valid while CocoaPods alone
-    # embeds frameworks, avoiding duplicate framework build outputs.
+    # Remove the macOS-only SwiftPM product left in Runner by earlier `pub get`
+    # runs. Running only with a stub Package.swift does not prevent Xcode 27
+    # from scanning stale SwiftPM modules. Keep the pbxproj canonical; do not
+    # restore the duplicate dependency after this macOS build.
+    runner_project = project / 'macos/Runner.xcodeproj/project.pbxproj'
+    if runner_project.is_file():
+        before = runner_project.read_text()
+        after = without_generated_swiftpm_dependency(before)
+        if after != before:
+            runner_project.write_text(after)
+
+    # Flutter can retain a generated SwiftPM package after disabling SwiftPM.
+    # Do not let a stale package manifest pull in the same native frameworks
+    # while the macOS CocoaPods build is running.
     swift_manifest = project / 'macos/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift'
     swift_original = swift_manifest.read_text() if swift_manifest.exists() else None
     backup = project / 'build/macos/pubspec-before-cocoapods.yaml'

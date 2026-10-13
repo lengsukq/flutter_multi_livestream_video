@@ -89,8 +89,9 @@ dependency_overrides:
 # The following section is specific to Flutter packages.
 flutter:
   config:
-    # IVS Media/Chat are SwiftPM-only. Agora Chat still comes from CocoaPods;
-    # the Podfile de-duplicates their shared aosl.framework at embed time.
+    # iOS IVS Media/Chat require SwiftPM. For macOS only, the CocoaPods-aware
+    # scripts/build_flutter_macos.py disables this temporarily; mixing both
+    # integration methods in the macOS Runner breaks iris_method_channel_objc.
     enable-swift-package-manager: true
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

@@ -111,7 +111,15 @@ repository root, and optionally install the Demo to `/Applications`:
 Double-click `build_macos_arm64.command` in Finder for the same build/install
 flow. Run `chmod +x build_macos_arm64.command` once if your checkout does not
 preserve the executable bit. This entry point reuses the CocoaPods-aware helper,
-verifies the built executable
+builds macOS through CocoaPods without duplicating Flutter's generated SwiftPM
+product (while preserving iOS SwiftPM integration),
+rejects simultaneous one-click builds, checks for processes using Xcode's
+`build.db` before starting, and reports missing Flutter/Xcode/CocoaPods tools.
+If another build is active, wait for it to finish instead of deleting its
+database. A `build.db` lock is distinct from the `iris_method_channel` SwiftPM
+module/link errors; see [DEVELOPMENT.md](DEVELOPMENT.md) for troubleshooting.
+The script never terminates other builds or automatically deletes build caches.
+It verifies the built executable
 contains `arm64`, and packages an Applications shortcut into the DMG. It builds
 the **Demo**, not an SDK framework. Dependencies should already be resolved in
 `example/` (`flutter pub get` there if needed). No Apple signing or notarization
