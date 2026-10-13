@@ -15,6 +15,7 @@ class MediaLiveVideoStage extends StatelessWidget {
     required this.roomCode,
     required this.renderer,
     this.participantBuilder,
+    this.fit,
   });
   final MediaSnapshot snapshot;
   final MediaRole role;
@@ -22,6 +23,7 @@ class MediaLiveVideoStage extends StatelessWidget {
   final String roomCode;
   final MediaTrackRenderer renderer;
   final MediaParticipantBuilder? participantBuilder;
+  final BoxFit? fit;
   @override
   Widget build(BuildContext context) {
     final value = snapshot;
@@ -120,7 +122,7 @@ class MediaLiveVideoStage extends StatelessWidget {
             child: MediaTrackView(
               renderer: renderer,
               track: hostParticipant.videoTrack,
-              fit: isPortrait ? BoxFit.cover : BoxFit.contain,
+              fit: fit ?? (isPortrait ? BoxFit.cover : BoxFit.contain),
               placeholder: _buildLiveHostOffCameraPlaceholder(
                 context,
                 hostParticipant,

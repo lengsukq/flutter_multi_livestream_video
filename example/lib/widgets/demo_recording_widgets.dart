@@ -9,9 +9,14 @@ import 'demo_cloud_recording_result_dialog.dart';
 
 /// Shows a badge while the backend is recording.
 class DemoRecordingBadge extends StatelessWidget {
-  const DemoRecordingBadge({super.key, required this.room});
+  const DemoRecordingBadge({
+    super.key,
+    required this.room,
+    this.compact = false,
+  });
 
   final RealtimeRoom room;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => StreamBuilder<RecordingStatus>(
@@ -36,6 +41,29 @@ class DemoRecordingBadge extends StatelessWidget {
               .remainder(60)
               .toString()
               .padLeft(2, '0');
+          if (compact) {
+            final strings = RealtimeStrings.of(context);
+            return Tooltip(
+              message: strings.isZh
+                  ? '云端录制中 · $minutes:$seconds'
+                  : 'Cloud recording · $minutes:$seconds',
+              child: Container(
+                width: 28,
+                height: 28,
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(
+                  color: Colors.red.withAlpha(40),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.red.withAlpha(160)),
+                ),
+                child: const Icon(
+                  Icons.fiber_manual_record_rounded,
+                  size: 13,
+                  color: Colors.redAccent,
+                ),
+              ),
+            );
+          }
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 6),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

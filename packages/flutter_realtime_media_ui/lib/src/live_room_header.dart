@@ -10,12 +10,16 @@ class LiveRoomHeader extends StatelessWidget {
     required this.snapshot,
     required this.isHost,
     required this.roomCode,
+    required this.videoFit,
+    required this.onVideoFitToggle,
     required this.onCleanScreen,
     required this.onLeave,
   });
   final MediaSnapshot snapshot;
   final bool isHost;
   final String roomCode;
+  final BoxFit videoFit;
+  final VoidCallback onVideoFitToggle;
   final VoidCallback onCleanScreen;
   final VoidCallback onLeave;
   @override
@@ -143,6 +147,21 @@ class LiveRoomHeader extends StatelessWidget {
           ),
 
           const Spacer(),
+
+          RealtimeGlassIconButton(
+            tooltip: videoFit == BoxFit.contain
+                ? strings.fillLiveScreen
+                : strings.showFullVideo,
+            icon: videoFit == BoxFit.contain
+                ? Icons.crop_free_rounded
+                : Icons.fit_screen_rounded,
+            active: videoFit == BoxFit.cover,
+            size: 36,
+            radius: RealtimeUiTokens.pillRadius,
+            onPressed: onVideoFitToggle,
+          ),
+
+          const SizedBox(width: 8),
 
           // Clean Screen button
           RealtimeGlassIconButton(

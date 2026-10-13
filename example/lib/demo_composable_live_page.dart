@@ -32,6 +32,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
   _LiveSidePanel _sidePanel = _LiveSidePanel.none;
   bool _cleanScreen = false;
   bool _chatInputActive = false;
+  BoxFit? _liveVideoFitOverride;
 
   @override
   void initState() {
@@ -198,9 +199,12 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                       : const Color(0xFFE2E8F0),
                 ),
                 Expanded(
-                  child: panel == _LiveSidePanel.chat
-                      ? const RealtimeChatPanel()
-                      : const RealtimeManagedParticipantList(),
+                  child: SafeArea(
+                    top: false,
+                    child: panel == _LiveSidePanel.chat
+                        ? const RealtimeChatPanel()
+                        : const RealtimeManagedParticipantList(),
+                  ),
                 ),
               ],
             ),
@@ -350,10 +354,20 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                 final strings = RealtimeStrings.of(context);
                 final isDark = Theme.of(context).brightness == Brightness.dark;
                 final controller = RealtimeRoomUiScope.of(context);
+                final viewerCount = controller.snapshot.participants.length;
+                final compactTopHud = constraints.maxWidth < 440;
                 final videoStageWidth =
                     wide && _sidePanel != _LiveSidePanel.none
                     ? constraints.maxWidth - 330
                     : constraints.maxWidth;
+                final fitStageWidth = _cleanScreen
+                    ? constraints.maxWidth
+                    : videoStageWidth;
+                final liveVideoFit =
+                    _liveVideoFitOverride ??
+                    (constraints.maxHeight > fitStageWidth
+                        ? BoxFit.cover
+                        : BoxFit.contain);
                 final isCompactDock = videoStageWidth < 660;
 
                 if (_cleanScreen) {
@@ -363,7 +377,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        const RealtimeLiveVideoStage(),
+                        RealtimeLiveVideoStage(fit: _liveVideoFitOverride),
                         Positioned(
                           top: 16,
                           right: 16,
@@ -409,7 +423,9 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                                 controller.sendLiveLike().catchError((_) {}),
                               );
                             },
-                            child: const RealtimeLiveVideoStage(),
+                            child: RealtimeLiveVideoStage(
+                              fit: _liveVideoFitOverride,
+                            ),
                           ),
 
                           // 2. Top Scrim Gradient
@@ -660,9 +676,9 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
 
                                     // Viewers online count pill
                                     RealtimePill(
-                                      label: strings.viewingCount(
-                                        controller.snapshot.participants.length,
-                                      ),
+                                      label: compactTopHud
+                                          ? '$viewerCount'
+                                          : strings.viewingCount(viewerCount),
                                       icon: Icons.visibility_rounded,
                                       foreground: isDark
                                           ? Colors.white
@@ -679,7 +695,29 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
 
                                     const Spacer(),
 
-                                    DemoRecordingBadge(room: widget.room),
+                                    DemoRecordingBadge(
+                                      room: widget.room,
+                                      compact: constraints.maxWidth < 520,
+                                    ),
+
+                                    RealtimeGlassIconButton(
+                                      tooltip: liveVideoFit == BoxFit.contain
+                                          ? strings.fillLiveScreen
+                                          : strings.showFullVideo,
+                                      icon: liveVideoFit == BoxFit.contain
+                                          ? Icons.crop_free_rounded
+                                          : Icons.fit_screen_rounded,
+                                      active: liveVideoFit == BoxFit.cover,
+                                      size: 36,
+                                      radius: RealtimeUiTokens.pillRadius,
+                                      onPressed: () => setState(() {
+                                        _liveVideoFitOverride =
+                                            liveVideoFit == BoxFit.contain
+                                            ? BoxFit.cover
+                                            : BoxFit.contain;
+                                      }),
+                                    ),
+                                    const SizedBox(width: 8),
 
                                     // Clean Screen button (wide screens)
                                     if (wide) ...[

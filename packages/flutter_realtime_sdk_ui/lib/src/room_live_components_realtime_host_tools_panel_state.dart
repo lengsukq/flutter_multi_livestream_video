@@ -739,6 +739,7 @@ Future<void> showRealtimeHostToolsBottomSheet(
         onClose: () => Navigator.maybeOf(sheetContext)?.pop(),
       );
       return Center(
+        heightFactor: 1,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: SizedBox(

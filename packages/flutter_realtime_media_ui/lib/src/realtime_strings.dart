@@ -362,6 +362,8 @@ class RealtimeStrings {
 
   // --- Extended Live Stream Strings ---
   String get liveStream => isZh ? '互动直播' : 'Livestream';
+  String get showFullVideo => isZh ? '完整显示' : 'Show full video';
+  String get fillLiveScreen => isZh ? '适应屏幕' : 'Fill screen';
   String get liveAudience => isZh ? '人正在看' : 'watching';
   String get watchLive => isZh ? '观看直播' : 'Watch live';
   String get startLive => isZh ? '开始直播' : 'Start live';

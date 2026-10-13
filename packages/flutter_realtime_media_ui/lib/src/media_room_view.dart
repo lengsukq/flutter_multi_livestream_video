@@ -139,6 +139,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   String? _error;
   MediaRoomLayoutMode _layoutMode = MediaRoomLayoutMode.grid;
   bool _cleanScreen = false;
+  BoxFit? _liveVideoFitOverride;
   int get _likeCount => _liveReactions.totalLikes;
   List<LiveReactionHeart> get _floatingHearts => _liveReactions.hearts;
   MediaSession get session => widget.room.session;
@@ -889,6 +890,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     final key = <Object?>[
       _layoutMode,
       _cleanScreen,
+      _liveVideoFitOverride,
       value.state,
       value.localVideoEnabled,
       value.localMuted,
@@ -915,6 +917,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
             participantId: widget.room.participantId,
             roomCode: widget.room.roomCode,
             renderer: widget.renderer,
+            fit: _liveVideoFitOverride,
             participantBuilder: widget.participantBuilder,
           )
         : MediaMeetingVideoStage(
@@ -1178,6 +1181,21 @@ class _MediaRoomViewState extends State<MediaRoomView> {
       ),
     ),
   );
+  BoxFit _liveVideoFitFor(BoxConstraints constraints) =>
+      _liveVideoFitOverride ??
+      (constraints.maxHeight > constraints.maxWidth
+          ? BoxFit.cover
+          : BoxFit.contain);
+
+  void _toggleLiveVideoFit(BoxConstraints constraints) {
+    final currentFit = _liveVideoFitFor(constraints);
+    setState(() {
+      _liveVideoFitOverride = currentFit == BoxFit.contain
+          ? BoxFit.cover
+          : BoxFit.contain;
+    });
+  }
+
   Widget _liveLayout(MediaSnapshot value, BoxConstraints constraints) =>
       LiveRoomViewLayout(
         constraints: constraints,
@@ -1193,6 +1211,8 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           snapshot: value,
           isHost: widget.room.role == MediaRole.host,
           roomCode: widget.room.roomCode,
+          videoFit: _liveVideoFitFor(constraints),
+          onVideoFitToggle: () => _toggleLiveVideoFit(constraints),
           onCleanScreen: _toggleCleanScreen,
           onLeave: () => observeDetached(
             widget.room.role == MediaRole.host
