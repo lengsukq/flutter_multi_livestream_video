@@ -75,7 +75,10 @@ void main() {
         'canDownload': false,
       });
       final result = await session.startCloudRecording(
-        RecordingOptions.cloud(layout: RecordingLayout.speaker),
+        RecordingOptions.cloud(
+          layout: RecordingLayout.speaker,
+          qualityPreset: RecordingQualityPreset.fullHd1080p30,
+        ),
       );
       expect(result.mode, RecordingMode.cloud);
       expect(result.recordingId, 'EG_123');
@@ -86,6 +89,7 @@ void main() {
       expect((sent['headers'] as Map)['Authorization'], 'Bearer demo-bearer');
       final payload = sent['body'] as Map<String, dynamic>;
       expect(payload['layout'], 'speaker');
+      expect(payload['rawProviderParams']['preset'], 'H264_1080P_30');
       expect(payload['requesterParticipantId'], 'p-host');
       expect(payload['participantCredential'], 'host-token');
       expect(payload['roomOwnerCredential'], 'owner-token');

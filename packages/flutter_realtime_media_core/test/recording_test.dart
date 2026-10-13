@@ -6,15 +6,18 @@ void main() {
     test('RecordingOptions default values and factory helpers', () {
       final cloud = RecordingOptions.cloud(
         layout: RecordingLayout.speaker,
+        qualityPreset: RecordingQualityPreset.fullHd1080p30,
         rawProviderParams: {'customKey': 123},
       );
       expect(cloud.mode, RecordingMode.cloud);
       expect(cloud.layout, RecordingLayout.speaker);
+      expect(cloud.qualityPreset, RecordingQualityPreset.fullHd1080p30);
       expect(cloud.rawProviderParams['customKey'], 123);
 
       final json = cloud.toJson();
       expect(json['mode'], 'cloud');
       expect(json['layout'], 'speaker');
+      expect(json['qualityPreset'], 'fullHd1080p30');
       expect(json['rawProviderParams']['customKey'], 123);
     });
 

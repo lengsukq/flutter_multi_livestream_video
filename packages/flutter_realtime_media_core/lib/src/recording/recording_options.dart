@@ -11,6 +11,9 @@ enum RecordingStreamType { both, audioOnly, videoOnly }
 
 enum RecordingContainerFormat { mp4, aac, hls, mkv }
 
+/// Preferred cloud encoding quality. Actual availability is provider-specific.
+enum RecordingQualityPreset { hd720p30, fullHd1080p30 }
+
 /// Cloud recording options; no media is captured or saved by the client.
 class RecordingOptions {
   const RecordingOptions({
@@ -18,6 +21,7 @@ class RecordingOptions {
     this.layout = RecordingLayout.grid,
     this.streamType = RecordingStreamType.both,
     this.containerFormat = RecordingContainerFormat.mp4,
+    this.qualityPreset = RecordingQualityPreset.hd720p30,
     this.rawProviderParams = const {},
   });
 
@@ -25,12 +29,14 @@ class RecordingOptions {
     RecordingLayout layout = RecordingLayout.grid,
     RecordingStreamType streamType = RecordingStreamType.both,
     RecordingContainerFormat containerFormat = RecordingContainerFormat.mp4,
+    RecordingQualityPreset qualityPreset = RecordingQualityPreset.hd720p30,
     Map<String, dynamic> rawProviderParams = const {},
   }) => RecordingOptions(
     mode: RecordingMode.cloud,
     layout: layout,
     streamType: streamType,
     containerFormat: containerFormat,
+    qualityPreset: qualityPreset,
     rawProviderParams: rawProviderParams,
   );
 
@@ -38,6 +44,7 @@ class RecordingOptions {
   final RecordingLayout layout;
   final RecordingStreamType streamType;
   final RecordingContainerFormat containerFormat;
+  final RecordingQualityPreset qualityPreset;
   final Map<String, dynamic> rawProviderParams;
 
   RecordingOptions copyWith({
@@ -45,12 +52,14 @@ class RecordingOptions {
     RecordingLayout? layout,
     RecordingStreamType? streamType,
     RecordingContainerFormat? containerFormat,
+    RecordingQualityPreset? qualityPreset,
     Map<String, dynamic>? rawProviderParams,
   }) => RecordingOptions(
     mode: mode ?? this.mode,
     layout: layout ?? this.layout,
     streamType: streamType ?? this.streamType,
     containerFormat: containerFormat ?? this.containerFormat,
+    qualityPreset: qualityPreset ?? this.qualityPreset,
     rawProviderParams: rawProviderParams ?? this.rawProviderParams,
   );
 
@@ -59,6 +68,7 @@ class RecordingOptions {
     'layout': layout.name,
     'streamType': streamType.name,
     'containerFormat': containerFormat.name,
+    'qualityPreset': qualityPreset.name,
     if (rawProviderParams.isNotEmpty) 'rawProviderParams': rawProviderParams,
   };
 }

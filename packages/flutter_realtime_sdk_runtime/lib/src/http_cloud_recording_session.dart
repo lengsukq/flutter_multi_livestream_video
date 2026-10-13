@@ -92,6 +92,7 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
           'recordingUnavailableReason': data['recordingUnavailableReason'],
         if (data['error'] != null) 'error': data['error'],
         if (data['layout'] != null) 'layout': data['layout'],
+        if (data['preset'] != null) 'preset': data['preset'],
       },
     );
   }
@@ -109,8 +110,12 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
       'layout': options.layout.name,
       'streamType': options.streamType.name,
       'containerFormat': options.containerFormat.name,
-      if (options.rawProviderParams.isNotEmpty)
-        'rawProviderParams': options.rawProviderParams,
+      'rawProviderParams': {
+        ...options.rawProviderParams,
+        'preset': options.qualityPreset == RecordingQualityPreset.fullHd1080p30
+            ? 'H264_1080P_30'
+            : 'H264_720P_30',
+      },
     });
     final result = _result(response);
     if (result.recordingId == null || result.recordingId!.isEmpty) {
