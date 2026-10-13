@@ -22,13 +22,23 @@ class ProcessedVideoSource {
     final width = reader.required<int>('width');
     final height = reader.required<int>('height');
     final rate = reader.required<num>('frameRate').toDouble();
-    if (id.isEmpty || width <= 0 || height <= 0 || !rate.isFinite || rate <= 0) {
-      throw const RealtimeException(code: RealtimeErrorCode.invalidResponse, message: 'processedVideo.source.geometry');
+    if (id.isEmpty ||
+        width <= 0 ||
+        height <= 0 ||
+        !rate.isFinite ||
+        rate <= 0) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
+        message: 'processedVideo.source.geometry',
+      );
     }
     return ProcessedVideoSource(
-      id: id, platform: reader.enumValue('platform', ProcessedVideoPlatform.values),
+      id: id,
+      platform: reader.enumValue('platform', ProcessedVideoPlatform.values),
       kind: reader.enumValue('kind', ProcessedVideoSourceKind.values),
-      width: width, height: height, frameRate: rate,
+      width: width,
+      height: height,
+      frameRate: rate,
       previewTextureId: reader.optional<int>('previewTextureId'),
       cameraDeviceId: reader.optional<String>('cameraDeviceId'),
     );

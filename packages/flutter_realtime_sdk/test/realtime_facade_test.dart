@@ -9,14 +9,14 @@ import 'support/fake_media_session.dart';
 
 void main() {
   group('Realtime facade', () {
-    test('media bundles restore video effects by default', () {
+    test('media bundles leave video effects unregistered', () {
       final realtime = Realtime(providers: [createLivekitProvider()]);
-      expect(realtime.sdk.services.videoEffectsFactory, isNotNull);
-      expect(realtime.sdk.createClient().videoEffects, isNotNull);
+      expect(realtime.sdk.services.videoEffectsFactory, isNull);
+      expect(realtime.sdk.createClient().videoEffects, isNull);
     });
 
-    test('explicit room video effects factory overrides provider defaults', () {
-      final factory = () => throw StateError('host selected effects');
+    test('the host explicitly selects its room video effects factory', () {
+      Never factory() => throw StateError('host selected effects');
       final realtime = Realtime(
         providers: [createLivekitProvider()],
         services: RealtimeRoomServices(videoEffectsFactory: factory),
@@ -512,7 +512,8 @@ class _FakeMediaProvisioner implements MediaRoomProvisioner {
 }
 
 class _FakeStandaloneChatProvisioner implements StandaloneChatProvisioner {
-  @override void dispose() {}
+  @override
+  void dispose() {}
   _FakeStandaloneChatProvisioner(this.providerId);
 
   final String providerId;

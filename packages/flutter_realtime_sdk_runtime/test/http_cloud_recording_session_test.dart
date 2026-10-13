@@ -59,48 +59,101 @@ void main() {
     });
     final result = await session.queryCloudRecording();
     expect(result.taskState, RecordingTaskState.failed);
-    expect(result.metadata['error'], 'Recording media pipeline was interrupted');
+    expect(
+      result.metadata['error'],
+      'Recording media pipeline was interrupted',
+    );
     expect(result.metadata['canDownload'], false);
   });
 
-  test('HTTP status survives an HTML failure without exposing its body', () async {
-    backend.replies.add(const MediaBackendTransportResponse(statusCode: 503, body: '<html>private backend details</html>'));
-    await expectLater(session.queryCloudRecording(), throwsA(isA<RealtimeException>()
-      .having((error) => error.code, 'code', RealtimeErrorCode.serverError)
-      .having((error) => error.message, 'sanitized message', isNot(contains('private backend')))));
-  });
+  test(
+    'HTTP status survives an HTML failure without exposing its body',
+    () async {
+      backend.replies.add(
+        const MediaBackendTransportResponse(
+          statusCode: 503,
+          body: '<html>private backend details</html>',
+        ),
+      );
+      await expectLater(
+        session.queryCloudRecording(),
+        throwsA(
+          isA<RealtimeException>()
+              .having(
+                (error) => error.code,
+                'code',
+                RealtimeErrorCode.serverError,
+              )
+              .having(
+                (error) => error.message,
+                'sanitized message',
+                isNot(contains('private backend')),
+              ),
+        ),
+      );
+    },
+  );
 
   test('authentication deadline prevents a late recording write', () async {
     final token = Completer<String?>();
     final recorder = HttpCloudRecordingSession(
-      backendUrl: 'https://demo.example.com', roomCode: 'r',
-      participantId: 'p', participantCredential: null,
-      tokenProvider: () => token.future, transport: backend,
+      backendUrl: 'https://demo.example.com',
+      roomCode: 'r',
+      participantId: 'p',
+      participantCredential: null,
+      tokenProvider: () => token.future,
+      transport: backend,
       requestTimeout: const Duration(milliseconds: 10),
     );
-    await expectLater(recorder.startCloudRecording(RecordingOptions.cloud()), throwsA(isA<RealtimeException>()
-      .having((error) => error.code, 'code', RealtimeErrorCode.timeout)));
+    await expectLater(
+      recorder.startCloudRecording(RecordingOptions.cloud()),
+      throwsA(
+        isA<RealtimeException>().having(
+          (error) => error.code,
+          'code',
+          RealtimeErrorCode.timeout,
+        ),
+      ),
+    );
     token.complete('late-token');
     await Future<void>.delayed(Duration.zero);
     expect(backend.requests, isEmpty);
     recorder.dispose();
-    expect(backend.closed, isFalse, reason: 'Injected transports belong to the host');
+    expect(
+      backend.closed,
+      isFalse,
+      reason: 'Injected transports belong to the host',
+    );
   });
 
-  test('dispose while authenticating prevents a late recording write', () async {
-    final token = Completer<String?>();
-    final recorder = HttpCloudRecordingSession(
-      backendUrl: 'https://demo.example.com', roomCode: 'r',
-      participantId: 'p', participantCredential: null,
-      tokenProvider: () => token.future, transport: backend,
-    );
-    final pending = recorder.startCloudRecording(RecordingOptions.cloud());
-    recorder.dispose();
-    token.complete('late-token');
-    await expectLater(pending, throwsA(isA<RealtimeException>()
-      .having((error) => error.code, 'code', RealtimeErrorCode.cancelled)));
-    expect(backend.requests, isEmpty);
-  });
+  test(
+    'dispose while authenticating prevents a late recording write',
+    () async {
+      final token = Completer<String?>();
+      final recorder = HttpCloudRecordingSession(
+        backendUrl: 'https://demo.example.com',
+        roomCode: 'r',
+        participantId: 'p',
+        participantCredential: null,
+        tokenProvider: () => token.future,
+        transport: backend,
+      );
+      final pending = recorder.startCloudRecording(RecordingOptions.cloud());
+      recorder.dispose();
+      token.complete('late-token');
+      await expectLater(
+        pending,
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.cancelled,
+          ),
+        ),
+      );
+      expect(backend.requests, isEmpty);
+    },
+  );
 
   test(
     'exposes provider-neutral recorder readiness without leaking credentials',
@@ -206,7 +259,10 @@ void main() {
         throwsA(isA<RealtimeException>()),
       );
       backend.respond(200, {'downloadUrl': 'http://non-tls.test/file'});
-      await expectLater(session.cloudRecordingDownloadUrl(), throwsA(isA<RealtimeException>()));
+      await expectLater(
+        session.cloudRecordingDownloadUrl(),
+        throwsA(isA<RealtimeException>()),
+      );
     },
   );
 
@@ -230,7 +286,10 @@ void main() {
         ),
       );
       backend.respond(200, {'downloadUrl': 'http://other-host.local/steal'});
-      await expectLater(local.cloudRecordingDownloadUrl(), throwsA(isA<RealtimeException>()));
+      await expectLater(
+        local.cloudRecordingDownloadUrl(),
+        throwsA(isA<RealtimeException>()),
+      );
     },
   );
 }

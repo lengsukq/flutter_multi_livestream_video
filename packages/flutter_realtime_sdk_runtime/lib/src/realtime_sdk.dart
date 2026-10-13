@@ -1,7 +1,6 @@
 import 'realtime_room_services.dart';
 import 'realtime_platform_reports.dart';
 import 'realtime_credentials_parser.dart';
-// ignore_for_file: prefer_initializing_formals
 
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
@@ -30,8 +29,8 @@ class RealtimeSdk {
     this.requestTimeout,
     this.services = const RealtimeRoomServices(),
     required Iterable<RealtimeProviderPlugin> plugins,
-    RealtimeTokenProvider? tokenProvider,
-    RealtimeClientFactory? clientFactory,
+    this.tokenProvider,
+    this.clientFactory,
     this.interactionControlPlaneFactory,
     Iterable<RealtimeFeaturePlugin<Object>> featurePlugins = const [],
     this.driverRegistry,
@@ -46,9 +45,7 @@ class RealtimeSdk {
            chatAssetsLoader: chatAssetsLoader,
          ),
        ),
-       _tokenProvider = tokenProvider,
-       featurePlugins = List.unmodifiable(featurePlugins),
-       _clientFactory = clientFactory;
+       featurePlugins = List.unmodifiable(featurePlugins);
 
   factory RealtimeSdk.standard({
     String? backendUrl,
@@ -86,14 +83,15 @@ class RealtimeSdk {
   final RealtimeRoomServices services;
   final RealtimePluginRegistry plugins;
   final RealtimeDriverRegistry? driverRegistry;
-  final RealtimeTokenProvider? _tokenProvider;
-  final RealtimeClientFactory? _clientFactory;
+  final RealtimeTokenProvider? tokenProvider;
+  final RealtimeClientFactory? clientFactory;
   final InteractionControlPlaneFactory? interactionControlPlaneFactory;
   final List<RealtimeFeaturePlugin<Object>> featurePlugins;
   RealtimeRuntimePlatform get platform =>
       driverRegistry?.platform ?? resolveRealtimeRuntimePlatform();
 
-  late final RealtimeVideoEffects? _videoEffects = services.videoEffectsFactory?.call();
+  late final RealtimeVideoEffects? _videoEffects = services.videoEffectsFactory
+      ?.call();
 
   final Map<String, MediaBackgroundCapabilities> _effectsSupport = {};
   final Map<String, Future<MediaBackgroundCapabilities>> _effectsPending = {};
@@ -114,7 +112,9 @@ class RealtimeSdk {
     if (cached != null) return cached;
     try {
       final result = await (_effectsPending[key] ??= (() async {
-        if (!await _videoEffects.isSupported()) return const MediaBackgroundCapabilities.none();
+        if (!await _videoEffects.isSupported()) {
+          return const MediaBackgroundCapabilities.none();
+        }
         return probe(role);
       })().timeout(const Duration(seconds: 10)));
       _effectsSupport[key] = result;
@@ -168,10 +168,11 @@ class RealtimeSdk {
         providerId.trim().toLowerCase();
     if (role != MediaRole.viewer) {
       final effects = _videoEffects;
-      if (effects != null && await _supportsVideoEffectsForProvider(
-        providerId: engineProvider,
-        role: role,
-      )) {
+      if (effects != null &&
+          await _supportsVideoEffectsForProvider(
+            providerId: engineProvider,
+            role: role,
+          )) {
         try {
           return await effects.createPreview(
             providerId: engineProvider,
@@ -197,7 +198,7 @@ class RealtimeSdk {
   });
 
   RealtimeClient createClient() =>
-      _clientFactory?.call() ??
+      clientFactory?.call() ??
       RealtimeClient(
         backendUrl: backendUrl,
         requestTimeout: requestTimeout,
@@ -208,9 +209,11 @@ class RealtimeSdk {
         recordingSessionFactory: services.recordingSessionFactory,
         mediaAdapters: plugins.media,
         chatRegistry: plugins.chat,
-        tokenProvider: _tokenProvider,
+        tokenProvider: tokenProvider,
         publicProviderResolver: driverRegistry?.publicProviderForEngine,
-        interactionControlPlaneFactory: services.interactionControlPlaneFactory ?? interactionControlPlaneFactory,
+        interactionControlPlaneFactory:
+            services.interactionControlPlaneFactory ??
+            interactionControlPlaneFactory,
         featurePlugins: featurePlugins,
       );
 

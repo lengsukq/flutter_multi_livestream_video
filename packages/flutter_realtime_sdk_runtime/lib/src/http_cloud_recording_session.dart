@@ -42,29 +42,44 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
         return {
           'Content-Type': 'application/json',
           'X-Media-Backend-Contract': '1',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
         };
       },
       body: {
         'requesterParticipantId': participantId,
-        if (participantCredential != null) 'participantCredential': participantCredential,
-        if (roomOwnerCredential != null) 'roomOwnerCredential': roomOwnerCredential,
+        if (participantCredential != null)
+          'participantCredential': participantCredential,
+        if (roomOwnerCredential != null)
+          'roomOwnerCredential': roomOwnerCredential,
         ...options,
       },
-      transport: transport == null ? null : (headers, body, abort) async {
-        final response = await transport.send(
-          method: 'POST', uri: uri, headers: headers, body: body,
-        );
-        return (response.statusCode, response.body);
-      },
+      transport: transport == null
+          ? null
+          : (headers, body, abort) async {
+              final response = await transport.send(
+                method: 'POST',
+                uri: uri,
+                headers: headers,
+                body: body,
+              );
+              return (response.statusCode, response.body);
+            },
     );
   }
 
   RecordingResult _result(Map<String, dynamic> data) {
     final reader = JsonReader(data);
     final stateName = reader.required<String>('state');
-    final taskState = RecordingTaskState.values.where((state) => state.name == stateName).firstOrNull;
-    if (taskState == null) throw const RealtimeException(code: RealtimeErrorCode.invalidResponse, message: 'recording.state');
+    final taskState = RecordingTaskState.values
+        .where((state) => state.name == stateName)
+        .firstOrNull;
+    if (taskState == null) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
+        message: 'recording.state',
+      );
+    }
     final id = reader.optional<String>('recordingId');
     return RecordingResult(
       mode: RecordingMode.cloud,
@@ -74,7 +89,8 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
       mimeType: 'video/mp4',
       fileSizeBytes: reader.optional<num>('fileSizeBytes')?.toInt() ?? 0,
       metadata: {
-        if (data['provider'] != null) 'provider': reader.required<String>('provider'),
+        if (data['provider'] != null)
+          'provider': reader.required<String>('provider'),
         'canDownload': data['canDownload'] == true,
         if (data['recordingAvailable'] is bool)
           'recordingAvailable': data['recordingAvailable'],
@@ -92,11 +108,17 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
   @override
   Future<RecordingResult> startCloudRecording(RecordingOptions options) async {
     if (options.mode != RecordingMode.cloud) {
-      throw const RealtimeException(code: RealtimeErrorCode.invalidArgument, message: 'recording.start.options');
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
+        message: 'recording.start.options',
+      );
     }
     if (options.containerFormat != RecordingContainerFormat.mp4 ||
         options.streamType != RecordingStreamType.both) {
-      throw const RealtimeException(code: RealtimeErrorCode.unsupportedFeature, message: 'recording.start.format');
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message: 'recording.start.format',
+      );
     }
     final response = await _request('start', {
       'layout': options.layout.name,
@@ -111,7 +133,10 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
     });
     final result = _result(response);
     if (result.recordingId == null || result.recordingId!.isEmpty) {
-      throw const RealtimeException(code: RealtimeErrorCode.invalidResponse, message: 'recording.start.id');
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
+        message: 'recording.start.id',
+      );
     }
     return result;
   }
@@ -129,7 +154,10 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
     final reply = await _request('download');
     final raw = reply['downloadUrl'];
     if (raw is! String) {
-      throw const RealtimeException(code: RealtimeErrorCode.invalidResponse, message: 'recording.download.url');
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
+        message: 'recording.download.url',
+      );
     }
     final parsed = Uri.tryParse(raw);
     final url = parsed == null ? null : _baseUrl.resolveUri(parsed);
@@ -141,7 +169,10 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
         url.port != _baseUrl.port ||
         url.scheme != _baseUrl.scheme ||
         (url.scheme != 'http' && url.scheme != 'https')) {
-      throw const RealtimeException(code: RealtimeErrorCode.invalidResponse, message: 'recording.download.origin');
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidResponse,
+        message: 'recording.download.origin',
+      );
     }
     return url;
   }

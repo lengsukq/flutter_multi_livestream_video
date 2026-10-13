@@ -1068,7 +1068,10 @@ void main() {
 
       // Advanced RealtimeClient users retain the same backend cloud recording
       // capability as the high-level RealtimeSdk entry point.
-      expect(room.recording.cloudRecordingSession, isA<HttpCloudRecordingSession>());
+      expect(
+        room.recording.cloudRecordingSession,
+        isA<HttpCloudRecordingSession>(),
+      );
 
       final eventFuture = room.events.firstWhere(
         (event) => event is RealtimeMediaEvent,
@@ -1310,12 +1313,21 @@ void main() {
 
     test('does not downgrade configured Product Chat failure to RTC', () async {
       final factory = FakeMediaSessionFactory();
-      final payload = liveKitJoinPayload(provider: 'fake')
-        ..['chatProvider'] = 'ivs';
+      final payload = liveKitJoinPayload(
+        provider: 'fake',
+        participantCredential: 'participant-proof',
+        roomOwnerCredential: 'owner-proof',
+      )..['chatProvider'] = 'ivs';
+      final transport = FakeTransport((request) {
+        if (request.uri.path.endsWith('/close')) {
+          return jsonResponse({'ok': true});
+        }
+        return jsonResponse(payload);
+      });
       final mediaClient = MediaClient(
         backendUrl: 'https://example.test',
         registry: MediaRegistry([factory]),
-        transport: FakeTransport((_) => jsonResponse(payload)),
+        transport: transport,
         heartbeatInterval: Duration.zero,
       );
       final client = RealtimeClient(
@@ -1346,6 +1358,12 @@ void main() {
         ),
       );
       expect(factory.createdSessions.single.disposeCount, 1);
+      expect(
+        transport.requestsTo('/rooms/482913/close'),
+        hasLength(1),
+        reason:
+            'optional Chat failure after media join must release newly created room',
+      );
     });
   });
 
@@ -2194,7 +2212,9 @@ class _FakeEffectsPlatform extends FlutterRealtimeProcessedVideoPlatform {
 
 RealtimeSdk _sdkWithProbeFactory(FakeMediaSessionFactory factory) =>
     RealtimeSdk.standard(
-      services: RealtimeRoomServices(videoEffectsFactory: DefaultRealtimeVideoEffects.new),
+      services: RealtimeRoomServices(
+        videoEffectsFactory: DefaultRealtimeVideoEffects.new,
+      ),
       platformResolver: () => RealtimeRuntimePlatform.macos,
       drivers: [
         RealtimeProviderDriver(
@@ -2249,5 +2269,7 @@ RealtimeRoom _effectsRoom(
     canBlur: true,
     canReplaceImage: true,
   ),
-  videoEffects: DefaultRealtimeVideoEffects(bridge: VideoEffectsBridge(platform: platform)),
+  videoEffects: DefaultRealtimeVideoEffects(
+    bridge: VideoEffectsBridge(platform: platform),
+  ),
 );

@@ -22,10 +22,7 @@ import 'runtime_platform.dart';
 /// Most applications should start here. [RealtimeSdk] remains available as
 /// the advanced API for custom provisioning and lower-level orchestration.
 class Realtime {
-  Realtime.fromSdk(
-    this.sdk, {
-    this.standaloneChatProvisionerFactory,
-  });
+  Realtime.fromSdk(this.sdk, {this.standaloneChatProvisionerFactory});
 
   factory Realtime({
     required Iterable<RealtimeProviderBundle> providers,
@@ -62,12 +59,7 @@ class Realtime {
     final sdk = RealtimeSdk(
       backendUrl: backendUrl,
       requestTimeout: requestTimeout,
-      services: services.withDefaultVideoEffects(
-        bundles.firstWhere(
-          (bundle) => bundle.videoEffectsFactory != null,
-          orElse: () => bundles.first,
-        ).videoEffectsFactory,
-      ),
+      services: services,
       plugins: plugins,
       driverRegistry: registry,
       tokenProvider: tokenProvider,
@@ -77,15 +69,18 @@ class Realtime {
     final url = backendUrl?.trim();
     return Realtime.fromSdk(
       sdk,
-      standaloneChatProvisionerFactory: services.standaloneChatProvisionerFactory ?? (url == null || url.isEmpty
-          ? null
-          : () => HttpStandaloneChatProvisioner(
-              ChatBackendConfig.fromUrl(
-                url,
-                tokenProvider: tokenProvider,
-                requestTimeout: requestTimeout ?? const Duration(seconds: 15),
-              ),
-            )),
+      standaloneChatProvisionerFactory:
+          services.standaloneChatProvisionerFactory ??
+          (url == null || url.isEmpty
+              ? null
+              : () => HttpStandaloneChatProvisioner(
+                  ChatBackendConfig.fromUrl(
+                    url,
+                    tokenProvider: tokenProvider,
+                    requestTimeout:
+                        requestTimeout ?? const Duration(seconds: 15),
+                  ),
+                )),
     );
   }
 
@@ -118,15 +113,18 @@ class Realtime {
     final url = backendUrl?.trim();
     return Realtime.fromSdk(
       sdk,
-      standaloneChatProvisionerFactory: services.standaloneChatProvisionerFactory ?? (url == null || url.isEmpty
-          ? null
-          : () => HttpStandaloneChatProvisioner(
-              ChatBackendConfig.fromUrl(
-                url,
-                tokenProvider: tokenProvider,
-                requestTimeout: requestTimeout ?? const Duration(seconds: 15),
-              ),
-            )),
+      standaloneChatProvisionerFactory:
+          services.standaloneChatProvisionerFactory ??
+          (url == null || url.isEmpty
+              ? null
+              : () => HttpStandaloneChatProvisioner(
+                  ChatBackendConfig.fromUrl(
+                    url,
+                    tokenProvider: tokenProvider,
+                    requestTimeout:
+                        requestTimeout ?? const Duration(seconds: 15),
+                  ),
+                )),
     );
   }
 
@@ -172,13 +170,15 @@ class Realtime {
       );
     }
     final provisioner = factory();
+    late final List<ChatRoomSummary> rooms;
     try {
-      return await provisioner.listRooms();
+      rooms = await provisioner.listRooms();
     } catch (error) {
+      await _disposeProvisioner(provisioner, cause: error);
       throw mapRealtimeException(error);
-    } finally {
-      await _disposeProvisioner(provisioner);
     }
+    await _disposeProvisioner(provisioner);
+    return List.unmodifiable(rooms);
   }
 
   Future<RealtimeConnection> open(RealtimeRequest request) async {
@@ -474,7 +474,10 @@ class Realtime {
     return providerId;
   }
 
-  Future<void> _disposeProvisioner(StandaloneChatProvisioner provisioner, {Object? cause}) async {
+  Future<void> _disposeProvisioner(
+    StandaloneChatProvisioner provisioner, {
+    Object? cause,
+  }) async {
     final cleanup = Cleanup();
     await cleanup.run('chat.provisioner', provisioner.dispose);
     cleanup.finish(domain: 'chat', cause: cause);

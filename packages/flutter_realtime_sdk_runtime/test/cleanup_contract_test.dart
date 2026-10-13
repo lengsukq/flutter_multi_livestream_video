@@ -64,9 +64,16 @@ void main() {
       expect(identical(first, second), true);
       // Functional fix: every resource is attempted, while failed feature
       // teardown is retained rather than being reported as successful release.
-      await expectLater(first, throwsA(isA<RealtimeException>().having(
-        (error) => error.code, 'code', RealtimeErrorCode.cleanupFailed,
-      )));
+      await expectLater(
+        first,
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.cleanupFailed,
+          ),
+        ),
+      );
       expect(media.releases, 1);
       expect(clients, 1);
       expect(identical(room.dispose(), first), true);

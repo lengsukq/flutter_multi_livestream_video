@@ -18,7 +18,11 @@ class Cleanup {
     try {
       final pending = Future<void>.sync(release);
       final deadline = timeout;
-      if (deadline == null) { await pending; } else { await pending.timeout(deadline); }
+      if (deadline == null) {
+        await pending;
+      } else {
+        await pending.timeout(deadline);
+      }
     } catch (error, stack) {
       _failures.add(CleanupFailure(stage, error, stack));
     }

@@ -161,7 +161,11 @@ void main() {
       );
       await room.initialize();
       expect(repository.reads, 1);
-      expect(room.sharedContent, isNull, reason: 'Classroom does not imply shared content or system annotation');
+      expect(
+        room.sharedContent,
+        isNull,
+        reason: 'Classroom does not imply shared content or system annotation',
+      );
       expect(room.liveInteractions, isNull);
       await room.dispose();
       expect(repository.closed, isTrue);

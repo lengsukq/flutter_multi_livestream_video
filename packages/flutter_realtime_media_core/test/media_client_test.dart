@@ -34,6 +34,86 @@ void main() {
 
   group('createRoomAndJoin', () {
     test(
+      'failed creator media join closes new room instead of reserving its code',
+      () async {
+        final failingFactory = FakeMediaSessionFactory(
+          joinError: const RealtimeException(
+            code: RealtimeErrorCode.providerError,
+            message: 'fake.rtc.join',
+          ),
+        );
+        final client = clientFor(
+          (request) {
+            if (request.uri.path.endsWith('/close')) {
+              return jsonResponse({'ok': true});
+            }
+            return jsonResponse(
+              liveKitJoinPayload(
+                provider: 'fake',
+                roomCode: 'retry-room',
+                participantId: 'creator-1',
+                role: 'participant',
+                participantCredential: 'creator-proof',
+                roomOwnerCredential: 'owner-proof',
+              ),
+            );
+          },
+          withRegistry: MediaRegistry([failingFactory]),
+          heartbeatInterval: Duration.zero,
+        );
+        await expectLater(
+          client.createRoomAndJoinIdentity(
+            identity: const MediaIdentity(
+              userId: 'creator',
+              displayName: 'Creator',
+            ),
+            roomCode: 'retry-room',
+          ),
+          throwsA(isA<RealtimeException>()),
+        );
+        final close = transport.requestsTo('/rooms/retry-room/close').single;
+        expect(close.json?['requesterParticipantId'], 'creator-1');
+        expect(close.json?['participantCredential'], 'creator-proof');
+        expect(close.json?['roomOwnerCredential'], 'owner-proof');
+        expect(transport.requestsTo('/rooms/retry-room/leave'), isEmpty);
+        expect(failingFactory.createdSessions.single.disposeCount, 1);
+        client.dispose();
+      },
+    );
+
+    test('a failed join of an existing room never closes that room', () async {
+      final failingFactory = FakeMediaSessionFactory(
+        joinError: const RealtimeException(
+          code: RealtimeErrorCode.providerError,
+          message: 'fake.rtc.join',
+        ),
+      );
+      final client = clientFor(
+        (_) => jsonResponse(
+          liveKitJoinPayload(
+            provider: 'fake',
+            roomCode: 'existing-room',
+            participantId: 'guest',
+            role: 'participant',
+            participantCredential: 'guest-proof',
+          ),
+        ),
+        withRegistry: MediaRegistry([failingFactory]),
+        heartbeatInterval: Duration.zero,
+      );
+      await expectLater(
+        client.joinRoomIdentity(
+          roomCode: 'existing-room',
+          identity: const MediaIdentity(userId: 'guest', displayName: 'Guest'),
+        ),
+        throwsA(isA<RealtimeException>()),
+      );
+      expect(transport.requestsTo('/rooms/existing-room/close'), isEmpty);
+      expect(transport.requestsTo('/rooms/existing-room/leave'), hasLength(1));
+      client.dispose();
+    });
+
+    test(
       'refreshes credentials once for concurrent adapter requests',
       () async {
         final refreshResponse = Completer<MediaBackendTransportResponse>();

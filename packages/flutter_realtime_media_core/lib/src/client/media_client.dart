@@ -162,7 +162,7 @@ class MediaClient {
       nickname: nickname,
       deviceId: deviceId,
     );
-    return _joinResponse(response);
+    return _joinCreatedResponse(response);
   }
 
   String? _normalizedOptionalProvider(Object? value) {
@@ -232,7 +232,7 @@ class MediaClient {
         credentialRefresher: custom,
       );
     }
-    return _joinResponse(
+    return _joinCreatedResponse(
       await _requireBackend('create rooms').createRoomWithIdentity(
         role: role,
         roomMode: roomMode,
@@ -280,9 +280,48 @@ class MediaClient {
     );
   }
 
+  /// A successful create response owns an entire new backend room. Roll that
+  /// room back if parsing, provider initialization or the media join fails;
+  /// leaving only the attendee would reserve the room code for the next retry.
+  Future<MediaRoomSession> _joinCreatedResponse(
+    MediaRoomJoinResponse response,
+  ) async {
+    try {
+      return await _joinResponse(response, leaveOnFailure: false);
+    } catch (error, stack) {
+      final cleanup = Cleanup();
+      await cleanup.run('created-room.rollback', () async {
+        final backend = this.backend;
+        if (backend == null) return;
+        final owner = response.json['roomOwnerCredential'];
+        final participant = response.json['participantCredential'];
+        if (owner is String &&
+            owner.isNotEmpty &&
+            participant is String &&
+            participant.isNotEmpty) {
+          await backend.closeRoomAsParticipant(
+            response.roomCode,
+            requesterParticipantId:
+                response.json['participantId']?.toString() ?? '',
+            participantCredential: participant,
+            roomOwnerCredential: owner,
+          );
+        } else {
+          await backend.leave(
+            response.roomCode,
+            participantId: response.json['participantId']?.toString(),
+          );
+        }
+      });
+      cleanup.finish(domain: 'media', cause: error);
+      Error.throwWithStackTrace(error, stack);
+    }
+  }
+
   Future<MediaRoomSession> _joinResponse(
     MediaRoomJoinResponse response, {
     MediaRoomProvisioner? credentialRefresher,
+    bool leaveOnFailure = true,
   }) async {
     final backend = this.backend;
     final factory = registry.require(response.providerId);
@@ -364,12 +403,14 @@ class MediaClient {
     } catch (error, stack) {
       final cleanup = Cleanup();
       await cleanup.run('session.rollback', session.dispose);
-      await cleanup.run('presence.rollback', () async {
-        await backend?.leave(
-          response.roomCode,
-          participantId: joinInfo.participantId,
-        );
-      });
+      if (leaveOnFailure) {
+        await cleanup.run('presence.rollback', () async {
+          await backend?.leave(
+            response.roomCode,
+            participantId: joinInfo.participantId,
+          );
+        });
+      }
       cleanup.finish(domain: 'media', cause: error);
       Error.throwWithStackTrace(
         normalizeRealtimeException(

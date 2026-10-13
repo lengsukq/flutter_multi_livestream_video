@@ -31,7 +31,9 @@ class RoomRecordingController implements MediaRecordingController {
   RecordingOptions? _currentOptions;
   RecordingTaskState _taskState = RecordingTaskState.idle;
   RecordingTaskState get taskState => _taskState;
-  bool get _cloudRecordingActive => _taskState == RecordingTaskState.recording || _taskState == RecordingTaskState.starting;
+  bool get _cloudRecordingActive =>
+      _taskState == RecordingTaskState.recording ||
+      _taskState == RecordingTaskState.starting;
   bool get _cloudStateUnknown => _taskState == RecordingTaskState.unknown;
   Duration cleanupTimeout = const Duration(seconds: 10);
   bool _disposed = false;
@@ -86,9 +88,13 @@ class RoomRecordingController implements MediaRecordingController {
       if (_disposing) {
         final cleanup = Cleanup(timeout: cleanupTimeout);
         await cleanup.run('recording.rollback', cloud.stopCloudRecording);
-        cleanup.finish(domain: 'recording', cause: const RealtimeException(
-          code: RealtimeErrorCode.cancelled, message: 'recording.start.cancelled',
-        ));
+        cleanup.finish(
+          domain: 'recording',
+          cause: const RealtimeException(
+            code: RealtimeErrorCode.cancelled,
+            message: 'recording.start.cancelled',
+          ),
+        );
         throw RealtimeException(
           code: RealtimeErrorCode.invalidState,
           message: 'Room was disposed while cloud recording was starting.',
@@ -100,11 +106,25 @@ class RoomRecordingController implements MediaRecordingController {
       _setStatus(RecordingStatus.recording);
       return result;
     } catch (error, stack) {
-      final failure = normalizeRealtimeException(error, domain: 'recording', operation: 'start', providerId: providerId, stackTrace: stack);
-      final uncertain = failure.code == RealtimeErrorCode.timeout || failure.code == RealtimeErrorCode.network || failure.code == RealtimeErrorCode.cancelled || failure.code == RealtimeErrorCode.cleanupFailed;
-      _taskState = uncertain ? RecordingTaskState.unknown : RecordingTaskState.failed;
+      final failure = normalizeRealtimeException(
+        error,
+        domain: 'recording',
+        operation: 'start',
+        providerId: providerId,
+        stackTrace: stack,
+      );
+      final uncertain =
+          failure.code == RealtimeErrorCode.timeout ||
+          failure.code == RealtimeErrorCode.network ||
+          failure.code == RealtimeErrorCode.cancelled ||
+          failure.code == RealtimeErrorCode.cleanupFailed;
+      _taskState = uncertain
+          ? RecordingTaskState.unknown
+          : RecordingTaskState.failed;
       if (!_cloudStateUnknown) _currentOptions = null;
-      _setStatus(_cloudStateUnknown ? RecordingStatus.unknown : RecordingStatus.failed);
+      _setStatus(
+        _cloudStateUnknown ? RecordingStatus.unknown : RecordingStatus.failed,
+      );
       onFailure?.call(failure);
       Error.throwWithStackTrace(failure, stack);
     } finally {
@@ -129,7 +149,16 @@ class RoomRecordingController implements MediaRecordingController {
       _setStatus(RecordingStatus.values.byName(_taskState.name));
       return result;
     } catch (error, stack) {
-      Error.throwWithStackTrace(normalizeRealtimeException(error, domain: 'recording', operation: 'query', providerId: providerId, stackTrace: stack), stack);
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          domain: 'recording',
+          operation: 'query',
+          providerId: providerId,
+          stackTrace: stack,
+        ),
+        stack,
+      );
     }
   }
 
@@ -146,7 +175,16 @@ class RoomRecordingController implements MediaRecordingController {
     try {
       return await cloud.cloudRecordingDownloadUrl();
     } catch (error, stack) {
-      Error.throwWithStackTrace(normalizeRealtimeException(error, domain: 'recording', operation: 'download', providerId: providerId, stackTrace: stack), stack);
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          domain: 'recording',
+          operation: 'download',
+          providerId: providerId,
+          stackTrace: stack,
+        ),
+        stack,
+      );
     }
   }
 
@@ -177,7 +215,13 @@ class RoomRecordingController implements MediaRecordingController {
       // and require an authoritative read before attempting another stop.
       _taskState = RecordingTaskState.unknown;
       _setStatus(RecordingStatus.unknown);
-      final failure = normalizeRealtimeException(error, domain: 'recording', operation: 'stop', providerId: providerId, stackTrace: stack);
+      final failure = normalizeRealtimeException(
+        error,
+        domain: 'recording',
+        operation: 'stop',
+        providerId: providerId,
+        stackTrace: stack,
+      );
       onFailure?.call(failure);
       Error.throwWithStackTrace(failure, stack);
     } finally {
@@ -220,14 +264,22 @@ class RoomRecordingController implements MediaRecordingController {
   Future<void> _dispose() async {
     _disposing = true;
     final cleanup = Cleanup(timeout: cleanupTimeout);
-    await cleanup.run('recording.start', () async { await _startCompleted?.future; });
-    await cleanup.run('recording.pendingStop', () async { await _stopCompleted?.future; });
+    await cleanup.run('recording.start', () async {
+      await _startCompleted?.future;
+    });
+    await cleanup.run('recording.pendingStop', () async {
+      await _stopCompleted?.future;
+    });
     if (_cloudRecordingActive || _cloudStateUnknown) {
-      await cleanup.run('recording.stop', () async { await stopRecording(); });
+      await cleanup.run('recording.stop', () async {
+        await stopRecording();
+      });
     }
     _disposed = true;
     _stopDurationTicker();
-    await cleanup.run('recording.session', () { cloudRecordingSession?.dispose(); });
+    await cleanup.run('recording.session', () {
+      cloudRecordingSession?.dispose();
+    });
     await cleanup.run('recording.statuses', _statusController.close);
     await cleanup.run('recording.durations', _durationController.close);
     cleanup.finish(domain: 'recording');

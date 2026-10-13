@@ -55,7 +55,11 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
         ),
       ),
     );
-    _effects = videoEffects?.createController(media: media, capabilities: effectsCapabilities, reportError: _reportFailure);
+    _effects = videoEffects?.createController(
+      media: media,
+      capabilities: effectsCapabilities,
+      reportError: _reportFailure,
+    );
     recording = RoomRecordingController(
       media: media,
       providerId: providerId,
@@ -164,17 +168,15 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
       try {
         await action();
       } catch (error, stack) {
-        if (!_disposed) {
-          _reportFailure(
-            normalizeRealtimeException(
-              error,
-              domain: 'runtime',
-              operation: operation,
-              providerId: providerId,
-              stackTrace: stack,
-            ),
-          );
-        }
+        _reportFailure(
+          normalizeRealtimeException(
+            error,
+            domain: 'runtime',
+            operation: operation,
+            providerId: providerId,
+            stackTrace: stack,
+          ),
+        );
       }
     }
 
@@ -201,16 +203,24 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
   late final RealtimeVideoEffectsController? _effects;
   @override
   MediaBackgroundCapabilities get backgroundCapabilities =>
-      _effects?.backgroundCapabilities ?? const MediaBackgroundCapabilities.none();
+      _effects?.backgroundCapabilities ??
+      const MediaBackgroundCapabilities.none();
   @override
-  MediaBackgroundEffect get backgroundEffect => _effects?.backgroundEffect ?? const MediaBackgroundEffect.none();
+  MediaBackgroundEffect get backgroundEffect =>
+      _effects?.backgroundEffect ?? const MediaBackgroundEffect.none();
   Future<void> prepareVideoEffects(MediaLocalPreviewSettings settings) =>
       _effects?.prepareVideoEffects(settings) ?? Future<void>.value();
   @override
   Future<void> setBackgroundEffect(MediaBackgroundEffect effect) =>
-      _effects?.setBackgroundEffect(effect) ?? (effect.enabled
-        ? Future<void>.error(const RealtimeException(code: RealtimeErrorCode.unsupportedFeature, message: 'videoEffects.unregistered'))
-        : Future<void>.value());
+      _effects?.setBackgroundEffect(effect) ??
+      (effect.enabled
+          ? Future<void>.error(
+              const RealtimeException(
+                code: RealtimeErrorCode.unsupportedFeature,
+                message: 'videoEffects.unregistered',
+              ),
+            )
+          : Future<void>.value());
 
   List<MediaParticipant> get participants =>
       List.unmodifiable(media.snapshot.participants);
@@ -272,8 +282,17 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
       return;
     }
     unawaited(
-      (_effects?.release() ?? Future<void>.value()).catchError((Object error, StackTrace stack) {
-        _reportFailure(normalizeRealtimeException(error, domain: 'room.effects.release', stackTrace: stack));
+      (_effects?.release() ?? Future<void>.value()).catchError((
+        Object error,
+        StackTrace stack,
+      ) {
+        _reportFailure(
+          normalizeRealtimeException(
+            error,
+            domain: 'room.effects.release',
+            stackTrace: stack,
+          ),
+        );
       }),
     );
   }
@@ -319,7 +338,9 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
     // must cancel/close the auxiliary sessions without waiting for that read.
     // Late startup errors are ignored once _disposed is set.
     await cleanup.run('recording', recording.dispose);
-    await cleanup.run('video.effects', () async { await _effects?.dispose(); });
+    await cleanup.run('video.effects', () async {
+      await _effects?.dispose();
+    });
     await cleanup.run('features', features.dispose);
     await cleanup.run('interactions', () async {
       await _interactions?.dispose();

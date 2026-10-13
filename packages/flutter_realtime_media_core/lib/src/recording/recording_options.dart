@@ -7,10 +7,27 @@ enum RecordingMode { cloud }
 enum RecordingLayout { grid, speaker, screenShare, custom }
 
 /// Authoritative task state returned by the cloud control plane.
-enum RecordingTaskState { idle, starting, recording, processing, completed, failed, unknown }
+enum RecordingTaskState {
+  idle,
+  starting,
+  recording,
+  processing,
+  completed,
+  failed,
+  unknown,
+}
 
 /// Local recording operation state.
-enum RecordingStatus { idle, starting, recording, stopping, processing, completed, unknown, failed }
+enum RecordingStatus {
+  idle,
+  starting,
+  recording,
+  stopping,
+  processing,
+  completed,
+  unknown,
+  failed,
+}
 
 enum RecordingStreamType { both, audioOnly, videoOnly }
 

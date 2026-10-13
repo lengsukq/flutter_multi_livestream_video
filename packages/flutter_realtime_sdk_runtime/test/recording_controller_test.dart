@@ -41,7 +41,12 @@ class _FakeCloudSession implements MediaCloudRecordingSession {
   Future<RecordingResult> stopCloudRecording() async {
     stops++;
     await stopGate?.future;
-    if (failStop) throw const RealtimeException(code: RealtimeErrorCode.network, message: 'test.stop');
+    if (failStop) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.network,
+        message: 'test.stop',
+      );
+    }
     return RecordingResult(
       mode: RecordingMode.cloud,
       recordingId: 'cloud-task-1',
@@ -95,30 +100,61 @@ void main() {
     await controller.dispose();
   });
 
-  test('failed stop retains uncertain task and queries before retrying', () async {
-    final cloud = _FakeCloudSession()..failStop = true..queryState = 'recording';
-    final controller = RoomRecordingController(media: room, providerId: 'agora', cloudRecordingSession: cloud);
-    await controller.startRecording();
-    await expectLater(controller.stopRecording(), throwsA(isA<RealtimeException>()));
-    expect(controller.status, RecordingStatus.unknown);
-    expect(controller.currentOptions, isNotNull);
-    await expectLater(controller.startRecording(), throwsA(isA<RealtimeException>()));
-    cloud.failStop = false;
-    await controller.stopRecording();
-    expect(cloud.stops, 2);
-    expect(controller.status, RecordingStatus.processing);
-    await controller.dispose();
-  });
+  test(
+    'failed stop retains uncertain task and queries before retrying',
+    () async {
+      final cloud = _FakeCloudSession()
+        ..failStop = true
+        ..queryState = 'recording';
+      final controller = RoomRecordingController(
+        media: room,
+        providerId: 'agora',
+        cloudRecordingSession: cloud,
+      );
+      await controller.startRecording();
+      await expectLater(
+        controller.stopRecording(),
+        throwsA(isA<RealtimeException>()),
+      );
+      expect(controller.status, RecordingStatus.unknown);
+      expect(controller.currentOptions, isNotNull);
+      await expectLater(
+        controller.startRecording(),
+        throwsA(isA<RealtimeException>()),
+      );
+      cloud.failStop = false;
+      await controller.stopRecording();
+      expect(cloud.stops, 2);
+      expect(controller.status, RecordingStatus.processing);
+      await controller.dispose();
+    },
+  );
 
-  test('failed remote stop does not skip local release or hide cleanup failure', () async {
-    final cloud = _FakeCloudSession()..failStop = true;
-    final controller = RoomRecordingController(media: room, providerId: 'agora', cloudRecordingSession: cloud);
-    await controller.startRecording();
-    final first = controller.dispose();
-    expect(identical(first, controller.dispose()), isTrue);
-    await expectLater(first, throwsA(isA<RealtimeException>().having((error) => error.code, 'code', RealtimeErrorCode.cleanupFailed)));
-    expect(cloud.disposed, isTrue);
-  });
+  test(
+    'failed remote stop does not skip local release or hide cleanup failure',
+    () async {
+      final cloud = _FakeCloudSession()..failStop = true;
+      final controller = RoomRecordingController(
+        media: room,
+        providerId: 'agora',
+        cloudRecordingSession: cloud,
+      );
+      await controller.startRecording();
+      final first = controller.dispose();
+      expect(identical(first, controller.dispose()), isTrue);
+      await expectLater(
+        first,
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.cleanupFailed,
+          ),
+        ),
+      );
+      expect(cloud.disposed, isTrue);
+    },
+  );
 
   test('cloud start, stop, query and signed download URL', () async {
     final cloud = _FakeCloudSession();

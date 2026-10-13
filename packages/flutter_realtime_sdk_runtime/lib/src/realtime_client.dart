@@ -47,7 +47,8 @@ class RealtimeClient {
        _mediaClientFactory = mediaClientFactory,
        _chatClientFactory = chatClientFactory,
        _publicProviderResolver = publicProviderResolver,
-       recordingSessionFactory = recordingSessionFactory ??
+       recordingSessionFactory =
+           recordingSessionFactory ??
            (backendUrl == null
                ? null
                : (room) => HttpCloudRecordingSession(
@@ -57,7 +58,8 @@ class RealtimeClient {
                    participantCredential: room.participantCredential,
                    roomOwnerCredential: room.roomOwnerCredential,
                    tokenProvider: tokenProvider,
-                   requestTimeout: requestTimeout ?? const Duration(seconds: 15),
+                   requestTimeout:
+                       requestTimeout ?? const Duration(seconds: 15),
                  ));
 
   final RealtimeVideoEffects? videoEffects;
@@ -227,7 +229,7 @@ class RealtimeClient {
         role: role,
         roomCode: roomCode,
       );
-      return await _resolveRoom(client, room);
+      return await _resolveRoom(client, room, createdRoom: true);
     } catch (error, stack) {
       final primary = normalizeRealtimeException(
         error,
@@ -277,6 +279,7 @@ class RealtimeClient {
     MediaRoomSession room, {
     ChatJoinInfo? directChatJoinInfo,
     ChatCredentialProvider? directChatCredentialProvider,
+    bool createdRoom = false,
   }) async {
     ChatClient? chatClient;
     ChatRoomSession? productChatRoom;
@@ -394,6 +397,21 @@ class RealtimeClient {
       return resolved;
     } catch (error, stack) {
       final cleanup = Cleanup();
+      // An adapter may join RTC successfully before chat/feature setup fails.
+      // Only the *create* flow may close the new room; a failed ordinary join
+      // must never close another host's existing session.
+      if (createdRoom &&
+          room.roomOwnerCredential?.isNotEmpty == true &&
+          room.participantCredential?.isNotEmpty == true) {
+        await cleanup.run('created-room.rollback', () async {
+          await mediaClient.backend?.closeRoomAsParticipant(
+            room.roomCode,
+            requesterParticipantId: room.participantId,
+            participantCredential: room.participantCredential,
+            roomOwnerCredential: room.roomOwnerCredential,
+          );
+        });
+      }
       await cleanup.run('chat.product', () async {
         await productChatRoom?.dispose();
       });
