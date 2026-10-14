@@ -717,11 +717,19 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildServerSettingsSection() => DemoServerSettingsPanel(
-    controller: _serverController, diagnostics: _diagnostics,
-    defaultBackendUrl: _defaultBackendUrl, onTest: _testConnection);
+    controller: _serverController,
+    diagnostics: _diagnostics,
+    defaultBackendUrl: _defaultBackendUrl,
+    onTest: _testConnection,
+  );
   Widget _buildIdentitySettingsSection() => DemoIdentitySettingsPanel(
-    deviceId: _deviceIdFuture, displayNameController: _displayNameController,
-    onNameChanged: (value) { unawaited(_persistDisplayName(value)); setState(() {}); });
+    deviceId: _deviceIdFuture,
+    displayNameController: _displayNameController,
+    onNameChanged: (value) {
+      unawaited(_persistDisplayName(value));
+      setState(() {});
+    },
+  );
 
   Widget _buildActionTabsCard() {
     final style = RealtimeStyle.of(context);

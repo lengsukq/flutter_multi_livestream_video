@@ -23,6 +23,99 @@ TrtcJoinInfo joinInfo({MediaRole role = MediaRole.participant}) => TrtcJoinInfo(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final disposing in [false, true]) {
+    test(
+      'late TRTC refresh preserves the next active owner after $disposing',
+      () async {
+        final engine = _FakeTrtcEngine();
+        final factory = TrtcSessionFactory(engineFactory: () async => engine);
+        final initial = joinInfo();
+        final session = factory.createSession(initial);
+        addTearDown(session.dispose);
+        await session.join(initial);
+        final pending = Completer<MediaJoinInfo>();
+        final started = Completer<void>();
+        (session as MediaCredentialRefreshable).setCredentialRefreshCallback((
+          current,
+        ) {
+          started.complete();
+          return pending.future;
+        });
+        engine.lastEvents!.onError!(-100018, 'usersig expired');
+        await started.future;
+        if (disposing) {
+          await session.dispose();
+        } else {
+          await session.leave();
+        }
+        final oldJoins = engine.enteredRooms.length;
+        final calls = List<String>.of(engine.calls);
+        final nextFactory = TrtcSessionFactory(
+          engineFactory: () async => _FakeTrtcEngine(),
+        );
+        final nextInfo = joinInfo();
+        final next = nextFactory.createSession(nextInfo);
+        addTearDown(next.dispose);
+        await next.join(nextInfo);
+        engine.lastEvents!.onRemoteUserEnterRoom!('stale');
+        pending.complete(joinInfo());
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        expect(engine.enteredRooms.length, oldJoins);
+        expect(engine.calls, calls);
+        expect(
+          session.state,
+          disposing ? MediaSessionState.disposed : MediaSessionState.ended,
+        );
+        expect(
+          session.snapshot.participants.any((p) => p.id == 'stale'),
+          isFalse,
+        );
+        expect(next.state, MediaSessionState.connected);
+        final contender = nextFactory.createSession(nextInfo);
+        await expectLater(
+          contender.join(nextInfo),
+          throwsA(
+            isA<RealtimeException>().having(
+              (error) => error.code,
+              'active owner',
+              RealtimeErrorCode.invalidState,
+            ),
+          ),
+        );
+        await contender.dispose();
+      },
+    );
+  }
+
+  test(
+    'TRTC preserves typed provider failures without native public text',
+    () async {
+      final engine = _ThrowingTrtcEngine();
+      final session = TrtcSessionFactory(
+        engineFactory: () async => engine,
+      ).createSession(joinInfo());
+      addTearDown(session.dispose);
+      await expectLater(
+        session.join(joinInfo()),
+        throwsA(
+          isA<RealtimeException>()
+              .having(
+                (error) => error.code,
+                'code',
+                RealtimeErrorCode.permissionDenied,
+              )
+              .having(
+                (error) => error.message,
+                'safe stage',
+                isNot(contains('native secret')),
+              )
+              .having((error) => error.cause, 'original cause', isNotNull),
+        ),
+      );
+    },
+  );
+
   test(
     'leave cancels a pending TRTC enter without reviving the room',
     () async {
@@ -262,6 +355,10 @@ void main() {
       engineEvents.onError?.call(-42, 'native failure');
       await Future<void>.delayed(Duration.zero);
       expect(session.snapshot.lastError?.code, RealtimeErrorCode.providerError);
+      expect(
+        session.snapshot.lastError?.message,
+        isNot(contains('native failure')),
+      );
       await session.leave();
       expect(session.state, MediaSessionState.ended);
       expect(engine.exitCount, 1);
@@ -450,5 +547,15 @@ class _FakeTrtcEngine implements TrtcEngine {
   @override
   Future<void> dispose() async {
     disposed = true;
+  }
+}
+
+class _ThrowingTrtcEngine extends _FakeTrtcEngine {
+  @override
+  Future<int> enterRoom(TrtcJoinInfo joinInfo, TrtcEngineEvents events) async {
+    throw const RealtimeException(
+      code: RealtimeErrorCode.permissionDenied,
+      message: 'native secret',
+    );
   }
 }

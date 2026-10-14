@@ -79,6 +79,20 @@ await room.session.sendData(
 room.recoveries.listen(print);
 ```
 
+## Room cleanup diagnostics
+
+`MediaRoomSession.leave()` coalesces repeated calls and always attempts the
+best-effort backend leave notification, including when media teardown fails.
+The returned future still reports the media failure. Presence failures continue
+to appear on `backendErrors`.
+
+`closeRoom()` succeeds once the authoritative room is closed. If the subsequent
+local media leave fails, `cleanupErrors` emits `RealtimeException(cleanupFailed)`
+with `operation: closeRoom.localLeave`, `details['roomClosed'] == true`, and an
+immutable `details['cleanupFailures']` list. Subscribe before closing the room;
+this broadcast stream does not replay and closes when the room is disposed.
+Ordinary `leave()` and `dispose()` failures remain on their returned futures.
+
 ## Pre-Join
 
 `MediaClient.runPreJoinCheck()` runs provider-neutral checks before a room is

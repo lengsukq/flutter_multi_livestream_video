@@ -57,7 +57,12 @@ class DemoBackendDiagnostics extends ChangeNotifier {
         report.activeChatProvider,
       );
     } catch (error, stack) {
-      final failure = normalizeRealtimeException(error, domain: 'demo.backend', operation: 'diagnose', stackTrace: stack);
+      final failure = normalizeRealtimeException(
+        error,
+        domain: 'demo.backend',
+        operation: 'diagnose',
+        stackTrace: stack,
+      );
       if (_diagnostics.length == 32) _diagnostics.removeAt(0);
       _diagnostics.add(failure);
       if (!_disposed && currentUrl() == url && generation == _generation) {

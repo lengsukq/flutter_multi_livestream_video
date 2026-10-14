@@ -36,6 +36,105 @@ Map<String, Object?> response({MediaRole role = MediaRole.participant}) => {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final disposing in [false, true]) {
+    test(
+      'late ARTC refresh preserves the next active owner after $disposing',
+      () async {
+        final engine = _FakeArtcEngine();
+        final factory = ArtcSessionFactory(engineFactory: () async => engine);
+        final initial = joinInfo();
+        final session = factory.createSession(initial);
+        addTearDown(session.dispose);
+        await session.join(initial);
+        final pending = Completer<MediaJoinInfo>();
+        final started = Completer<void>();
+        (session as MediaCredentialRefreshable).setCredentialRefreshCallback((
+          current,
+        ) {
+          started.complete();
+          return pending.future;
+        });
+        engine.events!.onAuthWillExpire!();
+        await started.future;
+        if (disposing) {
+          await session.dispose();
+        } else {
+          await session.leave();
+        }
+        final oldJoins = engine.joined.length;
+        final calls = List<String>.of(engine.calls);
+        final nextFactory = ArtcSessionFactory(
+          engineFactory: () async => _FakeArtcEngine(),
+        );
+        final nextInfo = joinInfo();
+        final next = nextFactory.createSession(nextInfo);
+        addTearDown(next.dispose);
+        await next.join(nextInfo);
+        engine.events!.onParticipantJoined!('stale');
+        pending.complete(joinInfo());
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        expect(engine.joined.length, oldJoins);
+        expect(engine.calls, calls);
+        expect(
+          session.state,
+          disposing ? MediaSessionState.disposed : MediaSessionState.ended,
+        );
+        expect(
+          session.snapshot.participants.any((p) => p.id == 'stale'),
+          isFalse,
+        );
+        expect(next.state, MediaSessionState.connected);
+        final contender = nextFactory.createSession(nextInfo);
+        await expectLater(
+          contender.join(nextInfo),
+          throwsA(
+            isA<RealtimeException>().having(
+              (error) => error.code,
+              'active owner',
+              RealtimeErrorCode.invalidState,
+            ),
+          ),
+        );
+        await contender.dispose();
+      },
+    );
+  }
+
+  test(
+    'ARTC rollback preserves join error and attempts disposal after leave fails',
+    () async {
+      final engine = _FaultArtcEngine();
+      final session = ArtcSessionFactory(
+        engineFactory: () async => engine,
+      ).createSession(joinInfo());
+      await expectLater(
+        session.join(joinInfo()),
+        throwsA(
+          isA<RealtimeException>()
+              .having(
+                (error) => error.code,
+                'primary code',
+                RealtimeErrorCode.invalidCredential,
+              )
+              .having(
+                (error) => error.message,
+                'safe message',
+                isNot(contains('native secret')),
+              )
+              .having((error) => error.details, 'secondary cleanup', isNotNull),
+        ),
+      );
+      expect(engine.disposed, isTrue);
+      final next = ArtcSessionFactory(
+        engineFactory: () async => _FakeArtcEngine(),
+      ).createSession(joinInfo());
+      await next.join(joinInfo());
+      await next.dispose();
+      await session.dispose();
+    },
+  );
+
   test('ARTC late join remains cancelled after leaving pending room', () async {
     final pending = Completer<void>();
     final engine = _FakeArtcEngine()..pendingJoin = pending.future;
@@ -591,5 +690,20 @@ class _FakeArtcEngine implements ArtcEngine {
   @override
   Future<void> dispose() async {
     disposed = true;
+  }
+}
+
+class _FaultArtcEngine extends _FakeArtcEngine {
+  @override
+  Future<void> join(ArtcJoinInfo info, ArtcEngineEvents events) async {
+    throw const RealtimeException(
+      code: RealtimeErrorCode.invalidCredential,
+      message: 'native secret',
+    );
+  }
+
+  @override
+  Future<void> leave() async {
+    throw StateError('failed leave');
   }
 }

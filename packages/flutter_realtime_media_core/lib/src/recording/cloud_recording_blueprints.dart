@@ -15,8 +15,10 @@ class CloudRecordingBlueprints {
     Set<RecordingLayout> allowed,
   ) {
     if (!allowed.contains(options.layout)) {
-      throw UnsupportedError('$providerId cloud recording does not support '
-          '${options.layout.name}; query recording capabilities first.');
+      throw UnsupportedError(
+        '$providerId cloud recording does not support '
+        '${options.layout.name}; query recording capabilities first.',
+      );
     }
   }
 
@@ -74,7 +76,8 @@ class CloudRecordingBlueprints {
     String action,
   ) {
     _requireLayout('agora', options, {
-      RecordingLayout.grid, RecordingLayout.featuredParticipant,
+      RecordingLayout.grid,
+      RecordingLayout.featuredParticipant,
       RecordingLayout.speaker,
     });
     final uid = participantId ?? '10001';
@@ -175,7 +178,8 @@ class CloudRecordingBlueprints {
           'Content': {'State': 'Disabled'},
           'CompositedVideo': {
             'Layout': 'GridView',
-            'Resolution': options.qualityPreset == RecordingQualityPreset.fullHd1080p30
+            'Resolution':
+                options.qualityPreset == RecordingQualityPreset.fullHd1080p30
                 ? 'FHD'
                 : 'HD',
             'GridViewConfiguration': {'ContentShareLayout': 'PresenterOnly'},
@@ -212,7 +216,8 @@ class CloudRecordingBlueprints {
     String action,
   ) {
     _requireLayout('trtc', options, {
-      RecordingLayout.grid, RecordingLayout.featuredParticipant,
+      RecordingLayout.grid,
+      RecordingLayout.featuredParticipant,
       RecordingLayout.speaker,
     });
     final trtcLayout = switch (options.layout) {
@@ -274,7 +279,8 @@ class CloudRecordingBlueprints {
     String action,
   ) {
     _requireLayout('artc', options, {
-      RecordingLayout.grid, RecordingLayout.featuredParticipant,
+      RecordingLayout.grid,
+      RecordingLayout.featuredParticipant,
       RecordingLayout.speaker,
     });
     final basePayload = <String, dynamic>{
@@ -284,8 +290,13 @@ class CloudRecordingBlueprints {
       'TaskId': 'task_${roomCode}_${DateTime.now().millisecondsSinceEpoch}',
       'TaskProfile': '1080P',
       'LayoutIds': [
-        const {RecordingLayout.speaker, RecordingLayout.featuredParticipant, RecordingLayout.activeSpeaker}
-            .contains(options.layout) ? 'speaker_pip' : 'grid_auto',
+        const {
+              RecordingLayout.speaker,
+              RecordingLayout.featuredParticipant,
+              RecordingLayout.activeSpeaker,
+            }.contains(options.layout)
+            ? 'speaker_pip'
+            : 'grid_auto',
       ],
       'StorageConfig': {
         'OssBucket': 'your-oss-bucket',
@@ -317,7 +328,8 @@ class CloudRecordingBlueprints {
     String action,
   ) {
     _requireLayout('livekit', options, {
-      RecordingLayout.grid, RecordingLayout.activeSpeaker,
+      RecordingLayout.grid,
+      RecordingLayout.activeSpeaker,
       RecordingLayout.speaker,
     });
     final livekitLayout = switch (options.layout) {

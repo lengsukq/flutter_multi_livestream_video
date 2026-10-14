@@ -3,11 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'demo_strings.dart';
+
 class DemoIdentitySettingsPanel extends StatelessWidget {
- const DemoIdentitySettingsPanel({super.key, required this.deviceId, required this.displayNameController, required this.onNameChanged});
- final Future<String> deviceId;
- final TextEditingController displayNameController;
- final ValueChanged<String> onNameChanged;
+  const DemoIdentitySettingsPanel({
+    super.key,
+    required this.deviceId,
+    required this.displayNameController,
+    required this.onNameChanged,
+  });
+  final Future<String> deviceId;
+  final TextEditingController displayNameController;
+  final ValueChanged<String> onNameChanged;
   @override
   Widget build(BuildContext context) {
     final style = RealtimeStyle.of(context);
@@ -143,5 +149,4 @@ class DemoIdentitySettingsPanel extends StatelessWidget {
       ),
     );
   }
-
 }

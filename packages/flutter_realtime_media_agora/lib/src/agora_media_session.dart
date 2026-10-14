@@ -13,59 +13,20 @@ import 'agora_media_track.dart';
 import 'agora_screen_capture.dart';
 import 'agora_screen_share_signals.dart';
 
-const _agoraProviderId = AgoraJoinInfo.providerIdValue;
+part 'agora_publishing.dart';
+part 'agora_data_stream.dart';
+part 'agora_snapshot_mapper.dart';
+part 'agora_event_adapter.dart';
 
-MediaCapabilities _capabilitiesForRole(MediaRole role) {
-  if (role == MediaRole.viewer) {
-    return const MediaCapabilities(
-      canSubscribeVideo: true,
-      canSendData: false,
-      canReceiveData: true,
-      canReportNetworkStats: true,
-    );
-  }
+part 'agora_interactive_session.dart';
 
-  final canSwitchCamera =
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.iOS ||
-          defaultTargetPlatform == TargetPlatform.android);
-  return MediaCapabilities(
-    canPublishAudio: true,
-    canPublishVideo: true,
-    canBlurBackground:
-        !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.macOS),
-    canReplaceBackgroundImage:
-        !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.macOS),
-    canEnumerateCameras:
-        !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.macOS),
-    canSelectCamera:
-        !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.macOS),
-    canSwitchCamera: canSwitchCamera,
-    // iOS cross-app sharing requires a separate ReplayKit Broadcast Extension.
-    // Android uses MediaProjection; desktop capture selects a display.
-    canScreenShare:
-        !kIsWeb &&
-        (defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows),
-    canSendData: true,
-    canReceiveData: true,
-    canSubscribeVideo: true,
-    canEnumerateAudioDevices: false,
-    canReportNetworkStats: true,
-    maxDataMessageBytes: 1024,
-    canListParticipants: role == MediaRole.host,
-    canCloseRoom: role == MediaRole.host,
-  );
-}
+part 'agora_host_session.dart';
+
+part 'agora_viewer_session.dart';
+
+part 'agora_capabilities.dart';
+
+part 'agora_failures.dart';
 
 abstract class _AgoraMediaSession
     implements
@@ -82,6 +43,12 @@ abstract class _AgoraMediaSession
         role: role,
         capabilities: _capabilitiesForRole(role),
       );
+  late final _failures = _AgoraFailures(providerId);
+  late final _publishing = _AgoraPublishing(this);
+  late final _data = _AgoraDataStream(this);
+  late final _mapper = _AgoraSnapshotMapper(this);
+  late final _eventAdapter = _AgoraEventAdapter(this);
+
   @override
   final MediaRole role;
 
@@ -94,110 +61,21 @@ abstract class _AgoraMediaSession
   final StreamController<MediaConnectionStats> _statsController =
       StreamController<MediaConnectionStats>.broadcast();
 
-  final Map<String, MediaParticipant> _participants = {};
-  final List<MediaMessage> _messages = [];
-  final AgoraRemoteScreenState _remoteScreenState = AgoraRemoteScreenState();
-  final Map<int, AgoraMediaVideoTrack> _remoteScreenTracks = {};
-  final AgoraScreenCapture _screenCapture = const AgoraScreenCapture();
-
   final MediaCapabilities _capabilities;
   MediaSnapshot _snapshot;
   MediaSessionState _state = MediaSessionState.idle;
   final agora.RtcEngine Function() _engineFactory;
   agora.RtcEngine? _engine;
-  int? _customVideoTrackId;
-  final _processedSink = NativeProcessedVideoSink(providerId: 'agora');
-  @override
-  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
-      role != MediaRole.viewer &&
-      capabilities.canBlurBackground &&
-      _processedSink.supports(source) &&
-      source.platform ==
-          (defaultTargetPlatform == TargetPlatform.android
-              ? ProcessedVideoPlatform.android
-              : ProcessedVideoPlatform.macos);
-  @override
-  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
-    _ensurePublisherActive('processed video');
-    if (!supportsProcessedVideoSource(source)) {
-      throw const RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message: 'Processed video is unavailable.',
-      );
-    }
-    await _requireEngine().enableLocalVideo(false);
-    _customVideoTrackId ??= await _requireEngine().createCustomVideoTrack();
-    await _processedSink.attach(
-      source,
-      arguments: {
-        'engineHandle': await _requireEngine().getNativeHandle(),
-        'trackId': _customVideoTrackId,
-      },
-    );
-    await _updatePublishOptions();
-  }
-
-  @override
-  Future<void> detachProcessedVideoSource() => _processedSink.detach();
-
-  @override
-  Future<List<MediaDevice>> listMediaDevices({
-    Set<MediaDeviceKind>? kinds,
-  }) async {
-    _ensurePublisherActive('camera device selection');
-    if (!capabilities.canEnumerateCameras ||
-        (kinds != null && !kinds.contains(MediaDeviceKind.camera))) {
-      return const [];
-    }
-    return List.unmodifiable([
-      for (final camera in await ProcessedVideoBridge().listCameras())
-        MediaDevice(
-          id: camera.id,
-          label: camera.label,
-          kind: MediaDeviceKind.camera,
-        ),
-    ]);
-  }
-
-  @override
-  Future<void> selectMediaDevice(MediaDevice device) async {
-    _ensurePublisherActive('camera device selection');
-    if (device.kind != MediaDeviceKind.camera ||
-        !capabilities.canSelectCamera) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        providerId: providerId,
-        message: 'This media device cannot be selected.',
-      );
-    }
-    if (_processedSink.source == null) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.invalidState,
-        providerId: providerId,
-        message: 'Prepare the SDK video source before selecting a camera.',
-      );
-    }
-    await _processedSink.selectCamera(device.id);
-  }
-
   agora.RtcEngineEventHandler? _eventHandler;
   AgoraJoinInfo? _joinInfo;
   Completer<void>? _joinCompleter;
   Future<void>? _joinFuture;
   Future<void>? _leaveFuture;
   Future<void>? _disposeFuture;
-  Future<int>? _dataStreamFuture;
   int? _localUid;
-  int? _dataStreamId;
-  int? _activeSpeakerUid;
-  bool _localMuted = true;
-  bool _localVideoEnabled = false;
-  bool _localScreenShareEnabled = false;
-  MediaVideoTrack? _localScreenTrack;
   bool _disposed = false;
   bool _joinCancelled = false;
   Duration cleanupTimeout = const Duration(seconds: 10);
-  MediaCameraPosition _cameraPosition = MediaCameraPosition.front;
   MediaConnectionStats? _connectionStats;
 
   @override
@@ -222,22 +100,46 @@ abstract class _AgoraMediaSession
   Stream<MediaEvent> get events => _eventController.stream;
 
   @override
-  int dataPayloadSizeBytes(String message, MediaSendOptions options) => utf8
-      .encode(
-        jsonEncode({
-          'version': 1,
-          'topic': options.topic.trim(),
-          'message': message.trim(),
-          'timestampMs': DateTime.now().millisecondsSinceEpoch,
-        }),
-      )
-      .length;
-
-  @override
   MediaConnectionStats? get connectionStats => _connectionStats;
 
   @override
   Stream<MediaConnectionStats> get stats => _statsController.stream;
+
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      _publishing.supportsProcessedVideoSource(source);
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) =>
+      _publishing.attachProcessedVideoSource(source);
+  @override
+  Future<void> detachProcessedVideoSource() =>
+      _publishing.detachProcessedVideoSource();
+  @override
+  Future<List<MediaDevice>> listMediaDevices({Set<MediaDeviceKind>? kinds}) =>
+      _publishing.listMediaDevices(kinds: kinds);
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) =>
+      _publishing.selectMediaDevice(device);
+  @override
+  int dataPayloadSizeBytes(String message, MediaSendOptions options) =>
+      _data.dataPayloadSizeBytes(message, options);
+  @override
+  Future<void> sendMessage(String message, {String topic = 'chat'}) =>
+      _data.sendMessage(message, topic: topic);
+
+  Future<void> setMutedInternal(bool muted) =>
+      _publishing.setMutedInternal(muted);
+  Future<void> toggleMuteInternal() => _publishing.toggleMuteInternal();
+  Future<void> setVideoEnabledInternal(bool enabled) =>
+      _publishing.setVideoEnabledInternal(enabled);
+  Future<void> switchCameraInternal(MediaCameraPosition position) =>
+      _publishing.switchCameraInternal(position);
+  Future<void> setScreenShareEnabledInternal(bool enabled) =>
+      _publishing.setScreenShareEnabledInternal(enabled);
+  Future<List<MediaAudioDevice>> listAudioDevicesInternal() =>
+      _publishing.listAudioDevicesInternal();
+  Future<void> selectAudioDeviceInternal(MediaAudioDevice device) =>
+      _publishing.selectAudioDeviceInternal(device);
 
   bool get _canPublish => role != MediaRole.viewer;
 
@@ -277,17 +179,17 @@ abstract class _AgoraMediaSession
     }
 
     _joinInfo = rawJoinInfo;
-    _localMuted = true;
-    _localVideoEnabled = false;
-    _localScreenShareEnabled = false;
-    _localScreenTrack = null;
-    _cameraPosition = MediaCameraPosition.front;
-    _participants.clear();
-    _messages.clear();
-    _remoteScreenState.clear();
-    _remoteScreenTracks.clear();
-    _activeSpeakerUid = null;
-    _dataStreamId = null;
+    _publishing._localMuted = true;
+    _publishing._localVideoEnabled = false;
+    _publishing._localScreenShareEnabled = false;
+    _publishing._localScreenTrack = null;
+    _publishing._cameraPosition = MediaCameraPosition.front;
+    _mapper._participants.clear();
+    _data._messages.clear();
+    _mapper._remoteScreenState.clear();
+    _mapper._remoteScreenTracks.clear();
+    _mapper._activeSpeakerUid = null;
+    _data._dataStreamId = null;
     _setState(MediaSessionState.joining);
 
     final engine = _engineFactory();
@@ -310,7 +212,7 @@ abstract class _AgoraMediaSession
         ),
       );
       _ensureJoinNotCancelled();
-      final handler = _buildEventHandler();
+      final handler = _eventAdapter._buildEventHandler();
       _eventHandler = handler;
       engine.registerEventHandler(handler);
       await engine.enableAudio();
@@ -328,7 +230,7 @@ abstract class _AgoraMediaSession
         token: rawJoinInfo.token,
         channelId: rawJoinInfo.channelName,
         uid: rawJoinInfo.uid,
-        options: _channelOptions(),
+        options: _publishing._channelOptions(),
       );
       _ensureJoinNotCancelled();
 
@@ -341,7 +243,7 @@ abstract class _AgoraMediaSession
     } on RealtimeException catch (error, stack) {
       await _rollbackJoin(error, stack);
     } catch (error, stack) {
-      final mapped = _mapError(error, 'Unable to join the Agora channel.');
+      final mapped = _mapError(error, 'join', stack: stack);
       await _rollbackJoin(mapped, stack);
     } finally {
       _joinCompleter = null;
@@ -355,748 +257,6 @@ abstract class _AgoraMediaSession
         message: 'The Agora join was cancelled.',
         providerId: providerId,
       );
-    }
-  }
-
-  agora.ChannelMediaOptions _channelOptions() => agora.ChannelMediaOptions(
-    channelProfile: agora.ChannelProfileType.channelProfileLiveBroadcasting,
-    clientRoleType: _canPublish
-        ? agora.ClientRoleType.clientRoleBroadcaster
-        : agora.ClientRoleType.clientRoleAudience,
-    autoSubscribeAudio: true,
-    autoSubscribeVideo: true,
-    publishMicrophoneTrack: _canPublish && !_localMuted,
-    publishCameraTrack:
-        _canPublish &&
-        _localVideoEnabled &&
-        !_localScreenShareEnabled &&
-        _processedSink.source == null,
-    publishCustomVideoTrack:
-        _canPublish &&
-        _localVideoEnabled &&
-        !_localScreenShareEnabled &&
-        _processedSink.source != null,
-    customVideoTrackId: _customVideoTrackId,
-    publishScreenCaptureAudio: false,
-    publishScreenCaptureVideo: _canPublish && _localScreenShareEnabled,
-    enableAudioRecordingOrPlayout: true,
-  );
-
-  agora.RtcEngineEventHandler _buildEventHandler() {
-    return agora.RtcEngineEventHandler(
-      onError: (err, message) {
-        final error = RealtimeException(
-          code: RealtimeErrorCode.providerError,
-          message: 'Agora error ${err.name}: $message',
-          details: err,
-          providerId: providerId,
-        );
-        _failPendingJoin(error);
-        _reportFailure(error);
-      },
-      onJoinChannelSuccess: (connection, elapsed) {
-        if (_disposed ||
-            _joinCancelled ||
-            _state == MediaSessionState.leaving ||
-            _state == MediaSessionState.ended) {
-          return;
-        }
-        final uid = connection.localUid ?? _joinInfo?.uid;
-        if (uid != null) {
-          _localUid = uid;
-          final info = _joinInfo;
-          _participants[uid.toString()] = MediaParticipant(
-            id: uid.toString(),
-            displayName: (info?.displayName.isNotEmpty ?? false)
-                ? info!.displayName
-                : uid.toString(),
-            isLocal: true,
-            isMuted: _localMuted,
-            isVideoEnabled: _localVideoEnabled,
-            videoTrack: _localVideoEnabled
-                ? _videoTrack(uid, local: true)
-                : null,
-            joinedAt: DateTime.now(),
-          );
-        }
-        _refreshSnapshot();
-        if (_state != MediaSessionState.connected) {
-          _setState(MediaSessionState.connected);
-        }
-        final completer = _joinCompleter;
-        if (completer != null && !completer.isCompleted) {
-          completer.complete();
-        }
-      },
-      onRtcStats: (connection, value) {
-        _updateConnectionStats(
-          (_connectionStats ??
-                  MediaConnectionStats(
-                    timestampMs: DateTime.now().millisecondsSinceEpoch,
-                  ))
-              .copyWith(
-                timestampMs: DateTime.now().millisecondsSinceEpoch,
-                rttMs: value.lastmileDelay,
-                uplinkPacketLossPercent: value.txPacketLossRate?.toDouble(),
-                downlinkPacketLossPercent: value.rxPacketLossRate?.toDouble(),
-                uploadKbps: value.txKBitRate,
-                downloadKbps: value.rxKBitRate,
-              ),
-        );
-      },
-      onNetworkQuality: (connection, remoteUid, txQuality, rxQuality) {
-        if (remoteUid != 0) return;
-        _updateConnectionStats(
-          (_connectionStats ??
-                  MediaConnectionStats(
-                    timestampMs: DateTime.now().millisecondsSinceEpoch,
-                  ))
-              .copyWith(
-                timestampMs: DateTime.now().millisecondsSinceEpoch,
-                upstreamQuality: _mapAgoraQuality(txQuality),
-                downstreamQuality: _mapAgoraQuality(rxQuality),
-              ),
-        );
-      },
-      onRejoinChannelSuccess: (connection, elapsed) {
-        _refreshSnapshot();
-        _setState(MediaSessionState.connected);
-      },
-      onConnectionStateChanged: (connection, state, reason) {
-        switch (state) {
-          case agora.ConnectionStateType.connectionStateConnecting:
-            if (_state != MediaSessionState.joining) {
-              _setState(MediaSessionState.connecting, reason: reason.name);
-            }
-          case agora.ConnectionStateType.connectionStateConnected:
-            if (_state == MediaSessionState.reconnecting) {
-              _setState(MediaSessionState.connected, reason: reason.name);
-            }
-          case agora.ConnectionStateType.connectionStateReconnecting:
-            _setState(MediaSessionState.reconnecting, reason: reason.name);
-          case agora.ConnectionStateType.connectionStateFailed:
-            final error = RealtimeException(
-              code: RealtimeErrorCode.providerError,
-              message: 'Agora connection failed: ${reason.name}.',
-              providerId: providerId,
-            );
-            _failPendingJoin(error);
-            _reportFailure(error);
-            _setState(
-              MediaSessionState.failed,
-              reason: reason.name,
-              error: error,
-            );
-          case agora.ConnectionStateType.connectionStateDisconnected:
-            final pending = _joinCompleter;
-            if (pending != null && !pending.isCompleted) {
-              final error = RealtimeException(
-                code: RealtimeErrorCode.providerError,
-                message:
-                    'Agora disconnected before join completed: ${reason.name}.',
-                providerId: providerId,
-              );
-              _failPendingJoin(error);
-              _reportFailure(error);
-              _setState(
-                MediaSessionState.failed,
-                reason: reason.name,
-                error: error,
-              );
-              return;
-            }
-            if (_state != MediaSessionState.leaving &&
-                _state != MediaSessionState.ended &&
-                _state != MediaSessionState.disposed &&
-                _state != MediaSessionState.failed &&
-                _state != MediaSessionState.idle) {
-              _setState(MediaSessionState.ended, reason: reason.name);
-            }
-        }
-      },
-      onUserJoined: (connection, uid, elapsed) {
-        final id = uid.toString();
-        final previous = _participants[id];
-        final participant =
-            previous ??
-            MediaParticipant(id: id, displayName: id, joinedAt: DateTime.now());
-        _participants[id] = participant;
-        _refreshSnapshot();
-        if (previous == null) _emit(MediaParticipantJoined(participant));
-        // RTC data has no history: announce to late joiners.
-        if (_localScreenShareEnabled) {
-          unawaited(_announceScreenShareState(true));
-        }
-      },
-      onUserOffline: (connection, uid, reason) {
-        final id = uid.toString();
-        final removed = _participants.remove(id);
-        _remoteScreenState.remove(uid);
-        final screen = _remoteScreenTracks.remove(uid);
-        if (screen != null) {
-          _emit(
-            MediaTrackUnpublished(
-              trackId: screen.id,
-              participantId: id,
-              wasScreenShare: true,
-            ),
-          );
-        }
-        if (_activeSpeakerUid == uid) _activeSpeakerUid = null;
-        _refreshSnapshot();
-        _emit(
-          MediaParticipantLeft(
-            participantId: id,
-            displayName: removed?.displayName,
-          ),
-        );
-      },
-      onUserMuteAudio: (connection, remoteUid, muted) {
-        _updateRemoteParticipant(
-          remoteUid,
-          (participant) => participant.copyWith(isMuted: muted),
-        );
-        _emit(
-          MediaTrackMutedChanged(
-            participantId: remoteUid.toString(),
-            muted: muted,
-            kind: MediaTrackKind.audio,
-          ),
-        );
-      },
-      onUserMuteVideo: (connection, remoteUid, muted) {
-        _setRemoteVideoState(remoteUid, enabled: !muted);
-        _emit(
-          MediaTrackMutedChanged(
-            participantId: remoteUid.toString(),
-            muted: muted,
-            trackId:
-                'agora:${_joinInfo?.channelName}:$remoteUid:${_remoteScreenState.isScreenPublisher(remoteUid) ? 'screen' : 'camera'}',
-          ),
-        );
-      },
-      onRemoteVideoStateChanged:
-          (connection, remoteUid, state, reason, elapsed) {
-            final enabled =
-                state == agora.RemoteVideoState.remoteVideoStateStarting ||
-                state == agora.RemoteVideoState.remoteVideoStateDecoding ||
-                state == agora.RemoteVideoState.remoteVideoStateFrozen;
-            _setRemoteVideoState(remoteUid, enabled: enabled);
-          },
-      onLocalVideoStateChanged: (source, state, reason) {
-        if (state == agora.LocalVideoStreamState.localVideoStreamStateFailed) {
-          if (source == agora.VideoSourceType.videoSourceScreen &&
-              _localScreenShareEnabled) {
-            final track = _localScreenTrack;
-            _localScreenShareEnabled = false;
-            _localScreenTrack = null;
-            if (track != null) {
-              _emit(
-                MediaTrackUnpublished(
-                  trackId: track.id,
-                  participantId: track.participantId,
-                  wasScreenShare: true,
-                ),
-              );
-            }
-            _refreshSnapshot();
-            final engine = _engine;
-            if (engine != null) {
-              unawaited(() async {
-                try {
-                  await engine.stopScreenCapture();
-                  if (!_disposed && !_joinCancelled) {
-                    await _updatePublishOptions();
-                  }
-                } catch (error) {
-                  _reportFailure(
-                    _mapError(
-                      error,
-                      'Unable to stop failed Agora screen capture.',
-                    ),
-                  );
-                }
-              }());
-            }
-          }
-          _reportFailure(
-            RealtimeException(
-              code: RealtimeErrorCode.providerError,
-              message: 'Agora local video failed: ${reason.name}.',
-              providerId: providerId,
-            ),
-          );
-        }
-      },
-      onActiveSpeaker: (connection, uid) {
-        final previous = _activeSpeakerUid;
-        if (previous == uid) return;
-        _activeSpeakerUid = uid == 0 ? null : uid;
-        if (previous != null) {
-          _updateRemoteParticipant(
-            previous,
-            (participant) => participant.copyWith(isSpeaking: false),
-            emitSnapshot: false,
-          );
-          _emit(
-            MediaSpeakingChanged(
-              participantId: previous.toString(),
-              isSpeaking: false,
-            ),
-          );
-        }
-        if (uid != 0) {
-          _updateRemoteParticipant(
-            uid,
-            (participant) => participant.copyWith(isSpeaking: true),
-            emitSnapshot: false,
-          );
-          _emit(
-            MediaSpeakingChanged(
-              participantId: uid.toString(),
-              isSpeaking: true,
-            ),
-          );
-        }
-        _refreshSnapshot();
-      },
-      onStreamMessage: (connection, remoteUid, streamId, data, length, sentTs) {
-        _handleStreamMessage(remoteUid, data, sentTs);
-      },
-      onRequestToken: (connection) {
-        final error = RealtimeException(
-          code: RealtimeErrorCode.providerError,
-          message:
-              'Agora requested a new token before the session finished joining. '
-              'Check the App ID, App Certificate, token TTL, channel name, and UID.',
-          providerId: providerId,
-        );
-        _failPendingJoin(error);
-        _reportFailure(error);
-      },
-      onPermissionError: (permissionType) {
-        final error = RealtimeException(
-          code: RealtimeErrorCode.permissionDenied,
-          message: 'Agora media permission denied: ${permissionType.name}.',
-          providerId: providerId,
-        );
-        _failPendingJoin(error);
-        _reportFailure(error);
-      },
-    );
-  }
-
-  bool _failPendingJoin(RealtimeException error) {
-    final completer = _joinCompleter;
-    if (completer == null || completer.isCompleted) return false;
-    completer.completeError(error);
-    return true;
-  }
-
-  void _handleStreamMessage(int remoteUid, Uint8List data, int sentTs) {
-    final text = utf8.decode(data, allowMalformed: true);
-    String topic = 'data';
-    String message = text;
-    int timestampMs = sentTs > 0
-        ? sentTs
-        : DateTime.now().millisecondsSinceEpoch;
-    final metadata = <String, String>{};
-    try {
-      final decoded = jsonDecode(text);
-      if (decoded is Map) {
-        final map = Map<String, dynamic>.from(decoded);
-        final mappedMessage = map['message']?.toString();
-        if (mappedMessage != null) {
-          message = mappedMessage;
-          topic = map['topic']?.toString().trim().isNotEmpty == true
-              ? map['topic'].toString().trim()
-              : 'chat';
-          if (topic == agoraScreenShareTopic) {
-            final signal = decodeAgoraScreenShareSignal(data);
-            if (signal != null) {
-              _setRemoteScreenPublisher(remoteUid, signal);
-            }
-            return;
-          }
-          final ts = map['timestampMs'];
-          if (ts is num) metadata['senderTimestampMs'] = ts.toInt().toString();
-        }
-      }
-    } catch (_) {
-      // Plain-text data from non-SDK Agora clients remains readable.
-    }
-    final participant = _participants[remoteUid.toString()];
-    final mediaMessage = MediaMessage(
-      participantId: remoteUid.toString(),
-      displayName: participant?.displayName ?? remoteUid.toString(),
-      message: message,
-      topic: topic,
-      timestampMs: timestampMs,
-      providerId: providerId,
-      metadata: metadata,
-    );
-    _messages.add(mediaMessage);
-    _refreshSnapshot();
-    _emit(MediaMessageReceived(mediaMessage));
-  }
-
-  void _setRemoteVideoState(int uid, {required bool enabled}) {
-    _remoteScreenState.onVideo(uid, available: enabled);
-    final id = uid.toString();
-    final before = _participants[id];
-    final previousCamera = before?.videoTrack;
-    final previousScreen = _remoteScreenTracks[uid];
-    final sharing = _remoteScreenState.showsScreen(uid);
-    final track = enabled && !sharing ? _videoTrack(uid, local: false) : null;
-    final screen = sharing
-        ? _videoTrack(uid, local: false, screenShare: true)
-        : null;
-    if (screen == null) {
-      _remoteScreenTracks.remove(uid);
-    } else {
-      _remoteScreenTracks[uid] = screen;
-    }
-    final participant =
-        (before ??
-                MediaParticipant(
-                  id: id,
-                  displayName: id,
-                  joinedAt: DateTime.now(),
-                ))
-            .copyWith(
-              isVideoEnabled: track != null,
-              videoTrack: track,
-              clearVideoTrack: track == null,
-            );
-    _participants[id] = participant;
-    _refreshSnapshot();
-    if (previousCamera != null && track == null) {
-      _emit(
-        MediaTrackUnpublished(trackId: previousCamera.id, participantId: id),
-      );
-    }
-    if (track != null && previousCamera == null) {
-      _emit(MediaTrackPublished(track));
-    }
-    if (previousScreen != null && screen == null) {
-      _emit(
-        MediaTrackUnpublished(
-          trackId: previousScreen.id,
-          participantId: id,
-          wasScreenShare: true,
-        ),
-      );
-    }
-    if (previousScreen == null && screen != null) {
-      _emit(MediaTrackPublished(screen));
-    }
-  }
-
-  void _setRemoteScreenPublisher(int uid, AgoraScreenShareSignal signal) {
-    _remoteScreenState.onSignal(uid, signal);
-    // An announcement may arrive before the first remote video frame.
-    _setRemoteVideoState(uid, enabled: _remoteScreenState.videoAvailable(uid));
-  }
-
-  void _updateRemoteParticipant(
-    int uid,
-    MediaParticipant Function(MediaParticipant participant) update, {
-    bool emitSnapshot = true,
-  }) {
-    final id = uid.toString();
-    final participant =
-        _participants[id] ??
-        MediaParticipant(id: id, displayName: id, joinedAt: DateTime.now());
-    _participants[id] = update(participant);
-    if (emitSnapshot) _refreshSnapshot();
-  }
-
-  AgoraMediaVideoTrack? _videoTrack(
-    int uid, {
-    required bool local,
-    bool screenShare = false,
-  }) {
-    final engine = _engine;
-    final channel = _joinInfo?.channelName;
-    if (engine == null || channel == null) return null;
-    return AgoraMediaVideoTrack(
-      engine: engine,
-      channelId: channel,
-      uid: uid,
-      local: local,
-      screenShare: screenShare,
-      processedSource: local ? _processedSink.source : null,
-    );
-  }
-
-  Future<void> setMutedInternal(bool muted) async {
-    _ensurePublisherActive('microphone');
-    final engine = _requireEngine();
-    try {
-      await engine.enableLocalAudio(!muted);
-      await engine.muteLocalAudioStream(muted);
-      _localMuted = muted;
-      await _updatePublishOptions();
-      _updateLocalParticipant();
-      _refreshSnapshot();
-      _emit(MediaLocalMediaChanged(muted: muted));
-    } catch (error) {
-      throw _mapError(error, 'Unable to update Agora microphone state.');
-    }
-  }
-
-  Future<void> toggleMuteInternal() => setMutedInternal(!_localMuted);
-
-  Future<void> setVideoEnabledInternal(bool enabled) async {
-    _ensurePublisherActive('camera');
-    final engine = _requireEngine();
-    try {
-      if (_processedSink.source == null) {
-        await engine.enableLocalVideo(enabled);
-      } else {
-        await _processedSink.setEnabled(enabled);
-      }
-      await engine.muteLocalVideoStream(!enabled);
-      _localVideoEnabled = enabled;
-      await _updatePublishOptions();
-      final localId = _localUid;
-      final beforeTrack = localId == null
-          ? null
-          : _participants[localId.toString()]?.videoTrack;
-      _updateLocalParticipant();
-      _refreshSnapshot();
-      _emit(MediaLocalMediaChanged(videoEnabled: enabled));
-      if (localId != null) {
-        if (enabled && beforeTrack == null) {
-          final track = _videoTrack(localId, local: true);
-          if (track != null) _emit(MediaTrackPublished(track));
-        } else if (!enabled && beforeTrack != null) {
-          _emit(
-            MediaTrackUnpublished(
-              trackId: beforeTrack.id,
-              participantId: localId.toString(),
-            ),
-          );
-        }
-      }
-    } catch (error) {
-      throw _mapError(error, 'Unable to update Agora camera state.');
-    }
-  }
-
-  Future<void> switchCameraInternal(MediaCameraPosition position) async {
-    if (!capabilities.canSwitchCamera) {
-      throw const RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message:
-            'Agora front/back camera switching is available on Android and '
-            'iOS only. macOS uses the current desktop camera.',
-        providerId: _agoraProviderId,
-      );
-    }
-    _ensurePublisherActive('camera switching');
-    if (position == _cameraPosition) return;
-    try {
-      if (_processedSink.source != null) {
-        await _processedSink.selectCamera(
-          position == MediaCameraPosition.front ? 'front' : 'back',
-        );
-      } else {
-        await _requireEngine().switchCamera();
-      }
-      _cameraPosition = position;
-    } catch (error) {
-      throw _mapError(error, 'Unable to switch the Agora camera.');
-    }
-  }
-
-  Future<void> setScreenShareEnabledInternal(bool enabled) async {
-    if (!capabilities.canScreenShare) {
-      throw const RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message:
-            'Agora sharing is supported on Android, macOS and Windows. '
-            'iOS requires a ReplayKit Broadcast Extension.',
-        providerId: _agoraProviderId,
-      );
-    }
-    _ensurePublisherActive('screen sharing');
-    if (_localScreenShareEnabled == enabled) return;
-    final engine = _requireEngine();
-    try {
-      if (enabled) {
-        await _screenCapture.start(engine, defaultTargetPlatform);
-        _localScreenShareEnabled = true;
-        try {
-          await _updatePublishOptions();
-        } catch (_) {
-          _localScreenShareEnabled = false;
-          await _screenCapture.stop(engine);
-          rethrow;
-        }
-        final uid = _localUid;
-        if (uid != null) {
-          final track = AgoraMediaVideoTrack(
-            engine: engine,
-            channelId: _joinInfo!.channelName,
-            uid: uid,
-            local: true,
-            screenShare: true,
-          );
-          _localScreenTrack = track;
-          _emit(MediaTrackPublished(track));
-        }
-      } else {
-        // Announce while screen video is still published. Agora can reject
-        // data-stream packets after the last AV track is unpublished.
-        await _announceScreenShareState(false);
-        await _screenCapture.stop(engine);
-        _localScreenShareEnabled = false;
-        final track = _localScreenTrack;
-        _localScreenTrack = null;
-        if (track != null) {
-          _emit(
-            MediaTrackUnpublished(
-              trackId: track.id,
-              participantId: track.participantId,
-              wasScreenShare: true,
-            ),
-          );
-        }
-        await _updatePublishOptions();
-      }
-      _refreshSnapshot();
-      // Metadata is separate from media publication. If data transport fails,
-      // capture remains active and the failure is reported independently.
-      if (enabled) unawaited(_announceScreenShareState(true));
-    } catch (error) {
-      _refreshSnapshot();
-      throw _mapError(error, 'Unable to change Agora screen-share state.');
-    }
-  }
-
-  Future<void> _announceScreenShareState(bool enabled) async {
-    if (!_canPublish || _engine == null || _joinCancelled || _disposed) return;
-    try {
-      final streamId = await _ensureDataStream();
-      if (_disposed || _joinCancelled || _engine == null) return;
-      final payload = encodeAgoraScreenShareSignal(
-        enabled
-            ? AgoraScreenShareSignal.started
-            : AgoraScreenShareSignal.stopped,
-      );
-      await _requireEngine().sendStreamMessage(
-        streamId: streamId,
-        data: payload,
-        length: payload.length,
-      );
-    } catch (error) {
-      if (_disposed || _joinCancelled) return;
-      _reportFailure(
-        _mapError(
-          error,
-          'Agora screen-share metadata announcement failed; remote participants may not recognize the screen track.',
-        ),
-      );
-    }
-  }
-
-  Future<List<MediaAudioDevice>> listAudioDevicesInternal() {
-    throw const RealtimeException(
-      code: RealtimeErrorCode.unsupportedFeature,
-      message: 'Agora audio-device enumeration is not exposed yet.',
-      providerId: _agoraProviderId,
-    );
-  }
-
-  Future<void> selectAudioDeviceInternal(MediaAudioDevice device) {
-    throw const RealtimeException(
-      code: RealtimeErrorCode.unsupportedFeature,
-      message: 'Agora audio-device selection is not exposed yet.',
-      providerId: _agoraProviderId,
-    );
-  }
-
-  Future<void> _updatePublishOptions() async {
-    if (!_canPublish) return;
-    await _requireEngine().updateChannelMediaOptions(_channelOptions());
-  }
-
-  void _updateLocalParticipant() {
-    final uid = _localUid;
-    if (uid == null) return;
-    final id = uid.toString();
-    final current = _participants[id];
-    final info = _joinInfo;
-    _participants[id] = MediaParticipant(
-      id: id,
-      displayName:
-          current?.displayName ??
-          ((info?.displayName.isNotEmpty ?? false) ? info!.displayName : id),
-      isLocal: true,
-      isMuted: _localMuted,
-      isVideoEnabled: _localVideoEnabled,
-      isSpeaking: current?.isSpeaking ?? false,
-      videoTrack: _localVideoEnabled ? _videoTrack(uid, local: true) : null,
-      joinedAt: current?.joinedAt ?? DateTime.now(),
-    );
-  }
-
-  @override
-  Future<void> sendMessage(String message, {String topic = 'chat'}) async {
-    _ensureActive();
-    if (!capabilities.canSendData) {
-      throw const RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message:
-            'Agora viewer data sending is disabled because RTC data streams '
-            'are host-only in live broadcasting.',
-        providerId: _agoraProviderId,
-      );
-    }
-    final normalizedMessage = message.trim();
-    final normalizedTopic = topic.trim();
-    if (normalizedMessage.isEmpty) {
-      throw const RealtimeException(
-        code: RealtimeErrorCode.invalidArgument,
-        message: 'Message must not be empty.',
-        providerId: _agoraProviderId,
-      );
-    }
-    if (normalizedTopic.isEmpty) {
-      throw const RealtimeException(
-        code: RealtimeErrorCode.invalidArgument,
-        message: 'Message topic must not be empty.',
-        providerId: _agoraProviderId,
-      );
-    }
-    final streamId = await _ensureDataStream();
-    final encoded = utf8.encode(
-      jsonEncode({
-        'version': 1,
-        'topic': normalizedTopic,
-        'message': normalizedMessage,
-        'timestampMs': DateTime.now().millisecondsSinceEpoch,
-      }),
-    );
-    if (encoded.length > 1024) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.invalidArgument,
-        message:
-            'Agora RTC data-stream messages must be at most 1024 bytes; '
-            'encoded payload is ${encoded.length} bytes.',
-        providerId: providerId,
-      );
-    }
-    try {
-      final data = Uint8List.fromList(encoded);
-      await _requireEngine().sendStreamMessage(
-        streamId: streamId,
-        data: data,
-        length: data.length,
-      );
-    } catch (error) {
-      throw _mapError(error, 'Unable to send Agora data.');
     }
   }
 
@@ -1126,19 +286,17 @@ abstract class _AgoraMediaSession
     if (engine != null) {
       try {
         await engine.leaveChannel();
-      } catch (error) {
+      } catch (error, stack) {
         if (!_joinCancelled) {
-          _reportFailure(
-            _mapError(error, 'Unable to leave the Agora channel.'),
-          );
+          _reportFailure(_mapError(error, 'leave', stack: stack));
         }
       }
     }
     await _tearDownEngine();
-    _participants.clear();
-    _messages.clear();
+    _mapper._participants.clear();
+    _data._messages.clear();
     _localUid = null;
-    _dataStreamId = null;
+    _data._dataStreamId = null;
     _refreshSnapshot();
     _setState(MediaSessionState.ended);
   }
@@ -1180,23 +338,6 @@ abstract class _AgoraMediaSession
     cleanup.finish(domain: providerId);
   }
 
-  void _updateConnectionStats(MediaConnectionStats value) {
-    _connectionStats = value;
-    if (!_statsController.isClosed) _statsController.add(value);
-    _emit(MediaNetworkStatsUpdated(value));
-  }
-
-  MediaNetworkQuality _mapAgoraQuality(agora.QualityType value) =>
-      switch (value) {
-        agora.QualityType.qualityExcellent => MediaNetworkQuality.excellent,
-        agora.QualityType.qualityGood => MediaNetworkQuality.good,
-        agora.QualityType.qualityPoor => MediaNetworkQuality.fair,
-        agora.QualityType.qualityBad => MediaNetworkQuality.poor,
-        agora.QualityType.qualityVbad => MediaNetworkQuality.bad,
-        agora.QualityType.qualityDown => MediaNetworkQuality.down,
-        _ => MediaNetworkQuality.unknown,
-      };
-
   Future<Never> _rollbackJoin(
     RealtimeException primary,
     StackTrace stack,
@@ -1220,17 +361,17 @@ abstract class _AgoraMediaSession
   Future<void> _tearDownEngine() async {
     final engine = _engine;
     final handler = _eventHandler;
-    final customTrackId = _customVideoTrackId;
-    final hadScreenCapture = _localScreenShareEnabled;
-    _localScreenShareEnabled = false;
-    _localScreenTrack = null;
+    final customTrackId = _publishing._customVideoTrackId;
+    final hadScreenCapture = _publishing._localScreenShareEnabled;
+    _publishing._localScreenShareEnabled = false;
+    _publishing._localScreenTrack = null;
     _engine = null;
     _eventHandler = null;
-    _customVideoTrackId = null;
-    _dataStreamId = null;
-    _dataStreamFuture = null;
+    _publishing._customVideoTrackId = null;
+    _data._dataStreamId = null;
+    _data._dataStreamFuture = null;
     final cleanup = Cleanup(timeout: cleanupTimeout);
-    await cleanup.run('processed.input', _processedSink.detach);
+    await cleanup.run('processed.input', _publishing._processedSink.detach);
     if (engine != null) {
       if (hadScreenCapture) {
         await cleanup.run('engine.stopScreenCapture', engine.stopScreenCapture);
@@ -1264,42 +405,6 @@ abstract class _AgoraMediaSession
     return engine;
   }
 
-  Future<int> _ensureDataStream() async {
-    final existing = _dataStreamId;
-    if (existing != null) return existing;
-
-    final inFlight = _dataStreamFuture;
-    if (inFlight != null) return inFlight;
-
-    final engine = _requireEngine();
-    final future = engine
-        .createDataStream(
-          const agora.DataStreamConfig(syncWithAudio: false, ordered: true),
-        )
-        .timeout(const Duration(seconds: 5));
-    _dataStreamFuture = future;
-    try {
-      final streamId = await future;
-      _dataStreamId = streamId;
-      return streamId;
-    } catch (error) {
-      throw _mapError(error, 'Unable to create the Agora data stream.');
-    } finally {
-      _dataStreamFuture = null;
-    }
-  }
-
-  void _ensurePublisherActive(String feature) {
-    _ensureActive();
-    if (!_canPublish) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message: 'Agora viewer sessions cannot use $feature.',
-        providerId: providerId,
-      );
-    }
-  }
-
   void _ensureActive() {
     _ensureNotDisposed();
     if (!_state.isActive) {
@@ -1329,17 +434,19 @@ abstract class _AgoraMediaSession
     _snapshot = _snapshot.copyWith(
       state: _state,
       role: role,
-      participants: _participants.values.toList(growable: false),
-      messages: List<MediaMessage>.unmodifiable(_messages),
+      participants: _mapper._participants.values.toList(growable: false),
+      messages: List<MediaMessage>.unmodifiable(_data._messages),
       localParticipantId: _localUid?.toString(),
       clearLocalParticipantId: _localUid == null,
-      localMuted: _localMuted,
-      localVideoEnabled: _localVideoEnabled,
-      localScreenShareEnabled: _localScreenShareEnabled,
+      localMuted: _publishing._localMuted,
+      localVideoEnabled: _publishing._localVideoEnabled,
+      localScreenShareEnabled: _publishing._localScreenShareEnabled,
       contentShareTrack:
-          _remoteScreenTracks.values.lastOrNull ?? _localScreenTrack,
+          _mapper._remoteScreenTracks.values.lastOrNull ??
+          _publishing._localScreenTrack,
       clearContentShareTrack:
-          _remoteScreenTracks.isEmpty && _localScreenTrack == null,
+          _mapper._remoteScreenTracks.isEmpty &&
+          _publishing._localScreenTrack == null,
       capabilities: _capabilities,
       lastError: error,
       clearLastError: clearLastError,
@@ -1384,88 +491,9 @@ abstract class _AgoraMediaSession
     if (!_disposed && !_eventController.isClosed) _eventController.add(event);
   }
 
-  RealtimeException _mapError(Object error, String message) {
-    if (error is RealtimeException) return error.withProvider(providerId);
-    if (error is TimeoutException) {
-      return RealtimeException(
-        code: RealtimeErrorCode.timeout,
-        message: '$message Timed out waiting for Agora.',
-        details: error,
-        providerId: providerId,
-      );
-    }
-    return RealtimeException(
-      code: RealtimeErrorCode.providerError,
-      message: message,
-      details: error,
-      providerId: providerId,
-    );
-  }
-}
-
-class AgoraInteractiveSession extends _AgoraMediaSession
-    implements InteractiveMediaSession {
-  AgoraInteractiveSession({super.engineFactory}) : super(MediaRole.participant);
-
-  @override
-  Future<void> setMuted(bool muted) => setMutedInternal(muted);
-
-  @override
-  Future<void> toggleMute() => toggleMuteInternal();
-
-  @override
-  Future<void> setVideoEnabled(bool enabled) =>
-      setVideoEnabledInternal(enabled);
-
-  @override
-  Future<void> setScreenShareEnabled(bool enabled) =>
-      setScreenShareEnabledInternal(enabled);
-
-  @override
-  Future<void> switchCamera(MediaCameraPosition position) =>
-      switchCameraInternal(position);
-
-  @override
-  Future<List<MediaAudioDevice>> listAudioDevices() =>
-      listAudioDevicesInternal();
-
-  @override
-  Future<void> selectAudioDevice(MediaAudioDevice device) =>
-      selectAudioDeviceInternal(device);
-}
-
-class AgoraHostSession extends _AgoraMediaSession
-    implements BroadcastHostSession {
-  AgoraHostSession({super.engineFactory}) : super(MediaRole.host);
-
-  @override
-  Future<void> setMuted(bool muted) => setMutedInternal(muted);
-
-  @override
-  Future<void> toggleMute() => toggleMuteInternal();
-
-  @override
-  Future<void> setVideoEnabled(bool enabled) =>
-      setVideoEnabledInternal(enabled);
-
-  @override
-  Future<void> setScreenShareEnabled(bool enabled) =>
-      setScreenShareEnabledInternal(enabled);
-
-  @override
-  Future<void> switchCamera(MediaCameraPosition position) =>
-      switchCameraInternal(position);
-
-  @override
-  Future<List<MediaAudioDevice>> listAudioDevices() =>
-      listAudioDevicesInternal();
-
-  @override
-  Future<void> selectAudioDevice(MediaAudioDevice device) =>
-      selectAudioDeviceInternal(device);
-}
-
-class AgoraViewerSession extends _AgoraMediaSession
-    implements BroadcastViewerSession {
-  AgoraViewerSession({super.engineFactory}) : super(MediaRole.viewer);
+  RealtimeException _mapError(
+    Object error,
+    String stage, {
+    StackTrace? stack,
+  }) => _failures.map(error, stage, stack: stack);
 }

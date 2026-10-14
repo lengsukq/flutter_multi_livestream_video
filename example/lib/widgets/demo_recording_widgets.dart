@@ -138,9 +138,9 @@ class _DemoRecordingButtonState extends State<DemoRecordingButton> {
         if (layout == null || !mounted) return;
       } catch (error) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('$error')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('$error')));
         }
         return;
       }

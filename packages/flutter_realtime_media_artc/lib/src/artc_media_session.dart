@@ -10,6 +10,19 @@ import 'artc_engine.dart';
 import 'artc_join_info.dart';
 import 'artc_media_track.dart';
 
+part 'artc_publishing.dart';
+part 'artc_credential_refresh.dart';
+part 'artc_data_messenger.dart';
+part 'artc_snapshot_mapper.dart';
+
+part 'artc_participant_session.dart';
+
+part 'artc_broadcast_host_session.dart';
+
+part 'artc_broadcast_viewer_session.dart';
+
+_ArtcMediaSession? _activeArtcSession;
+
 typedef ArtcSessionEngineFactory = Future<ArtcEngine> Function();
 
 abstract class _ArtcMediaSession
@@ -21,8 +34,6 @@ abstract class _ArtcMediaSession
         MediaDeviceController {
   _ArtcMediaSession({required this.role, required this.engineFactory});
 
-  static _ArtcMediaSession? _activeSession;
-
   final ArtcSessionEngineFactory engineFactory;
   final StreamController<MediaSessionState> _states =
       StreamController<MediaSessionState>.broadcast();
@@ -33,164 +44,37 @@ abstract class _ArtcMediaSession
 
   ArtcEngine? _engine;
   ArtcJoinInfo? _joinInfo;
-  MediaCredentialRefreshCallback? _refreshCallback;
-  Timer? _refreshTimer;
-  Future<void>? _refreshFuture;
   MediaSessionState _state = MediaSessionState.idle;
   MediaCapabilities _capabilities = const MediaCapabilities.none();
   late MediaSnapshot _snapshot = MediaSnapshot(role: role);
-  MediaCameraPosition _cameraPosition = MediaCameraPosition.front;
-  bool _screenShareEnabled = false;
-  ArtcMediaVideoTrack? _localScreenTrack;
-  final Map<String, ArtcMediaVideoTrack> _remoteScreens = {};
-  int _trackGeneration = 0;
   bool _disposed = false;
   bool _joinCancelled = false;
+  int _connectionGeneration = 0;
   Future<void>? _joinFuture;
   Future<void>? _disposeFuture;
   Duration cleanupTimeout = const Duration(seconds: 10);
 
+  late final _publishing = _ArtcPublishing(this);
+  late final _credentials = _ArtcCredentialRefresh(this);
+  late final _data = _ArtcDataMessenger(this);
+  late final _mapper = _ArtcSnapshotMapper(this);
+
   @override
   final MediaRole role;
-
-  bool _macEffectsInputAvailable = false;
-  bool get _effectsPlatform =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          (defaultTargetPlatform == TargetPlatform.macOS &&
-              _macEffectsInputAvailable));
-  Future<void> _probeProcessedVideoInput() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) return;
-    try {
-      _macEffectsInputAvailable =
-          await MethodChannel(
-            _processedSink.channelName,
-          ).invokeMethod<bool>('probeProcessedVideoInput') ??
-          false;
-    } on MissingPluginException {
-      _macEffectsInputAvailable = false;
-    } on PlatformException {
-      _macEffectsInputAvailable = false;
-    }
-  }
-
-  void _remoteScreenChanged(String userId, bool available) {
-    if (userId == _joinInfo?.userId) return;
-    _ensureRemoteParticipant(userId);
-    final previous = _remoteScreens[userId];
-    if (available) {
-      if (previous != null) return;
-      final next = ArtcMediaVideoTrack(
-        userId: userId,
-        local: false,
-        screenShare: true,
-        generation: _trackGeneration,
-      );
-      _remoteScreens[userId] = next;
-      _emit(MediaTrackPublished(next));
-    } else {
-      if (previous == null) return;
-      _remoteScreens.remove(userId);
-      _emit(
-        MediaTrackUnpublished(
-          trackId: previous.id,
-          participantId: userId,
-          wasScreenShare: true,
-        ),
-      );
-    }
-    _setSnapshot(
-      _snapshot.copyWith(
-        contentShareTrack:
-            _remoteScreens.values.lastOrNull ?? _localScreenTrack,
-        clearContentShareTrack:
-            _remoteScreens.isEmpty && _localScreenTrack == null,
-      ),
-    );
-  }
-
-  final _processedSink = NativeProcessedVideoSink(
-    providerId: 'artc',
-    channelName: 'com.oneplusdream.flutter_realtime_media_artc/methods',
-    attachMethod: 'attachProcessedVideoSource',
-    detachMethod: 'detachProcessedVideoSource',
-  );
-  @override
-  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
-      capabilities.canPublishVideo &&
-      _effectsPlatform &&
-      _processedSink.supports(source) &&
-      source.platform ==
-          (defaultTargetPlatform == TargetPlatform.android
-              ? ProcessedVideoPlatform.android
-              : ProcessedVideoPlatform.macos);
-  @override
-  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
-    _requireActive();
-    if (!supportsProcessedVideoSource(source)) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        providerId: providerId,
-        message:
-            'Processed video input is unavailable for this role or platform.',
-      );
-    }
-    await _processedSink.attach(source);
-  }
-
-  @override
-  Future<void> detachProcessedVideoSource() => _processedSink.detach();
-
-  @override
-  Future<List<MediaDevice>> listMediaDevices({
-    Set<MediaDeviceKind>? kinds,
-  }) async {
-    _requireActive();
-    if (!capabilities.canEnumerateCameras ||
-        (kinds != null && !kinds.contains(MediaDeviceKind.camera))) {
-      return const [];
-    }
-    return List.unmodifiable([
-      for (final camera in await ProcessedVideoBridge().listCameras())
-        MediaDevice(
-          id: camera.id,
-          label: camera.label,
-          kind: MediaDeviceKind.camera,
-        ),
-    ]);
-  }
-
-  @override
-  Future<void> selectMediaDevice(MediaDevice device) async {
-    _requireActive();
-    if (device.kind != MediaDeviceKind.camera ||
-        !capabilities.canSelectCamera) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        providerId: providerId,
-        message: 'This media device cannot be selected.',
-      );
-    }
-    if (_processedSink.source == null) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.invalidState,
-        providerId: providerId,
-        message: 'Prepare the SDK video source before selecting a camera.',
-      );
-    }
-    await _processedSink.selectCamera(device.id);
-  }
 
   @override
   String get providerId => ArtcJoinInfo.providerIdValue;
 
   @override
   MediaCapabilities get capabilities => _capabilities.copyWith(
-    canBlurBackground: _capabilities.canPublishVideo && _effectsPlatform,
+    canBlurBackground:
+        _capabilities.canPublishVideo && _publishing._effectsPlatform,
     canReplaceBackgroundImage:
-        _capabilities.canPublishVideo && _effectsPlatform,
-    canEnumerateCameras: _capabilities.canPublishVideo && _effectsPlatform,
-    canSelectCamera: _capabilities.canPublishVideo && _effectsPlatform,
+        _capabilities.canPublishVideo && _publishing._effectsPlatform,
+    canEnumerateCameras:
+        _capabilities.canPublishVideo && _publishing._effectsPlatform,
+    canSelectCamera:
+        _capabilities.canPublishVideo && _publishing._effectsPlatform,
   );
 
   @override
@@ -209,17 +93,26 @@ abstract class _ArtcMediaSession
   Stream<MediaEvent> get events => _events.stream;
 
   @override
-  void setCredentialRefreshCallback(MediaCredentialRefreshCallback? callback) {
-    _refreshCallback = callback;
-    _scheduleCredentialRefresh();
-  }
-
+  void setCredentialRefreshCallback(MediaCredentialRefreshCallback? callback) =>
+      _credentials.setCredentialRefreshCallback(callback);
   @override
-  int dataPayloadSizeBytes(String message, MediaSendOptions options) => utf8
-      .encode(
-        jsonEncode({'message': message.trim(), 'topic': options.topic.trim()}),
-      )
-      .length;
+  int dataPayloadSizeBytes(String message, MediaSendOptions options) =>
+      _data.dataPayloadSizeBytes(message, options);
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      _publishing.supportsProcessedVideoSource(source);
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) =>
+      _publishing.attachProcessedVideoSource(source);
+  @override
+  Future<void> detachProcessedVideoSource() =>
+      _publishing.detachProcessedVideoSource();
+  @override
+  Future<List<MediaDevice>> listMediaDevices({Set<MediaDeviceKind>? kinds}) =>
+      _publishing.listMediaDevices(kinds: kinds);
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) =>
+      _publishing.selectMediaDevice(device);
 
   @override
   Future<void> join(MediaJoinInfo joinInfo) {
@@ -262,14 +155,15 @@ abstract class _ArtcMediaSession
         'ARTC join information does not match this session.',
       );
     }
-    if (_activeSession != null && !identical(_activeSession, this)) {
+    if (_activeArtcSession != null && !identical(_activeArtcSession, this)) {
       throw _error(
         RealtimeErrorCode.invalidState,
         'ARTC supports one active engine session per app process.',
       );
     }
 
-    _activeSession = this;
+    _connectionGeneration++;
+    _activeArtcSession = this;
     _joinInfo = joinInfo;
     _capabilities = switch (role) {
       MediaRole.participant => const MediaCapabilities(
@@ -311,9 +205,9 @@ abstract class _ArtcMediaSession
       _engine ??= await engineFactory();
       _ensureJoinNotCancelled();
       _setState(MediaSessionState.connecting);
-      await _engine!.join(joinInfo, _createEngineEvents());
+      await _engine!.join(joinInfo, _mapper._createEngineEvents());
       _ensureJoinNotCancelled();
-      await _probeProcessedVideoInput();
+      await _publishing._probeProcessedVideoInput();
       _ensureJoinNotCancelled();
       final local = MediaParticipant(
         id: joinInfo.userId,
@@ -335,16 +229,21 @@ abstract class _ArtcMediaSession
         ),
       );
       _setState(MediaSessionState.connected);
-      _scheduleCredentialRefresh();
-    } catch (error) {
+      _credentials._scheduleCredentialRefresh();
+    } catch (error, stack) {
       final cancelled = _disposed || _joinCancelled;
       final mapped = cancelled
-          ? _error(RealtimeErrorCode.cancelled, 'The ARTC join was cancelled.')
-          : _mapError(error, 'Unable to join the ARTC channel.');
-      await _releaseEngine(leave: !cancelled);
-      if (identical(_activeSession, this)) _activeSession = null;
+          ? _error(RealtimeErrorCode.cancelled, 'artc.join cancelled.')
+          : _mapError(error, 'join', stack: stack);
+      final cleanup = Cleanup(timeout: cleanupTimeout);
+      if (!cancelled) {
+        await cleanup.run('rollback.leave', () => _releaseEngine(leave: true));
+      }
+      await cleanup.run('rollback.dispose', () => _releaseEngine(leave: false));
+      if (identical(_activeArtcSession, this)) _activeArtcSession = null;
       if (!cancelled) _setState(MediaSessionState.failed, error: mapped);
-      throw mapped;
+      cleanup.finish(domain: providerId, cause: mapped);
+      Error.throwWithStackTrace(mapped, stack);
     }
   }
 
@@ -360,22 +259,29 @@ abstract class _ArtcMediaSession
     _leaveFuture = null;
   });
   Future<void> _leave() async {
+    _connectionGeneration++;
     if (_disposed ||
         _state == MediaSessionState.ended ||
         _state == MediaSessionState.idle) {
       return;
     }
-    _refreshTimer?.cancel();
-    _refreshTimer = null;
+    _credentials.cancel();
     _joinCancelled = _joinCancelled || _joinFuture != null;
     _setState(MediaSessionState.leaving);
-    await _releaseEngine(leave: true);
-    if (_joinCancelled) await _releaseEngine(leave: false);
-    _activeSession = null;
-    _trackGeneration++;
-    _screenShareEnabled = false;
-    _localScreenTrack = null;
-    _remoteScreens.clear();
+    final cleanup = Cleanup(timeout: cleanupTimeout);
+    var left = false;
+    await cleanup.run('engine.leave', () async {
+      await _releaseEngine(leave: true);
+      left = true;
+    });
+    if (!left || _joinCancelled) {
+      await cleanup.run('engine.dispose', () => _releaseEngine(leave: false));
+    }
+    if (identical(_activeArtcSession, this)) _activeArtcSession = null;
+    _mapper._trackGeneration++;
+    _publishing._screenShareEnabled = false;
+    _publishing._localScreenTrack = null;
+    _mapper._remoteScreens.clear();
     _setSnapshot(
       _snapshot.copyWith(
         participants: const [],
@@ -388,25 +294,26 @@ abstract class _ArtcMediaSession
       ),
     );
     _setState(MediaSessionState.ended);
+    cleanup.finish(domain: providerId);
   }
 
   @override
   Future<void> dispose() => _disposeFuture ??= _dispose();
 
   Future<void> _dispose() async {
+    _connectionGeneration++;
     _disposed = true;
     _joinCancelled = true;
     final cleanup = Cleanup(timeout: cleanupTimeout);
     await cleanup.run('refresh.timer', () async {
-      _refreshTimer?.cancel();
-      _refreshCallback = null;
+      await _credentials.dispose();
     });
     if (_state.isActive || _state == MediaSessionState.connecting) {
       await cleanup.run('engine.leave', () => _releaseEngine(leave: true));
     }
     await cleanup.run('engine.dispose', () => _releaseEngine(leave: false));
     await cleanup.run('active.owner', () async {
-      if (identical(_activeSession, this)) _activeSession = null;
+      if (identical(_activeArtcSession, this)) _activeArtcSession = null;
     });
     await cleanup.run('terminal', () async {
       _setState(MediaSessionState.disposed);
@@ -426,15 +333,15 @@ abstract class _ArtcMediaSession
   Future<void> _releaseEngine({required bool leave}) async {
     final engine = _engine;
     final cleanup = Cleanup(timeout: cleanupTimeout);
-    await cleanup.run('processed.input', _processedSink.detach);
+    await cleanup.run('processed.input', _publishing._processedSink.detach);
     if (engine != null) {
-      if (_screenShareEnabled) {
+      if (_publishing._screenShareEnabled) {
         await cleanup.run(
           'screen.stop',
           () => engine.setScreenShareEnabled(false),
         );
-        _screenShareEnabled = false;
-        _localScreenTrack = null;
+        _publishing._screenShareEnabled = false;
+        _publishing._localScreenTrack = null;
       }
       if (leave) {
         await cleanup.run('engine.leave', engine.leave);
@@ -446,265 +353,17 @@ abstract class _ArtcMediaSession
     cleanup.finish(domain: providerId);
   }
 
-  ArtcEngineEvents _createEngineEvents() => ArtcEngineEvents(
-    onError: _onNativeError,
-    onParticipantJoined: _participantJoined,
-    onParticipantLeft: _participantLeft,
-    onRemoteVideoChanged: _remoteVideoChanged,
-    onRemoteScreenChanged: _remoteScreenChanged,
-    onLocalScreenShareChanged: (available) {
-      if (_state.isActive && !_disposed) {
-        _syncLocalScreenShare(available);
-      }
-    },
-    onRemoteAudioChanged: _remoteAudioChanged,
-    onMessage: _receiveMessage,
-    onReconnecting: () => _setState(MediaSessionState.reconnecting),
-    onRecovered: () {
-      if (_state == MediaSessionState.reconnecting) {
-        _setState(MediaSessionState.connected);
-      }
-    },
-    onAuthWillExpire: () => unawaited(_refreshAndRejoin()),
-  );
-
-  void _participantJoined(String userId) {
-    if (userId.isEmpty || userId == _joinInfo?.userId) return;
-    final existing = _snapshot.participants.where((item) => item.id == userId);
-    if (existing.isNotEmpty) return;
-    final participant = MediaParticipant(id: userId, displayName: userId);
-    _setSnapshot(
-      _snapshot.copyWith(
-        participants: [..._snapshot.participants, participant],
-      ),
-    );
-    _emit(MediaParticipantJoined(participant));
-  }
-
-  void _participantLeft(String userId) {
-    final existing = _participantById(userId);
-    if (existing == null || existing.isLocal) return;
-    final shared = _remoteScreens.remove(userId);
-    if (shared != null) {
-      _emit(
-        MediaTrackUnpublished(
-          trackId: shared.id,
-          participantId: userId,
-          wasScreenShare: true,
-        ),
-      );
-    }
-    _setSnapshot(
-      _snapshot.copyWith(
-        participants: _snapshot.participants
-            .where((item) => item.id != userId)
-            .toList(),
-        contentShareTrack:
-            _remoteScreens.values.lastOrNull ?? _localScreenTrack,
-        clearContentShareTrack:
-            _remoteScreens.isEmpty && _localScreenTrack == null,
-      ),
-    );
-    _emit(
-      MediaParticipantLeft(
-        participantId: userId,
-        displayName: existing.displayName,
-      ),
-    );
-  }
-
-  void _remoteVideoChanged(String userId, bool available) {
-    if (userId == _joinInfo?.userId) return;
-    _ensureRemoteParticipant(userId);
-    final participants = _snapshot.participants.map((item) {
-      if (item.id != userId) return item;
-      final track = available
-          ? ArtcMediaVideoTrack(
-              userId: userId,
-              local: false,
-              generation: _trackGeneration,
-            )
-          : null;
-      return item.copyWith(
-        isVideoEnabled: available,
-        videoTrack: track,
-        clearVideoTrack: !available,
-      );
-    }).toList();
-    _setSnapshot(_snapshot.copyWith(participants: participants));
-    if (available) {
-      final track = participants
-          .firstWhere((item) => item.id == userId)
-          .videoTrack!;
-      _emit(MediaTrackPublished(track));
-    } else {
-      _emit(
-        MediaTrackUnpublished(
-          trackId: 'artc:$userId:camera:$_trackGeneration',
-          participantId: userId,
-        ),
-      );
-    }
-  }
-
-  void _remoteAudioChanged(String userId, bool available) {
-    if (userId == _joinInfo?.userId) return;
-    _ensureRemoteParticipant(userId);
-    final participants = _snapshot.participants
-        .map(
-          (item) =>
-              item.id == userId ? item.copyWith(isMuted: !available) : item,
-        )
-        .toList();
-    _setSnapshot(_snapshot.copyWith(participants: participants));
-    _emit(
-      MediaTrackMutedChanged(
-        participantId: userId,
-        muted: !available,
-        kind: MediaTrackKind.audio,
-      ),
-    );
-  }
-
-  void _ensureRemoteParticipant(String userId) {
-    if (_snapshot.participants.any((item) => item.id == userId)) return;
-    final participant = MediaParticipant(id: userId, displayName: userId);
-    _setSnapshot(
-      _snapshot.copyWith(
-        participants: [..._snapshot.participants, participant],
-      ),
-    );
-    _emit(MediaParticipantJoined(participant));
-  }
-
-  void _receiveMessage(String userId, String rawData) {
-    if (rawData.isEmpty) return;
-    var message = rawData;
-    var topic = 'chat';
-    try {
-      final decoded = jsonDecode(rawData);
-      if (decoded is Map) {
-        message = decoded['message']?.toString() ?? rawData;
-        topic = decoded['topic']?.toString() ?? 'chat';
-      }
-    } on FormatException {
-      // Preserve raw messages sent by non-SDK clients.
-    }
-    final item = MediaMessage(
-      participantId: userId,
-      displayName: _participantById(userId)?.displayName ?? userId,
-      message: message,
-      topic: topic,
-      timestampMs: DateTime.now().millisecondsSinceEpoch,
-      providerId: providerId,
-    );
-    _appendMessage(item);
-    _emit(MediaMessageReceived(item));
-  }
-
   void _onNativeError(int code, String message) {
     final error = RealtimeException(
       code: RealtimeErrorCode.providerError,
-      message: 'ARTC reported an error: $message',
+      message: 'artc.nativeEvent failed.',
+      domain: 'media',
+      operation: 'nativeEvent',
       details: {'code': code, 'message': message},
       providerId: providerId,
     );
     _setSnapshot(_snapshot.copyWith(lastError: error));
     _emit(MediaFailureEvent(error));
-  }
-
-  MediaParticipant? _participantById(String userId) {
-    for (final participant in _snapshot.participants) {
-      if (participant.id == userId) return participant;
-    }
-    return null;
-  }
-
-  Future<void> _refreshAndRejoin() {
-    final current = _refreshFuture;
-    if (current != null) return current;
-    late final Future<void> future;
-    future = _refreshAndRejoinOnce().whenComplete(() {
-      if (identical(_refreshFuture, future)) _refreshFuture = null;
-    });
-    _refreshFuture = future;
-    return future;
-  }
-
-  Future<void> _refreshAndRejoinOnce() async {
-    final callback = _refreshCallback;
-    final current = _joinInfo;
-    if (_disposed || current == null || callback == null) {
-      _onNativeError(
-        -2,
-        'ARTC credentials are expiring and no refresh callback is configured.',
-      );
-      return;
-    }
-    _refreshTimer?.cancel();
-    _setState(MediaSessionState.reconnecting);
-    try {
-      final rawRefreshed = await callback(current);
-      final refreshed = _validateRefreshedInfo(current, rawRefreshed);
-      final source = _processedSink.source;
-      await _processedSink.detach();
-      await _engine!.leave();
-      _joinInfo = refreshed;
-      _trackGeneration++;
-      await _engine!.join(refreshed, _createEngineEvents());
-      await _probeProcessedVideoInput();
-      if (source != null) {
-        await _processedSink.attach(source);
-        await _engine!.setVideoEnabled(_snapshot.localVideoEnabled);
-      }
-      _setSnapshot(_snapshot.copyWith(clearLastError: true));
-      _setState(MediaSessionState.connected);
-      _scheduleCredentialRefresh();
-    } catch (error) {
-      final mapped = _mapError(error, 'Unable to renew ARTC credentials.');
-      _setSnapshot(_snapshot.copyWith(lastError: mapped));
-      _emit(MediaFailureEvent(mapped));
-      _setState(MediaSessionState.failed, error: mapped);
-      await _releaseEngine(leave: true);
-      _activeSession = null;
-    }
-  }
-
-  ArtcJoinInfo _validateRefreshedInfo(
-    MediaJoinInfo current,
-    MediaJoinInfo refreshed,
-  ) {
-    if (current is! ArtcJoinInfo ||
-        refreshed is! ArtcJoinInfo ||
-        refreshed.providerId != current.providerId ||
-        refreshed.roomCode != current.roomCode ||
-        refreshed.participantId != current.participantId ||
-        refreshed.userId != current.userId ||
-        refreshed.channelId != current.channelId ||
-        refreshed.appId != current.appId ||
-        refreshed.role != current.role) {
-      throw _error(
-        RealtimeErrorCode.invalidArgument,
-        'ARTC refresh credentials changed the active room or identity.',
-      );
-    }
-    return refreshed;
-  }
-
-  void _scheduleCredentialRefresh() {
-    _refreshTimer?.cancel();
-    final info = _joinInfo;
-    if (info == null ||
-        _refreshCallback == null ||
-        _state != MediaSessionState.connected) {
-      return;
-    }
-    final delayMs =
-        info.expiresAtMs - 30000 - DateTime.now().millisecondsSinceEpoch;
-    _refreshTimer = Timer(
-      Duration(milliseconds: delayMs > 0 ? delayMs : 0),
-      () => unawaited(_refreshAndRejoin()),
-    );
   }
 
   void _setState(MediaSessionState next, {RealtimeException? error}) {
@@ -739,18 +398,30 @@ abstract class _ArtcMediaSession
     _snapshots.add(next);
   }
 
-  void _appendMessage(MediaMessage message) {
-    _setSnapshot(
-      _snapshot.copyWith(messages: [..._snapshot.messages, message]),
-    );
-  }
-
-  RealtimeException _mapError(Object error, String fallback) {
-    if (error is RealtimeException) return error.withProvider(providerId);
-    return RealtimeException(
-      code: RealtimeErrorCode.unknown,
-      message: error.toString().isEmpty ? fallback : error.toString(),
+  RealtimeException _mapError(Object error, String stage, {StackTrace? stack}) {
+    final typed = error is RealtimeException ? error : null;
+    return normalizeRealtimeException(
+      RealtimeException(
+        code:
+            (typed?.code == RealtimeErrorCode.unknown ? null : typed?.code) ??
+            (error is TimeoutException
+                ? RealtimeErrorCode.timeout
+                : RealtimeErrorCode.providerError),
+        message: 'artc.$stage failed.',
+        providerId: providerId,
+        domain: 'media',
+        operation: stage,
+        cause: typed?.cause ?? error,
+        details: typed?.details,
+        statusCode: typed?.statusCode,
+        recoverable: typed?.recoverable ?? false,
+        suggestedAction: typed?.suggestedAction,
+        stackTrace: stack ?? typed?.stackTrace,
+      ),
+      domain: 'media',
+      operation: stage,
       providerId: providerId,
+      stackTrace: stack,
     );
   }
 
@@ -774,248 +445,4 @@ abstract class _ArtcMediaSession
       );
     }
   }
-
-  Future<void> _sendMessage(String message, {String topic = 'chat'}) async {
-    _requireActive();
-    _requireCapability(_capabilities.canSendData, 'sending data messages');
-    if (_snapshot.localMuted && !_snapshot.localVideoEnabled) {
-      throw _error(
-        RealtimeErrorCode.invalidState,
-        'ARTC data messages require an active local audio or video stream. Enable the microphone or camera first.',
-      );
-    }
-    final content = message.trim();
-    final normalizedTopic = topic.trim();
-    if (content.isEmpty || normalizedTopic.isEmpty) {
-      throw _error(
-        RealtimeErrorCode.invalidArgument,
-        'ARTC messages and topics must not be empty.',
-      );
-    }
-    final envelope = jsonEncode({'message': content, 'topic': normalizedTopic});
-    if (utf8.encode(envelope).length > 1000) {
-      throw _error(
-        RealtimeErrorCode.invalidArgument,
-        'ARTC data messages must be at most 1000 UTF-8 bytes.',
-      );
-    }
-    await _engine!.sendMessage(content, normalizedTopic);
-    final info = _joinInfo!;
-    final item = MediaMessage(
-      participantId: info.userId,
-      displayName: info.displayName,
-      message: content,
-      topic: normalizedTopic,
-      timestampMs: DateTime.now().millisecondsSinceEpoch,
-      providerId: providerId,
-    );
-    _appendMessage(item);
-  }
-
-  Future<void> _setMuted(bool muted) async {
-    _requireActive();
-    _requireCapability(_capabilities.canPublishAudio, 'publishing audio');
-    await _engine!.setMuted(muted);
-    _setSnapshot(_snapshot.copyWith(localMuted: muted));
-    _emit(MediaLocalMediaChanged(muted: muted));
-  }
-
-  Future<void> _setVideoEnabled(bool enabled) async {
-    _requireActive();
-    _requireCapability(_capabilities.canPublishVideo, 'publishing video');
-    await _processedSink.setEnabled(enabled);
-    await _engine!.setVideoEnabled(enabled);
-    if (_joinInfo case final info?) {
-      final localTrack = enabled
-          ? ArtcMediaVideoTrack(
-              userId: info.userId,
-              local: true,
-              generation: _trackGeneration,
-            )
-          : null;
-      final participants = _snapshot.participants
-          .map(
-            (item) => item.isLocal
-                ? item.copyWith(
-                    isVideoEnabled: enabled,
-                    videoTrack: localTrack,
-                    clearVideoTrack: !enabled,
-                  )
-                : item,
-          )
-          .toList();
-      _setSnapshot(
-        _snapshot.copyWith(
-          participants: participants,
-          localVideoEnabled: enabled,
-        ),
-      );
-      if (enabled) {
-        _emit(MediaTrackPublished(localTrack!));
-      } else {
-        _emit(
-          MediaTrackUnpublished(
-            trackId: 'artc:${info.userId}:camera:$_trackGeneration',
-            participantId: info.userId,
-          ),
-        );
-      }
-    }
-    _emit(MediaLocalMediaChanged(videoEnabled: enabled));
-  }
-
-  Future<void> _switchCamera(MediaCameraPosition position) async {
-    _requireActive();
-    _requireCapability(_capabilities.canSwitchCamera, 'switching cameras');
-    if (_cameraPosition == position) return;
-    if (_processedSink.source != null) {
-      await _processedSink.selectCamera(
-        position == MediaCameraPosition.front ? 'front' : 'back',
-      );
-    } else {
-      await _engine!.switchCamera(position);
-    }
-    _cameraPosition = position;
-  }
-
-  Future<void> _setScreenShareEnabled(bool enabled) async {
-    _requireActive();
-    _requireCapability(capabilities.canScreenShare, 'screen sharing');
-    if (_screenShareEnabled == enabled) return;
-    await _engine!.setScreenShareEnabled(enabled);
-    // The vendor will also send a publish-state callback. Reconciliation is
-    // idempotent whether that callback arrives before or after this response.
-    _syncLocalScreenShare(enabled);
-  }
-
-  void _syncLocalScreenShare(bool enabled) {
-    if (_screenShareEnabled == enabled) return;
-    _screenShareEnabled = enabled;
-    final info = _joinInfo;
-    if (info == null) return;
-    final previous = _localScreenTrack;
-    _localScreenTrack = enabled
-        ? ArtcMediaVideoTrack(
-            userId: info.userId,
-            local: true,
-            screenShare: true,
-            generation: _trackGeneration,
-          )
-        : null;
-    _setSnapshot(
-      _snapshot.copyWith(
-        localScreenShareEnabled: enabled,
-        contentShareTrack:
-            _remoteScreens.values.lastOrNull ?? _localScreenTrack,
-        clearContentShareTrack:
-            _remoteScreens.isEmpty && _localScreenTrack == null,
-      ),
-    );
-    if (_localScreenTrack case final next?) {
-      _emit(MediaTrackPublished(next));
-    } else if (previous != null) {
-      _emit(
-        MediaTrackUnpublished(
-          trackId: previous.id,
-          participantId: info.userId,
-          wasScreenShare: true,
-        ),
-      );
-    }
-  }
-
-  Future<List<MediaAudioDevice>> _listAudioDevices() async {
-    _requireActive();
-    _requireCapability(
-      _capabilities.canEnumerateAudioDevices,
-      'audio device enumeration',
-    );
-    return const [];
-  }
-
-  Future<void> _selectAudioDevice(MediaAudioDevice device) async {
-    _requireActive();
-    _requireCapability(
-      _capabilities.canEnumerateAudioDevices,
-      'audio device selection',
-    );
-  }
-}
-
-class ArtcParticipantSession extends _ArtcMediaSession
-    implements InteractiveMediaSession {
-  ArtcParticipantSession({required super.engineFactory})
-    : super(role: MediaRole.participant);
-
-  @override
-  Future<void> setMuted(bool muted) => _setMuted(muted);
-
-  @override
-  Future<void> toggleMute() => setMuted(!snapshot.localMuted);
-
-  @override
-  Future<void> setVideoEnabled(bool enabled) => _setVideoEnabled(enabled);
-
-  @override
-  Future<void> setScreenShareEnabled(bool enabled) =>
-      _setScreenShareEnabled(enabled);
-
-  @override
-  Future<void> switchCamera(MediaCameraPosition position) =>
-      _switchCamera(position);
-
-  @override
-  Future<List<MediaAudioDevice>> listAudioDevices() => _listAudioDevices();
-
-  @override
-  Future<void> selectAudioDevice(MediaAudioDevice device) =>
-      _selectAudioDevice(device);
-
-  @override
-  Future<void> sendMessage(String message, {String topic = 'chat'}) =>
-      _sendMessage(message, topic: topic);
-}
-
-class ArtcBroadcastHostSession extends _ArtcMediaSession
-    implements BroadcastHostSession {
-  ArtcBroadcastHostSession({required super.engineFactory})
-    : super(role: MediaRole.host);
-
-  @override
-  Future<void> setMuted(bool muted) => _setMuted(muted);
-
-  @override
-  Future<void> toggleMute() => setMuted(!snapshot.localMuted);
-
-  @override
-  Future<void> setVideoEnabled(bool enabled) => _setVideoEnabled(enabled);
-
-  @override
-  Future<void> setScreenShareEnabled(bool enabled) =>
-      _setScreenShareEnabled(enabled);
-
-  @override
-  Future<void> switchCamera(MediaCameraPosition position) =>
-      _switchCamera(position);
-
-  @override
-  Future<List<MediaAudioDevice>> listAudioDevices() => _listAudioDevices();
-
-  @override
-  Future<void> selectAudioDevice(MediaAudioDevice device) =>
-      _selectAudioDevice(device);
-
-  @override
-  Future<void> sendMessage(String message, {String topic = 'chat'}) =>
-      _sendMessage(message, topic: topic);
-}
-
-class ArtcBroadcastViewerSession extends _ArtcMediaSession
-    implements BroadcastViewerSession {
-  ArtcBroadcastViewerSession({required super.engineFactory})
-    : super(role: MediaRole.viewer);
-
-  @override
-  Future<void> sendMessage(String message, {String topic = 'chat'}) =>
-      _sendMessage(message, topic: topic);
 }

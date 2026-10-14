@@ -133,6 +133,25 @@ void main() {
   });
 
   test(
+    'native error payload stays in diagnostics rather than the public message',
+    () async {
+      final engine = _ScreenEngine();
+      final session = AgoraInteractiveSession(engineFactory: () => engine);
+      await session.join(_credential());
+      engine.handler!.onError!(
+        agora.ErrorCodeType.errFailed,
+        'secret native payload',
+      );
+      expect(session.snapshot.lastError!.code, RealtimeErrorCode.providerError);
+      expect(
+        session.snapshot.lastError!.message,
+        isNot(contains('secret native payload')),
+      );
+      await session.dispose();
+    },
+  );
+
+  test(
     'Agora Android publishes the captured screen and restores camera options on stop',
     () async {
       final engine = _ScreenEngine();

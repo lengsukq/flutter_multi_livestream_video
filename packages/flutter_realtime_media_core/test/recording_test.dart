@@ -90,11 +90,15 @@ void main() {
         'GridView',
       );
 
-      expect(() => CloudRecordingBlueprints.buildDescriptor(
-            providerId: 'chime',
-            roomCode: 'chime-meeting-99',
-            options: RecordingOptions.cloud(layout: RecordingLayout.featuredParticipant),
-          ), throwsUnsupportedError,
+      expect(
+        () => CloudRecordingBlueprints.buildDescriptor(
+          providerId: 'chime',
+          roomCode: 'chime-meeting-99',
+          options: RecordingOptions.cloud(
+            layout: RecordingLayout.featuredParticipant,
+          ),
+        ),
+        throwsUnsupportedError,
       );
     });
 

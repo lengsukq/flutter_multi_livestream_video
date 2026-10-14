@@ -74,6 +74,122 @@ Map<String, dynamic> _joinJson({
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final disposing in [false, true]) {
+    test(
+      'late IVS refresh preserves the next active owner after $disposing',
+      () async {
+        final engine = _FakeIvsEngine();
+        final factory = IvsSessionFactory(engineFactory: () async => engine);
+        final initial = IvsJoinInfo.fromJson(
+          _joinJson(expiresAtMs: DateTime.now().millisecondsSinceEpoch + 10),
+        );
+        final session = factory.createSession(initial);
+        addTearDown(session.dispose);
+
+        final pending = Completer<MediaJoinInfo>();
+        final started = Completer<void>();
+        (session as MediaCredentialRefreshable).setCredentialRefreshCallback((
+          current,
+        ) {
+          started.complete();
+          return pending.future;
+        });
+        await session.join(initial);
+        await started.future;
+        if (disposing) {
+          await session.dispose();
+        } else {
+          await session.leave();
+        }
+        final oldJoins = engine.calls.length;
+        final calls = List<String>.of(engine.calls);
+        final nextFactory = IvsSessionFactory(
+          engineFactory: () async => _FakeIvsEngine(),
+        );
+        final nextInfo = IvsJoinInfo.fromJson(_joinJson());
+        final next = nextFactory.createSession(nextInfo);
+        addTearDown(next.dispose);
+        await next.join(nextInfo);
+        engine.events.onParticipantJoined!('stale', 'Stale');
+        pending.complete(IvsJoinInfo.fromJson(_joinJson()));
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+        expect(engine.calls.length, oldJoins);
+        expect(engine.calls, calls);
+        expect(
+          session.state,
+          disposing ? MediaSessionState.disposed : MediaSessionState.ended,
+        );
+        expect(
+          session.snapshot.participants.any((p) => p.id == 'stale'),
+          isFalse,
+        );
+        expect(next.state, MediaSessionState.connected);
+        final contender = nextFactory.createSession(nextInfo);
+        await expectLater(
+          contender.join(nextInfo),
+          throwsA(
+            isA<RealtimeException>().having(
+              (error) => error.code,
+              'active owner',
+              RealtimeErrorCode.invalidState,
+            ),
+          ),
+        );
+        await contender.dispose();
+      },
+    );
+  }
+
+  test('IVS native error payload stays out of public messages', () async {
+    final engine = _FakeIvsEngine();
+    final factory = IvsSessionFactory(engineFactory: () async => engine);
+    final info = factory.parseJoinInfo(_joinJson());
+    final session = factory.createSession(info);
+    addTearDown(session.dispose);
+    await session.join(info);
+    engine.events.onError!(-99, 'native secret');
+    expect(session.snapshot.lastError!.code, RealtimeErrorCode.providerError);
+    expect(
+      session.snapshot.lastError!.message,
+      isNot(contains('native secret')),
+    );
+  });
+  test(
+    'IVS rollback preserves join error and attempts disposal after leave fails',
+    () async {
+      final engine = _FaultIvsEngine();
+      final factory = IvsSessionFactory(engineFactory: () async => engine);
+      final info = factory.parseJoinInfo(_joinJson());
+      final session = factory.createSession(info);
+      await expectLater(
+        session.join(info),
+        throwsA(
+          isA<RealtimeException>()
+              .having(
+                (error) => error.code,
+                'primary code',
+                RealtimeErrorCode.invalidCredential,
+              )
+              .having(
+                (error) => error.message,
+                'safe message',
+                isNot(contains('native secret')),
+              )
+              .having((error) => error.details, 'secondary cleanup', isNotNull),
+        ),
+      );
+      expect(engine.calls, contains('dispose'));
+      final nextFactory = IvsSessionFactory(
+        engineFactory: () async => _FakeIvsEngine(),
+      );
+      final next = nextFactory.createSession(info);
+      await next.join(info);
+      await next.dispose();
+      await session.dispose();
+    },
+  );
+
   test('IVS late join cannot revive a room after leave', () async {
     final pending = Completer<void>();
     final engine = _FakeIvsEngine()..pendingJoin = pending.future;
@@ -340,4 +456,19 @@ void main() {
       );
     },
   );
+}
+
+class _FaultIvsEngine extends _FakeIvsEngine {
+  @override
+  Future<void> join(IvsJoinInfo info, IvsEngineEvents events) async {
+    throw const RealtimeException(
+      code: RealtimeErrorCode.invalidCredential,
+      message: 'native secret',
+    );
+  }
+
+  @override
+  Future<void> leave() async {
+    throw StateError('failed leave');
+  }
 }

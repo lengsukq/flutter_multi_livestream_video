@@ -17,6 +17,10 @@ import 'media_session.dart';
 import 'media_background_effects_controller.dart';
 import 'media_room_extensions.dart';
 
+part 'room_presence.dart';
+part 'room_recovery.dart';
+part 'room_management.dart';
+
 /// High-level room lifecycle returned by `MediaClient`.
 ///
 /// The underlying [session] stays the source of media state and controls. This
@@ -53,43 +57,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   }) {
     _stateSubscription = session.states.listen(_onStateChanged);
     _eventSubscription = session.events.listen(_onSessionEvent);
-    _startHeartbeat();
-  }
-
-  MediaRoomManagement _managementExecutor(
-    ManagementCapability capability,
-    String operation,
-  ) {
-    if (!capability.supported) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message:
-            'Cannot $operation because the active provider does not support it.',
-        providerId: providerId,
-      );
-    }
-    if (capability.canExecuteOnClient && session is MediaRoomManagement) {
-      return session as MediaRoomManagement;
-    }
-    return _requireManagement(operation);
-  }
-
-  MediaRoomModeration _moderationExecutor(
-    ManagementCapability capability,
-    String operation,
-  ) {
-    if (!capability.supported) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message:
-            'Cannot $operation because the active provider does not support it.',
-        providerId: providerId,
-      );
-    }
-    if (capability.canExecuteOnClient && session is MediaRoomModeration) {
-      return session as MediaRoomModeration;
-    }
-    return _requireModeration(operation);
+    _presenceOwner.start();
   }
 
   /// Attaches backend presence handling to an already joined [session].
@@ -130,79 +98,35 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   final MediaRoomPresence? _presence;
   final MediaRoomManagement? _management;
   final Duration _heartbeatInterval;
-  final StreamController<RealtimeException> _backendErrorController =
-      StreamController<RealtimeException>.broadcast();
-  final StreamController<MediaRecoveryStatus> _recoveryController =
-      StreamController<MediaRecoveryStatus>.broadcast();
-
-  Timer? _heartbeatTimer;
-  Timer? _initialHeartbeatTimer;
+  late final _presenceOwner = _RoomPresence(
+    _presence,
+    roomCode,
+    participantId,
+    _heartbeatInterval,
+  );
+  final _recovery = _RoomRecovery();
+  late final _roomManagement = _RoomManagement(
+    session: session,
+    management: _management,
+    roomCode: roomCode,
+    participantId: participantId,
+    participantCredential: participantCredential,
+    roomOwnerCredential: roomOwnerCredential,
+    backendMetadata: backendMetadata,
+  );
+  final _cleanupErrors = StreamController<RealtimeException>.broadcast();
   StreamSubscription<MediaSessionState>? _stateSubscription;
   StreamSubscription<MediaEvent>? _eventSubscription;
-  bool _leaveNotified = false;
   bool _disposed = false;
   Duration cleanupTimeout = const Duration(seconds: 10);
-  Future<void>? _heartbeatFuture;
-  Future<void>? _leaveNotificationFuture;
   Future<void>? _disposeFuture;
   Future<void>? _closeRoomFuture;
-  int _recoveryAttempt = 0;
-  int? _recoveryStartedAtMs;
-  String? _recoveryReason;
-  MediaRecoveryStatus? _recoveryStatus;
-
-  /// Provider id of the underlying session.
+  Future<void>? _leaveFuture;
   String get providerId => session.providerId;
-
-  /// Role the session was created for.
   MediaRole get role => session.role;
-
-  bool get isLogicalOwner =>
-      (roomOwnerCredential?.trim().isNotEmpty ?? false) ||
-      role == MediaRole.host;
-
-  bool _backendManagementFlag(String key, {required bool fallback}) {
-    final raw = backendMetadata['management'];
-    if (raw is! Map) return fallback;
-    final value = raw[key];
-    return value is bool ? value : fallback;
-  }
-
-  MediaManagementCapabilities get managementCapabilities {
-    final client = session.capabilities.managementCapabilities;
-    if (!isLogicalOwner || _management == null) return client;
-    ManagementCapability preferClient(
-      ManagementCapability clientCapability, {
-      required String backendKey,
-      required bool backendFallback,
-    }) {
-      if (clientCapability.supported) return clientCapability;
-      return _backendManagementFlag(backendKey, fallback: backendFallback)
-          ? const ManagementCapability.backend()
-          : clientCapability;
-    }
-
-    return MediaManagementCapabilities(
-      listParticipants: preferClient(
-        client.listParticipants,
-        backendKey: 'listParticipants',
-        backendFallback: true,
-      ),
-      removeParticipant: preferClient(
-        client.removeParticipant,
-        backendKey: 'removeParticipant',
-        backendFallback: false,
-      ),
-      muteParticipant: client.muteParticipant,
-      stopParticipantVideo: client.stopParticipantVideo,
-      changeParticipantRole: client.changeParticipantRole,
-      closeRoom: preferClient(
-        client.closeRoom,
-        backendKey: 'closeRoom',
-        backendFallback: true,
-      ),
-    );
-  }
+  bool get isLogicalOwner => _roomManagement.isLogicalOwner;
+  MediaManagementCapabilities get managementCapabilities =>
+      _roomManagement.capabilities;
 
   /// Latest media snapshot.
   MediaSnapshot get snapshot => session.snapshot;
@@ -273,80 +197,27 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     );
   }
 
-  /// Backend presence failures (heartbeat, leave notification, ...).
-  Stream<RealtimeException> get backendErrors => _backendErrorController.stream;
+  Stream<RealtimeException> get backendErrors => _presenceOwner.errors;
+  MediaRecoveryStatus? get recoveryStatus => _recovery.status;
+  Stream<MediaRecoveryStatus> get recoveries => _recovery.stream;
 
-  /// Latest reconnect/recovery status for this logical room session.
-  MediaRecoveryStatus? get recoveryStatus => _recoveryStatus;
+  /// Non-replaying local cleanup failures after an authoritative room close.
+  /// The room is already closed; closeRoom still completes successfully.
+  /// Ordinary leave/dispose failures are reported by their returned futures.
+  Stream<RealtimeException> get cleanupErrors => _cleanupErrors.stream;
 
-  /// Emits a normalized reconnect/recovered/failed lifecycle.
-  Stream<MediaRecoveryStatus> get recoveries => _recoveryController.stream;
-
-  /// Lists sanitized logical room participants. The backend remains the
-  /// authority and rejects callers without room-management permission.
   Future<List<MediaRoomParticipantSummary>> listParticipants() =>
-      _managementExecutor(
-        managementCapabilities.listParticipants,
-        'list room participants',
-      ).listParticipants(
-        roomCode,
-        requesterParticipantId: participantId,
-        participantCredential: participantCredential,
-        roomOwnerCredential: roomOwnerCredential,
-      );
-
+      _roomManagement.listParticipants();
   Future<void> muteParticipant(String targetParticipantId) =>
-      _moderationExecutor(
-        managementCapabilities.muteParticipant,
-        'mute room participants',
-      ).muteParticipant(
-        roomCode,
-        requesterParticipantId: participantId,
-        targetParticipantId: targetParticipantId,
-        participantCredential: participantCredential,
-        roomOwnerCredential: roomOwnerCredential,
-      );
-
+      _roomManagement.muteParticipant(targetParticipantId);
   Future<void> stopParticipantVideo(String targetParticipantId) =>
-      _moderationExecutor(
-        managementCapabilities.stopParticipantVideo,
-        'stop participant video',
-      ).stopParticipantVideo(
-        roomCode,
-        requesterParticipantId: participantId,
-        targetParticipantId: targetParticipantId,
-        participantCredential: participantCredential,
-        roomOwnerCredential: roomOwnerCredential,
-      );
-
+      _roomManagement.stopParticipantVideo(targetParticipantId);
   Future<void> changeParticipantRole(
     String targetParticipantId,
     MediaRole role,
-  ) =>
-      _moderationExecutor(
-        managementCapabilities.changeParticipantRole,
-        'change participant role',
-      ).changeParticipantRole(
-        roomCode,
-        requesterParticipantId: participantId,
-        targetParticipantId: targetParticipantId,
-        role: role,
-        participantCredential: participantCredential,
-        roomOwnerCredential: roomOwnerCredential,
-      );
-
-  /// Removes a participant when the backend/provider supports true moderation.
+  ) => _roomManagement.changeParticipantRole(targetParticipantId, role);
   Future<void> removeParticipant(String targetParticipantId) =>
-      _managementExecutor(
-        managementCapabilities.removeParticipant,
-        'remove room participants',
-      ).removeParticipant(
-        roomCode,
-        requesterParticipantId: participantId,
-        targetParticipantId: targetParticipantId,
-        participantCredential: participantCredential,
-        roomOwnerCredential: roomOwnerCredential,
-      );
+      _roomManagement.removeParticipant(targetParticipantId);
 
   /// Closes the logical room for future joins using backend-authoritative
   /// permissions.
@@ -362,13 +233,13 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   }
 
   Future<void> _closeRoom() async {
-    final management = _managementExecutor(
+    final management = _roomManagement.executor(
       managementCapabilities.closeRoom,
       'close the logical room',
     );
-    if (_disposed || _leaveNotified) return;
-    _stopHeartbeat();
-    await _heartbeatFuture;
+    if (_disposed || _presenceOwner.leaveNotified) return;
+    _presenceOwner.stop();
+    await _presenceOwner.drain();
     try {
       await management.closeRoomManaged(
         roomCode,
@@ -377,8 +248,10 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
         roomOwnerCredential: roomOwnerCredential,
       );
     } catch (_) {
-      if (!_disposed && !_leaveNotified && !session.state.isTerminal) {
-        _startHeartbeat();
+      if (!_disposed &&
+          !_presenceOwner.leaveNotified &&
+          !session.state.isTerminal) {
+        _presenceOwner.start();
       }
       rethrow;
     }
@@ -386,34 +259,50 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     // Closing a room supersedes the normal leave notification. Mark it before
     // disconnecting local media because terminal state callbacks also attempt
     // the best-effort leave path.
-    _leaveNotified = true;
+    _presenceOwner.leaveNotified = true;
     try {
       await session.leave();
-    } on RealtimeException {
-      // The backend has already authoritatively closed the room. A local
-      // adapter teardown failure must not turn a successful room close into a
-      // misleading backend failure; dispose() will make one final cleanup pass.
+    } catch (error, stack) {
+      if (!_cleanupErrors.isClosed) {
+        _cleanupErrors.add(
+          RealtimeException(
+            code: RealtimeErrorCode.cleanupFailed,
+            message: 'closeRoom.localLeave failed.',
+            domain: 'media',
+            operation: 'closeRoom.localLeave',
+            providerId: providerId,
+            cause: error,
+            stackTrace: stack,
+            details: Map<String, Object>.unmodifiable({
+              'roomClosed': true,
+              'cleanupFailures': List<CleanupFailure>.unmodifiable([
+                CleanupFailure('session.leave', error, stack),
+              ]),
+            }),
+          ),
+        );
+      }
     }
   }
 
-  /// Leaves the media session and notifies the backend (best effort).
-  Future<void> leave() async {
+  /// Leaves media and always attempts the best-effort backend notification.
+  Future<void> leave() => _leaveFuture ??= _leave();
+  Future<void> _leave() async {
     if (_disposed) return;
-    _stopHeartbeat();
-    await session.leave();
-    await _notifyLeaveBestEffort();
+    _presenceOwner.stop();
+    try {
+      await session.leave();
+    } finally {
+      await _presenceOwner.notifyLeave();
+    }
   }
 
-  /// Disposes the media session and this wrapper. Safe to call repeatedly.
   Future<void> dispose() => _disposeFuture ??= _dispose();
-
   Future<void> _dispose() async {
     _disposed = true;
-    _stopHeartbeat();
+    _presenceOwner.stop();
     final cleanup = Cleanup(timeout: cleanupTimeout);
-    await cleanup.run('presence.heartbeat', () async {
-      await _heartbeatFuture;
-    });
+    await cleanup.run('presence.heartbeat', _presenceOwner.drain);
     await cleanup.run('session.states', () async {
       await _stateSubscription?.cancel();
     });
@@ -421,184 +310,20 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
       await _eventSubscription?.cancel();
     });
     await cleanup.run('session', session.dispose);
-    await cleanup.run('presence.leave', _notifyLeaveBestEffort);
-    await cleanup.run('backend.errors', _backendErrorController.close);
-    await cleanup.run('recovery', _recoveryController.close);
+    await cleanup.run('presence.leave', _presenceOwner.notifyLeave);
+    await cleanup.run('backend.errors', _presenceOwner.dispose);
+    await cleanup.run('recovery', _recovery.dispose);
+    await cleanup.run('cleanup.errors', _cleanupErrors.close);
     cleanup.finish(domain: 'media');
   }
 
-  void _startHeartbeat() {
-    if (_presence == null) return;
-    if (_heartbeatInterval <= Duration.zero) return;
-    _initialHeartbeatTimer = Timer(
-      Duration.zero,
-      () => unawaited(_heartbeat()),
-    );
-    _heartbeatTimer = Timer.periodic(
-      _heartbeatInterval,
-      (_) => unawaited(_heartbeat()),
-    );
-  }
-
-  void _stopHeartbeat() {
-    _initialHeartbeatTimer?.cancel();
-    _initialHeartbeatTimer = null;
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-  }
-
-  Future<void> _heartbeat() {
-    if (_disposed || _leaveNotified) return Future<void>.value();
-    final current = _heartbeatFuture;
-    if (current != null) return current;
-    late final Future<void> future;
-    future = _sendHeartbeat().whenComplete(() {
-      if (identical(_heartbeatFuture, future)) _heartbeatFuture = null;
-    });
-    _heartbeatFuture = future;
-    return future;
-  }
-
-  Future<void> _sendHeartbeat() async {
-    final presence = _presence;
-    if (presence == null) return;
-    try {
-      await presence.heartbeat(roomCode, participantId: participantId);
-    } on RealtimeException catch (error) {
-      _reportBackendError(error);
-    }
-  }
-
   void _onStateChanged(MediaSessionState state) {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    if (state == MediaSessionState.reconnecting) {
-      if (_recoveryStartedAtMs == null) {
-        _recoveryAttempt++;
-        _recoveryStartedAtMs = now;
-      }
-      _emitRecovery(
-        MediaRecoveryStatus(
-          phase: MediaRecoveryPhase.reconnecting,
-          attempt: _recoveryAttempt,
-          startedAtMs: _recoveryStartedAtMs!,
-          updatedAtMs: now,
-          reason: _recoveryReason,
-        ),
-      );
-    } else if (state == MediaSessionState.connected &&
-        _recoveryStartedAtMs != null) {
-      _emitRecovery(
-        MediaRecoveryStatus(
-          phase: MediaRecoveryPhase.recovered,
-          attempt: _recoveryAttempt,
-          startedAtMs: _recoveryStartedAtMs!,
-          updatedAtMs: now,
-          reason: _recoveryReason,
-        ),
-      );
-      _recoveryStartedAtMs = null;
-      _recoveryReason = null;
-    } else if (state.isTerminal && _recoveryStartedAtMs != null) {
-      _emitRecovery(
-        MediaRecoveryStatus(
-          phase: MediaRecoveryPhase.failed,
-          attempt: _recoveryAttempt,
-          startedAtMs: _recoveryStartedAtMs!,
-          updatedAtMs: now,
-          reason: _recoveryReason,
-        ),
-      );
-      _recoveryStartedAtMs = null;
-      _recoveryReason = null;
-    }
+    _recovery.onState(state);
     if (state.isTerminal) {
-      _stopHeartbeat();
-      unawaited(_notifyLeaveBestEffort());
+      _presenceOwner.stop();
+      unawaited(_presenceOwner.notifyLeave());
     }
   }
 
-  void _onSessionEvent(MediaEvent event) {
-    if (event is! MediaConnectionStateChanged) return;
-    final reason = event.reason;
-    if (reason == null) return;
-    _recoveryReason = reason;
-    final current = _recoveryStatus;
-    if (current != null &&
-        (event.current == MediaSessionState.reconnecting ||
-            event.current == MediaSessionState.connected ||
-            event.current.isTerminal)) {
-      _emitRecovery(
-        MediaRecoveryStatus(
-          phase: current.phase,
-          attempt: current.attempt,
-          startedAtMs: current.startedAtMs,
-          updatedAtMs: DateTime.now().millisecondsSinceEpoch,
-          reason: reason,
-        ),
-      );
-    }
-  }
-
-  void _emitRecovery(MediaRecoveryStatus status) {
-    _recoveryStatus = status;
-    if (!_recoveryController.isClosed) _recoveryController.add(status);
-  }
-
-  Future<void> _notifyLeaveBestEffort() {
-    final current = _leaveNotificationFuture;
-    if (current != null) return current;
-    if (_leaveNotified) return Future<void>.value();
-    if (_presence == null) {
-      _leaveNotified = true;
-      return Future<void>.value();
-    }
-    _leaveNotified = true;
-    late final Future<void> future;
-    future = _sendLeaveBestEffort().whenComplete(() {
-      if (identical(_leaveNotificationFuture, future)) {
-        _leaveNotificationFuture = null;
-      }
-    });
-    _leaveNotificationFuture = future;
-    return future;
-  }
-
-  Future<void> _sendLeaveBestEffort() async {
-    final presence = _presence;
-    if (presence == null) return;
-    try {
-      await presence.leave(roomCode, participantId: participantId);
-    } on RealtimeException catch (error) {
-      _reportBackendError(error);
-    }
-  }
-
-  void _reportBackendError(RealtimeException error) {
-    if (!_backendErrorController.isClosed) {
-      _backendErrorController.add(error);
-    }
-  }
-
-  MediaRoomManagement _requireManagement(String operation) {
-    final management = _management;
-    if (management != null) return management;
-    throw RealtimeException(
-      code: RealtimeErrorCode.unsupportedFeature,
-      message:
-          'Cannot $operation because this room was joined without a room '
-          'management executor.',
-      providerId: providerId,
-    );
-  }
-
-  MediaRoomModeration _requireModeration(String operation) {
-    final management = _management;
-    if (management is MediaRoomModeration) return management;
-    throw RealtimeException(
-      code: RealtimeErrorCode.unsupportedFeature,
-      message:
-          'Cannot $operation because this room has no advanced moderation executor.',
-      providerId: providerId,
-    );
-  }
+  void _onSessionEvent(MediaEvent event) => _recovery.onEvent(event);
 }

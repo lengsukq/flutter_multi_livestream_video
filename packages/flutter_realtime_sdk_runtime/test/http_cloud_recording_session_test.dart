@@ -172,7 +172,10 @@ void main() {
         'Linux Recording SDK is missing',
       );
       expect(result.metadata.containsKey('AGORA_APP_CERTIFICATE'), false);
-      expect(result.metadata['supportedLayouts'], ['grid', 'featuredParticipant']);
+      expect(result.metadata['supportedLayouts'], [
+        'grid',
+        'featuredParticipant',
+      ]);
     },
   );
 

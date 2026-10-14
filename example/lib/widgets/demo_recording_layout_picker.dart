@@ -33,40 +33,44 @@ Future<RecordingLayout?> chooseCloudRecordingLayout(
   final zh = Localizations.localeOf(context).languageCode == 'zh';
   String title(RecordingLayout mode) => switch (mode) {
     RecordingLayout.grid => zh ? '宫格录制' : 'Grid recording',
-    RecordingLayout.featuredParticipant => zh
-        ? '固定主画面（不跟随发言）'
-        : 'Featured participant (does not follow speech)',
-    RecordingLayout.activeSpeaker => zh
-        ? '动态发言人（自动切换）'
-        : 'Active speaker (switches automatically)',
+    RecordingLayout.featuredParticipant =>
+      zh ? '固定主画面（不跟随发言）' : 'Featured participant (does not follow speech)',
+    RecordingLayout.activeSpeaker =>
+      zh ? '动态发言人（自动切换）' : 'Active speaker (switches automatically)',
     _ => mode.name,
   };
   String subtitle(RecordingLayout mode) => switch (mode) {
     RecordingLayout.grid => zh ? '所有视频均匀排列' : 'Equal-sized participant tiles',
-    RecordingLayout.featuredParticipant => zh
-        ? '由云服务端选择主要画面，其他画面悬浮或缩略显示'
-        : 'Cloud backend picks the featured tile; other tiles remain smaller',
-    RecordingLayout.activeSpeaker => zh
-        ? '使用支持语音聚焦的供应商录制模板'
-        : 'Requires a provider recording template with speaker tracking',
+    RecordingLayout.featuredParticipant =>
+      zh
+          ? '由云服务端选择主要画面，其他画面悬浮或缩略显示'
+          : 'Cloud backend picks the featured tile; other tiles remain smaller',
+    RecordingLayout.activeSpeaker =>
+      zh
+          ? '使用支持语音聚焦的供应商录制模板'
+          : 'Requires a provider recording template with speaker tracking',
     _ => '',
   };
   return showDialog<RecordingLayout>(
     context: context,
     builder: (dialogContext) => SimpleDialog(
       title: Text(zh ? '选择云端录制布局' : 'Cloud recording layout'),
-      children: choices.map((mode) => SimpleDialogOption(
-        onPressed: () => Navigator.pop(dialogContext, mode),
-        child: ListTile(
-          leading: Icon(switch (mode) {
-            RecordingLayout.grid => Icons.grid_view,
-            RecordingLayout.featuredParticipant => Icons.person_pin,
-            _ => Icons.record_voice_over,
-          }),
-          title: Text(title(mode)),
-          subtitle: Text(subtitle(mode)),
-        ),
-      )).toList(),
+      children: choices
+          .map(
+            (mode) => SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, mode),
+              child: ListTile(
+                leading: Icon(switch (mode) {
+                  RecordingLayout.grid => Icons.grid_view,
+                  RecordingLayout.featuredParticipant => Icons.person_pin,
+                  _ => Icons.record_voice_over,
+                }),
+                title: Text(title(mode)),
+                subtitle: Text(subtitle(mode)),
+              ),
+            ),
+          )
+          .toList(),
     ),
   );
 }

@@ -10,82 +10,29 @@ import 'package:flutter_realtime_processed_video/flutter_realtime_processed_vide
 import 'trtc_join_info.dart';
 import 'trtc_media_track.dart';
 
-MediaCapabilities _publisherCapabilities(MediaRole role) => MediaCapabilities(
-  canPublishAudio: true,
-  canPublishVideo: true,
-  canBlurBackground:
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.macOS),
-  canReplaceBackgroundImage:
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.macOS),
-  canEnumerateCameras:
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.macOS),
-  canSelectCamera:
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.macOS),
-  canSwitchCamera:
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS),
-  canScreenShare:
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS ||
-          defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows),
-  canSendData: true,
-  canReceiveData: true,
-  canSubscribeVideo: true,
-  canReportNetworkStats: true,
-  maxDataMessageBytes: 1024,
-  canListParticipants: role == MediaRole.host,
-  canCloseRoom: role == MediaRole.host,
-);
-const _viewerCapabilities = MediaCapabilities(
-  canSubscribeVideo: true,
-  canSendData: false,
-  canReceiveData: true,
-  canReportNetworkStats: true,
-);
+part 'trtc_publishing.dart';
+part 'trtc_credential_refresh.dart';
+part 'trtc_data_messenger.dart';
+part 'trtc_snapshot_mapper.dart';
+
+part 'trtc_capabilities.dart';
+
+part 'trtc_participant_session.dart';
+
+part 'trtc_host_session.dart';
+
+part 'trtc_viewer_session.dart';
+
+part 'trtc_interactive_session.dart';
+
 const _customMessageCommandId = 1;
 const _userSigCheckFailed = -100018;
 
-Object? _activeTrtcSession;
+TrtcMediaSession? _activeTrtcSession;
 
 /// Shared TRTC room lifecycle exposed for provider-specific integrations.
 abstract class TrtcMediaSession
     implements MediaSession, MediaCredentialRefreshable {}
-
-/// TRTC meeting participant with symmetric publish and subscribe controls.
-class TrtcParticipantSession extends _TrtcInteractiveSession {
-  TrtcParticipantSession({
-    TrtcEngineFactory engineFactory = createNativeTrtcEngine,
-  }) : super(MediaRole.participant, engineFactory);
-}
-
-/// TRTC live-stream publisher.
-class TrtcHostSession extends _TrtcInteractiveSession
-    implements BroadcastHostSession {
-  TrtcHostSession({TrtcEngineFactory engineFactory = createNativeTrtcEngine})
-    : super(MediaRole.host, engineFactory);
-}
-
-/// Subscribe-only TRTC audience session.
-class TrtcViewerSession extends _TrtcSessionBase
-    implements BroadcastViewerSession {
-  TrtcViewerSession({TrtcEngineFactory engineFactory = createNativeTrtcEngine})
-    : super(MediaRole.viewer, _viewerCapabilities, engineFactory);
-
-  @override
-  Future<void> sendMessage(String message, {String topic = 'chat'}) =>
-      _sendMessage(message, topic: topic);
-}
 
 abstract class _TrtcSessionBase
     implements
@@ -100,6 +47,11 @@ abstract class _TrtcSessionBase
   @override
   String get providerId => TrtcJoinInfo.providerIdValue;
 
+  late final _publishing = _TrtcPublishing(this);
+  late final _credentials = _TrtcCredentialRefresh(this);
+  late final _data = _TrtcDataMessenger(this);
+  late final _mapper = _TrtcSnapshotMapper(this);
+
   @override
   final MediaRole role;
 
@@ -107,85 +59,16 @@ abstract class _TrtcSessionBase
   final TrtcEngineFactory _engineFactory;
   MediaSnapshot _snapshot;
   TrtcEngine? _engine;
-  final _processedSink = NativeProcessedVideoSink(providerId: 'trtc');
-  @override
-  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
-      role != MediaRole.viewer &&
-      capabilities.canBlurBackground &&
-      _processedSink.supports(source) &&
-      source.platform ==
-          (defaultTargetPlatform == TargetPlatform.android
-              ? ProcessedVideoPlatform.android
-              : ProcessedVideoPlatform.macos);
-  @override
-  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
-    _requireConnected();
-    if (!supportsProcessedVideoSource(source)) {
-      throw const RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message: 'Processed video is unavailable.',
-      );
-    }
-    _engine!.stopLocalPreview();
-    await _processedSink.attach(source);
-  }
-
-  @override
-  Future<void> detachProcessedVideoSource() => _processedSink.detach();
-
-  @override
-  Future<List<MediaDevice>> listMediaDevices({
-    Set<MediaDeviceKind>? kinds,
-  }) async {
-    _requireConnected();
-    if (!capabilities.canEnumerateCameras ||
-        (kinds != null && !kinds.contains(MediaDeviceKind.camera))) {
-      return const [];
-    }
-    return List.unmodifiable([
-      for (final camera in await ProcessedVideoBridge().listCameras())
-        MediaDevice(
-          id: camera.id,
-          label: camera.label,
-          kind: MediaDeviceKind.camera,
-        ),
-    ]);
-  }
-
-  @override
-  Future<void> selectMediaDevice(MediaDevice device) async {
-    _requireConnected();
-    if (device.kind != MediaDeviceKind.camera ||
-        !capabilities.canSelectCamera) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        providerId: providerId,
-        message: 'This media device cannot be selected.',
-      );
-    }
-    if (_processedSink.source == null) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.invalidState,
-        providerId: providerId,
-        message: 'Prepare the SDK video source before selecting a camera.',
-      );
-    }
-    await _processedSink.selectCamera(device.id);
-  }
-
   TrtcJoinInfo? _joinInfo;
-  MediaCredentialRefreshCallback? _refreshCallback;
   Future<void>? _joinFuture;
   Future<void>? _leaveFuture;
   Future<void>? _disposeFuture;
-  Future<void>? _refreshFuture;
-  Timer? _refreshTimer;
   bool _enterRequested = false;
   bool _disposed = false;
   bool _disposing = false;
   bool _leaveRequestedDuringJoin = false;
   Duration cleanupTimeout = const Duration(seconds: 10);
-  int _streamGeneration = 0;
+  int _connectionGeneration = 0;
 
   final _stateController = StreamController<MediaSessionState>.broadcast();
   final _snapshotController = StreamController<MediaSnapshot>.broadcast();
@@ -218,20 +101,26 @@ abstract class _TrtcSessionBase
   Stream<MediaConnectionStats> get stats => _statsController.stream;
 
   @override
-  void setCredentialRefreshCallback(MediaCredentialRefreshCallback? callback) {
-    _refreshCallback = callback;
-    if (callback == null) _refreshTimer?.cancel();
-    if (callback != null && state == MediaSessionState.connected) {
-      _scheduleCredentialRefresh();
-    }
-  }
-
+  void setCredentialRefreshCallback(MediaCredentialRefreshCallback? callback) =>
+      _credentials.setCredentialRefreshCallback(callback);
   @override
-  int dataPayloadSizeBytes(String message, MediaSendOptions options) => utf8
-      .encode(
-        jsonEncode({'topic': options.topic.trim(), 'message': message.trim()}),
-      )
-      .length;
+  int dataPayloadSizeBytes(String message, MediaSendOptions options) =>
+      _data.dataPayloadSizeBytes(message, options);
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      _publishing.supportsProcessedVideoSource(source);
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) =>
+      _publishing.attachProcessedVideoSource(source);
+  @override
+  Future<void> detachProcessedVideoSource() =>
+      _publishing.detachProcessedVideoSource();
+  @override
+  Future<List<MediaDevice>> listMediaDevices({Set<MediaDeviceKind>? kinds}) =>
+      _publishing.listMediaDevices(kinds: kinds);
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) =>
+      _publishing.selectMediaDevice(device);
 
   @override
   Future<void> join(MediaJoinInfo joinInfo) {
@@ -285,6 +174,7 @@ abstract class _TrtcSessionBase
         providerId: providerId,
       );
     }
+    _connectionGeneration++;
     _activeTrtcSession = this;
     _joinInfo = rawInfo;
     _setState(MediaSessionState.joining);
@@ -304,12 +194,12 @@ abstract class _TrtcSessionBase
         } on RealtimeException catch (error) {
           if (refreshedOnJoin ||
               !_isCredentialError(error) ||
-              _refreshCallback == null) {
+              _credentials._refreshCallback == null) {
             rethrow;
           }
           refreshedOnJoin = true;
           await _exitCloudRoom();
-          _joinInfo = await _refreshCredentials(_joinInfo!);
+          _joinInfo = await _credentials._refreshCredentials(_joinInfo!);
         }
       }
       if (role.canPublishMedia) {
@@ -333,8 +223,8 @@ abstract class _TrtcSessionBase
         ),
       );
       _setState(MediaSessionState.connected);
-      _scheduleCredentialRefresh();
-    } catch (error) {
+      _credentials._scheduleCredentialRefresh();
+    } catch (error, stack) {
       final cancelled = _leaveRequestedDuringJoin || _disposed;
       final mapped = cancelled
           ? RealtimeException(
@@ -343,9 +233,9 @@ abstract class _TrtcSessionBase
               message: 'The TRTC join was cancelled.',
               cause: error,
             )
-          : _mapError(error, 'Unable to join the TRTC room.');
+          : _mapError(error, 'join', stack: stack);
       await _releaseCloud();
-      _activeTrtcSession = null;
+      if (identical(_activeTrtcSession, this)) _activeTrtcSession = null;
       if (!cancelled) _setState(MediaSessionState.failed, error: mapped);
       throw mapped;
     }
@@ -367,182 +257,30 @@ abstract class _TrtcSessionBase
     );
     _enterRequested = true;
     final result = await _engine!
-        .enterRoom(info, _engineEvents)
+        .enterRoom(info, _mapper._engineEvents)
         .timeout(
           const Duration(seconds: 30),
           onTimeout: () => throw RealtimeException(
-            code: RealtimeErrorCode.providerError,
-            message: 'TRTC did not confirm room entry before the timeout.',
+            code: RealtimeErrorCode.timeout,
+            message: 'trtc.enterRoom timed out.',
             providerId: providerId,
           ),
         );
     if (result <= 0) {
       throw RealtimeException(
         code: RealtimeErrorCode.providerError,
-        message: 'TRTC rejected room entry (code $result).',
+        message: 'trtc.enterRoom failed.',
         details: {'code': result},
         providerId: providerId,
       );
     }
   }
 
-  TrtcEngineEvents get _engineEvents => TrtcEngineEvents(
-    onError: (code, message) {
-      if (_isUserSigFailure(code, message) &&
-          state == MediaSessionState.connected) {
-        unawaited(_refreshAndRejoin());
-        return;
-      }
-      if (state == MediaSessionState.connected ||
-          state == MediaSessionState.reconnecting) {
-        _reportFailure(
-          RealtimeException(
-            code: RealtimeErrorCode.providerError,
-            message: 'TRTC reported an error: $message',
-            details: {'code': code, 'message': message},
-            providerId: providerId,
-          ),
-        );
-      }
-    },
-    onRemoteUserEnterRoom: _remoteUserEntered,
-    onRemoteUserLeaveRoom: _remoteUserLeft,
-    onUserVideoAvailable: _remoteVideoAvailable,
-    onUserSubStreamAvailable: _remoteScreenShareAvailable,
-    onUserAudioAvailable: _remoteAudioAvailable,
-    onRecvCustomCmdMsg: _messageReceived,
-    onConnectionLost: () => _setState(MediaSessionState.reconnecting),
-    onTryToReconnect: () => _setState(MediaSessionState.reconnecting),
-    onConnectionRecovery: () {
-      if (state == MediaSessionState.reconnecting) {
-        _setState(MediaSessionState.connected);
-      }
-    },
-    onStats: (stats) {
-      _connectionStats = stats;
-      if (!_statsController.isClosed) _statsController.add(stats);
-      _eventController.add(MediaNetworkStatsUpdated(stats));
-    },
-  );
-
-  Future<void> _refreshAndRejoin() {
-    final current = _refreshFuture;
-    if (current != null) return current;
-    late final Future<void> future;
-    future = _refreshAndRejoinOnce().whenComplete(() {
-      if (identical(_refreshFuture, future)) _refreshFuture = null;
-    });
-    _refreshFuture = future;
-    return future;
-  }
-
-  Future<void> _refreshAndRejoinOnce() async {
-    final callback = _refreshCallback;
-    final current = _joinInfo;
-    if (_disposed || current == null || callback == null) {
-      _reportFailure(
-        RealtimeException(
-          code: RealtimeErrorCode.providerError,
-          message:
-              'TRTC credentials expired and no refresh callback is available.',
-          providerId: providerId,
-        ),
-      );
-      return;
-    }
-    _refreshTimer?.cancel();
-    _setState(MediaSessionState.reconnecting);
-    try {
-      final refreshed = await _refreshCredentials(current);
-      final source = _processedSink.source;
-      await _exitCloudRoom();
-      _joinInfo = refreshed;
-      _streamGeneration++;
-      await _enterRoom(refreshed);
-      if (source != null) await _processedSink.attach(source);
-      if (role.canPublishMedia) {
-        _engine!.startLocalAudio();
-        _engine!.muteLocalAudio(_snapshot.localMuted);
-        if (_snapshot.localVideoEnabled) _engine!.muteLocalVideo(false);
-        if (_snapshot.localScreenShareEnabled) _engine!.startScreenCapture();
-      }
-      _refreshLocalTrack();
-      _setState(MediaSessionState.connected);
-      _scheduleCredentialRefresh();
-    } catch (error) {
-      final mapped = _mapError(error, 'Unable to renew TRTC credentials.');
-      _reportFailure(mapped);
-      await _releaseCloud();
-      _activeTrtcSession = null;
-      _setState(MediaSessionState.failed, error: mapped);
-    }
-  }
-
-  Future<TrtcJoinInfo> _refreshCredentials(TrtcJoinInfo current) async {
-    final callback = _refreshCallback;
-    if (callback == null) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.providerError,
-        message: 'No backend credential refresh callback is configured.',
-        providerId: providerId,
-      );
-    }
-    final refreshed = await callback(current);
-    if (refreshed is! TrtcJoinInfo ||
-        refreshed.providerId != current.providerId ||
-        refreshed.roomCode != current.roomCode ||
-        refreshed.participantId != current.participantId ||
-        refreshed.userId != current.userId ||
-        refreshed.role != current.role ||
-        refreshed.strRoomId != current.strRoomId) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.invalidArgument,
-        message: 'TRTC refresh credentials changed the current room identity.',
-        providerId: providerId,
-      );
-    }
-    return refreshed;
-  }
-
-  void _scheduleCredentialRefresh() {
-    _refreshTimer?.cancel();
-    final info = _joinInfo;
-    if (info == null || _refreshCallback == null || info.expiresAtMs <= 0) {
-      return;
-    }
-    final refreshAtMs = info.expiresAtMs - 30000;
-    final delayMs = refreshAtMs - DateTime.now().millisecondsSinceEpoch;
-    _refreshTimer = Timer(
-      Duration(milliseconds: delayMs > 0 ? delayMs : 0),
-      () => unawaited(_refreshAndRejoin()),
-    );
-  }
-
-  TrtcMediaVideoTrack _makeScreenShareTrack(String userId) {
-    final engine = _engine!;
-    // Screen shares must never be cropped: the TRTC sub-stream view defaults to
-    // fill, which cuts off whatever does not match the tile aspect ratio.
-    engine.setRemoteFillMode(userId, true, true);
-    return TrtcMediaVideoTrack(
-      userId: userId,
-      local: false,
-      screenShare: true,
-      generation: _streamGeneration,
-      frameWidth: engine.remoteWidth(userId, subStream: true),
-      frameHeight: engine.remoteHeight(userId, subStream: true),
-      startRendering: (viewId) =>
-          engine.startRemoteSubStreamView(userId, viewId),
-      stopRendering: () => engine.stopRemoteSubStreamView(userId),
-    );
-  }
-
   Future<void> _exitCloudRoom() async {
     try {
-      await _processedSink.detach();
-    } catch (error) {
-      _reportFailure(
-        _mapError(error, 'Unable to detach processed video input.'),
-      );
+      await _publishing._processedSink.detach();
+    } catch (error, stack) {
+      _reportFailure(_mapError(error, 'processedVideo.detach', stack: stack));
     }
     final engine = _engine;
     if (engine == null || !_enterRequested) return;
@@ -557,7 +295,7 @@ abstract class _TrtcSessionBase
   }
 
   Future<void> _releaseCloud() async {
-    _refreshTimer?.cancel();
+    _credentials.cancel();
     try {
       await _exitCloudRoom();
     } finally {
@@ -565,224 +303,6 @@ abstract class _TrtcSessionBase
       _engine = null;
       if (engine != null) await engine.dispose();
     }
-  }
-
-  void _remoteUserEntered(String userId) {
-    if (userId == _joinInfo?.userId) return;
-    if (_findParticipant(userId) != null) return;
-    final participant = MediaParticipant(id: userId, displayName: userId);
-    _setSnapshot(
-      _snapshot.copyWith(
-        participants: [..._snapshot.participants, participant],
-      ),
-    );
-    _eventController.add(MediaParticipantJoined(participant));
-  }
-
-  void _remoteUserLeft(String userId) {
-    if (_findParticipant(userId) == null) return;
-    final sharedTrack = _snapshot.contentShareTrack;
-    _setSnapshot(
-      _snapshot.copyWith(
-        participants: _snapshot.participants
-            .where((item) => item.id != userId)
-            .toList(),
-        clearContentShareTrack: sharedTrack?.participantId == userId,
-      ),
-    );
-    _eventController.add(MediaParticipantLeft(participantId: userId));
-    _eventController.add(
-      MediaTrackUnpublished(
-        trackId: 'trtc:$userId:camera',
-        participantId: userId,
-      ),
-    );
-    if (sharedTrack?.participantId == userId) {
-      _eventController.add(
-        MediaTrackUnpublished(
-          trackId: sharedTrack!.id,
-          participantId: userId,
-          wasScreenShare: true,
-        ),
-      );
-    }
-  }
-
-  void _remoteVideoAvailable(String userId, bool available) {
-    if (userId == _joinInfo?.userId) return;
-    var participant = _findParticipant(userId);
-    if (participant == null) {
-      _remoteUserEntered(userId);
-      participant = _findParticipant(userId);
-    }
-    if (participant == null) return;
-    if (available && _engine != null) {
-      final track = _makeVideoTrack(userId, local: false);
-      _replaceParticipant(
-        participant.copyWith(videoTrack: track, isVideoEnabled: true),
-      );
-      _eventController.add(MediaTrackPublished(track));
-    } else {
-      _replaceParticipant(
-        participant.copyWith(clearVideoTrack: true, isVideoEnabled: false),
-      );
-      _eventController.add(
-        MediaTrackUnpublished(
-          trackId: 'trtc:$userId:camera',
-          participantId: userId,
-        ),
-      );
-    }
-  }
-
-  void _remoteAudioAvailable(String userId, bool available) {
-    if (userId == _joinInfo?.userId) return;
-    var participant = _findParticipant(userId);
-    if (participant == null) {
-      _remoteUserEntered(userId);
-      participant = _findParticipant(userId);
-    }
-    if (participant == null) return;
-    _replaceParticipant(participant.copyWith(isMuted: !available));
-  }
-
-  void _remoteScreenShareAvailable(String userId, bool available) {
-    if (userId == _joinInfo?.userId) return;
-    if (available && _engine != null) {
-      final track = _makeScreenShareTrack(userId);
-      _setSnapshot(_snapshot.copyWith(contentShareTrack: track));
-      _eventController.add(MediaTrackPublished(track));
-      return;
-    }
-    final current = _snapshot.contentShareTrack;
-    if (current?.participantId != userId) return;
-    _setSnapshot(_snapshot.copyWith(clearContentShareTrack: true));
-    _eventController.add(
-      MediaTrackUnpublished(
-        trackId: current!.id,
-        participantId: userId,
-        wasScreenShare: true,
-      ),
-    );
-  }
-
-  void _messageReceived(String userId, int cmdId, String data) {
-    if (cmdId != _customMessageCommandId) return;
-    String message = data;
-    String topic = 'chat';
-    try {
-      final decoded = jsonDecode(data);
-      if (decoded is Map) {
-        message = decoded['message']?.toString() ?? data;
-        topic = decoded['topic']?.toString() ?? topic;
-      }
-    } on FormatException {
-      // Older TRTC senders may send a plain text payload.
-    }
-    final incoming = MediaMessage(
-      participantId: userId,
-      displayName: _findParticipant(userId)?.displayName ?? userId,
-      message: message,
-      topic: topic,
-      timestampMs: DateTime.now().millisecondsSinceEpoch,
-      providerId: providerId,
-    );
-    _setSnapshot(
-      _snapshot.copyWith(messages: [..._snapshot.messages, incoming]),
-    );
-    _eventController.add(MediaMessageReceived(incoming));
-  }
-
-  Future<void> _sendMessage(String message, {required String topic}) async {
-    final trimmed = message.trim();
-    if (trimmed.isEmpty) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.invalidArgument,
-        message: 'Message must not be empty.',
-        providerId: providerId,
-      );
-    }
-    if (!_capabilities.canSendData) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message: 'TRTC viewers cannot send custom messages.',
-        providerId: providerId,
-      );
-    }
-    _requireConnected();
-    final payload = jsonEncode({'topic': topic, 'message': trimmed});
-    if (utf8.encode(payload).length > 1000) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.invalidArgument,
-        message: 'TRTC custom messages must be 1000 bytes or fewer.',
-        providerId: providerId,
-      );
-    }
-    try {
-      final sent = _engine!.sendCustomCmdMsg(_customMessageCommandId, payload);
-      if (!sent) {
-        throw RealtimeException(
-          code: RealtimeErrorCode.providerError,
-          message: 'TRTC did not accept the custom message.',
-          providerId: providerId,
-        );
-      }
-      final info = _joinInfo!;
-      final outgoing = MediaMessage(
-        participantId: info.userId,
-        displayName: info.displayName,
-        message: trimmed,
-        topic: topic,
-        timestampMs: DateTime.now().millisecondsSinceEpoch,
-        providerId: providerId,
-      );
-      _setSnapshot(
-        _snapshot.copyWith(messages: [..._snapshot.messages, outgoing]),
-      );
-    } catch (error) {
-      throw _mapError(error, 'Unable to send the TRTC message.');
-    }
-  }
-
-  MediaParticipant? _findParticipant(String id) {
-    for (final participant in _snapshot.participants) {
-      if (participant.id == id) return participant;
-    }
-    return null;
-  }
-
-  void _replaceParticipant(MediaParticipant replacement) {
-    final participants = _snapshot.participants
-        .map((item) => item.id == replacement.id ? replacement : item)
-        .toList();
-    _setSnapshot(_snapshot.copyWith(participants: participants));
-  }
-
-  void _refreshLocalTrack() {
-    final info = _joinInfo;
-    if (info == null || _engine == null || !_snapshot.localVideoEnabled) {
-      return;
-    }
-    final local = _findParticipant(info.userId);
-    if (local == null) return;
-    _replaceParticipant(
-      local.copyWith(videoTrack: _makeVideoTrack(info.userId, local: true)),
-    );
-  }
-
-  TrtcMediaVideoTrack _makeVideoTrack(String userId, {required bool local}) {
-    final engine = _engine!;
-    return TrtcMediaVideoTrack(
-      userId: userId,
-      local: local,
-      generation: _streamGeneration,
-      startRendering: local
-          ? engine.startLocalPreview
-          : (viewId) => engine.startRemoteView(userId, viewId),
-      stopRendering: local
-          ? engine.clearLocalView
-          : () => engine.stopRemoteView(userId),
-    );
   }
 
   bool _isCredentialError(RealtimeException error) =>
@@ -795,13 +315,30 @@ abstract class _TrtcSessionBase
           (message.toLowerCase().contains('expired') ||
               message.toLowerCase().contains('过期')));
 
-  RealtimeException _mapError(Object error, String message) {
-    if (error is RealtimeException) return error.withProvider(providerId);
-    return RealtimeException(
-      code: RealtimeErrorCode.providerError,
-      message: message,
-      details: error,
+  RealtimeException _mapError(Object error, String stage, {StackTrace? stack}) {
+    final typed = error is RealtimeException ? error : null;
+    return normalizeRealtimeException(
+      RealtimeException(
+        code:
+            (typed?.code == RealtimeErrorCode.unknown ? null : typed?.code) ??
+            (error is TimeoutException
+                ? RealtimeErrorCode.timeout
+                : RealtimeErrorCode.providerError),
+        message: 'trtc.$stage failed.',
+        providerId: providerId,
+        domain: 'media',
+        operation: stage,
+        cause: typed?.cause ?? error,
+        details: typed?.details,
+        statusCode: typed?.statusCode,
+        recoverable: typed?.recoverable ?? false,
+        suggestedAction: typed?.suggestedAction,
+        stackTrace: stack ?? typed?.stackTrace,
+      ),
+      domain: 'media',
+      operation: stage,
       providerId: providerId,
+      stackTrace: stack,
     );
   }
 
@@ -860,6 +397,7 @@ abstract class _TrtcSessionBase
   }
 
   Future<void> _leave() async {
+    _connectionGeneration++;
     if (_disposed) return;
     final joining = _joinFuture;
     if (joining != null) {
@@ -867,19 +405,19 @@ abstract class _TrtcSessionBase
       // A native enterRoom can be unresponsive until its provider timeout.
       // Release immediately and reject any later completion in _join.
       await _releaseCloud();
-      _activeTrtcSession = null;
+      if (identical(_activeTrtcSession, this)) _activeTrtcSession = null;
       _setState(MediaSessionState.ended);
       return;
     }
     if (state == MediaSessionState.ended || state == MediaSessionState.idle) {
       _setState(MediaSessionState.ended);
-      _activeTrtcSession = null;
+      if (identical(_activeTrtcSession, this)) _activeTrtcSession = null;
       return;
     }
     _setState(MediaSessionState.leaving);
-    _refreshTimer?.cancel();
+    _credentials.cancel();
     await _releaseCloud();
-    _activeTrtcSession = null;
+    if (identical(_activeTrtcSession, this)) _activeTrtcSession = null;
     _setSnapshot(
       _snapshot.copyWith(
         participants: const [],
@@ -896,12 +434,12 @@ abstract class _TrtcSessionBase
   Future<void> dispose() => _disposeFuture ??= _dispose();
 
   Future<void> _dispose() async {
+    _connectionGeneration++;
     _disposing = true;
     final cleanup = Cleanup(timeout: cleanupTimeout);
     await cleanup.run('trtc.leave', leave);
     _disposed = true;
-    _refreshCallback = null;
-    _refreshTimer?.cancel();
+    await cleanup.run('credentials', _credentials.dispose);
     _setState(MediaSessionState.disposed);
     await cleanup.run('states', _stateController.close);
     await cleanup.run('snapshots', _snapshotController.close);
@@ -909,139 +447,4 @@ abstract class _TrtcSessionBase
     await cleanup.run('stats', _statsController.close);
     cleanup.finish(domain: providerId);
   }
-}
-
-abstract class _TrtcInteractiveSession extends _TrtcSessionBase
-    implements InteractiveMediaSession {
-  _TrtcInteractiveSession(MediaRole role, TrtcEngineFactory engineFactory)
-    : super(role, _publisherCapabilities(role), engineFactory);
-
-  @override
-  Future<void> setMuted(bool muted) async {
-    _requireConnected();
-    try {
-      _engine!.muteLocalAudio(muted);
-      final info = _joinInfo!;
-      final local = _findParticipant(info.userId);
-      if (local != null) _replaceParticipant(local.copyWith(isMuted: muted));
-      _setSnapshot(_snapshot.copyWith(localMuted: muted));
-      _eventController.add(MediaLocalMediaChanged(muted: muted));
-    } catch (error) {
-      throw _mapError(error, 'Unable to change TRTC microphone state.');
-    }
-  }
-
-  @override
-  Future<void> toggleMute() => setMuted(!_snapshot.localMuted);
-
-  @override
-  Future<void> setVideoEnabled(bool enabled) async {
-    _requireConnected();
-    if (_snapshot.localVideoEnabled == enabled) return;
-    try {
-      await _processedSink.setEnabled(enabled);
-      _engine!.muteLocalVideo(!enabled);
-      if (!enabled) _engine!.stopLocalPreview();
-      final info = _joinInfo!;
-      final local = _findParticipant(info.userId);
-      TrtcMediaVideoTrack? track;
-      if (enabled) {
-        track = _makeVideoTrack(info.userId, local: true);
-      }
-      if (local != null) {
-        _replaceParticipant(
-          local.copyWith(
-            clearVideoTrack: !enabled,
-            videoTrack: track,
-            isVideoEnabled: enabled,
-          ),
-        );
-      }
-      _setSnapshot(_snapshot.copyWith(localVideoEnabled: enabled));
-      if (track != null) _eventController.add(MediaTrackPublished(track));
-      if (!enabled) {
-        _eventController.add(
-          MediaTrackUnpublished(
-            trackId: 'trtc:${info.userId}:camera',
-            participantId: info.userId,
-          ),
-        );
-      }
-      _eventController.add(MediaLocalMediaChanged(videoEnabled: enabled));
-    } catch (error) {
-      throw _mapError(error, 'Unable to change TRTC camera state.');
-    }
-  }
-
-  @override
-  Future<void> setScreenShareEnabled(bool enabled) async {
-    _requireConnected();
-    if (!capabilities.canScreenShare) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message: 'TRTC screen sharing is supported on Android and iOS only.',
-        providerId: providerId,
-      );
-    }
-    if (_snapshot.localScreenShareEnabled == enabled) return;
-    try {
-      if (enabled) {
-        _engine!.startScreenCapture();
-      } else {
-        _engine!.stopScreenCapture();
-      }
-      _setSnapshot(_snapshot.copyWith(localScreenShareEnabled: enabled));
-    } catch (error) {
-      throw _mapError(error, 'Unable to change TRTC screen-share state.');
-    }
-  }
-
-  @override
-  Future<void> switchCamera(MediaCameraPosition position) async {
-    _requireConnected();
-    try {
-      if (_processedSink.source != null) {
-        await _processedSink.selectCamera(
-          position == MediaCameraPosition.front ? 'front' : 'back',
-        );
-        return;
-      }
-      final result = _engine!.switchCamera(
-        position == MediaCameraPosition.front,
-      );
-      if (result < 0) {
-        throw RealtimeException(
-          code: RealtimeErrorCode.providerError,
-          message: 'TRTC camera switch failed (code $result).',
-          details: {'code': result},
-          providerId: providerId,
-        );
-      }
-    } catch (error) {
-      throw _mapError(error, 'Unable to switch the TRTC camera.');
-    }
-  }
-
-  @override
-  Future<List<MediaAudioDevice>> listAudioDevices() => Future.error(
-    RealtimeException(
-      code: RealtimeErrorCode.unsupportedFeature,
-      message:
-          'TRTC audio-device enumeration is not supported by this adapter.',
-      providerId: providerId,
-    ),
-  );
-
-  @override
-  Future<void> selectAudioDevice(MediaAudioDevice device) => Future.error(
-    RealtimeException(
-      code: RealtimeErrorCode.unsupportedFeature,
-      message: 'TRTC audio-device selection is not supported by this adapter.',
-      providerId: providerId,
-    ),
-  );
-
-  @override
-  Future<void> sendMessage(String message, {String topic = 'chat'}) =>
-      _sendMessage(message, topic: topic);
 }

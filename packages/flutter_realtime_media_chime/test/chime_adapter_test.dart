@@ -35,6 +35,33 @@ void main() {
   };
 
   test(
+    'Chime retains the provider error code without exposing native payloads',
+    () async {
+      final provider = _FailingControlSession();
+      final adapter = ChimeMediaSession(session: provider);
+      addTearDown(adapter.dispose);
+      await adapter.join(ChimeJoinInfo.fromBackendResponse(backendJson()));
+      await expectLater(
+        adapter.setMuted(false),
+        throwsA(
+          isA<RealtimeException>()
+              .having(
+                (error) => error.code,
+                'code',
+                RealtimeErrorCode.permissionDenied,
+              )
+              .having(
+                (error) => error.message,
+                'safe message',
+                isNot(contains('native secret')),
+              )
+              .having((error) => error.cause, 'diagnostic cause', isNotNull),
+        ),
+      );
+    },
+  );
+
+  test(
     'content modality retains its native ID and maps to its classroom owner',
     () {
       final track = ChimeMediaVideoTrack(
@@ -340,4 +367,14 @@ class _PendingChimeSession extends FakeChimeMeetingSession {
   }
 
   void finishJoin() => _pending.complete();
+}
+
+class _FailingControlSession extends FakeChimeMeetingSession {
+  @override
+  Future<void> setMuted(bool muted) async {
+    throw const chime.RealtimeException(
+      code: RealtimeErrorCode.permissionDenied,
+      message: 'native secret',
+    );
+  }
 }

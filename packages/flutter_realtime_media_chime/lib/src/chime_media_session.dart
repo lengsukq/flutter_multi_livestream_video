@@ -9,6 +9,9 @@ import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'chime_join_info.dart';
 import 'chime_media_track.dart';
 
+part 'chime_media_controls.dart';
+part 'chime_snapshot_mapper.dart';
+
 MediaCapabilities get _chimeCapabilities => MediaCapabilities(
   canPublishAudio: true,
   canPublishVideo: true,
@@ -34,7 +37,6 @@ class ChimeMediaSession
   final _stateController = StreamController<MediaSessionState>.broadcast();
   final _snapshotController = StreamController<MediaSnapshot>.broadcast();
   final _eventController = StreamController<MediaEvent>.broadcast();
-  final Set<String> _speakingParticipantIds = <String>{};
 
   StreamSubscription<chime.MeetingSnapshot>? _snapshotSubscription;
   StreamSubscription<chime.ChimeEvent>? _eventSubscription;
@@ -52,27 +54,6 @@ class ChimeMediaSession
   /// Existing provider session for advanced Chime-specific integrations.
   chime.ChimeMeetingSession get chimeSession => _session;
 
-  bool _macEffectsInputAvailable = false;
-  bool get _effectsPlatform =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          (defaultTargetPlatform == TargetPlatform.macOS &&
-              _macEffectsInputAvailable));
-  Future<void> _probeProcessedVideoInput() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.macOS) return;
-    try {
-      _macEffectsInputAvailable =
-          await MethodChannel(
-            _processedSink.channelName,
-          ).invokeMethod<bool>('probeProcessedVideoInput') ??
-          false;
-    } on MissingPluginException {
-      _macEffectsInputAvailable = false;
-    } on PlatformException {
-      _macEffectsInputAvailable = false;
-    }
-  }
-
   void _ensureJoinNotCancelled() {
     if (_joinCancelled || _disposed) {
       throw RealtimeException(
@@ -83,37 +64,8 @@ class ChimeMediaSession
     }
   }
 
-  final _processedSink = NativeProcessedVideoSink(
-    providerId: 'chime',
-    channelName: 'com.oneplusdream.aws.chime.methodChannel',
-    attachMethod: 'attachProcessedVideoSource',
-    detachMethod: 'detachProcessedVideoSource',
-  );
-  @override
-  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
-      capabilities.canPublishVideo &&
-      _effectsPlatform &&
-      _processedSink.supports(source) &&
-      source.platform ==
-          (defaultTargetPlatform == TargetPlatform.android
-              ? ProcessedVideoPlatform.android
-              : ProcessedVideoPlatform.macos);
-  @override
-  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
-    _ensureActive();
-    if (!supportsProcessedVideoSource(source)) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        providerId: providerId,
-        message:
-            'Processed video input is unavailable for this role or platform.',
-      );
-    }
-    await _processedSink.attach(source);
-  }
-
-  @override
-  Future<void> detachProcessedVideoSource() => _processedSink.detach();
+  late final _controls = _ChimeMediaControls(this);
+  late final _mapper = _ChimeSnapshotMapper(this);
 
   @override
   String get providerId => ChimeJoinInfo.providerIdValue;
@@ -123,11 +75,12 @@ class ChimeMediaSession
 
   @override
   MediaCapabilities get capabilities => _chimeCapabilities.copyWith(
-    canBlurBackground: _chimeCapabilities.canPublishVideo && _effectsPlatform,
+    canBlurBackground:
+        _chimeCapabilities.canPublishVideo && _controls._effectsPlatform,
     canReplaceBackgroundImage:
-        _chimeCapabilities.canPublishVideo && _effectsPlatform,
-    canEnumerateCameras: _effectsPlatform,
-    canSelectCamera: _effectsPlatform,
+        _chimeCapabilities.canPublishVideo && _controls._effectsPlatform,
+    canEnumerateCameras: _controls._effectsPlatform,
+    canSelectCamera: _controls._effectsPlatform,
   );
 
   @override
@@ -144,6 +97,44 @@ class ChimeMediaSession
 
   @override
   Stream<MediaEvent> get events => _eventController.stream;
+
+  @override
+  bool supportsProcessedVideoSource(ProcessedVideoSource source) =>
+      _controls.supportsProcessedVideoSource(source);
+  @override
+  Future<void> attachProcessedVideoSource(ProcessedVideoSource source) =>
+      _controls.attachProcessedVideoSource(source);
+  @override
+  Future<void> detachProcessedVideoSource() =>
+      _controls.detachProcessedVideoSource();
+  @override
+  Future<List<MediaDevice>> listMediaDevices({Set<MediaDeviceKind>? kinds}) =>
+      _controls.listMediaDevices(kinds: kinds);
+  @override
+  Future<void> selectMediaDevice(MediaDevice device) =>
+      _controls.selectMediaDevice(device);
+  @override
+  Future<void> setMuted(bool muted) => _controls.setMuted(muted);
+  @override
+  Future<void> toggleMute() => _controls.toggleMute();
+  @override
+  Future<void> setVideoEnabled(bool enabled) =>
+      _controls.setVideoEnabled(enabled);
+  @override
+  Future<void> setScreenShareEnabled(bool enabled) =>
+      _controls.setScreenShareEnabled(enabled);
+  @override
+  Future<void> switchCamera(MediaCameraPosition position) =>
+      _controls.switchCamera(position);
+  @override
+  Future<List<MediaAudioDevice>> listAudioDevices() =>
+      _controls.listAudioDevices();
+  @override
+  Future<void> selectAudioDevice(MediaAudioDevice device) =>
+      _controls.selectAudioDevice(device);
+  @override
+  Future<void> sendMessage(String message, {String topic = 'chat'}) =>
+      _controls.sendMessage(message, topic: topic);
 
   @override
   Future<void> join(MediaJoinInfo joinInfo) {
@@ -181,16 +172,16 @@ class ChimeMediaSession
     try {
       await _session.join(rawJoinInfo.chimeJoinInfo);
       _ensureJoinNotCancelled();
-      await _probeProcessedVideoInput();
+      await _controls._probeProcessedVideoInput();
       _ensureJoinNotCancelled();
-      _onProviderSnapshot(_session.snapshot, clearLastError: true);
-    } on chime.RealtimeException catch (error) {
+      _mapper._onProviderSnapshot(_session.snapshot, clearLastError: true);
+    } on chime.RealtimeException catch (error, stack) {
       if (_joinCancelled || _disposed) rethrow;
-      final mapped = _mapError(error);
+      final mapped = _mapError(error, stage: 'join', stack: stack);
       _replaceSnapshot(_snapshot.copyWith(lastError: mapped));
       _emit(MediaFailureEvent(mapped));
       throw mapped;
-    } catch (error) {
+    } catch (error, stack) {
       if (_joinCancelled || _disposed) {
         throw RealtimeException(
           code: RealtimeErrorCode.cancelled,
@@ -200,9 +191,14 @@ class ChimeMediaSession
         );
       }
       final mapped = RealtimeException(
-        code: RealtimeErrorCode.unknown,
-        message: 'Unable to join the Chime meeting.',
-        details: error,
+        code: error is TimeoutException
+            ? RealtimeErrorCode.timeout
+            : RealtimeErrorCode.providerError,
+        message: 'chime.join failed.',
+        operation: 'join',
+        domain: 'media',
+        cause: error,
+        stackTrace: stack,
         providerId: providerId,
       );
       _replaceSnapshot(_snapshot.copyWith(lastError: mapped));
@@ -211,72 +207,12 @@ class ChimeMediaSession
     }
   }
 
-  @override
-  Future<List<MediaDevice>> listMediaDevices({
-    Set<MediaDeviceKind>? kinds,
-  }) async {
-    final requested = kinds ?? MediaDeviceKind.values.toSet();
-    _ensureActive();
-    final cameras =
-        capabilities.canEnumerateCameras &&
-            requested.contains(MediaDeviceKind.camera)
-        ? await ProcessedVideoBridge().listCameras()
-        : const <ProcessedVideoCameraDevice>[];
-    final devices = requested.contains(MediaDeviceKind.audioOutput)
-        ? await listAudioDevices()
-        : const <MediaAudioDevice>[];
-    return [
-      for (final camera in cameras)
-        MediaDevice(
-          id: camera.id,
-          label: camera.label,
-          kind: MediaDeviceKind.camera,
-        ),
-      ...devices.map(
-        (device) => MediaDevice(
-          id: device.id ?? device.label,
-          label: device.label,
-          kind: MediaDeviceKind.audioOutput,
-        ),
-      ),
-    ];
-  }
-
-  @override
-  Future<void> selectMediaDevice(MediaDevice device) async {
-    _ensureActive();
-    if (device.kind == MediaDeviceKind.camera && capabilities.canSelectCamera) {
-      if (_processedSink.source == null) {
-        throw RealtimeException(
-          code: RealtimeErrorCode.invalidState,
-          providerId: providerId,
-          message: 'Prepare the SDK video source before selecting a camera.',
-        );
-      }
-      await _processedSink.selectCamera(device.id);
-      return;
-    }
-    if (device.kind != MediaDeviceKind.audioOutput) {
-      throw RealtimeException(
-        code: RealtimeErrorCode.unsupportedFeature,
-        message: 'Chime only exposes audio output device selection.',
-        providerId: providerId,
-      );
-    }
-    final mapped = MediaAudioDevice.fromLabel(device.label);
-    return selectAudioDevice(
-      MediaAudioDevice(
-        id: device.id.isEmpty ? null : device.id,
-        label: mapped.label,
-        type: mapped.type,
-      ),
-    );
-  }
-
   void _attachProviderStreams() {
-    _snapshotSubscription ??= _session.snapshots.listen(_onProviderSnapshot);
-    _eventSubscription ??= _session.events.listen(_onProviderEvent);
-    _onProviderSnapshot(_session.snapshot);
+    _snapshotSubscription ??= _session.snapshots.listen(
+      _mapper._onProviderSnapshot,
+    );
+    _eventSubscription ??= _session.events.listen(_mapper._onProviderEvent);
+    _mapper._onProviderSnapshot(_session.snapshot);
   }
 
   @override
@@ -294,13 +230,13 @@ class ChimeMediaSession
     if (_joinFuture != null) _joinCancelled = true;
     try {
       try {
-        await detachProcessedVideoSource();
+        await _controls.detachProcessedVideoSource();
       } finally {
         await _session.leave();
       }
-      _onProviderSnapshot(_session.snapshot);
-    } on chime.RealtimeException catch (error) {
-      throw _mapError(error);
+      _mapper._onProviderSnapshot(_session.snapshot);
+    } on chime.RealtimeException catch (error, stack) {
+      throw _mapError(error, stage: 'leave', stack: stack);
     }
   }
 
@@ -312,7 +248,7 @@ class ChimeMediaSession
     _joinCancelled = true;
     final cleanup = Cleanup(timeout: cleanupTimeout);
     await cleanup.run('processedVideo', () async {
-      await detachProcessedVideoSource();
+      await _controls.detachProcessedVideoSource();
     });
     await cleanup.run('session', () async {
       await _session.dispose();
@@ -336,318 +272,6 @@ class ChimeMediaSession
       await _eventController.close();
     });
     cleanup.finish(domain: providerId);
-  }
-
-  @override
-  Future<void> setMuted(bool muted) async {
-    _ensureActive();
-    try {
-      await _session.setMuted(muted);
-      _onProviderSnapshot(_session.snapshot);
-    } on chime.RealtimeException catch (error) {
-      throw _mapError(error);
-    }
-  }
-
-  @override
-  Future<void> toggleMute() async {
-    _ensureActive();
-    try {
-      await _session.toggleMute();
-      _onProviderSnapshot(_session.snapshot);
-    } on chime.RealtimeException catch (error) {
-      throw _mapError(error);
-    }
-  }
-
-  @override
-  Future<void> setVideoEnabled(bool enabled) async {
-    _ensureActive();
-    try {
-      await _processedSink.setEnabled(enabled);
-      await _session.setVideoEnabled(enabled);
-      _onProviderSnapshot(_session.snapshot);
-    } on chime.RealtimeException catch (error) {
-      throw _mapError(error);
-    }
-  }
-
-  @override
-  Future<void> setScreenShareEnabled(bool enabled) async {
-    throw RealtimeException(
-      code: RealtimeErrorCode.unsupportedFeature,
-      message: 'Outgoing screen share is not implemented by flutter_aws_chime.',
-      providerId: providerId,
-    );
-  }
-
-  @override
-  Future<void> switchCamera(MediaCameraPosition position) async {
-    _ensureActive();
-    try {
-      if (_processedSink.source != null) {
-        await _processedSink.selectCamera(
-          position == MediaCameraPosition.front ? 'front' : 'back',
-        );
-        return;
-      }
-      await _session.switchCamera(
-        position == MediaCameraPosition.front
-            ? chime.CameraPosition.front
-            : chime.CameraPosition.back,
-      );
-    } on chime.RealtimeException catch (error) {
-      throw _mapError(error);
-    }
-  }
-
-  @override
-  Future<List<MediaAudioDevice>> listAudioDevices() async {
-    _ensureActive();
-    try {
-      final devices = await _session.listAudioDevices();
-      return devices.map(_mapAudioDevice).toList(growable: false);
-    } on chime.RealtimeException catch (error) {
-      throw _mapError(error);
-    }
-  }
-
-  @override
-  Future<void> selectAudioDevice(MediaAudioDevice device) async {
-    _ensureActive();
-    try {
-      await _session.selectAudioDevice(
-        chime.ChimeAudioDevice.fromLabel(device.label),
-      );
-    } on chime.RealtimeException catch (error) {
-      throw _mapError(error);
-    }
-  }
-
-  @override
-  Future<void> sendMessage(String message, {String topic = 'chat'}) async {
-    _ensureActive();
-    try {
-      await _session.sendMessage(message, topic: topic);
-      _onProviderSnapshot(_session.snapshot);
-    } on chime.RealtimeException catch (error) {
-      throw _mapError(error);
-    }
-  }
-
-  void _onProviderSnapshot(
-    chime.MeetingSnapshot providerSnapshot, {
-    bool clearLastError = false,
-  }) {
-    if (_disposed ||
-        (_joinCancelled &&
-            providerSnapshot.state != chime.MeetingState.ended &&
-            providerSnapshot.state != chime.MeetingState.disposed)) {
-      return;
-    }
-    final previous = _snapshot;
-    final next = _mapSnapshot(providerSnapshot, clearLastError: clearLastError);
-    _replaceSnapshot(next);
-    _emitSnapshotDiff(previous, next);
-  }
-
-  MediaSnapshot _mapSnapshot(
-    chime.MeetingSnapshot providerSnapshot, {
-    required bool clearLastError,
-  }) {
-    final participants = providerSnapshot.attendees
-        .map(
-          (attendee) => MediaParticipant(
-            id: attendee.attendeeId,
-            displayName: attendee.externalUserId.isEmpty
-                ? attendee.attendeeId
-                : attendee.externalUserId,
-            isLocal: attendee.isLocal,
-            isMuted: attendee.isMuted,
-            isVideoEnabled: attendee.isVideoEnabled,
-            isSpeaking: _speakingParticipantIds.contains(attendee.attendeeId),
-            videoTrack: attendee.videoTile == null
-                ? null
-                : ChimeMediaVideoTrack(attendee.videoTile!),
-            joinedAt: attendee.joinedAt,
-          ),
-        )
-        .toList(growable: false);
-    final messages = providerSnapshot.messages
-        .map(
-          (message) => MediaMessage(
-            participantId: message.attendeeId,
-            displayName: message.externalUserId,
-            message: message.message,
-            topic: message.topic,
-            timestampMs: message.timestampMs,
-            providerId: providerId,
-          ),
-        )
-        .toList(growable: false);
-    return MediaSnapshot(
-      state: _mapState(providerSnapshot.state),
-      role: role,
-      participants: participants,
-      messages: messages,
-      localParticipantId: providerSnapshot.localAttendeeId,
-      localMuted: providerSnapshot.localMuted,
-      localVideoEnabled: providerSnapshot.localVideoEnabled,
-      contentShareTrack: providerSnapshot.contentShareTile == null
-          ? null
-          : ChimeMediaVideoTrack(providerSnapshot.contentShareTile!),
-      capabilities: capabilities,
-      lastError: clearLastError ? null : _snapshot.lastError,
-    );
-  }
-
-  void _emitSnapshotDiff(MediaSnapshot previous, MediaSnapshot next) {
-    if (previous.state != next.state) {
-      if (!_stateController.isClosed) _stateController.add(next.state);
-      _emit(
-        MediaConnectionStateChanged(
-          previous: previous.state,
-          current: next.state,
-        ),
-      );
-    }
-
-    final oldParticipants = {
-      for (final item in previous.participants) item.id: item,
-    };
-    final newParticipants = {
-      for (final item in next.participants) item.id: item,
-    };
-    for (final participant in next.participants) {
-      final old = oldParticipants[participant.id];
-      if (old == null && !participant.isLocal) {
-        _emit(MediaParticipantJoined(participant));
-      }
-      final oldTrack = old?.videoTrack;
-      final newTrack = participant.videoTrack;
-      if (oldTrack == null && newTrack != null) {
-        _emit(MediaTrackPublished(newTrack));
-      } else if (oldTrack != null && newTrack == null) {
-        _emit(
-          MediaTrackUnpublished(
-            trackId: oldTrack.id,
-            participantId: participant.id,
-          ),
-        );
-      } else if (oldTrack != null &&
-          newTrack != null &&
-          oldTrack.id != newTrack.id) {
-        _emit(
-          MediaTrackUnpublished(
-            trackId: oldTrack.id,
-            participantId: participant.id,
-          ),
-        );
-        _emit(MediaTrackPublished(newTrack));
-      }
-      if (old != null && old.isMuted != participant.isMuted) {
-        _emit(
-          MediaTrackMutedChanged(
-            participantId: participant.id,
-            muted: participant.isMuted,
-            kind: MediaTrackKind.audio,
-          ),
-        );
-      }
-    }
-    for (final participant in previous.participants) {
-      if (!participant.isLocal &&
-          !newParticipants.containsKey(participant.id)) {
-        _emit(
-          MediaParticipantLeft(
-            participantId: participant.id,
-            displayName: participant.displayName,
-          ),
-        );
-      }
-    }
-
-    if (previous.localMuted != next.localMuted ||
-        previous.localVideoEnabled != next.localVideoEnabled) {
-      _emit(
-        MediaLocalMediaChanged(
-          muted: previous.localMuted == next.localMuted
-              ? null
-              : next.localMuted,
-          videoEnabled: previous.localVideoEnabled == next.localVideoEnabled
-              ? null
-              : next.localVideoEnabled,
-        ),
-      );
-    }
-
-    if (next.messages.length > previous.messages.length) {
-      for (final message in next.messages.skip(previous.messages.length)) {
-        _emit(MediaMessageReceived(message));
-      }
-    }
-
-    final oldContent = previous.contentShareTrack;
-    final newContent = next.contentShareTrack;
-    if (oldContent == null && newContent != null) {
-      _emit(MediaTrackPublished(newContent));
-    } else if (oldContent != null && newContent == null) {
-      _emit(
-        MediaTrackUnpublished(
-          trackId: oldContent.id,
-          participantId: oldContent.participantId,
-          wasScreenShare: true,
-        ),
-      );
-    }
-  }
-
-  void _onProviderEvent(chime.ChimeEvent event) {
-    if (_disposed) return;
-    if (event is chime.AttendeeVolumeEvent) {
-      final speaking = switch (event.volumeLevel) {
-        chime.MeetingVolumeLevel.low ||
-        chime.MeetingVolumeLevel.medium ||
-        chime.MeetingVolumeLevel.high => true,
-        chime.MeetingVolumeLevel.muted ||
-        chime.MeetingVolumeLevel.notSpeaking => false,
-        chime.MeetingVolumeLevel.unknown => _speakingParticipantIds.contains(
-          event.attendeeId,
-        ),
-      };
-      final wasSpeaking = _speakingParticipantIds.contains(event.attendeeId);
-      if (speaking) {
-        _speakingParticipantIds.add(event.attendeeId);
-      } else {
-        _speakingParticipantIds.remove(event.attendeeId);
-      }
-      if (speaking != wasSpeaking) {
-        _onProviderSnapshot(_session.snapshot);
-        _emit(
-          MediaSpeakingChanged(
-            participantId: event.attendeeId,
-            isSpeaking: speaking,
-          ),
-        );
-      }
-      return;
-    }
-
-    if (event is chime.VideoTileEvent &&
-        (event.kind == chime.VideoTileEventKind.paused ||
-            event.kind == chime.VideoTileEventKind.resumed)) {
-      final tile = event.videoTile;
-      _emit(
-        MediaTrackMutedChanged(
-          participantId: tile.attendeeId,
-          trackId: ChimeMediaVideoTrack(tile).id,
-          muted: event.kind == chime.VideoTileEventKind.paused,
-          kind: tile.isContentShare
-              ? MediaTrackKind.screenShare
-              : MediaTrackKind.video,
-        ),
-      );
-    }
   }
 
   void _transition(MediaSessionState next) {
@@ -716,5 +340,28 @@ MediaAudioDevice _mapAudioDevice(chime.ChimeAudioDevice device) =>
       },
     );
 
-RealtimeException _mapError(chime.RealtimeException error) =>
-    error.withProvider('chime');
+RealtimeException _mapError(
+  chime.RealtimeException error, {
+  String stage = 'provider',
+  StackTrace? stack,
+}) => normalizeRealtimeException(
+  RealtimeException(
+    code: error.code == RealtimeErrorCode.unknown
+        ? RealtimeErrorCode.providerError
+        : error.code,
+    message: 'chime.$stage failed.',
+    providerId: 'chime',
+    domain: 'media',
+    operation: stage,
+    cause: error.cause ?? error,
+    details: error.details,
+    statusCode: error.statusCode,
+    recoverable: error.recoverable,
+    suggestedAction: error.suggestedAction,
+    stackTrace: stack ?? error.stackTrace,
+  ),
+  domain: 'media',
+  operation: stage,
+  providerId: 'chime',
+  stackTrace: stack,
+);
