@@ -10,6 +10,12 @@ class AgoraTrackRenderer extends MediaTrackRenderer {
   const AgoraTrackRenderer();
 
   @override
+  bool handlesVideoFit(MediaVideoTrack track) =>
+      track is AgoraMediaVideoTrack &&
+      (track.processedSource == null ||
+          track.processedSource!.platform == ProcessedVideoPlatform.web);
+
+  @override
   Widget buildView(BuildContext context, MediaVideoTrack track) =>
       buildViewWithFit(context, track);
 

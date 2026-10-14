@@ -8,6 +8,10 @@ import 'provider_web_track.dart';
 class ProviderWebTrackRenderer extends MediaTrackRenderer {
   const ProviderWebTrackRenderer();
 
+  // Provider Web bridge uses HTMLVideoElement.objectFit = contain.
+  @override
+  bool handlesVideoFit(MediaVideoTrack track) => true;
+
   @override
   Widget buildView(BuildContext context, MediaVideoTrack track) {
     if (track is! ProviderWebVideoTrack) {

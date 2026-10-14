@@ -9,6 +9,13 @@ import '../model/media_track.dart';
 abstract class MediaTrackRenderer {
   const MediaTrackRenderer();
 
+  /// Whether this adapter guarantees aspect-preserving contain/cover when it
+  /// receives the *entire* destination rectangle. Opt in only if the native
+  /// SDK/player actually scales frames using their decoded dimensions.
+  /// Platform views and textures that simply resize to their Flutter bounds
+  /// must return false so [MediaTrackView] can preserve track geometry.
+  bool handlesVideoFit(MediaVideoTrack track) => false;
+
   /// Builds the widget that displays [track].
   Widget buildView(BuildContext context, MediaVideoTrack track);
 
@@ -52,9 +59,9 @@ class MediaTrackView extends StatelessWidget {
   final BoxFit fit;
 
   /// Let the provider renderer determine the frame's actual aspect ratio
-  /// inside the full viewport. Camera metadata may still report 16:9 while
-  /// decoded frames are portrait; an outer FittedBox based on that metadata
-  /// would letterbox the viewport *before* the native renderer fits the frame.
+  /// inside the full viewport. Use this only for renderers implementing native
+  /// aspect-preserving fit/cover; otherwise a platform view/texture can
+  /// *stretch* a landscape camera into a portrait window.
   ///
   /// Keep false for screen-sharing/other callers that depend on the supplied
   /// track dimensions for explicit aspect-ratio layout.

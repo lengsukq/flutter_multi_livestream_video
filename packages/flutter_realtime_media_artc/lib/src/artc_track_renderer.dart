@@ -9,6 +9,9 @@ import 'artc_media_track.dart';
 class ArtcTrackRenderer extends MediaTrackRenderer {
   const ArtcTrackRenderer();
 
+  @override
+  bool handlesVideoFit(MediaVideoTrack track) => true;
+
   static const String viewType =
       'com.oneplusdream.flutter_realtime_media_artc/video';
 

@@ -70,9 +70,12 @@ class MediaParticipantTile extends StatelessWidget {
                 renderer: renderer,
                 track: participant.videoTrack,
                 fit: fit,
-                // The underlying camera renderer knows the decoded frame
-                // orientation; avoid a second contain using stale metadata.
-                rendererManagesFit: true,
+                // Only renderers that guarantee native aspect-preserving fit
+                // may fill the stage directly. Chime and raw texture/platform
+                // views need the track's aspect ratio enforced externally.
+                rendererManagesFit: renderer.handlesVideoFit(
+                  participant.videoTrack!,
+                ),
               )
             else
               Container(

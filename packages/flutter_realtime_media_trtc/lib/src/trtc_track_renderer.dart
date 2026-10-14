@@ -8,6 +8,10 @@ import 'trtc_media_track.dart';
 class TrtcTrackRenderer extends MediaTrackRenderer {
   const TrtcTrackRenderer();
 
+  // TRTC's platform SDK configures fit render params for native video views.
+  @override
+  bool handlesVideoFit(MediaVideoTrack track) => true;
+
   @override
   Widget buildView(BuildContext context, MediaVideoTrack track) {
     if (track is! TrtcMediaVideoTrack) {

@@ -9,6 +9,9 @@ class LiveKitTrackRenderer extends MediaTrackRenderer {
   const LiveKitTrackRenderer();
 
   @override
+  bool handlesVideoFit(MediaVideoTrack track) => true;
+
+  @override
   Widget buildView(BuildContext context, MediaVideoTrack track) =>
       buildViewWithFit(context, track);
 
