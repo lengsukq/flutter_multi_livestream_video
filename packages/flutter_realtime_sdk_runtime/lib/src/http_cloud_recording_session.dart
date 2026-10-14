@@ -100,6 +100,10 @@ class HttpCloudRecordingSession implements MediaCloudRecordingSession {
         // the Demo needs the reason even when the remote task has failed.
         if (data['error'] is String) 'error': data['error'],
         if (data['layout'] != null) 'layout': data['layout'],
+        if (data['supportedLayouts'] is List)
+          'supportedLayouts': List<String>.from(
+            (data['supportedLayouts'] as List).whereType<String>(),
+          ),
         if (data['preset'] != null) 'preset': data['preset'],
       },
     );

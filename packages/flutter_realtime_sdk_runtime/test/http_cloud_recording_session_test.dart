@@ -163,6 +163,7 @@ void main() {
         'state': 'idle',
         'recordingAvailable': false,
         'recordingUnavailableReason': 'Linux Recording SDK is missing',
+        'supportedLayouts': ['grid', 'featuredParticipant'],
       });
       final result = await session.queryCloudRecording();
       expect(result.metadata['recordingAvailable'], false);
@@ -171,6 +172,7 @@ void main() {
         'Linux Recording SDK is missing',
       );
       expect(result.metadata.containsKey('AGORA_APP_CERTIFICATE'), false);
+      expect(result.metadata['supportedLayouts'], ['grid', 'featuredParticipant']);
     },
   );
 

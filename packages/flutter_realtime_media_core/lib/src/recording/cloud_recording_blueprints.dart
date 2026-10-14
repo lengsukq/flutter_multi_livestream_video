@@ -3,11 +3,22 @@ import 'recording_options.dart';
 
 /// Registry and blueprint generators for provider-specific cloud recording APIs.
 ///
-/// Converts neutral [RecordingOptions] and room context into structured
-/// [CloudRecordingDescriptor]s that include official endpoints, HTTP methods,
-/// recommended headers, and ready-to-dispatch request body payloads.
+/// Educational vendor request examples, NOT the production recording execution
+/// path. The authoritative capability check and storage/auth configuration
+/// belong to demo-server; clients must not dispatch these example payloads.
 class CloudRecordingBlueprints {
   CloudRecordingBlueprints._();
+
+  static void _requireLayout(
+    String providerId,
+    RecordingOptions options,
+    Set<RecordingLayout> allowed,
+  ) {
+    if (!allowed.contains(options.layout)) {
+      throw UnsupportedError('$providerId cloud recording does not support '
+          '${options.layout.name}; query recording capabilities first.');
+    }
+  }
 
   /// Builds a [CloudRecordingDescriptor] for the given [providerId] and room context.
   static CloudRecordingDescriptor buildDescriptor({
@@ -62,6 +73,10 @@ class CloudRecordingBlueprints {
     RecordingOptions options,
     String action,
   ) {
+    _requireLayout('agora', options, {
+      RecordingLayout.grid, RecordingLayout.featuredParticipant,
+      RecordingLayout.speaker,
+    });
     final uid = participantId ?? '10001';
     final tokenPlaceholder =
         'demo-client-request-token-${DateTime.now().millisecondsSinceEpoch}';
@@ -70,6 +85,8 @@ class CloudRecordingBlueprints {
     // 0: Floating, 1: Best-Fit (Grid), 2: Vertical
     final agoraLayout = switch (options.layout) {
       RecordingLayout.grid => 1,
+      RecordingLayout.featuredParticipant => 0,
+      RecordingLayout.activeSpeaker => 0,
       RecordingLayout.speaker => 0,
       RecordingLayout.screenShare => 2,
       RecordingLayout.custom => 3,
@@ -117,7 +134,7 @@ class CloudRecordingBlueprints {
       providerId: 'agora',
       action: action,
       endpoint:
-          'https://api.agora.io/v1/apps/{appId}/cloud_recording/resourceid/{resourceId}/mode/mix/$action',
+          'https://api.agora.io/v1/apps/{appId}/cloud_recording/resourceid/{resourceId}/mode/composite/$action',
       httpMethod: 'POST',
       suggestedHeaders: const {
         'Content-Type': 'application/json;charset=utf-8',
@@ -136,12 +153,12 @@ class CloudRecordingBlueprints {
     RecordingOptions options,
     String action,
   ) {
-    final layoutName = switch (options.layout) {
-      RecordingLayout.grid => 'GridView',
-      RecordingLayout.speaker => 'ActiveSpeakerOnly',
-      RecordingLayout.screenShare => 'GridView',
-      RecordingLayout.custom => 'GridView',
-    };
+    if (options.layout != RecordingLayout.grid) {
+      throw UnsupportedError(
+        'Chime webcam-only cloud recording supports GridView only. '
+        'Content-share overlays do not implement a full speaker layout.',
+      );
+    }
 
     final basePayload = <String, dynamic>{
       'SourceType': 'ChimeSdkMeeting',
@@ -153,18 +170,16 @@ class CloudRecordingBlueprints {
           'chime-rec-${DateTime.now().millisecondsSinceEpoch}',
       'ChimeSdkMeetingConfiguration': {
         'ArtifactsConfiguration': {
-          'Audio': {'MuxType': 'AudioOnly'},
-          'Video': {
-            'State': options.streamType == RecordingStreamType.audioOnly
-                ? 'Disabled'
-                : 'Enabled',
-            'MuxType': 'VideoOnly',
+          'Audio': {'MuxType': 'AudioWithCompositedVideo'},
+          'Video': {'State': 'Disabled'},
+          'Content': {'State': 'Disabled'},
+          'CompositedVideo': {
+            'Layout': 'GridView',
+            'Resolution': options.qualityPreset == RecordingQualityPreset.fullHd1080p30
+                ? 'FHD'
+                : 'HD',
+            'GridViewConfiguration': {'ContentShareLayout': 'PresenterOnly'},
           },
-          'Content': {'State': 'Enabled', 'MuxType': 'ContentOnly'},
-        },
-        'CompositedVideoArtifactsConfiguration': {
-          'Layout': layoutName,
-          'Resolution': 'HD',
         },
       },
     };
@@ -196,10 +211,16 @@ class CloudRecordingBlueprints {
     RecordingOptions options,
     String action,
   ) {
+    _requireLayout('trtc', options, {
+      RecordingLayout.grid, RecordingLayout.featuredParticipant,
+      RecordingLayout.speaker,
+    });
     final trtcLayout = switch (options.layout) {
-      RecordingLayout.grid => 2, // 2: 预设九宫格
-      RecordingLayout.speaker => 1, // 1: 悬浮/画中画
-      RecordingLayout.screenShare => 3, // 3: 屏幕分享为主
+      RecordingLayout.grid => 3, // 3: 九宫格
+      RecordingLayout.featuredParticipant => 1, // 1: 悬浮/画中画
+      RecordingLayout.activeSpeaker => 1, // 示意用；实际需服务端能力检查
+      RecordingLayout.speaker => 1,
+      RecordingLayout.screenShare => 2, // 2: 屏幕分享为主
       RecordingLayout.custom => 4,
     };
 
@@ -252,6 +273,10 @@ class CloudRecordingBlueprints {
     RecordingOptions options,
     String action,
   ) {
+    _requireLayout('artc', options, {
+      RecordingLayout.grid, RecordingLayout.featuredParticipant,
+      RecordingLayout.speaker,
+    });
     final basePayload = <String, dynamic>{
       'Action': 'StartMPUTask',
       'AppId': 'your-aliyun-artc-appid',
@@ -259,7 +284,8 @@ class CloudRecordingBlueprints {
       'TaskId': 'task_${roomCode}_${DateTime.now().millisecondsSinceEpoch}',
       'TaskProfile': '1080P',
       'LayoutIds': [
-        options.layout == RecordingLayout.speaker ? 'speaker_pip' : 'grid_auto',
+        const {RecordingLayout.speaker, RecordingLayout.featuredParticipant, RecordingLayout.activeSpeaker}
+            .contains(options.layout) ? 'speaker_pip' : 'grid_auto',
       ],
       'StorageConfig': {
         'OssBucket': 'your-oss-bucket',
@@ -290,8 +316,14 @@ class CloudRecordingBlueprints {
     RecordingOptions options,
     String action,
   ) {
+    _requireLayout('livekit', options, {
+      RecordingLayout.grid, RecordingLayout.activeSpeaker,
+      RecordingLayout.speaker,
+    });
     final livekitLayout = switch (options.layout) {
       RecordingLayout.grid => 'grid',
+      RecordingLayout.featuredParticipant => 'speaker',
+      RecordingLayout.activeSpeaker => 'speaker',
       RecordingLayout.speaker => 'speaker',
       RecordingLayout.screenShare => 'speaker-dark',
       RecordingLayout.custom => 'custom',

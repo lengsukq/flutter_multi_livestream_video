@@ -65,7 +65,7 @@ void main() {
       },
     );
 
-    test('AWS Chime blueprint maps grid and speaker layouts properly', () {
+    test('AWS Chime blueprint emits only valid webcam grid layout', () {
       final gridDescriptor = CloudRecordingBlueprints.buildDescriptor(
         providerId: 'chime',
         roomCode: 'chime-meeting-99',
@@ -86,20 +86,15 @@ void main() {
       );
       final config = gridDescriptor.payload['ChimeSdkMeetingConfiguration'];
       expect(
-        config['CompositedVideoArtifactsConfiguration']['Layout'],
+        config['ArtifactsConfiguration']['CompositedVideo']['Layout'],
         'GridView',
       );
 
-      final speakerDescriptor = CloudRecordingBlueprints.buildDescriptor(
-        providerId: 'chime',
-        roomCode: 'chime-meeting-99',
-        options: RecordingOptions.cloud(layout: RecordingLayout.speaker),
-      );
-      final speakerConfig =
-          speakerDescriptor.payload['ChimeSdkMeetingConfiguration'];
-      expect(
-        speakerConfig['CompositedVideoArtifactsConfiguration']['Layout'],
-        'ActiveSpeakerOnly',
+      expect(() => CloudRecordingBlueprints.buildDescriptor(
+            providerId: 'chime',
+            roomCode: 'chime-meeting-99',
+            options: RecordingOptions.cloud(layout: RecordingLayout.featuredParticipant),
+          ), throwsUnsupportedError,
       );
     });
 
@@ -121,8 +116,8 @@ void main() {
       expect(descriptor.payload['UserId'], 'bot_trtc');
       expect(
         descriptor.payload['MixLayoutParams']['MixLayoutMode'],
-        2,
-      ); // 2 = 九宫格
+        3,
+      ); // 3 = 九宫格
     });
 
     test('LiveKit blueprint maps Egress twirp API and layout correctly', () {

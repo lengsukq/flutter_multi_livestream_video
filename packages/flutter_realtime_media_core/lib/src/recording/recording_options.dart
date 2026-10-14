@@ -3,8 +3,22 @@ import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
 /// Recording execution is handled by the configured cloud provider backend.
 enum RecordingMode { cloud }
 
-/// Layout mode for composited multi-party cloud recording.
-enum RecordingLayout { grid, speaker, screenShare, custom }
+/// Intent for composited cloud recording, distinct from the meeting UI layout.
+///
+/// [featuredParticipant] highlights a fixed participant selected by the
+/// backend/provider (the host when supported); it does NOT follow speech.
+/// [activeSpeaker] follows voice activity and is currently available only on
+/// LiveKit RoomComposite Egress. Check the backend's `supportedLayouts` first.
+/// [speaker] is a legacy provider-native alias whose behavior varies; prefer
+/// one of the explicit intents. Other layouts are reserved for future backends.
+enum RecordingLayout {
+  grid,
+  featuredParticipant,
+  activeSpeaker,
+  speaker,
+  screenShare,
+  custom,
+}
 
 /// Authoritative task state returned by the cloud control plane.
 enum RecordingTaskState {
