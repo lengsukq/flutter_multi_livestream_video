@@ -44,6 +44,8 @@ void main() {
       expect(find.byType(ChatMessageList), findsOneWidget);
       expect(find.byType(ChatComposer), findsOneWidget);
       expect(find.text('Product chat'), findsOneWidget);
+      expect(find.textContaining('Chat member'), findsOneWidget);
+      expect(find.byTooltip('Manage chat'), findsNothing);
       expect(tester.takeException(), isNull);
       if ([390.0, 1440.0].contains(width)) {
         await captureDesign(tester, 'chat-room-${width.toInt()}');
@@ -51,13 +53,47 @@ void main() {
     }
     await tester.binding.setSurfaceSize(null);
   });
+
+  testWidgets('chat creator and guest have different role UI', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final role in [ChatRole.host, ChatRole.participant]) {
+      final chatRoom = RealtimeChatRoom(
+        room: ChatRoomSession(
+          roomCode: 'shared-room',
+          participantId: 'p1',
+          userId: role == ChatRole.host ? 'owner' : 'guest',
+          role: role,
+          session: _ChatSessionStub(role: role),
+        ),
+        disposeClient: () {},
+      );
+      addTearDown(chatRoom.dispose);
+      await tester.pumpWidget(
+        MaterialApp(home: DemoComposableChatPage(chatRoom: chatRoom)),
+      );
+      await tester.pump();
+      expect(
+        find.textContaining(
+          role == ChatRole.host ? 'Chat host' : 'Chat member',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byTooltip('Manage chat'),
+        role == ChatRole.host ? findsOneWidget : findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+  });
 }
 
 class _ChatSessionStub extends Fake implements ChatSession {
+  _ChatSessionStub({this.role = ChatRole.participant});
   @override
   String get providerId => 'fake';
   @override
-  ChatRole get role => ChatRole.participant;
+  final ChatRole role;
   @override
   ChatCapabilities get capabilities =>
       const ChatCapabilities(canSendMessage: true);

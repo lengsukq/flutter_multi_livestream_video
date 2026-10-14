@@ -15,14 +15,24 @@ class MeetingRoomPage extends StatelessWidget {
 
   final RealtimeRoom room;
   final MediaLocalPreviewSettings initialMediaSettings;
+
+  /// Pre-join display hint. The connected backend metadata / role is
+  /// authoritative; this hint never confers Live broadcaster permissions.
   final MediaRoomMode? roomMode;
+
+  static bool isLiveSession(RealtimeRoom room) {
+    // Route by *connected* backend mode / token role, never the mode a guest
+    // selected before joining. A stale broadcast hint must not turn an
+    // ordinary Meeting participant into a Live presenter.
+    final backendMode = room.media.backendMetadata['roomMode'];
+    return backendMode == MediaRoomMode.broadcast.wireName ||
+        (backendMode != MediaRoomMode.meeting.wireName &&
+            room.media.role != MediaRole.participant);
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Both Meeting and Live layouts are now owned by the Demo. The default
-    // RealtimeRoomView remains available for quick SDK integration.
-    if (roomMode == MediaRoomMode.broadcast ||
-        room.media.role == MediaRole.viewer) {
+    if (isLiveSession(room)) {
       return DemoComposableLivePage(
         room: room,
         initialSettings: initialMediaSettings,

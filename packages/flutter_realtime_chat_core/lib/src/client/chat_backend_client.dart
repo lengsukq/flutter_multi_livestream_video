@@ -31,8 +31,10 @@ class HttpStandaloneChatProvisioner
     implements
         StandaloneChatProfileProvisioner,
         StandaloneChatModerationProvider {
-  HttpStandaloneChatProvisioner(ChatBackendConfig config)
-    : _backend = ChatBackendClient(config);
+  HttpStandaloneChatProvisioner(
+    ChatBackendConfig config, {
+    http.Client? httpClient,
+  }) : _backend = ChatBackendClient(config, httpClient: httpClient);
 
   final ChatBackendClient _backend;
 
@@ -137,7 +139,10 @@ class HttpStandaloneChatProvisioner
       participantId: data['participantId']?.toString() ?? userId,
       userId: data['userId']?.toString() ?? userId,
       displayName: data['displayName']?.toString() ?? displayName,
-      role: ChatRole.tryParse(data['role']) ?? role,
+      // The public join request is a hint, not authority. An older/malformed
+      // backend omitting its assigned role must never promote the guest to
+      // host just because the caller requested ChatRole.host.
+      role: ChatRole.tryParse(data['role']) ?? ChatRole.participant,
       json: data,
       context: ChatRoomContext.standalone,
     );

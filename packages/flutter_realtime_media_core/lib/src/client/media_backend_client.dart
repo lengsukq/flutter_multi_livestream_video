@@ -257,7 +257,10 @@ class MediaBackendClient
       if (roomOwnerCredential != null && roomOwnerCredential.trim().isNotEmpty)
         'roomOwnerCredential': roomOwnerCredential.trim(),
     });
-    return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
+    // Joining cannot grant the caller's requested role. The server assigns
+    // authority from room policy and credentials; absent role fails closed to
+    // ordinary participant rather than inventing broadcaster privileges.
+    return _parseJoinResponse(data, fallbackRoomCode: code);
   }
 
   Future<MediaRoomJoinResponse> createRoomWithIdentity({
@@ -300,7 +303,9 @@ class MediaBackendClient
       if (roomOwnerCredential != null && roomOwnerCredential.trim().isNotEmpty)
         'roomOwnerCredential': roomOwnerCredential.trim(),
     });
-    return _parseJoinResponse(data, role: role, fallbackRoomCode: code);
+    // Legacy join requests may include 'host', but its presence in the
+    // request is not proof that the backend issued broadcaster credentials.
+    return _parseJoinResponse(data, fallbackRoomCode: code);
   }
 
   /// Requests replacement provider credentials for an existing participant.

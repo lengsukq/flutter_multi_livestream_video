@@ -7,6 +7,7 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'room_ui_controller.dart';
 import 'room_control_components.dart';
 import 'realtime_host_tools_panel.dart';
+import 'realtime_role_presentation.dart';
 
 class RoomLiveComponentsRealtimeHostToolsPanelState
     extends State<RealtimeHostToolsPanel> {
@@ -98,7 +99,21 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
       listenable: controller,
       builder: (context, _) {
         final snapshot = controller.snapshot;
-        final isHost = controller.room.media.role == MediaRole.host;
+        final isHost = RealtimePresentationRole.forLive(
+          controller.room.media.role,
+        ).canShowLiveHostTools;
+
+        // A direct caller may mount this panel independently from the Demo.
+        // Do not render broadcaster tools for viewer/participant credentials.
+        if (!isHost) {
+          return Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              isZh ? '仅主播可以管理直播工具' : 'Broadcaster tools are host-only',
+              style: TextStyle(color: style.textMuted),
+            ),
+          );
+        }
 
         return Column(
           children: [

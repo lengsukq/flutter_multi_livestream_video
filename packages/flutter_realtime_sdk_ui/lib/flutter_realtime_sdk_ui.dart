@@ -4,6 +4,7 @@ export 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
 export 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 
 export 'src/realtime_room_view.dart';
+export 'src/realtime_role_presentation.dart';
 export 'src/room_ui_controller.dart';
 export 'src/realtime_composable_template.dart';
 export 'src/room_media_components.dart';

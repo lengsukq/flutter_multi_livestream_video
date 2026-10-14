@@ -394,12 +394,14 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   }
 
   bool get isLive {
-    if (widget.config.roomMode != null) {
-      return widget.config.roomMode == MediaRoomMode.broadcast;
-    }
-    // A host can host an ordinary meeting. Only the viewer role implies
-    // broadcast when no explicit room mode has been supplied.
-    return widget.room.role == MediaRole.viewer;
+    // Backend-assigned room mode wins over an app's pre-join UI hint.
+    final serverMode = widget.room.backendMetadata['roomMode'];
+    if (serverMode == MediaRoomMode.broadcast.wireName) return true;
+    if (serverMode == MediaRoomMode.meeting.wireName) return false;
+    if (widget.room.role == MediaRole.viewer) return true;
+    if (widget.room.role == MediaRole.participant) return false;
+    // Direct custom host sessions do not necessarily carry mode metadata.
+    return widget.config.roomMode == MediaRoomMode.broadcast;
   }
 
   void setLayoutMode(MediaRoomLayoutMode mode) {
@@ -410,7 +412,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     final strings = RealtimeStrings.of(context);
     final style = RealtimeStyle.of(context);
     final canCloseRoom =
-        widget.room.role == MediaRole.host &&
+        widget.room.isLogicalOwner &&
         widget.room.managementCapabilities.closeRoom.supported;
 
     if (!widget.config.confirmBeforeLeave) {

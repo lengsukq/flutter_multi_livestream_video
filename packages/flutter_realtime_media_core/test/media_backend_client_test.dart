@@ -324,6 +324,28 @@ void main() {
 
   group('joinRoom', () {
     test(
+      'a missing backend role never promotes requested host to broadcaster',
+      () async {
+        final client = clientFor(
+          (_) => jsonResponse({
+            'provider': 'livekit',
+            'roomCode': '482913',
+            'roomMode': 'broadcast',
+            'participantId': 'guest',
+            'livekit': {'url': 'ws://host:7880', 'token': 'jwt'},
+          }),
+        );
+        final joined = await client.joinRoom(
+          role: MediaRole.host,
+          roomCode: '482913',
+          nickname: 'Guest',
+        );
+        expect(transport.requests.single.json!['role'], 'host');
+        expect(joined.role, MediaRole.participant);
+      },
+    );
+
+    test(
       'posts to the encoded room path and keeps the requested role',
       () async {
         final client = clientFor(

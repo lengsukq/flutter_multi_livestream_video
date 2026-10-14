@@ -103,6 +103,25 @@ void main() {
       }
     },
   );
+
+  testWidgets('independently mounted live host panel rejects a guest role', (
+    tester,
+  ) async {
+    final room = _room(_FakeMediaSession(role: MediaRole.participant));
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(body: RealtimeHostToolsPanel(showHeader: true)),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Broadcaster tools are host-only'), findsOneWidget);
+    expect(find.text('Switch Camera'), findsNothing);
+    expect(find.text('Screen Share'), findsNothing);
+  });
   testWidgets('host can place the same leave widget at the top right', (
     tester,
   ) async {
@@ -301,7 +320,7 @@ void main() {
   testWidgets('RealtimeHostToolsPanel renders host tools and extra tools', (
     tester,
   ) async {
-    final media = _FakeMediaSession();
+    final media = _FakeMediaSession(role: MediaRole.host);
     final room = _room(media);
     addTearDown(room.dispose);
 
@@ -331,7 +350,7 @@ void main() {
   testWidgets(
     'showRealtimeHostToolsBottomSheet opens and closes bottom sheet',
     (tester) async {
-      final media = _FakeMediaSession();
+      final media = _FakeMediaSession(role: MediaRole.host);
       final room = _room(media);
       addTearDown(room.dispose);
 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
-import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'room_ui_controller.dart';
+import 'realtime_role_presentation.dart';
 
 class RealtimeLiveStatus extends StatelessWidget {
   const RealtimeLiveStatus({super.key});
@@ -13,14 +13,21 @@ class RealtimeLiveStatus extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        final isViewer = controller.room.media.role == MediaRole.viewer;
+        final role = RealtimePresentationRole.forLive(
+          controller.room.media.role,
+        );
+        final isViewer = role == RealtimePresentationRole.liveViewer;
         return Chip(
           avatar: Icon(
             isViewer ? Icons.visibility_outlined : Icons.sensors,
             size: 16,
           ),
           label: Text(
-            '${isViewer ? (strings.isZh ? '观看中' : 'Watching') : strings.liveStatus} · ${controller.snapshot.participants.length}',
+            '${role == RealtimePresentationRole.liveHost
+                ? strings.liveStatus
+                : role == RealtimePresentationRole.liveViewer
+                ? (strings.isZh ? '观看中' : 'Watching')
+                : role.label(isZh: strings.isZh)} · ${controller.snapshot.participants.length}',
           ),
         );
       },

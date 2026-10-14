@@ -1331,7 +1331,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final fixture = _ManagedRoomFixture();
-      final chat = _FakeChatSession();
+      final chat = _FakeChatSession(fakeRole: ChatRole.host);
       final moderation = _FakeChatModeration();
 
       await tester.pumpWidget(

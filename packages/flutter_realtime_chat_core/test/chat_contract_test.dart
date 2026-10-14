@@ -246,6 +246,44 @@ class _FakeStandaloneProvisioner implements StandaloneChatProvisioner {
 }
 
 void main() {
+  test(
+    'standalone chat join never trusts caller-requested host for missing backend role',
+    () async {
+      final client = MockClient((request) async {
+        expect(request.url.path, '/chat/rooms/123456/join');
+        expect(
+          (jsonDecode(request.body) as Map<String, dynamic>)['role'],
+          'host',
+        );
+        return http.Response(
+          jsonEncode({
+            'contractVersion': 1,
+            'chatProvider': 'fake',
+            'roomCode': '123456',
+            'participantId': 'guest-1',
+            'userId': 'guest',
+            'displayName': 'Guest',
+            // Deliberately omit authoritative role.
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final provisioner = HttpStandaloneChatProvisioner(
+        ChatBackendConfig.fromUrl('https://example.test'),
+        httpClient: client,
+      );
+      final joined = await provisioner.join(
+        roomCode: '123456',
+        userId: 'guest',
+        displayName: 'Guest',
+        role: ChatRole.host,
+      );
+      expect(joined.role, ChatRole.participant);
+      provisioner.dispose();
+    },
+  );
+
   test('legacy chat moderation flags map to typed execution capabilities', () {
     const capabilities = ChatCapabilities(
       canDeleteMessage: true,

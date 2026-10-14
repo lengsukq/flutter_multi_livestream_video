@@ -19,6 +19,9 @@ class DemoComposableChatPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = DemoStrings.of(context);
     final theme = Theme.of(context);
+    final roleLabel = RealtimePresentationRole.forChat(
+      chatRoom.session.role,
+    ).label(isZh: strings.isZh);
     return ChatUiScope(
       session: chatRoom.session,
       moderation: chatRoom.moderation,
@@ -85,7 +88,7 @@ class DemoComposableChatPage extends StatelessWidget {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '${strings.roomCode} · ${chatRoom.roomCode}',
+                                        '${strings.roomCode} · ${chatRoom.roomCode} · $roleLabel',
                                         overflow: TextOverflow.ellipsis,
                                         style: theme.textTheme.bodySmall
                                             ?.copyWith(

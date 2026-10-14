@@ -167,9 +167,13 @@ class _RoomMembersPanelState extends State<RoomMembersPanel> {
         ),
       );
     }
+    final mediaOwner = widget.room.isLogicalOwner;
+    final chatHost = widget.chatSession?.role == ChatRole.host;
     final canCloseChat =
-        chatModeration != null && chatCapabilities.closeRoom.supported;
-    final canCloseMedia = capabilities.closeRoom.supported;
+        chatHost &&
+        chatModeration != null &&
+        chatCapabilities.closeRoom.supported;
+    final canCloseMedia = mediaOwner && capabilities.closeRoom.supported;
     return RealtimeGlassSurface(
       radius: RealtimeUiTokens.cardRadius,
       opacity: .97,
@@ -204,8 +208,7 @@ class _RoomMembersPanelState extends State<RoomMembersPanel> {
             ),
           ),
           const Divider(height: 1),
-          if (capabilities.muteParticipant.supported &&
-              widget.room.role == MediaRole.host)
+          if (mediaOwner && capabilities.muteParticipant.supported)
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
               child: Row(
@@ -280,18 +283,22 @@ class _RoomMembersPanelState extends State<RoomMembersPanel> {
                             final media = member.media;
                             final chat = member.chat;
                             final canRemoveMedia =
+                                mediaOwner &&
                                 !member.isSelf &&
                                 media != null &&
                                 capabilities.removeParticipant.supported;
                             final canMuteMedia =
+                                mediaOwner &&
                                 !member.isSelf &&
                                 media != null &&
                                 capabilities.muteParticipant.supported;
                             final canStopVideo =
+                                mediaOwner &&
                                 !member.isSelf &&
                                 media != null &&
                                 capabilities.stopParticipantVideo.supported;
                             final canRemoveChat =
+                                chatHost &&
                                 !member.isSelf &&
                                 chat != null &&
                                 chatModeration != null &&
@@ -299,7 +306,7 @@ class _RoomMembersPanelState extends State<RoomMembersPanel> {
                             final canGrantHost =
                                 !member.isSelf &&
                                 media != null &&
-                                widget.room.role == MediaRole.host &&
+                                mediaOwner &&
                                 capabilities.changeParticipantRole.supported;
                             final hasActions =
                                 canRemoveMedia ||
