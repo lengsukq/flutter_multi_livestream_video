@@ -1,4 +1,10 @@
-# Composable Realtime UI (incremental P0 API)
+# flutter_realtime_sdk_ui
+
+> **Development monorepo package, not yet published to pub.dev.** This optional
+> UI package is **not** included in `flutter_realtime_sdk` automatically.
+> Read [release preparation](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md)
+> before publishing. Import `package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart`,
+> not individual `src/` implementation files.
 
 The SDK **owns the room session and actions**; the host app **owns every
 Scaffold, route, breakpoint, panel and overlay**. Components use one
@@ -98,7 +104,7 @@ an entry failure stays on the same page with recoverable settings.
 | Chat-only UI | `package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart` | Depends on `flutter_realtime_chat_core` + Flutter only. No media, native RTC drivers, or room UI. |
 | Session orchestration without the default UI | `package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart` | Depends on runtime/core modules, but not the all-provider umbrella. |
 | Media, live, classroom + UI components | `package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart` | Rich aggregate that pulls in several UI modules. |
-| All providers pre-registered + convenience facade | `package:flutter_realtime_sdk/flutter_realtime_sdk.dart` | Full umbrella intentionally depends on all supported provider drivers. |
+| Lightweight facade with selected providers | `package:flutter_realtime_sdk/flutter_realtime_sdk.dart` **plus** the chosen `flutter_realtime_provider_*` | Facade exports Runtime only; it does **not** auto-register vendors or UI. |
 
 The **same** chat-specific state/controller and widgets work in both standalone
 chat and an attached meeting chat. The Room UI scope creates one
