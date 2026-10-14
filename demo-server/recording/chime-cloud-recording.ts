@@ -44,6 +44,8 @@ export function chimeCompositedVideo(layout: RecordingLayout, preset: RecordingP
 
 /** AWS Chime hosted capture + concatenation: Chime creates the MP4 in S3. */
 export class ChimeCloudRecording implements CloudRecordingExecutor {
+  // Chime GridView changes only while screen-sharing; no webcam-only speaker view.
+  readonly supportedLayouts = ['grid'] as const;
   private readonly jobs = new Map<string, Job>();
   private readonly rooms = new Map<string, NamedRoomEntry>();
   private readonly tickets = new Map<string, {roomCode: string; id: string; expires: number}>();
@@ -161,6 +163,9 @@ export class ChimeCloudRecording implements CloudRecordingExecutor {
     return null;
   }
   async start(room: NamedRoomEntry, layout: RecordingLayout, preset: RecordingPreset) {
+    if (layout !== 'grid') {
+      throw new RecordingProviderError('Chime webcam recording supports only grid; speaker overlays apply only to content sharing.');
+    }
     this.ensureConfigured();
     const sourceArn = room.meeting?.MeetingArn;
     if (!sourceArn?.startsWith('arn:aws:chime:')) {

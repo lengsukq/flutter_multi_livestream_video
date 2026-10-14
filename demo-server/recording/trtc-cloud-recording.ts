@@ -29,6 +29,8 @@ type Job = {
  * Signed 311 (VOD) / 310 (S3) callbacks identify the exported artifact.
  */
 export class TrtcCloudRecording implements CloudRecordingExecutor {
+  // MixLayoutMode=1 is a floating layout, not automatic voice detection.
+  readonly supportedLayouts = ['grid', 'featuredParticipant'] as const;
   private readonly jobs = new Map<string, Job>();
   private readonly tickets = new Map<string, {roomCode: string; jobId: string; expires: number}>();
   private readonly sdkAppId: number;
@@ -158,7 +160,7 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
     };
   }
 
-  async start(room: NamedRoomEntry, layout: RecordingLayout, _preset: RecordingPreset) {
+  async start(room: NamedRoomEntry, layout: RecordingLayout, preset: RecordingPreset) {
     this.ensureConfigured();
     const active = this.jobs.get(room.roomCode);
     if (active && active.state !== 'completed' && active.state !== 'failed') {
@@ -176,7 +178,12 @@ export class TrtcCloudRecording implements CloudRecordingExecutor {
       RoomIdType: 0, UserId: userId, UserSig: credentials.userSig,
       RecordParams: {RecordMode: 2, StreamType: 0, MaxIdleTime: 60},
       MixTranscodeParams: {
-        VideoParams: {Width: 1280, Height: 720, Fps: 15, BitRate: 1500000, Gop: 10},
+        VideoParams: {
+          Width: preset === 'H264_1080P_30' ? 1920 : 1280,
+          Height: preset === 'H264_1080P_30' ? 1080 : 720,
+          Fps: 30, BitRate: preset === 'H264_1080P_30' ? 3600000 : 2200000,
+          Gop: 30,
+        },
       },
       MixLayoutParams: {MixLayoutMode: layout === 'speaker' ? 1 : 3},
       StorageParams: this.storage === 'vod'

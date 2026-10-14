@@ -67,6 +67,15 @@ test('cloud recording HTTP routes authorize only this room host and never expose
     assert.equal(idle.body.state, 'idle');
     assert.equal(idle.body.recordingAvailable, false);
     assert.match(idle.body.recordingUnavailableReason, /Egress/);
+    assert.deepEqual(idle.body.supportedLayouts, ['grid', 'activeSpeaker']);
+    assert.equal((await send('room1', 'start', {
+      ...asHost, layout: 'featuredParticipant',
+    })).status, 422);
+    // Explicit voice-following mode is valid even when the cloud recorder
+    // itself is not configured yet; that failure remains 503.
+    assert.equal((await send('room1', 'start', {
+      ...asHost, layout: 'activeSpeaker',
+    })).status, 503);
     assert.equal((await send('room1', 'start', {
       ...asHost, layout: 'grid', rawProviderParams: {storage: {secret: 'client-injected'}},
     })).status, 400);
@@ -104,6 +113,7 @@ test('cloud recording routes dispatch TRTC by trusted room provider and proxy a 
   const invoked: string[] = [];
   let ticketUsed = false;
   const recorder: CloudRecordingExecutor = {
+    supportedLayouts: ['grid', 'featuredParticipant'],
     start: async () => {invoked.push('start'); return {provider:'trtc', recordingId:'task-1', state:'recording'};},
     stop: async () => {invoked.push('stop'); return {provider:'trtc', recordingId:'task-1', state:'processing'};},
     status: async () => {invoked.push('status'); return {provider:'trtc', recordingId:'task-1', state:'completed', canDownload:true};},
@@ -140,6 +150,8 @@ test('cloud recording routes dispatch TRTC by trusted room provider and proxy a 
     assert.equal((await post('start', host)).status, 200);
     assert.equal((await post('stop', host)).status, 200);
     assert.equal((await post('status', host)).status, 200);
+    const capabilities = await (await post('status', host)).json() as any;
+    assert.deepEqual(capabilities.supportedLayouts, ['grid', 'featuredParticipant']);
     const reply = await post('download', host);
     assert.equal(reply.status, 200);
     const data = await reply.json() as {downloadUrl:string};
@@ -148,7 +160,7 @@ test('cloud recording routes dispatch TRTC by trusted room provider and proxy a 
     assert.match(download.headers.get('content-disposition') ?? '', /trtc-test.mp4/);
     assert.equal((await download.arrayBuffer()).byteLength, bytes.length);
     assert.equal((await fetch(`http://127.0.0.1:${port}${data.downloadUrl}`)).status, 404);
-    assert.deepEqual(invoked, ['start', 'stop', 'status', 'download']);
+    assert.deepEqual(invoked, ['start', 'stop', 'status', 'status', 'download']);
   } finally {
     await new Promise<void>((resolve) => listener.close(() => resolve()));
     await new Promise<void>((resolve) => mediaListener.close(() => resolve()));

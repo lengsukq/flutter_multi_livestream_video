@@ -28,6 +28,45 @@ test('ARTC VOD missing storage config fails with explicit instructions (no OSS o
   await assert.rejects(recorder.start(room, 'grid', 'H264_720P_30'), RecordingConfigurationError);
 });
 
+test('ARTC VOD refreshes recording subscriptions on status and preserves pinned host', async () => {
+  const updates: Array<{subscribed: string[]; panes: string[]}> = [];
+  const live = {
+    async startRtcCloudRecording(req: any) {
+      assert.equal(req.subscribeParams.subscribeUserIdList.length, 1);
+      assert.equal(req.mixLayoutParams.userPanes[0].userId, 'publisher-1');
+      assert.equal(req.mixTranscodeParams.videoWidth, 1920);
+      assert.equal(req.mixTranscodeParams.videoFramerate, 30);
+      return {body: {taskId: 'task-live-members'}};
+    },
+    async updateRtcCloudRecording(req: any) {
+      assert.equal(req.taskId, 'task-live-members');
+      updates.push({
+        subscribed: req.subscribeParams.subscribeUserIdList.map((v: any) => v.userId),
+        panes: req.mixLayoutParams.userPanes.map((v: any) => v.userId),
+      });
+      return {body: {taskId: 'task-live-members'}};
+    },
+    async describeRtcCloudRecordingFiles() {
+      return {body: {taskInfo: {taskId: 'task-live-members', status: 'RECORDING'}}};
+    },
+  };
+  const recorder = new ArtcVodRecording(env, live as never, {} as never);
+  const changingRoom: NamedRoomEntry = {...room, attendees: [...room.attendees]};
+  await recorder.start(changingRoom, 'speaker', 'H264_1080P_30');
+  changingRoom.attendees.push({attendeeId: 'publisher-2', externalUserId: 'Student',
+    joinedAt: new Date().toISOString(), role: 'participant'});
+  await recorder.status(changingRoom);
+  assert.deepEqual(updates[0], {
+    subscribed: ['publisher-1', 'publisher-2'], panes: ['publisher-1'],
+  });
+  // Once the host leaves, the remaining publisher becomes the featured one.
+  changingRoom.attendees = changingRoom.attendees.filter((user) => user.attendeeId !== 'publisher-1');
+  await recorder.status(changingRoom);
+  assert.deepEqual(updates[1], {subscribed: ['publisher-2'], panes: ['publisher-2']});
+  await recorder.status(changingRoom);
+  assert.equal(updates.length, 2, 'unchanged membership must not cause repeated vendor charges');
+});
+
 test('ARTC VOD uses Live RTC API and VOD MP4 with private one-time HTTP export', async () => {
   const calls: string[] = [];
   const live = {

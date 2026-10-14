@@ -126,6 +126,7 @@ test('Chime cloud capture -> concat -> S3 MP4 uses vendor APIs and no local reco
 test('ARTC cloud recorder requires storage credentials and records via Alibaba API SDK', async () => {
   const missing = new ArtcCloudRecording({ARTC_APP_ID: 'app-id'});
   assert.equal(missing.readiness().available, false);
+  assert.deepEqual(missing.supportedLayouts, ['grid']);
   await assert.rejects(missing.start(entry('artc'), 'grid', 'H264_720P_30'), RecordingConfigurationError);
   const calls: string[] = [];
   let task = '';
@@ -161,6 +162,7 @@ test('ARTC cloud recorder requires storage credentials and records via Alibaba A
       }]}} as never;
     },
   } as never, objectReader);
+  assert.deepEqual(recorder.supportedLayouts, ['grid']);
   const room = entry('artc');
   const started = await recorder.start(room, 'grid', 'H264_720P_30');
   assert.equal(started.state, 'recording');

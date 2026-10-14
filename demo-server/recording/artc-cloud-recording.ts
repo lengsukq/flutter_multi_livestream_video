@@ -26,10 +26,13 @@ type Api = Pick<InstanceType<typeof AliRtc.default>,
 
 /** Alibaba ARTC hosted RTC Cloud Recording, backed by user OSS only. */
 export class ArtcCloudRecording implements CloudRecordingExecutor {
+  // Older OSS API requires separately provisioned templates for each layout.
+  readonly supportedLayouts: readonly ('grid' | 'featuredParticipant')[];
   private readonly jobs = new Map<string, Task>();
   private readonly tickets = new Map<string, {code: string; id: string; expires: number}>();
   private readonly appId: string;
   private readonly templateId: string;
+  private readonly speakerTemplateId: string;
   private readonly apiAccess: string;
   private readonly apiSecret: string;
   private readonly bucket: string;
@@ -46,7 +49,11 @@ export class ArtcCloudRecording implements CloudRecordingExecutor {
     injectedReader?: RecordingObjectReader,
   ) {
     this.appId = env.ARTC_APP_ID?.trim() ?? '';
-    this.templateId = env.ARTC_RECORDING_TEMPLATE_ID?.trim() ?? '';
+    this.templateId = env.ARTC_RECORDING_TEMPLATE_ID_GRID?.trim() ||
+      env.ARTC_RECORDING_TEMPLATE_ID?.trim() || '';
+    this.speakerTemplateId = env.ARTC_RECORDING_TEMPLATE_ID_SPEAKER?.trim() ?? '';
+    this.supportedLayouts = this.speakerTemplateId
+      ? ['grid', 'featuredParticipant'] : ['grid'];
     this.apiAccess = env.ALIBABA_CLOUD_ACCESS_KEY_ID?.trim() ?? '';
     this.apiSecret = env.ALIBABA_CLOUD_ACCESS_KEY_SECRET?.trim() ?? '';
     this.bucket = env.ARTC_RECORDING_OSS_BUCKET?.trim() ?? '';
@@ -129,6 +136,9 @@ export class ArtcCloudRecording implements CloudRecordingExecutor {
 
   async start(room: NamedRoomEntry, layout: RecordingLayout, _preset: RecordingPreset) {
     this.ensureConfigured();
+    if (layout === 'speaker' && !this.speakerTemplateId) {
+      throw new RecordingConfigurationError('ARTC OSS speaker layout requires ARTC_RECORDING_TEMPLATE_ID_SPEAKER.');
+    }
     const old = this.jobs.get(room.roomCode);
     if (old && old.state !== 'completed' && old.state !== 'failed') {
       throw new RecordingProviderError('An ARTC cloud recording is already running.');
@@ -139,14 +149,15 @@ export class ArtcCloudRecording implements CloudRecordingExecutor {
     };
     try {
       const response = await this.api!.startCloudRecord(new StartCloudRecordRequest({
-        appId: this.appId, channelId: room.providerRoomName, templateId: this.templateId,
+        appId: this.appId, channelId: room.providerRoomName,
+        templateId: layout === 'speaker' ? this.speakerTemplateId : this.templateId,
         taskId: job.id,
         storageConfig: new StartCloudRecordRequestStorageConfig({
           vendor: 1, region: this.regionCode, bucket: this.bucket,
           accessKey: this.ossAccess, secretKey: this.ossSecret,
         }),
-        // The template owns encoding and compositing. Use different templates
-        // for grid/speaker if that distinction is needed in production.
+        // The template owns encoding/compositing. Never silently reuse grid
+        // when the caller specifically requested featuredParticipant.
       }));
       if (response.body?.taskId !== job.id) {
         throw new RecordingProviderError('ARTC did not confirm the expected recording TaskId.');

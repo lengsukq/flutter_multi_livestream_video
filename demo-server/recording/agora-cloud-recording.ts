@@ -24,6 +24,8 @@ type Job = {
  * until real recording is requested.
  */
 export class AgoraCloudRecording implements CloudRecordingExecutor {
+  // Native floating video: highlights the first publisher, not voice activity.
+  readonly supportedLayouts = ['grid', 'featuredParticipant'] as const;
   private readonly jobs = new Map<string, Job>();
   private readonly tickets = new Map<string, {roomCode: string; id: string; expires: number}>();
   private readonly appId: string;

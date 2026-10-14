@@ -63,6 +63,7 @@ function parseState(value: string | number | undefined): EgressState {
  * Room managers are authenticated by the HTTP route before invoking this.
  */
 export class LiveKitCloudRecording {
+  readonly supportedLayouts = ['grid', 'activeSpeaker'] as const;
   private readonly jobs = new Map<string, Job>();
   private readonly url: string;
   private readonly apiKey: string;

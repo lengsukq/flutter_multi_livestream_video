@@ -44,6 +44,8 @@ export function ivsCompositionLayout(layout: RecordingLayout) {
  * The Demo Server does not transcode audio/video or run FFmpeg.
  */
 export class IvsCloudRecording implements CloudRecordingExecutor {
+  // isFeatured comes from the host's IVS participant token.
+  readonly supportedLayouts = ['grid', 'featuredParticipant'] as const;
   private readonly bucket: string;
   private readonly encoderArn: string;
   private readonly encoder1080Arn: string;

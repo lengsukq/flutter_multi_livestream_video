@@ -54,10 +54,20 @@ test('IVS requires MediaConvert and Chime requires bucket before recording, with
       };
       const result = await check('status');
       assert.equal(result.status, 200);
+      assert.deepEqual(result.body.supportedLayouts,
+        roomCode === 'CHI123' ? ['grid'] : ['grid', 'featuredParticipant']);
       assert.equal(result.body.recordingAvailable, false);
       assert.ok(result.body.recordingUnavailableReason);
       assert.equal(result.body.recordingId, null);
       assert.equal((await check('start')).status, 503);
+      if (roomCode === 'CHI123') {
+        const rejected = await fetch(`${base}/rooms/${roomCode}/recording/start`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({...body, layout: 'speaker'}),
+        });
+        assert.equal(rejected.status, 422);
+        assert.equal((await rejected.json() as any).error.code, 'unsupported-recording-layout');
+      }
     }
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));

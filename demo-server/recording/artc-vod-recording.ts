@@ -12,6 +12,11 @@ import Live, {
   StartRtcCloudRecordingRequestSubscribeParams,
   StartRtcCloudRecordingRequestSubscribeParamsSubscribeUserIdList,
   StopRtcCloudRecordingRequest,
+  UpdateRtcCloudRecordingRequest,
+  UpdateRtcCloudRecordingRequestMixLayoutParams,
+  UpdateRtcCloudRecordingRequestMixLayoutParamsUserPanes,
+  UpdateRtcCloudRecordingRequestSubscribeParams,
+  UpdateRtcCloudRecordingRequestSubscribeParamsSubscribeUserIdList,
 } from '@alicloud/live20161101';
 import Vod, {GetPlayInfoRequest} from '@alicloud/vod20170321';
 import {Config} from '@alicloud/openapi-client';
@@ -21,12 +26,15 @@ import type {CloudRecordingExecutor, RecordingLayout, RecordingPreset} from './c
 import {RecordingConfigurationError, RecordingProviderError} from './livekit-cloud-recording.ts';
 
 type LiveApi = Pick<InstanceType<typeof Live.default>,
-  'startRtcCloudRecording' | 'stopRtcCloudRecording' | 'describeRtcCloudRecordingFiles'>;
+  'startRtcCloudRecording' | 'updateRtcCloudRecording' |
+  'stopRtcCloudRecording' | 'describeRtcCloudRecordingFiles'>;
 type VodApi = Pick<InstanceType<typeof Vod.default>, 'getPlayInfo'>;
 type Task = {
   id: string;
   channel: string;
   layout: RecordingLayout;
+  subscribedIds: string[];
+  featuredId: string | null;
   state: 'recording' | 'processing' | 'completed' | 'failed';
   stopped: boolean;
   mediaId: string | null;
@@ -41,7 +49,9 @@ type Task = {
  * Media is recorded by Alibaba and served from Alibaba VOD without AWS S3.
  */
 export class ArtcVodRecording implements CloudRecordingExecutor {
+  readonly supportedLayouts = ['grid', 'featuredParticipant'] as const;
   private readonly jobs = new Map<string, Task>();
+  private readonly participantUpdates = new Map<string, Promise<void>>();
   private readonly tickets = new Map<string, {roomCode: string; id: string; expires: number}>();
   private readonly appId: string;
   private readonly storageLocation: string;
@@ -69,6 +79,59 @@ export class ArtcVodRecording implements CloudRecordingExecutor {
       accessKeyId: key, accessKeySecret: secret, regionId: this.region,
       endpoint: `vod.${this.region}.aliyuncs.com`,
     })) : null);
+  }
+
+  private publisherIds(room: NamedRoomEntry): string[] {
+    return [...new Set(room.attendees
+      .filter((person) => person.role !== 'viewer')
+      .sort((a, b) => Number(b.role === 'host') - Number(a.role === 'host'))
+      .map((person) => person.attendeeId))];
+  }
+
+  /** Called on authenticated recorder status/stop requests. Failures leave
+   * the previous vendor subscription intact and may be retried next poll. */
+  private async syncParticipants(room: NamedRoomEntry, job: Task): Promise<void> {
+    if (job.stopped || job.state !== 'recording') return;
+    const running = this.participantUpdates.get(room.roomCode);
+    if (running) return running;
+    const ids = this.publisherIds(room);
+    if (!ids.length || ids.length > 16 ||
+        (ids.length === job.subscribedIds.length &&
+          ids.every((id, index) => job.subscribedIds[index] === id))) return;
+    const featured = job.featuredId && ids.includes(job.featuredId)
+      ? job.featuredId : ids[0]!;
+    const videoIds = job.layout === 'speaker' ? [featured] : ids;
+    const columns = job.layout === 'speaker' ? 1 : Math.ceil(Math.sqrt(videoIds.length));
+    const rows = Math.ceil(videoIds.length / columns);
+    const updating = (async () => {
+      try {
+        await this.live!.updateRtcCloudRecording(new UpdateRtcCloudRecordingRequest({
+          taskId: job.id,
+          subscribeParams: new UpdateRtcCloudRecordingRequestSubscribeParams({
+            subscribeUserIdList: ids.map((userId) =>
+              new UpdateRtcCloudRecordingRequestSubscribeParamsSubscribeUserIdList({
+                userId, streamType: 0,
+              })),
+          }),
+          mixLayoutParams: new UpdateRtcCloudRecordingRequestMixLayoutParams({
+            userPanes: videoIds.map((userId, index) =>
+              new UpdateRtcCloudRecordingRequestMixLayoutParamsUserPanes({
+                userId,
+                x: String((index % columns) / columns),
+                y: String(Math.floor(index / columns) / rows),
+                width: String(1 / columns), height: String(1 / rows),
+                ZOrder: index,
+              })),
+          }),
+        }));
+        job.subscribedIds = ids;
+        job.featuredId = featured;
+      } catch {
+        throw new RecordingProviderError('ARTC VOD could not update recording participants; retry status to resync.');
+      }
+    })();
+    this.participantUpdates.set(room.roomCode, updating);
+    try {await updating;} finally {this.participantUpdates.delete(room.roomCode);}
   }
 
   private async getMp4(mediaId: string) {
@@ -120,15 +183,14 @@ export class ArtcVodRecording implements CloudRecordingExecutor {
     } catch { return false; }
   }
 
-  async start(room: NamedRoomEntry, layout: RecordingLayout, _preset: RecordingPreset) {
+  async start(room: NamedRoomEntry, layout: RecordingLayout, preset: RecordingPreset) {
     this.ensureConfigured();
     const previous = this.jobs.get(room.roomCode);
     if (previous && previous.state !== 'completed' && previous.state !== 'failed') {
       throw new RecordingProviderError('An ARTC VOD recording is already running.');
     }
-    const ids = [...new Set(room.attendees
-      .filter((person) => person.role !== 'viewer')
-      .map((person) => person.attendeeId))];
+    // A deterministic featured participant: prefer a host, not join order.
+    const ids = this.publisherIds(room);
     if (ids.length === 0 || ids.length > 16) {
       throw new RecordingProviderError('ARTC VOD recording needs 1 to 16 active publishing participants.');
     }
@@ -171,8 +233,11 @@ export class ArtcVodRecording implements CloudRecordingExecutor {
       }),
       mixTranscodeParams: new StartRtcCloudRecordingRequestMixTranscodeParams({
         audioBitrate: 128, audioChannels: 2, audioSampleRate: 48000,
-        videoCodec: 'H.264', videoBitrate: 1600, videoFramerate: 15,
-        videoGop: 30, videoHeight: 720, videoWidth: 1280,
+        videoCodec: 'H.264',
+        videoBitrate: preset === 'H264_1080P_30' ? 3600 : 2200,
+        videoFramerate: 30, videoGop: 30,
+        videoHeight: preset === 'H264_1080P_30' ? 1080 : 720,
+        videoWidth: preset === 'H264_1080P_30' ? 1920 : 1280,
       }),
       mixLayoutParams: new StartRtcCloudRecordingRequestMixLayoutParams({userPanes: panes}),
       maxIdleTime: 60,
@@ -189,6 +254,7 @@ export class ArtcVodRecording implements CloudRecordingExecutor {
     }
     const job: Task = {
       id, channel: room.providerRoomName, layout, state: 'recording', stopped: false,
+      subscribedIds: ids, featuredId: ids[0] ?? null,
       mediaId: null, videoUrl: null, size: 0, error: null,
     };
     this.jobs.set(room.roomCode, job);
@@ -200,6 +266,7 @@ export class ArtcVodRecording implements CloudRecordingExecutor {
     if (!job) throw new RecordingProviderError('No ARTC VOD recording exists for this room.');
     if (!job.stopped) {
       this.ensureConfigured();
+      await this.syncParticipants(room, job);
       try {
         await this.live!.stopRtcCloudRecording(new StopRtcCloudRecordingRequest({taskId: job.id}));
       } catch {
@@ -219,6 +286,7 @@ export class ArtcVodRecording implements CloudRecordingExecutor {
     };
     if (job.state === 'failed' || job.state === 'completed') return this.view(job);
     this.ensureConfigured();
+    await this.syncParticipants(room, job);
     const result = await this.live!.describeRtcCloudRecordingFiles(
       new DescribeRtcCloudRecordingFilesRequest({taskId: job.id}),
     );

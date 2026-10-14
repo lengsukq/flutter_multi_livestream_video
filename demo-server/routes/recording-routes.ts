@@ -3,7 +3,7 @@ import {pipeline} from 'node:stream/promises';
 import type {Express, Response} from 'express';
 import type {IvsRoomEntry, NamedRoomEntry, RoomEntry} from '../types.ts';
 import {requireRoomManager} from '../room-access.ts';
-import type {CloudRecordingExecutor} from '../recording/cloud-recording-executor.ts';
+import type {CloudRecordingExecutor, RecordingLayoutIntent} from '../recording/cloud-recording-executor.ts';
 import {
   RecordingConfigurationError,
   RecordingProviderError,
@@ -48,6 +48,8 @@ export function registerRecordingRoutes(app: Express, dependencies: {
           providerRoomName: entry.providerRoomName ??
             entry.meeting?.MeetingId ?? stageArn ?? '',
         };
+        const supportedLayouts: readonly RecordingLayoutIntent[] =
+          recorder.supportedLayouts ?? ['grid'];
         if (action === 'start') {
           // No client-supplied URL, storage, credentials or arbitrary vendor API
           // payload are allowed. The backend owns all privileged configuration.
@@ -68,11 +70,22 @@ export function registerRecordingRoutes(app: Express, dependencies: {
           if (req.body?.streamType && req.body.streamType !== 'both') {
             return contractError(res, 400, 'invalid-recording-stream', 'Cloud recording V1 captures composite audio and video.');
           }
-          const layout = req.body?.layout ?? 'grid';
-          if (layout !== 'grid' && layout !== 'speaker') {
-            return contractError(res, 400, 'invalid-recording-layout', 'Only grid and speaker layouts are available.');
+          const requestedLayout: unknown = req.body?.layout ?? 'grid';
+          // Accept the old 'speaker' spelling, but never downgrade silently.
+          const layout = requestedLayout === 'speaker'
+            ? (supportedLayouts.includes('activeSpeaker') ? 'activeSpeaker' : 'featuredParticipant')
+            : requestedLayout;
+          if (!['grid', 'featuredParticipant', 'activeSpeaker'].includes(String(layout))) {
+            return contractError(res, 400, 'invalid-recording-layout',
+              'Use grid, featuredParticipant or activeSpeaker.');
           }
-          return res.json(await recorder.start(room, layout, preset));
+          if (!supportedLayouts.includes(layout as RecordingLayoutIntent)) {
+            return contractError(res, 422, 'unsupported-recording-layout',
+              `Recording layout ${layout} is not supported by ${entry.provider}. ` +
+              `Available: ${supportedLayouts.join(', ') || 'none'}.`);
+          }
+          // Native provider integrations continue using their own layout names.
+          return res.json(await recorder.start(room, layout === 'grid' ? 'grid' : 'speaker', preset));
         }
         if (action === 'stop') return res.json(await recorder.stop(room));
         if (action === 'status') {
@@ -82,6 +95,7 @@ export function registerRecordingRoutes(app: Express, dependencies: {
             ...(status as Record<string, unknown>),
             recordingAvailable: readiness?.available ?? true,
             recordingUnavailableReason: readiness?.available === false ? readiness.reason : undefined,
+            supportedLayouts,
           });
         }
         return res.json(await recorder.download(room));
