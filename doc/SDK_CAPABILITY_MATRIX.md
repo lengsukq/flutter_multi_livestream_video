@@ -13,12 +13,16 @@ platform or role.
 Declarations, target builds and real calls are separate evidence; the [unified acceptance entry point](ACCEPTANCE.md) records devices, vendor versions, remote visuals and cleanup.
 
 
-## Built-in platform drivers
+## Optional provider-bundle platform drivers
 
-`RealtimeSdk.standard()` owns this routing table. Application code uses the
-same API on every target; the SDK resolves the provider implementation for the
-current runtime platform. A dash means the provider is known but the built-in
-SDK deliberately returns `unsupportedPlatform` on that target.
+**This table describes the drivers shipped by optional Provider bundles; it
+does not mean the facade automatically installs every vendor.** Host apps
+must explicitly depend on and register the appropriate
+`flutter_realtime_provider_*` bundle using `Realtime(providers: [...])`.
+Runtime resolves the registered provider for the current platform. A dash
+means that the selected bundle lacks that target's driver, which yields a
+typed unsupported-platform/unregistered-provider failure rather than an
+implicit vendor fallback.
 
 | Public Media provider | Android | iOS | macOS | Windows | Web |
 | --- | --- | --- | --- | --- | --- |
@@ -34,7 +38,7 @@ SDK deliberately returns `unsupportedPlatform` on that target.
 | Tencent Cloud Chat | Yes | Yes | Yes | Yes | Yes |
 | Amazon IVS Chat | Yes | Yes | Yes | — | Yes |
 
-Linux is not registered in the default catalog yet. Advanced applications can
+The optional bundles do not currently advertise general Linux support. Advanced applications can
 add or override drivers with `RealtimeProviderPlugin` without modifying Core.
 
 ## Host application requirements
@@ -65,7 +69,7 @@ Wasm dry-run reports incompatibilities. Do not advertise the bundled Web stack
 as Wasm-ready until those upstream dependencies migrate.
 
 The macOS build is verified with CocoaPods. `Yes**` for AWS means the
-batteries-included SDK uses one internal WebKit runtime: Meeting loads the
+optional AWS bundle uses one internal WebKit runtime: Meeting loads the
 pinned Chime JS SDK and Live loads the pinned IVS Web Broadcast SDK. The same
 public `aws` provider and the same Dart session APIs are used; applications do
 not create a WebView or add JavaScript assets. Flutter currently warns that
@@ -78,7 +82,7 @@ loaded only when an IVS Chat session is first opened.
 
 The current verification host is macOS: Android debug APK, iOS device Release
 without codesigning, macOS Release, and JavaScript Web builds are verified.
-Windows entries above are registered by the default catalog and covered by
+Windows entries above are available in the corresponding optional bundles and covered by
 platform-selection tests. CI is configured to build the Windows example on a
 Windows runner; a macOS development host cannot produce a native Windows build
 result locally.

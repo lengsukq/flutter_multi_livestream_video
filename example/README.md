@@ -35,8 +35,11 @@ Below 600px, the homepage uses a compact top header instead of the large
 desktop hero. Meeting/Live/Chat/Pre-Join pages are Demo-owned arrangements
 of reusable SDK UI widgets, not fixed full-page SDK templates.
 `MediaRole.host` is not a reliable substitute for an explicit
-meeting/live mode: passing `MediaRoomMode.broadcast` is important for
-livestream hosts. See the [Chinese P1 architecture and integration guide](../doc/P1_ARCHITECTURE_AND_INTEGRATION.zh-CN.md)
+meeting/live mode during creation. **After joining, the backend-returned
+`roomMode` and assigned credentials take precedence over Pre-Join hints.**
+Meeting creators may be `participant` with separate logical room-owner
+authority; Live joiners must not see broadcaster tools.
+See the [role UI contract](../doc/ROLE_UI_SEMANTICS.md) and [Chinese P1 architecture and integration guide](../doc/P1_ARCHITECTURE_AND_INTEGRATION.zh-CN.md)
 for the module graph and tested versus pending features.
 
 ## Run the example
@@ -110,9 +113,11 @@ Agora's optional real-service device E2E flow is documented in
 
 Applications that use the lower-level Core packages directly may still depend
 on only the provider adapters they need. The recommended high-level
-`flutter_realtime_sdk` intentionally acts as the batteries-included bundle so
-application runtime code does not maintain adapter registration. TRTC and ARTC
-device E2E instructions are in [`../doc/TRTC_E2E.md`](../doc/TRTC_E2E.md) and
+`flutter_realtime_sdk` is now a **lightweight facade**; the Demo explicitly
+registers its selected bundles in `createDemoProviders()`. Host apps must
+add only the desired `flutter_realtime_provider_*` packages and pass them
+to `Realtime(providers: [...])`. No vendor is bundled or selected implicitly.
+TRTC and ARTC device E2E instructions are in [`../doc/TRTC_E2E.md`](../doc/TRTC_E2E.md) and
 [`../doc/ARTC_E2E.md`](../doc/ARTC_E2E.md). The ARTC 7.11.0 iOS pod does not support
 simulator linking.
 
@@ -122,8 +127,13 @@ simulator linking.
 Meeting rooms show the SDK classroom entry with hands, Q&A, roster and teaching
 tools. Live rooms show the SDK gift entry when the backend advertises the
 optional interaction API. No Demo-specific classroom/gift state is maintained.
-Material sharing uses existing links; storage, file upload and recording are
-not implemented. Screen annotations are drawn in the shared-content preview.
+Material sharing uses existing links; **general-purpose file upload** is not
+implemented. **Cloud recording and MP4 download are implemented through the
+trusted Demo Server and vendor-specific cloud recording/storage APIs**, not
+through a local Flutter recorder. Some vendors require S3; Tencent and Alibaba
+can use their own VOD services. Provider setup, costs, status, and unverified
+paths are documented in [Cloud recording](../doc/CLOUD_RECORDING.md).
+Screen annotations are drawn in the shared-content preview.
 
 For macOS builds that hit the Iris SwiftPM FlutterMacOS linker issue, use
 `python3 ../scripts/build_flutter_macos.py --release --no-pub` instead of a

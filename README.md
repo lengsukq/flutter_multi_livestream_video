@@ -2,6 +2,66 @@
 
 Provider-neutral Flutter SDK for meetings, live media, product chat, classroom tools and shared content. The Demo uses the same public APIs as a host application.
 
+> **发布状态 / Publication status (2026-10-14):** This monorepo is **not yet published on pub.dev**. Every first-party package currently uses `publish_to: none`; local `path:` dependencies need a coordinated migration to hosted, version-constrained dependencies before publication. `flutter_realtime_sdk` is a **facade**, not a bundle of all vendors. See the [pub.dev release readiness guide](doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md). Do not run `pub publish` until the release gates pass.
+
+**简体中文** · [快速接入](#快速接入开发阶段) · [Package 划分](#entry-points) · [接入指南](doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) · [供应商与平台能力](doc/SDK_CAPABILITY_MATRIX.zh-CN.md) · [云录制](doc/CLOUD_RECORDING.md) · [发布准备](doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md)
+
+**从零在第三方 Flutter App 接入：**[完整接入清单（安装依赖 → 配置后端 → 创建/加入 → UI/权限 → 验收）](doc/APP_INTEGRATION_QUICKSTART.zh-CN.md)。
+**所有自有 SDK 包职责与选型：**[44 包依赖/接入索引](doc/PACKAGE_INTEGRATION_INDEX.zh-CN.md)。
+
+## 快速接入（开发阶段）
+
+**要求：** Flutter ≥ 3.47、Dart ≥ 3.12；运行参考后端需 Node.js ≥ 22.18。开发仓库并非已发布的 pub 包。推荐先克隆仓库，在宿主应用里用相对路径连接所需包：
+
+```yaml
+# Host app pubspec.yaml; assume the SDK checkout sits beside your app.
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_realtime_sdk:
+    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk
+  flutter_realtime_provider_livekit:
+    path: ../flutter_multi_livestream_video/packages/flutter_realtime_provider_livekit
+  # Optional UI:
+  flutter_realtime_sdk_ui:
+    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk_ui
+```
+
+先按 [Demo Server 指南](demo-server/README.md) 启动可信任的服务端、配置真实供应商和临时入会凭证。这里的 `backendUrl` 必须可从**运行应用的设备**访问：macOS 本机开发可用 `http://localhost:3000`；Android 模拟器可使用 `http://10.0.2.2:3000`；物理手机需要服务端的局域网 IP 或 HTTPS 域名。**不要把 App Certificate、Customer Secret、S3 密钥等写入 Flutter 客户端。**
+
+```dart
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_provider_livekit/flutter_realtime_provider_livekit.dart';
+
+final realtime = Realtime(
+  backendUrl: 'https://your-backend.example',
+  providers: [createLivekitProvider()],
+);
+
+final connection = await realtime.open(
+  RealtimeRequest.create(
+    type: RealtimeExperience.meeting,
+    user: const RealtimeUser(id: 'user-1', name: 'Alice'),
+  ),
+);
+final room = connection.mediaRoom!; // Meeting/Live；纯 Chat 则取 chatRoom。
+// 使用 room.states / room.events / room.media.session.snapshots 更新宿主 UI。
+// 只有用户真正离开房间时，才释放 SDK 持有的会话。
+await connection.dispose();
+```
+
+需要成品房间组件时，应用**额外依赖** `flutter_realtime_sdk_ui` 并导入：
+
+```dart
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
+
+RealtimeRoomView(room: connection.mediaRoom!);
+```
+
+需要举手、课堂 Q&A 或直播点赞/礼物时，请再依赖 `flutter_realtime_classroom_preset` / `flutter_realtime_live_preset`，使用 `featurePlugins: const [ClassroomPreset(), LivePreset()]` **显式注册**。礼物是演示互动，不包含支付或资金结算。参照 [SDK 接入指南](doc/SDK_RUNTIME_INTEGRATION.zh-CN.md)、[可选功能注册](doc/INTERACTION_PRESET_GUIDE.zh-CN.md) 和 [Demo 示例](example/README.md)；无需单独维护 Headless Demo。
+
+> **平台能力不等于真实设备验收：**会议/直播、IM、共享屏幕、录制、虚拟背景依赖选定 Provider、平台和角色。部分 Windows、iOS/Android 屏幕共享和云录制流程仍需实机联调。看 [能力矩阵](doc/SDK_CAPABILITY_MATRIX.zh-CN.md) 与 [验收记录](doc/ACCEPTANCE.md)，不要把示例的 UI 按钮视为已实现全部厂商能力。
+
 ## Entry points
 
 | Package | Use |
@@ -64,6 +124,9 @@ retains the existing business implementations. It also implements its own
 `room.interactions` API; no new SDK business method is needed.
 
 See [Interaction architecture and opt-in feature registration](doc/INTERACTION_ARCHITECTURE.md).
+For Meeting creator/guest, Live broadcaster/viewer and standalone Chat
+host/member wording and permission boundaries, see
+[role-aware UI semantics](doc/ROLE_UI_SEMANTICS.md).
 For four independent integration patterns and a custom feature plugin, see
 [Headless / Preset / Interaction 接入指南](doc/INTERACTION_PRESET_GUIDE.zh-CN.md).
 

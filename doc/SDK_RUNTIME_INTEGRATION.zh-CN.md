@@ -2,6 +2,10 @@
 
 本指南只提供 SDK 接入方法与**短代码片段**，不新增 Headless 示例工程或第二套 Demo。现有 `example/` 只演示如何自由组合 SDK 自带的 UI 组件。
 
+**首次在独立宿主 App 接入**，请先按 [完整分步接入清单](APP_INTEGRATION_QUICKSTART.zh-CN.md)
+准备 Flutter 依赖、可信后端、Provider、权限与创建/加入链路。当前包尚未发布
+pub.dev，示例路径属于**本地开发 Checkout**。
+
 ## 1. 依赖边界
 
 应用使用纯功能 API 时，只需依赖 `flutter_realtime_sdk` 与选中的 `flutter_realtime_provider_*` 包；不需要 `flutter_realtime_sdk_ui`。主 SDK 的生产依赖只有 `flutter_realtime_sdk_runtime`，并通过 Runtime 传递依赖必要领域 Core（视频特效和系统桥接等为当前 Runtime 自身能力）。不注册供应商时 SDK 不会自动拉取任何特定供应商。
@@ -47,6 +51,20 @@ await connection.dispose();
 `RealtimeExperience.live` 用于直播；`RealtimeExperience.chat` 用于独立聊天。`RealtimeRequest.create` 与 `join` 使用同一身份结构。也可使用 `RealtimeSource.credentials` 传入业务后端签发的临时凭据，不要求使用仓库的 Demo Server。Web 的 Provider Bundle 自带按需 JS 加载回调；优先使用 `Realtime(providers: [...])` 而非手动拼接资源路径。
 
 ## 3. Media、Chat、直播与课堂的纯功能操作
+
+以下 `room.liveInteractions` 与 `room.classroom` 并非主 SDK 内置成员：
+必须**另行依赖并导入** `flutter_realtime_live_preset` 和
+`flutter_realtime_classroom_preset`，且在 `Realtime(featurePlugins: ...)`
+中显式注册对应 Preset。未安装/注册的宿主请删去以下两个可选调用，
+仅使用媒体和 Chat 功能。
+
+```dart
+import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
+import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
+
+// 在创建 Realtime 时注册：
+// featurePlugins: const [LivePreset(), ClassroomPreset()],
+```
 
 ```dart
 final media = room.media.session;
@@ -98,6 +116,12 @@ final batch = await directory.muteAll(room.media, isCurrent: () => true);
 ```
 
 Room 所在后端与各 Provider 负责权限最终裁决，SDK 依据能力矩阵拒绝不支持的操作。聊天室的 `room.chatModeration` 与 RTC 的 `room.mediaModeration` 互相独立。批量静音只是多次调用既有权限受控接口，不绕过服务端授权。
+
+**角色语义：** Meeting 创建者通常持有单独的 `media.isLogicalOwner`，
+即使其 RTC 角色是 `participant`；Live 只有 `MediaRole.host` 才是主播；
+独立聊天使用已连接的 `ChatSession.role` 判断房主/成员。管理按钮须同时检查
+**服务端权限和当前能力**，不能仅靠“点了创建按钮”判断房主。详见
+[角色与 UI 语义](ROLE_UI_SEMANTICS.md)。
 
 Classroom / Live 可选服务由 `RealtimeRoom.initialize()` **在 Runtime 内启动一次**；UI 控制器不再负责启动，重复调用 initialize 不会重复创建轮询。初始失败通过 Runtime 事件报告，不应把仅课堂/直播辅助服务的错误当成媒体会话断开。退出时由 Room 统一清理辅助会话。
 

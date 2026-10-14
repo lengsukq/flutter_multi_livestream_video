@@ -20,11 +20,15 @@ IM System Hint / RTC Data 仅发送修订通知以加快同步。
 声明、平台构建和真实通话是三种独立证据；[统一验收入口](ACCEPTANCE.md)记录设备、供应商版本、远端画面与资源清理。
 
 
-## 内置平台 Driver
+## 可选 Provider Bundle 的平台 Driver 声明
 
-`RealtimeSdk.standard()` 内置并维护以下路由表。业务代码在所有平台调用同一套
-API，由 SDK 根据当前运行平台选择 Provider 实现。破折号表示 SDK 知道该 Provider，
-但当前平台没有内置 Driver，会明确返回 `unsupportedPlatform`。
+**下表是各个可选 Provider 包提供的 Driver 能力，不表示主 SDK 内置了所有厂商。**
+宿主必须显式引入对应的 `flutter_realtime_provider_*` 并使用
+`Realtime(providers: [createLivekitProvider(), ...])` 注册；纯
+`flutter_realtime_sdk` 不会自动安装或注册任意 Vendor。
+业务代码在所有平台使用同一套 API，Runtime 从**已注册**的 Driver 中按运行平台
+解析。破折号表示该 Bundle 对应平台没有可用 Driver，按能力返回
+`unsupportedPlatform` 或 Provider 未注册错误，而不是静默替换其他供应商。
 
 | 对外 Media Provider | Android | iOS | macOS | Windows | Web |
 | --- | --- | --- | --- | --- | --- |
@@ -40,7 +44,7 @@ API，由 SDK 根据当前运行平台选择 Provider 实现。破折号表示 S
 | Tencent Cloud Chat | 支持 | 支持 | 支持 | 支持 | 支持 |
 | Amazon IVS Chat | 支持 | 支持 | 支持 | — | 支持 |
 
-Linux 暂未注册到默认 Catalog。高级使用者仍可通过
+Linux 暂无上述官方 Bundle 的统一支持声明。高级使用者可以通过
 `RealtimeProviderPlugin` 增加或覆盖 Driver，而无需修改 Core。
 
 ## 宿主应用要求
@@ -77,7 +81,7 @@ JavaScript bridge。Chat bridge 只会在首次打开 IVS Chat 会话时加载�
 
 当前验证环境为 macOS：Android Debug APK、iOS 真机 Release（关闭签名）、
 macOS Release 以及标准 JavaScript Web 均已完成构建验证。上表中的 Windows
-组合已经注册到默认 Catalog，并有平台选择单测覆盖；但 macOS 主机无法执行
+组合已在对应的可选 Provider Bundle 中提供平台注册，并有平台选择单测覆盖；但 macOS 主机无法执行
 Windows 原生构建。CI 配置了 Windows runner 构建；macOS 开发主机无法在本机生成
 Windows 构建结果。
 
@@ -274,7 +278,7 @@ Windows 的已注册组合仍缺本次原生构建和新互动功能验收。
 
 ### Live 与产品 Chat 的平台接入
 
-[内置平台 Driver](#内置平台-driver) 表列出五套媒体供应商和三套产品 Chat
+[可选 Provider Bundle 的平台 Driver 声明](#可选-provider-bundle-的平台-driver-声明) 表列出五套媒体供应商和三套产品 Chat
 在 Web、Android、iOS、macOS、Windows 的接入情况。五套 Live 为 LiveKit、
 Agora、TRTC、ARTC、AWS IVS；AWS Meeting 使用 Chime。ARTC macOS 有原生
 framework 条件；Windows 已注册 LiveKit/Agora/TRTC 和 Tencent Chat，
