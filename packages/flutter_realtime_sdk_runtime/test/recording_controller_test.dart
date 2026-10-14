@@ -197,8 +197,14 @@ void main() {
     );
     expect(blueprint.providerId, 'agora');
     expect(blueprint.payload['cname'], 'unit_test_room');
-    expect(blueprint.payload['uid'], 'user_1');
-    expect(blueprint.payload['customToken'], 'xyz987');
+    // Recording services must use their own numeric UID and server-issued
+    // RTC token, not the caller's ordinary logical participant identifier.
+    expect(blueprint.payload['uid'], '{recordingUid}');
+    expect(
+      (blueprint.payload['clientRequest']
+          as Map<String, dynamic>)['customToken'],
+      'xyz987',
+    );
     await controller.dispose();
   });
 
