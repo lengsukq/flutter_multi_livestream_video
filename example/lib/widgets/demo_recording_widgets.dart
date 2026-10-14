@@ -6,6 +6,7 @@ import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 import '../demo_strings.dart';
 import 'demo_cloud_recording_result_dialog.dart';
+import 'demo_recording_layout_picker.dart';
 
 /// Shows a badge while the backend is recording.
 class DemoRecordingBadge extends StatelessWidget {
@@ -132,23 +133,17 @@ class _DemoRecordingButtonState extends State<DemoRecordingButton> {
     final recording = widget.room.recordingStatus == RecordingStatus.recording;
     RecordingLayout? layout;
     if (!recording) {
-      layout = await showDialog<RecordingLayout>(
-        context: context,
-        builder: (context) => SimpleDialog(
-          title: Text(DemoStrings.of(context).chooseCloudRecordingLayout),
-          children: [
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, RecordingLayout.grid),
-              child: Text(DemoStrings.of(context).gridModePreferred),
-            ),
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, RecordingLayout.speaker),
-              child: Text(DemoStrings.of(context).speakerMode),
-            ),
-          ],
-        ),
-      );
-      if (layout == null || !mounted) return;
+      try {
+        layout = await chooseCloudRecordingLayout(context, widget.room);
+        if (layout == null || !mounted) return;
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$error')),
+          );
+        }
+        return;
+      }
     }
     setState(() => _operating = true);
     try {

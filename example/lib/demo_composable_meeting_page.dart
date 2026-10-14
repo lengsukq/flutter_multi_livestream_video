@@ -7,6 +7,7 @@ import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 import 'demo_background.dart';
 import 'widgets/demo_cloud_recording_result_dialog.dart';
+import 'widgets/demo_recording_layout_picker.dart';
 import 'widgets/demo_recording_widgets.dart';
 
 /// Demo-owned layout: the SDK supplies only stateful functional widgets.
@@ -751,29 +752,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
           ),
         );
       } else {
-        final chosen = await showDialog<RecordingLayout>(
-          context: context,
-          builder: (dialogCtx) => SimpleDialog(
-            title: Text(isZh ? '选择云端录制布局' : 'Choose Cloud Recording Layout'),
-            children: [
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(dialogCtx, RecordingLayout.grid),
-                child: ListTile(
-                  leading: const Icon(Icons.grid_view),
-                  title: Text(isZh ? '画廊视图（多画面网格）' : 'Grid Layout'),
-                ),
-              ),
-              SimpleDialogOption(
-                onPressed: () =>
-                    Navigator.pop(dialogCtx, RecordingLayout.speaker),
-                child: ListTile(
-                  leading: const Icon(Icons.person_pin),
-                  title: Text(isZh ? '主讲人视图（大画面聚焦）' : 'Speaker Layout'),
-                ),
-              ),
-            ],
-          ),
-        );
+        final chosen = await chooseCloudRecordingLayout(context, widget.room);
         if (chosen == null || !mounted) return;
         await widget.room.startRecording(
           RecordingOptions.cloud(layout: chosen),
