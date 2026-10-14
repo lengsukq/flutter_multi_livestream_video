@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'realtime_strings.dart';
-import 'realtime_style.dart';
 import 'realtime_ui_style.dart';
 import 'room_regions.dart';
 import 'media_participant_builder.dart';
@@ -159,18 +158,7 @@ class MediaLiveVideoStage extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircleAvatar(
-                radius: 44,
-                backgroundColor: style.primarySubtle,
-                child: Text(
-                  name.isNotEmpty ? name.characters.first.toUpperCase() : '?',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                    color: style.primary,
-                  ),
-                ),
-              ),
+              RealtimeAvatar(name: name, avatarUrl: host.avatarUrl, size: 88),
               const SizedBox(height: 16),
               Text(
                 name,

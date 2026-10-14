@@ -27,6 +27,7 @@ class RealtimeParticipantList extends StatelessWidget {
             key: ValueKey(member.id),
             leading: RealtimeAvatar(
               name: member.displayName,
+              avatarUrl: member.avatarUrl,
               size: 36,
               isOnline: true,
               showOnlineDot: true,
@@ -425,8 +426,6 @@ class _RealtimeManagedParticipantListState
                         final name = member.displayName.isEmpty
                             ? member.userId
                             : member.displayName;
-                        final initial = (name.isNotEmpty ? name[0] : 'U')
-                            .toUpperCase();
 
                         return Container(
                           padding: const EdgeInsets.symmetric(
@@ -453,25 +452,10 @@ class _RealtimeManagedParticipantListState
                               Stack(
                                 alignment: Alignment.bottomRight,
                                 children: [
-                                  CircleAvatar(
-                                    radius: 18,
-                                    backgroundColor: member.isSelf
-                                        ? style.primarySubtle
-                                        : (isDark
-                                              ? Colors.white12
-                                              : Colors.grey.shade200),
-                                    child: Text(
-                                      initial,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 13,
-                                        color: member.isSelf
-                                            ? style.primary
-                                            : (isDark
-                                                  ? Colors.white
-                                                  : RealtimeUiTokens.text),
-                                      ),
-                                    ),
+                                  RealtimeAvatar(
+                                    name: name,
+                                    avatarUrl: member.avatarUrl,
+                                    size: 36,
                                   ),
                                   if (media != null || chatMember != null)
                                     Container(
@@ -655,7 +639,7 @@ class _RealtimeManagedParticipantListState
                                                   Icons
                                                       .chat_bubble_outline_rounded,
                                                   size: 10,
-                                                  color: Color(0xFF0284C7),
+                                                  color: Color(0xFF1D1D1F),
                                                 ),
                                                 const SizedBox(width: 3),
                                                 Text(

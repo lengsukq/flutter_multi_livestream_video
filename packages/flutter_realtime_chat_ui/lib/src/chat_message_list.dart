@@ -229,10 +229,10 @@ class ChatMessageList extends StatelessWidget {
 
             final bubbleBgColor = own
                 ? theme.colorScheme.primary
-                : (isDark ? const Color(0xFF262629) : const Color(0xFFF2F2F7));
+                : (isDark ? const Color(0xFF262629) : const Color(0xFFF5F5F7));
             final bubbleTextColor = own
                 ? Colors.white
-                : (isDark ? Colors.white : const Color(0xFF0F172A));
+                : (isDark ? Colors.white : const Color(0xFF1D1D1F));
             final timeStr =
                 '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
 
@@ -245,7 +245,11 @@ class ChatMessageList extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   if (!own) ...[
-                    ChatComponentsChatAvatar(name: senderName, size: 30),
+                    ChatComponentsChatAvatar(
+                      name: senderName,
+                      avatarUrl: message.avatarUrl,
+                      size: 30,
+                    ),
                     const SizedBox(width: 8),
                   ],
                   Flexible(
@@ -350,6 +354,14 @@ class ChatMessageList extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (own) ...[
+                    const SizedBox(width: 8),
+                    ChatComponentsChatAvatar(
+                      name: senderName,
+                      avatarUrl: message.avatarUrl,
+                      size: 30,
+                    ),
+                  ],
                 ],
               ),
             );

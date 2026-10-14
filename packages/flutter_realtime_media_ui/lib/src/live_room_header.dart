@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'realtime_strings.dart';
-import 'realtime_style.dart';
 import 'realtime_ui_style.dart';
 
 class LiveRoomHeader extends StatelessWidget {

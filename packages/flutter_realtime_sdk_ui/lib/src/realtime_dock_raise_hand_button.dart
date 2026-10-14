@@ -27,7 +27,7 @@ class RealtimeDockRaiseHandButton extends StatelessWidget {
           icon: raised ? Icons.pan_tool_rounded : Icons.pan_tool_outlined,
           label: raised ? strings.handRaised : strings.raiseHand,
           isActive: raised,
-          activeColor: RealtimeUiTokens.iosOrange,
+          activeColor: RealtimeUiTokens.primary,
           showLabel: showLabel,
           onPressed: controller.isPending(RealtimeRoomUiAction.classroom)
               ? null

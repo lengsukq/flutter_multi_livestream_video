@@ -37,13 +37,13 @@ const Map<String, MediaProviderPresentation> _mediaProviderPresentations = {
     label: 'Agora',
     background: Color(0xFFF5F3FF),
     border: Color(0xFFDDD6FE),
-    foreground: Color(0xFF7C3AED),
+    foreground: Color(0xFF1D1D1F),
   ),
   'livekit': MediaProviderPresentation(
     label: 'LiveKit',
     background: Color(0xFFF0F9FF),
     border: Color(0xFFBAE6FD),
-    foreground: Color(0xFF0284C7),
+    foreground: Color(0xFF1D1D1F),
   ),
   'trtc': MediaProviderPresentation(
     label: 'Tencent TRTC',
@@ -65,9 +65,9 @@ MediaProviderPresentation mediaProviderPresentation(String providerId) {
   if (known != null) return known;
   return MediaProviderPresentation(
     label: providerId.trim().isEmpty ? providerId : providerId.toUpperCase(),
-    background: const Color(0xFFEEF2FF),
-    border: const Color(0xFFC7D2FE),
-    foreground: const Color(0xFF4F46E5),
+    background: const Color(0xFFF5F5F7),
+    border: const Color(0xFFE5E5EA),
+    foreground: const Color(0xFF1D1D1F),
   );
 }
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'realtime_strings.dart';
-import 'realtime_style.dart';
 import 'realtime_ui_style.dart';
 import 'media_participant_builder.dart';
 import 'media_participant_tile.dart';
@@ -100,39 +99,26 @@ class _MediaMeetingVideoStageState extends State<MediaMeetingVideoStage> {
         final others = participants
             .where((p) => p.id != effectiveFocused.id)
             .toList(growable: false);
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-          child: Column(
-            children: [
-              Expanded(
-                flex: 3,
-                child: _buildParticipantWidget(
-                  effectiveFocused,
-                  isFocused: true,
-                  canFocus: true,
-                ),
+        RealtimeMeetingTileData tile(MediaParticipant participant) =>
+            RealtimeMeetingTileData(
+              id: participant.id,
+              avatarUrl: participant.avatarUrl,
+              displayName: participant.displayName.isEmpty
+                  ? RealtimeStrings.of(context).participant
+                  : participant.displayName,
+              isMuted: participant.isMuted,
+              isSpeaking: participant.isSpeaking,
+              videoWidget: _buildParticipantWidget(
+                participant,
+                isFocused: participant.id == effectiveFocused.id,
+                canFocus: false,
               ),
-              if (others.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 120,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: others.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 10),
-                    itemBuilder: (context, index) => AspectRatio(
-                      aspectRatio: 4 / 3,
-                      child: _buildParticipantWidget(
-                        others[index],
-                        isFocused: false,
-                        canFocus: true,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+            );
+        return RealtimeMeetingFilmstripStage(
+          primaryParticipant: tile(effectiveFocused),
+          participants: others.map(tile).toList(growable: false),
+          onSelectParticipant: (participant) =>
+              setState(() => _focusedParticipantId = participant.id),
         );
       }
 

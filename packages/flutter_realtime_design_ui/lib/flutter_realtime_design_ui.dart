@@ -1,0 +1,42 @@
+/// Public, provider-independent visual system. Import this entrypoint only.
+library;
+
+import 'dart:async';
+import 'dart:ui';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+part 'src/realtime_style.dart';
+part 'src/realtime_ui_tokens.dart';
+part 'src/realtime_ui_theme.dart';
+part 'src/realtime_ui_theme_extension.dart';
+part 'src/realtime_ambient_background.dart';
+part 'src/realtime_glass_pressable.dart';
+part 'src/realtime_glass_surface.dart';
+part 'src/realtime_card_surface.dart';
+part 'src/realtime_badge.dart';
+part 'src/realtime_glass_card.dart';
+part 'src/realtime_segment_tab.dart';
+part 'src/realtime_segmented_tabs.dart';
+part 'src/realtime_glass_tile.dart';
+part 'src/realtime_pill.dart';
+part 'src/realtime_avatar.dart';
+part 'src/realtime_card.dart';
+part 'src/realtime_cupertino_segmented_bar.dart';
+part 'src/realtime_cupertino_switch_row.dart';
+part 'src/realtime_empty_state.dart';
+part 'src/realtime_inset_group.dart';
+part 'src/realtime_floating_pill.dart';
+part 'src/realtime_glass_icon_button.dart';
+part 'src/realtime_glass_text_field.dart';
+part 'src/realtime_field_action.dart';
+part 'src/realtime_glass_button.dart';
+part 'src/realtime_glass_dialog.dart';
+part 'src/realtime_sheet_header.dart';
+part 'src/realtime_danger_button.dart';
+part 'src/show_realtime_glass_bottom_sheet.dart';
+part 'src/realtime_workspace_shell.dart';
+part 'src/realtime_meeting_tile_data.dart';
+part 'src/realtime_meeting_filmstrip_stage.dart';
+part 'src/realtime_idle_controls.dart';

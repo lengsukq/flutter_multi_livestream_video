@@ -34,7 +34,7 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
             isLoading: pending,
             onPressed: onPressed,
             showLabel: showLabel,
-            activeColor: RealtimeUiTokens.iosOrange,
+            activeColor: RealtimeUiTokens.primary,
           );
         },
       );
@@ -178,7 +178,7 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
           isLoading: status.busy,
           onPressed: status.content?.canManage == true ? openMenu : null,
           showLabel: showLabel,
-          activeColor: RealtimeUiTokens.iosOrange,
+          activeColor: RealtimeUiTokens.primary,
         );
       },
     );

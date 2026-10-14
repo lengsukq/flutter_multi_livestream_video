@@ -13,8 +13,8 @@ IconData _icon(String key) => switch (key) {
 Color _giftColor(String key) => switch (key) {
   'flower' => const Color(0xFFEC4899),
   'star' => const Color(0xFFF59E0B),
-  'applause' => const Color(0xFF3B82F6),
-  _ => const Color(0xFF8B5CF6),
+  'applause' => const Color(0xFF1D1D1F),
+  _ => const Color(0xFF1D1D1F),
 };
 
 String _name(BuildContext context, LiveGift gift) {
@@ -843,8 +843,8 @@ class _LiveGiftControlButtonState extends State<LiveGiftControlButton> {
     final label = _text(context, '礼物', 'Gifts');
     final style = RealtimeStyle.of(context);
     final buttonContent = Container(
-      width: 40,
-      height: 40,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
         color: _panelOpen ? style.primarySubtle : style.surfaceSubtle,
         borderRadius: BorderRadius.circular(
@@ -882,8 +882,8 @@ class _LiveGiftControlButtonState extends State<LiveGiftControlButton> {
           ),
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: widget.showLabel ? 6 : 2,
-              vertical: 4,
+              horizontal: widget.showLabel ? 6 : 0,
+              vertical: widget.showLabel ? 4 : 0,
             ),
             child: widget.showLabel
                 ? Column(

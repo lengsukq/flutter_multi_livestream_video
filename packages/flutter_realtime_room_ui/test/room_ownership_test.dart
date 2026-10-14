@@ -95,8 +95,9 @@ class _FakeRenderer extends MediaTrackRenderer {
 }
 
 class _FakeMediaSession extends InteractiveMediaSession {
-  _FakeMediaSession({required MediaRole role}) : _role = role;
-  final MediaRole _role;
+  _FakeMediaSession({required this.role});
+  @override
+  final MediaRole role;
   final _snapshots = StreamController<MediaSnapshot>.broadcast();
   final _states = StreamController<MediaSessionState>.broadcast();
   final _events = StreamController<MediaEvent>.broadcast();
@@ -116,8 +117,6 @@ class _FakeMediaSession extends InteractiveMediaSession {
 
   @override
   String get providerId => 'fake';
-  @override
-  MediaRole get role => _role;
   @override
   MediaCapabilities get capabilities => snapshot.capabilities;
   @override

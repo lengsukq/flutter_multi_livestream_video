@@ -78,7 +78,7 @@ class LiveReactionsController {
       Color(0xFFF43F5E),
       Color(0xFFEC4899),
       Color(0xFFF59E0B),
-      Color(0xFF8B5CF6),
+      Color(0xFF1D1D1F),
     ];
     final heart = LiveReactionHeart(
       id: '${DateTime.now().microsecondsSinceEpoch}-${random.nextInt(1000)}',

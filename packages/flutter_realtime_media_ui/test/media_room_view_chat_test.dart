@@ -951,8 +951,22 @@ void main() {
       find.byKey(const ValueKey('meeting-participants-wide')),
       findsOneWidget,
     );
-    expect(find.text('Me'), findsOneWidget);
-    expect(find.text('Alice'), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('meeting-participants-wide')),
+        matching: find.text('Me'),
+      ),
+      findsOneWidget,
+    );
+    // The media stage and filmstrip can each show a participant label.
+    // Verify the roster directly rather than counting presentation copies.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('meeting-participants-wide')),
+        matching: find.text('Alice'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.pumpWidget(const SizedBox.shrink());
     await fixture.dispose();

@@ -127,7 +127,7 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                       indicator: BoxDecoration(
                         color: RealtimeUiTokens.surface,
                         borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.controlRadius,
+                          RealtimeUiTokens.pillRadius,
                         ),
                         boxShadow: [
                           BoxShadow(

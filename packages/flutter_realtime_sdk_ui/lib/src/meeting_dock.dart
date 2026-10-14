@@ -12,3 +12,6 @@ export 'realtime_dock_more_item.dart';
 export 'realtime_dock_more_button.dart';
 export 'realtime_share_option_card.dart';
 export 'realtime_classroom_panel.dart';
+export 'realtime_meeting_top_bar.dart';
+export 'realtime_meeting_filmstrip_stage.dart';
+export 'realtime_meeting_sidebar.dart';

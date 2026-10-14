@@ -46,7 +46,9 @@ class MeetingDockRealtimeClassroomPanelState
                   padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     color: style.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(
+                      RealtimeUiTokens.pillRadius,
+                    ),
                     border: Border.all(color: style.border),
                   ),
                   child: ListenableBuilder(
@@ -62,7 +64,9 @@ class MeetingDockRealtimeClassroomPanelState
                         indicatorSize: TabBarIndicatorSize.tab,
                         indicator: BoxDecoration(
                           color: style.surface,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(
+                            RealtimeUiTokens.pillRadius,
+                          ),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.06),

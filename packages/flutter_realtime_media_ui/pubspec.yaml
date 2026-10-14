@@ -6,6 +6,8 @@ environment:
   sdk: '>=3.12.0 <4.0.0'
   flutter: '>=3.47.0'
 dependencies:
+  flutter_realtime_design_ui:
+    path: ../flutter_realtime_design_ui
   flutter_realtime_foundation:
     path: ../flutter_realtime_foundation
   flutter:

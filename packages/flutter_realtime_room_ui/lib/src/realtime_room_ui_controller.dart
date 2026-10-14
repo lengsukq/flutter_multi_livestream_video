@@ -15,8 +15,8 @@ class RealtimeRoomUiController extends ChangeNotifier {
     this.onActionError,
     MediaCameraPosition initialCameraPosition = MediaCameraPosition.front,
   }) : _cameraPosition = initialCameraPosition {
-    _snapshot = room.media.session.snapshot;
-    _mediaSubscription = room.media.session.snapshots.listen((snapshot) {
+    _snapshot = room.media.snapshot;
+    _mediaSubscription = room.media.snapshots.listen((snapshot) {
       if (_disposed) return;
       _snapshot = snapshot;
       notifyListeners();

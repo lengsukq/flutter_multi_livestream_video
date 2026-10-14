@@ -195,7 +195,7 @@ class RealtimeDockReactionsButton extends StatelessWidget {
         icon: raised ? Icons.pan_tool_rounded : Icons.add_reaction_outlined,
         label: raised ? strings.handRaised : strings.reactions,
         isActive: raised,
-        activeColor: RealtimeUiTokens.iosOrange,
+        activeColor: RealtimeUiTokens.primary,
         showLabel: showLabel,
         onPressed: openMenu,
       );

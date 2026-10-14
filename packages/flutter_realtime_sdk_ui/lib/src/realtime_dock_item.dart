@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
 class RealtimeDockItem extends StatelessWidget {
   const RealtimeDockItem({
@@ -32,7 +35,7 @@ class RealtimeDockItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final primaryColor = activeColor ?? theme.colorScheme.primary;
+    final primaryColor = activeColor ?? RealtimeUiTokens.appleTeal;
 
     Color iconBgColor;
     Color iconColor;
@@ -60,44 +63,57 @@ class RealtimeDockItem extends StatelessWidget {
           isLabelVisible:
               (badgeCount != null && badgeCount! > 0) || showBadgeDot,
           label: badgeCount != null && badgeCount! > 0
-              ? Text('$badgeCount', style: const TextStyle(fontSize: 9))
+              ? Text(
+                  '$badgeCount',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
               : null,
           child: Container(
-            width: 42,
-            height: 42,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: iconBgColor,
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(
+                RealtimeUiTokens.controlRadius,
+              ),
               border: isActive && !isDanger
                   ? Border.all(
-                      color: primaryColor.withValues(alpha: 0.4),
-                      width: 1,
+                      color: primaryColor.withValues(alpha: 0.5),
+                      width: 1.2,
                     )
-                  : null,
+                  : Border.all(
+                      color: (isDark ? Colors.white : Colors.black).withValues(
+                        alpha: 0.08,
+                      ),
+                      width: 0.6,
+                    ),
             ),
             child: Center(
               child: isLoading
                   ? SizedBox(
-                      width: 16,
-                      height: 16,
+                      width: 18,
+                      height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         color: iconColor,
                       ),
                     )
-                  : Icon(icon, size: 20, color: iconColor),
+                  : Icon(icon, size: 21, color: iconColor),
             ),
           ),
         ),
         if (showLabel) ...[
-          const SizedBox(height: 3),
+          const SizedBox(height: 4),
           Text(
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+              fontSize: 13.0,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
               color: isActive
                   ? primaryColor
                   : theme.colorScheme.onSurfaceVariant,
@@ -107,14 +123,25 @@ class RealtimeDockItem extends StatelessWidget {
       ],
     );
 
-    return Tooltip(
-      message: tooltip ?? label,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: isLoading ? null : onPressed,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-          child: buttonContent,
+    return Semantics(
+      button: true,
+      enabled: onPressed != null && !isLoading,
+      selected: isActive,
+      label: label,
+      child: Tooltip(
+        message: tooltip ?? label,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+          onTap: isLoading || onPressed == null
+              ? null
+              : () {
+                  unawaited(HapticFeedback.lightImpact());
+                  onPressed?.call();
+                },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: buttonContent,
+          ),
         ),
       ),
     );

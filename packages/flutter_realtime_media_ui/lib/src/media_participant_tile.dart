@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 import 'realtime_strings.dart';
-import 'realtime_style.dart';
 import 'realtime_ui_style.dart';
 
 class MediaParticipantTile extends StatelessWidget {
@@ -71,6 +70,9 @@ class MediaParticipantTile extends StatelessWidget {
                 renderer: renderer,
                 track: participant.videoTrack,
                 fit: fit,
+                // The underlying camera renderer knows the decoded frame
+                // orientation; avoid a second contain using stale metadata.
+                rendererManagesFit: true,
               )
             else
               Container(
@@ -90,17 +92,10 @@ class MediaParticipantTile extends StatelessWidget {
                           )
                         : null,
                   ),
-                  child: CircleAvatar(
-                    radius: borderless ? 44 : 32,
-                    backgroundColor: style.primarySubtle,
-                    child: Text(
-                      name.characters.first.toUpperCase(),
-                      style: TextStyle(
-                        color: style.primary,
-                        fontSize: borderless ? 32 : 23,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                  child: RealtimeAvatar(
+                    name: name,
+                    avatarUrl: participant.avatarUrl,
+                    size: borderless ? 88 : 64,
                   ),
                 ),
               ),

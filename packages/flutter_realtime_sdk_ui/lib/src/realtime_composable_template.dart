@@ -3,6 +3,7 @@ import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart'
 import 'package:flutter_realtime_shared_content_preset/flutter_realtime_shared_content_preset.dart';
 import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 
 import 'room_chat_components.dart';
@@ -61,7 +62,9 @@ class _RealtimeComposableRoomTemplateState
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final wide = constraints.maxWidth >= 760;
+            final wide =
+                constraints.maxWidth >= 1000 &&
+                MediaQuery.textScalerOf(context).scale(17) < 28;
             final isViewer = widget.room.media.role == MediaRole.viewer;
             return Column(
               children: [
@@ -99,67 +102,72 @@ class _RealtimeComposableRoomTemplateState
                   SizedBox(height: 210, child: _sidebar()),
                 Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      if (!isViewer) ...[
-                        const RealtimeMicrophoneButton(),
-                        const RealtimeCameraButton(),
-                        const RealtimeSwitchCameraButton(),
-                        const RealtimeMediaDevicePicker(
-                          kind: MediaDeviceKind.microphone,
-                        ),
-                        const RealtimeMediaDevicePicker(
-                          kind: MediaDeviceKind.camera,
-                        ),
-                        if (widget.room.sharedContent != null)
-                          const RealtimeSharedContentButton()
-                        else
-                          const RealtimeScreenShareButton(),
-                      ],
-                      if (widget.isLive) ...[
-                        const RealtimeLiveLikeButton(),
-                        const RealtimeLiveGiftButton(),
-                      ],
-                      if (widget.room.classroom != null) ...[
-                        const RealtimeClassroomButton(),
-                        const RealtimeRaiseHandButton(),
-                        const RealtimeClassroomFeedbackButton(),
-                        const RealtimeClassroomToolsButton(),
-                        IconButton(
-                          tooltip: 'Questions',
-                          icon: const Icon(Icons.question_answer_outlined),
-                          onPressed: () => _toggle(_TemplatePanel.questions),
-                        ),
-                        IconButton(
-                          tooltip: 'Raised hands',
-                          icon: const Icon(Icons.pan_tool_outlined),
-                          onPressed: () => _toggle(_TemplatePanel.hands),
-                        ),
-                        IconButton(
-                          tooltip: 'Polls and quizzes',
-                          icon: const Icon(Icons.quiz_outlined),
-                          onPressed: () => _toggle(_TemplatePanel.activities),
-                        ),
-                      ],
-                      IconButton(
-                        tooltip: 'Participants',
-                        icon: const Icon(Icons.people_outline),
-                        onPressed: () => _toggle(_TemplatePanel.members),
-                      ),
-                      if (widget.room.chat != null)
-                        IconButton(
-                          tooltip: 'Chat',
-                          icon: Icon(
-                            _panel == _TemplatePanel.chat
-                                ? Icons.close
-                                : Icons.chat,
+                  child: RealtimeGlassSurface(
+                    radius: RealtimeUiTokens.pillRadius,
+                    blur: RealtimeUiTokens.blur,
+                    padding: const EdgeInsets.all(8),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        if (!isViewer) ...[
+                          const RealtimeMicrophoneButton(),
+                          const RealtimeCameraButton(),
+                          const RealtimeSwitchCameraButton(),
+                          const RealtimeMediaDevicePicker(
+                            kind: MediaDeviceKind.microphone,
                           ),
-                          onPressed: () => _toggle(_TemplatePanel.chat),
+                          const RealtimeMediaDevicePicker(
+                            kind: MediaDeviceKind.camera,
+                          ),
+                          if (widget.room.sharedContent != null)
+                            const RealtimeSharedContentButton()
+                          else
+                            const RealtimeScreenShareButton(),
+                        ],
+                        if (widget.isLive) ...[
+                          const RealtimeLiveLikeButton(),
+                          const RealtimeLiveGiftButton(),
+                        ],
+                        if (widget.room.classroom != null) ...[
+                          const RealtimeClassroomButton(),
+                          const RealtimeRaiseHandButton(),
+                          const RealtimeClassroomFeedbackButton(),
+                          const RealtimeClassroomToolsButton(),
+                          IconButton(
+                            tooltip: 'Questions',
+                            icon: const Icon(Icons.question_answer_outlined),
+                            onPressed: () => _toggle(_TemplatePanel.questions),
+                          ),
+                          IconButton(
+                            tooltip: 'Raised hands',
+                            icon: const Icon(Icons.pan_tool_outlined),
+                            onPressed: () => _toggle(_TemplatePanel.hands),
+                          ),
+                          IconButton(
+                            tooltip: 'Polls and quizzes',
+                            icon: const Icon(Icons.quiz_outlined),
+                            onPressed: () => _toggle(_TemplatePanel.activities),
+                          ),
+                        ],
+                        IconButton(
+                          tooltip: 'Participants',
+                          icon: const Icon(Icons.people_outline),
+                          onPressed: () => _toggle(_TemplatePanel.members),
                         ),
-                    ],
+                        if (widget.room.chat != null)
+                          IconButton(
+                            tooltip: 'Chat',
+                            icon: Icon(
+                              _panel == _TemplatePanel.chat
+                                  ? Icons.close
+                                  : Icons.chat,
+                            ),
+                            onPressed: () => _toggle(_TemplatePanel.chat),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ],

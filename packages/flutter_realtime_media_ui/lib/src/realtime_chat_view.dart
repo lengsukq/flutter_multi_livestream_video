@@ -6,7 +6,6 @@ import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart';
 
 import 'realtime_strings.dart';
-import 'realtime_style.dart';
 import 'realtime_ui_style.dart';
 
 part 'legacy_chat_actions.dart';
@@ -159,21 +158,6 @@ class _RealtimeChatViewState extends State<RealtimeChatView>
     _copyTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _copiedCode = false);
     });
-  }
-
-  Color _avatarColor(String name) {
-    if (name.isEmpty) return RealtimeUiTokens.primary;
-    final hash = name.codeUnits.fold(0, (acc, c) => acc + c);
-    const hues = [
-      Color(0xFF4F46E5),
-      Color(0xFF0D9488),
-      Color(0xFFD97706),
-      Color(0xFFE11D48),
-      Color(0xFF7C3AED),
-      Color(0xFF0284C7),
-      Color(0xFF059669),
-    ];
-    return hues[hash % hues.length];
   }
 
   String _formatTime(DateTime time) {
@@ -404,18 +388,6 @@ class _RealtimeChatViewState extends State<RealtimeChatView>
                                 _chatUi.isHost &&
                                 capabilities.removeMember.supported &&
                                 !own;
-                            final initialChar = message.displayName.isNotEmpty
-                                ? message.displayName.characters.first
-                                      .toUpperCase()
-                                : (message.userId.isNotEmpty
-                                      ? message.userId.characters.first
-                                            .toUpperCase()
-                                      : '?');
-                            final avatarColor = _avatarColor(
-                              message.displayName.isNotEmpty
-                                  ? message.displayName
-                                  : message.userId,
-                            );
 
                             final bubble = RealtimeGlassPressable(
                               onLongPress: () => _showMessageManagement(
@@ -484,7 +456,7 @@ class _RealtimeChatViewState extends State<RealtimeChatView>
                                           style: TextStyle(
                                             fontSize: 11.5,
                                             fontWeight: FontWeight.w800,
-                                            color: avatarColor,
+                                            color: style.textSecondary,
                                           ),
                                         ),
                                       ),
@@ -517,9 +489,20 @@ class _RealtimeChatViewState extends State<RealtimeChatView>
                             );
 
                             if (own) {
-                              return Align(
-                                alignment: Alignment.centerRight,
-                                child: bubble,
+                              return Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Flexible(child: bubble),
+                                  const SizedBox(width: 8),
+                                  RealtimeAvatar(
+                                    name: message.displayName.isEmpty
+                                        ? message.userId
+                                        : message.displayName,
+                                    avatarUrl: message.avatarUrl,
+                                    size: 32,
+                                  ),
+                                ],
                               );
                             }
 
@@ -528,19 +511,12 @@ class _RealtimeChatViewState extends State<RealtimeChatView>
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: avatarColor.withValues(
-                                      alpha: 0.15,
-                                    ),
-                                    child: Text(
-                                      initialChar,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w800,
-                                        color: avatarColor,
-                                      ),
-                                    ),
+                                  RealtimeAvatar(
+                                    name: message.displayName.isEmpty
+                                        ? message.userId
+                                        : message.displayName,
+                                    avatarUrl: message.avatarUrl,
+                                    size: 32,
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(

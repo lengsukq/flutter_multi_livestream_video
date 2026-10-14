@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'chat_ui_scope.dart';
 
@@ -29,6 +30,13 @@ class ChatMemberList extends StatelessWidget {
                   capabilities.banMember.supported ||
                   capabilities.manageRoles.supported);
           return ListTile(
+            leading: RealtimeAvatar(
+              name: member.displayName.isEmpty
+                  ? member.userId
+                  : member.displayName,
+              avatarUrl: member.avatarUrl,
+              size: 36,
+            ),
             title: Text(
               member.displayName.isEmpty ? member.userId : member.displayName,
             ),

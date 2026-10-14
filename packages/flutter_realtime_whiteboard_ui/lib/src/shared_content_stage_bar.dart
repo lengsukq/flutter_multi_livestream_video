@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'whiteboard_strings.dart';
 
 /// Unified Material 3 / Glassmorphic stage bar for shared content.
@@ -57,20 +58,24 @@ class SharedContentStageBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = RealtimeStyle.of(context).isDark;
+    final appearance = RealtimeUiThemeExtension.of(context);
+    final opaque =
+        !appearance.glassEnabled || MediaQuery.highContrastOf(context);
     final s = WhiteboardStrings.of(context);
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(appearance.controlRadius),
       child: BackdropFilter(
+        enabled: !opaque,
         filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: (isDark ? const Color(0xFF1E293B) : Colors.white).withValues(
-              alpha: 0.88,
+              alpha: opaque ? 1 : 0.88,
             ),
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(appearance.controlRadius),
             border: Border.all(
               color: (isDark ? Colors.white12 : Colors.black12),
               width: 1,

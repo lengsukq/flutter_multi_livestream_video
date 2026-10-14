@@ -87,7 +87,7 @@ class RealtimeShareOptionCard extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                                 color: isDark
                                     ? Colors.white
-                                    : const Color(0xFF0F172A),
+                                    : const Color(0xFF1D1D1F),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),

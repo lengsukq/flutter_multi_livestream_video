@@ -125,19 +125,10 @@ class _ClassroomRaisedHandsPanelState extends State<ClassroomRaisedHandsPanel> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 17,
-                    backgroundColor: RealtimeUiTokens.success,
-                    child: Text(
-                      s.displayName.isNotEmpty
-                          ? s.displayName.substring(0, 1)
-                          : 'S',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  RealtimeAvatar(
+                    name: s.displayName,
+                    avatarUrl: s.avatarUrl,
+                    size: 34,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -232,14 +223,10 @@ class _ClassroomRaisedHandsPanelState extends State<ClassroomRaisedHandsPanel> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 17,
-                    backgroundColor: RealtimeUiTokens.warningSubtle,
-                    child: const Icon(
-                      Icons.pan_tool_alt_rounded,
-                      size: 18,
-                      color: RealtimeUiTokens.warning,
-                    ),
+                  RealtimeAvatar(
+                    name: s.displayName,
+                    avatarUrl: s.avatarUrl,
+                    size: 34,
                   ),
                   const SizedBox(width: 12),
                   Expanded(

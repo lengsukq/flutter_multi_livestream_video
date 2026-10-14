@@ -38,13 +38,23 @@ class RealtimeVideoGrid extends StatelessWidget {
                   members.length,
                   math.max(1, (constraints.maxWidth / 290).ceil()),
                 );
+            final count = math.max(1, columns);
+            final rows = (members.length / count).ceil();
+            final insets = padding.resolve(Directionality.of(context));
+            // Distribute short grids across the full viewport rather than
+            // forcing 16:9 cells into the first row and leaving the remainder
+            // empty. Keep a usable minimum height for crowded rooms; GridView
+            // remains scrollable when all participants cannot fit at once.
+            final availableHeight =
+                constraints.maxHeight - insets.vertical - spacing * (rows - 1);
+            final tileHeight = math.max(160.0, availableHeight / rows);
             return GridView.builder(
               padding: padding,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: math.max(1, columns),
+                crossAxisCount: count,
                 crossAxisSpacing: spacing,
                 mainAxisSpacing: spacing,
-                childAspectRatio: 16 / 9,
+                mainAxisExtent: tileHeight,
               ),
               itemCount: members.length,
               itemBuilder: (context, index) {

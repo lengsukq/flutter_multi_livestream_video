@@ -12,13 +12,13 @@ class ClassroomNoticeCard extends StatelessWidget {
     final style = RealtimeStyle.of(context);
     final isFocus = notice.isFocusReminder;
     final fgColor = isFocus
-        ? (style.isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5))
+        ? (style.isDark ? const Color(0xFFA5B4FC) : const Color(0xFF1D1D1F))
         : style.primary;
     final bgColor = isFocus
-        ? (style.isDark ? const Color(0xFF312E81) : const Color(0xFFEEF2FF))
+        ? (style.isDark ? const Color(0xFF312E81) : const Color(0xFFF5F5F7))
         : style.primarySubtle;
     final borderColor = isFocus
-        ? (style.isDark ? const Color(0xFF4338CA) : const Color(0xFFC7D2FE))
+        ? (style.isDark ? const Color(0xFF1D1D1F) : const Color(0xFFE5E5EA))
         : style.primaryBorder;
     final icon = isFocus ? Icons.center_focus_strong : Icons.campaign_outlined;
 

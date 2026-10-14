@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'chat_ui_scope.dart';
 
 class ChatSearchField extends StatelessWidget {
@@ -11,12 +12,12 @@ class ChatSearchField extends StatelessWidget {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
 
     return Container(
-      height: 38,
+      constraints: const BoxConstraints(minHeight: 48),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withValues(alpha: 0.08)
             : Colors.black.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
         border: Border.all(
           color: isDark
               ? Colors.white.withValues(alpha: 0.1)

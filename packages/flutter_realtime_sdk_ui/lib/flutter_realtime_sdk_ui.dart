@@ -15,6 +15,7 @@ export 'src/room_classroom_interactions.dart';
 export 'src/classroom_event_overlay.dart';
 export 'src/room_classroom_activities.dart';
 export 'src/room_live_components.dart';
+export 'src/realtime_stage_layout.dart';
 export 'src/system_toolbar_entry.dart';
 export 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 export 'package:flutter_realtime_classroom_ui/flutter_realtime_classroom_ui.dart';

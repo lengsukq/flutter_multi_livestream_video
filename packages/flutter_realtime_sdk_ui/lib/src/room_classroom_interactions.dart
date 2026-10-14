@@ -140,7 +140,11 @@ class RealtimeClassroomHandQueue extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  RealtimeAvatar(name: student.displayName, size: 36),
+                  RealtimeAvatar(
+                    name: student.displayName,
+                    avatarUrl: student.avatarUrl,
+                    size: 36,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -266,6 +270,7 @@ class RealtimeClassroomRoster extends StatelessWidget {
                 children: [
                   RealtimeAvatar(
                     name: member.displayName,
+                    avatarUrl: member.avatarUrl,
                     size: 36,
                     isOnline: member.online,
                     showOnlineDot: true,
@@ -409,7 +414,11 @@ class RealtimeClassroomQuestions extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      RealtimeAvatar(name: question.displayName, size: 28),
+                      RealtimeAvatar(
+                        name: question.displayName,
+                        avatarUrl: question.avatarUrl,
+                        size: 28,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(

@@ -50,6 +50,7 @@ class ClassroomAttendancePanel extends StatelessWidget {
                     children: [
                       RealtimeAvatar(
                         name: state.attendance[i].displayName,
+                        avatarUrl: state.attendance[i].avatarUrl,
                         size: 32,
                         isOnline: state.attendance[i].online,
                         showOnlineDot: true,

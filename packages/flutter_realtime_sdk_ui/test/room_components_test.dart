@@ -6,6 +6,103 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 void main() {
+  testWidgets('broadcast controls toggle media and disappear for viewers', (
+    tester,
+  ) async {
+    for (final role in [MediaRole.host, MediaRole.viewer]) {
+      final media = _FakeMediaSession(role: role);
+      final room = _room(media);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RealtimeUiTheme.light(),
+          home: RealtimeRoomUiScope(
+            room: room,
+            child: const Scaffold(
+              body: Center(child: RealtimeLiveMediaControls()),
+            ),
+          ),
+        ),
+      );
+      expect(media.muteCalls, 0);
+      expect(media.cameraCalls, 0);
+      if (role == MediaRole.host) {
+        await tester.tap(find.byTooltip('Turn on microphone'));
+        await tester.pumpAndSettle();
+        expect(media.muteCalls, 1);
+        expect(find.byTooltip('Turn off microphone'), findsOneWidget);
+        await tester.tap(find.byTooltip('Turn on camera'));
+        await tester.pumpAndSettle();
+        expect(media.cameraCalls, 1);
+        expect(find.byTooltip('Turn off camera'), findsOneWidget);
+      } else {
+        expect(find.byType(RealtimeRoomActionButton), findsNothing);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(room.dispose);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets(
+    'live discussion remains scrollable with many messages and large text',
+    (tester) async {
+      final chat = _BufferedChatSession();
+      final room = RealtimeRoom(
+        media: MediaRoomSession.direct(
+          roomCode: 'live',
+          participantId: 'self',
+          session: _FakeMediaSession(),
+        ),
+        chat: chat,
+        renderer: const _FakeRenderer(),
+        disposeClients: () {},
+      );
+      addTearDown(room.dispose);
+      for (final scale in [1.0, 2.0]) {
+        for (final height in [180.0, 420.0]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: RealtimeRoomUiScope(
+                room: room,
+                child: MediaQuery(
+                  data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                  child: Scaffold(
+                    body: Center(
+                      child: SizedBox(
+                        width: 320,
+                        height: height,
+                        child: Align(
+                          alignment: Alignment.bottomLeft,
+                          child: RealtimeLiveChatFeed(
+                            key: ValueKey('$scale/$height'),
+                            maxMessages: 20,
+                            onVideo: false,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+          final scrollable = tester.state<ScrollableState>(
+            find.descendant(
+              of: find.byType(RealtimeLiveChatFeed),
+              matching: find.byType(Scrollable),
+            ),
+          );
+          expect(scrollable.position.maxScrollExtent, greaterThan(0));
+          expect(scrollable.position.pixels, 0);
+          scrollable.position.jumpTo(scrollable.position.maxScrollExtent);
+          await tester.pump();
+          expect(tester.takeException(), isNull);
+        }
+      }
+    },
+  );
   testWidgets('host can place the same leave widget at the top right', (
     tester,
   ) async {
@@ -633,6 +730,20 @@ class _BulkMuteMediaSession extends _FakeMediaSession
   }) async {}
 }
 
+class _BufferedChatSession extends _FakeChatSession {
+  @override
+  List<ChatMessage> get messages => List.generate(
+    20,
+    (index) => ChatMessage(
+      id: '$index',
+      userId: 'guest',
+      message:
+          'Live discussion message $index with enough text to use two lines',
+      timestamp: DateTime(2026),
+    ),
+  );
+}
+
 class _HostChatSession extends _FakeChatSession {
   @override
   ChatRole get role => ChatRole.host;
@@ -672,8 +783,9 @@ class _FakeRenderer extends MediaTrackRenderer {
 }
 
 class _FakeMediaSession extends InteractiveMediaSession {
-  _FakeMediaSession({this._role = MediaRole.participant});
-  final MediaRole _role;
+  _FakeMediaSession({this.role = MediaRole.participant});
+  @override
+  final MediaRole role;
   final _snapshots = StreamController<MediaSnapshot>.broadcast();
   final _states = StreamController<MediaSessionState>.broadcast();
   final _events = StreamController<MediaEvent>.broadcast();
@@ -693,7 +805,6 @@ class _FakeMediaSession extends InteractiveMediaSession {
   @override
   String get providerId => 'fake';
   @override
-  MediaRole get role => _role;
   @override
   MediaCapabilities get capabilities => snapshot.capabilities;
   @override

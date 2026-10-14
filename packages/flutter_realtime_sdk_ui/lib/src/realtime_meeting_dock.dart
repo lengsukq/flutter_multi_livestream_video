@@ -1,6 +1,8 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
+/// Floating room controls. Primary media and exit actions remain visible;
+/// secondary groups scroll independently when the window is narrow.
 class RealtimeMeetingDock extends StatelessWidget {
   const RealtimeMeetingDock({
     super.key,
@@ -8,85 +10,83 @@ class RealtimeMeetingDock extends StatelessWidget {
     this.collaborationGroup = const [],
     this.panelsGroup = const [],
     this.exitAction,
+    this.leadingStatus,
+    this.moreAction,
     this.showLabels = true,
   });
-
   final List<Widget> mediaGroup;
   final List<Widget> collaborationGroup;
   final List<Widget> panelsGroup;
   final Widget? exitAction;
+  final Widget? leadingStatus;
+  final Widget? moreAction;
   final bool showLabels;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    Widget divider() => Container(
-      width: 1,
-      height: showLabels ? 34 : 24,
-      margin: const EdgeInsets.symmetric(horizontal: 6),
-      color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1),
-    );
-
-    return SafeArea(
-      top: false,
-      child: Center(
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: showLabels ? 6 : 4,
-              ),
-              decoration: BoxDecoration(
-                color: (isDark
-                    ? const Color(0xE61E2533)
-                    : const Color(0xF2FFFFFF)),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: (isDark ? Colors.white12 : Colors.black12),
-                  width: 1,
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 16,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // Group 1: Media
-                    ...mediaGroup,
-
-                    // Divider
-                    if (collaborationGroup.isNotEmpty) ...[
-                      divider(),
-                      ...collaborationGroup,
-                    ],
-
-                    // Divider
-                    if (panelsGroup.isNotEmpty) ...[divider(), ...panelsGroup],
-
-                    // Exit
-                    if (exitAction != null) ...[divider(), exitAction!],
-                  ],
-                ),
+  Widget build(BuildContext context) => SafeArea(
+    top: false,
+    child: RealtimeGlassSurface(
+      radius: RealtimeUiTokens.pillRadius,
+      blur: RealtimeUiTokens.blur,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < 600;
+          final divider = Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: SizedBox(
+              height: 24,
+              child: VerticalDivider(
+                width: 1,
+                color: RealtimeStyle.of(context).border,
               ),
             ),
-          ),
-        ),
+          );
+          final secondary = [
+            ...mediaGroup.skip(2),
+            ...collaborationGroup,
+            ...panelsGroup,
+            if (moreAction != null) moreAction!,
+          ];
+          if (narrow) {
+            return Row(
+              children: [
+                ...mediaGroup.take(2),
+                if (exitAction != null) exitAction!,
+                if (secondary.isNotEmpty) ...[
+                  divider,
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: secondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          }
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (leadingStatus != null) ...[leadingStatus!, divider],
+                ...mediaGroup,
+                if (exitAction != null) ...[divider, exitAction!],
+                if (collaborationGroup.isNotEmpty) ...[
+                  divider,
+                  ...collaborationGroup,
+                ],
+                if (panelsGroup.isNotEmpty) ...[divider, ...panelsGroup],
+                if (moreAction != null) ...[divider, moreAction!],
+              ],
+            ),
+          );
+        },
       ),
-    );
-  }
+    ),
+  );
 }
-
-/// Dock Microphone button with proper label, active state and mute toggle.

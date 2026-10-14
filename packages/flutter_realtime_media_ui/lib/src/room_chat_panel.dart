@@ -1,4 +1,3 @@
-import 'realtime_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 import 'room_chat_events_controller.dart';
@@ -266,77 +265,101 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
         alignment: own ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: constraints.maxWidth * .82),
-          child: Column(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: own
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
             children: [
-              if (!own && !sameSenderAsPrevious)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4, bottom: 4),
-                  child: Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      color: style.textMuted,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+              if (!own) ...[
+                RealtimeAvatar(
+                  name: displayName,
+                  avatarUrl: message.avatarUrl,
+                  size: 30,
                 ),
-              Container(
-                key: ValueKey(
-                  'chat-message-${message.id}-${own ? 'local' : 'remote'}',
-                ),
-                padding: const EdgeInsets.fromLTRB(12, 9, 11, 7),
-                decoration: BoxDecoration(
-                  gradient: own ? RealtimeUiTokens.primaryGradient : null,
-                  color: own ? null : style.surface,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(
-                      RealtimeUiTokens.controlRadius,
-                    ),
-                    topRight: const Radius.circular(
-                      RealtimeUiTokens.controlRadius,
-                    ),
-                    bottomLeft: Radius.circular(
-                      own ? RealtimeUiTokens.controlRadius : 6,
-                    ),
-                    bottomRight: Radius.circular(
-                      own ? 6 : RealtimeUiTokens.controlRadius,
-                    ),
-                  ),
-                  border: own ? null : Border.all(color: style.border),
-                ),
+                const SizedBox(width: 8),
+              ],
+              Flexible(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: own
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.start,
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        message.message,
-                        style: TextStyle(
-                          color: own ? Colors.white : style.text,
-                          fontSize: 12.5,
-                          height: 1.3,
+                    if (!own && !sameSenderAsPrevious)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 4),
+                        child: Text(
+                          displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: style.textMuted,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      _formatChatTime(message.timestamp),
-                      style: TextStyle(
-                        color: own
-                            ? Colors.white.withValues(alpha: .74)
-                            : style.textMuted,
-                        fontSize: 9.5,
+                    Container(
+                      key: ValueKey(
+                        'chat-message-${message.id}-${own ? 'local' : 'remote'}',
+                      ),
+                      padding: const EdgeInsets.fromLTRB(12, 9, 11, 7),
+                      decoration: BoxDecoration(
+                        gradient: own ? RealtimeUiTokens.primaryGradient : null,
+                        color: own ? null : style.surface,
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(
+                            RealtimeUiTokens.controlRadius,
+                          ),
+                          topRight: const Radius.circular(
+                            RealtimeUiTokens.controlRadius,
+                          ),
+                          bottomLeft: Radius.circular(
+                            own ? RealtimeUiTokens.controlRadius : 6,
+                          ),
+                          bottomRight: Radius.circular(
+                            own ? 6 : RealtimeUiTokens.controlRadius,
+                          ),
+                        ),
+                        border: own ? null : Border.all(color: style.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              message.message,
+                              style: TextStyle(
+                                color: own ? Colors.white : style.text,
+                                fontSize: 12.5,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            _formatChatTime(message.timestamp),
+                            style: TextStyle(
+                              color: own
+                                  ? Colors.white.withValues(alpha: .74)
+                                  : style.textMuted,
+                              fontSize: 9.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
+              if (own) ...[
+                const SizedBox(width: 8),
+                RealtimeAvatar(
+                  name: displayName,
+                  avatarUrl: message.avatarUrl,
+                  size: 30,
+                ),
+              ],
             ],
           ),
         ),

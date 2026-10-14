@@ -100,9 +100,6 @@ class _ClassroomStudentsPanelState extends State<ClassroomStudentsPanel> {
                   : (s.cameraOn!
                         ? strings.t('cameraOn')
                         : strings.t('cameraOff'));
-              final avatarLetter = s.displayName.isNotEmpty
-                  ? s.displayName.substring(0, 1).toUpperCase()
-                  : 'S';
 
               return Container(
                 padding: const EdgeInsets.symmetric(
@@ -131,17 +128,10 @@ class _ClassroomStudentsPanelState extends State<ClassroomStudentsPanel> {
                 ),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: _avatarColor(s.displayName),
-                      child: Text(
-                        avatarLetter,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    RealtimeAvatar(
+                      name: s.displayName,
+                      avatarUrl: s.avatarUrl,
+                      size: 36,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -270,18 +260,4 @@ class _ClassroomStudentsPanelState extends State<ClassroomStudentsPanel> {
       ],
     );
   }
-}
-
-Color _avatarColor(String name) {
-  if (name.isEmpty) return RealtimeUiTokens.primary;
-  final hash = name.codeUnits.fold(0, (acc, c) => acc + c);
-  const hues = [
-    Color(0xFF4F46E5),
-    Color(0xFF0D9488),
-    Color(0xFFD97706),
-    Color(0xFFE11D48),
-    Color(0xFF7C3AED),
-    Color(0xFF2563EB),
-  ];
-  return hues[hash % hues.length];
 }

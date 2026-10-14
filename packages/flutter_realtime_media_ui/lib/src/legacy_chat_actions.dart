@@ -526,12 +526,12 @@ mixin _LegacyChatActions on State<RealtimeChatView> {
                         RealtimeUiTokens.controlRadius,
                       ),
                     ),
-                    leading: const CircleAvatar(
-                      backgroundColor: RealtimeUiTokens.primarySubtle,
-                      child: Icon(
-                        Icons.person_outline,
-                        color: RealtimeUiTokens.primary,
-                      ),
+                    leading: RealtimeAvatar(
+                      name: member.displayName.isEmpty
+                          ? member.userId
+                          : member.displayName,
+                      avatarUrl: member.avatarUrl,
+                      size: 36,
                     ),
                     title: Text(
                       member.displayName.isEmpty

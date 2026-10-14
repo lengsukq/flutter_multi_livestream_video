@@ -83,7 +83,7 @@ class SharedContentStage extends StatelessWidget {
                           aspectRatio: screenAspectRatio,
                           child: Container(
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0F172A),
+                              color: const Color(0xFF1D1D1F),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: Colors.black.withValues(alpha: 0.08),

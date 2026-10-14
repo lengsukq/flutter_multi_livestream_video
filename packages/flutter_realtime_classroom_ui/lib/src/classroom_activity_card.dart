@@ -27,20 +27,20 @@ class ClassroomActivityCard extends StatelessWidget {
         final totalVotes =
             activity.counts?.fold(0, (a, b) => a + b) ?? activity.responseCount;
         final fgColor = isQuiz
-            ? (style.isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5))
+            ? (style.isDark ? const Color(0xFFA5B4FC) : const Color(0xFF1D1D1F))
             : (style.isDark
                   ? const Color(0xFFF472B6)
-                  : const Color(0xFFBE185D));
+                  : const Color(0xFF1D1D1F));
         final bgColor = isQuiz
-            ? (style.isDark ? const Color(0xFF312E81) : const Color(0xFFEEF2FF))
+            ? (style.isDark ? const Color(0xFF312E81) : const Color(0xFFF5F5F7))
             : (style.isDark
                   ? const Color(0xFF831843)
-                  : const Color(0xFFFDF2F8));
+                  : const Color(0xFFF5F5F7));
         final borderColor = isQuiz
-            ? (style.isDark ? const Color(0xFF4338CA) : const Color(0xFFC7D2FE))
+            ? (style.isDark ? const Color(0xFF1D1D1F) : const Color(0xFFE5E5EA))
             : (style.isDark
                   ? const Color(0xFF9D174D)
-                  : const Color(0xFFFBCFE8));
+                  : const Color(0xFFE5E5EA));
 
         return RealtimeCard(
           margin: const EdgeInsets.only(bottom: 12),
@@ -169,6 +169,10 @@ class ClassroomActivityCard extends StatelessWidget {
                           child: Row(
                             children: [
                               RealtimeAvatar(
+                                avatarUrl: state.students
+                                    .where((st) => st.userId == answer.key)
+                                    .firstOrNull
+                                    ?.avatarUrl,
                                 name:
                                     state.students
                                         .where((st) => st.userId == answer.key)

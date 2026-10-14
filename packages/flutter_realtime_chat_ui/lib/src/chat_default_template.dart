@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
 
 import 'chat_components.dart';
@@ -22,34 +23,42 @@ class ChatDefaultPage extends StatelessWidget {
   final VoidCallback? onBack;
 
   @override
-  Widget build(BuildContext context) => ChatUiScope(
-    session: session,
-    moderation: moderation,
-    child: Scaffold(
-      appBar: AppBar(
-        leading: onBack == null
-            ? null
-            : IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
-        title: Text(title),
-        actions: [
-          ChatRoomCodeCopy(roomCode: roomCode),
-          const ChatManagementButton(),
-        ],
-      ),
-      body: const SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: EdgeInsets.all(8),
-              child: Row(
-                children: [
-                  Expanded(child: ChatSearchField()),
-                  ChatConnectionIndicator(),
-                ],
-              ),
-            ),
-            Expanded(child: ChatPanel()),
+  Widget build(BuildContext context) => Theme(
+    data: RealtimeUiTheme.light(
+      appearance: RealtimeUiThemeExtension.of(context),
+    ),
+    child: ChatUiScope(
+      session: session,
+      moderation: moderation,
+      child: Scaffold(
+        appBar: AppBar(
+          leading: onBack == null
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: onBack,
+                ),
+          title: Text(title),
+          actions: [
+            ChatRoomCodeCopy(roomCode: roomCode),
+            const ChatManagementButton(),
           ],
+        ),
+        body: const SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    Expanded(child: ChatSearchField()),
+                    ChatConnectionIndicator(),
+                  ],
+                ),
+              ),
+              Expanded(child: ChatPanel()),
+            ],
+          ),
         ),
       ),
     ),

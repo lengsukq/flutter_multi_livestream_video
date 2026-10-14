@@ -313,14 +313,10 @@ class _RoomMembersPanelState extends State<RoomMembersPanel> {
                                 horizontal: 10,
                                 vertical: 2,
                               ),
-                              leading: CircleAvatar(
-                                radius: 18,
-                                backgroundColor: RealtimeUiTokens.primarySubtle,
-                                child: const Icon(
-                                  Icons.person_outline_rounded,
-                                  size: 18,
-                                  color: RealtimeUiTokens.primary,
-                                ),
+                              leading: RealtimeAvatar(
+                                name: member.displayName,
+                                avatarUrl: member.avatarUrl,
+                                size: 36,
                               ),
                               title: Row(
                                 children: [

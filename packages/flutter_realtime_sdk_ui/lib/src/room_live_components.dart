@@ -8,3 +8,7 @@ export 'realtime_live_hearts_overlay.dart';
 export 'realtime_host_tools_panel.dart';
 export 'room_live_components_realtime_host_tools_panel_state.dart'
     show showRealtimeHostToolsBottomSheet;
+export 'realtime_audience_avatar_row.dart';
+export 'realtime_live_desktop_stage.dart';
+export 'realtime_live_mobile_overlay.dart';
+export 'realtime_live_media_controls.dart';

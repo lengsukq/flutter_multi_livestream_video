@@ -43,22 +43,13 @@ class RealtimeLiveLikeButton extends StatelessWidget {
               onTap: pending ? null : sendLike,
               borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
               child: Container(
-                height: 40,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF2D55), Color(0xFFFF5252)],
-                  ),
+                  color: const Color(0xFFB82443),
                   borderRadius: BorderRadius.circular(
                     RealtimeUiTokens.pillRadius,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF2D55).withValues(alpha: 0.35),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -96,6 +87,15 @@ class RealtimeLiveLikeButton extends StatelessWidget {
         }
 
         return FilledButton.tonalIcon(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFFB82443),
+            foregroundColor: Colors.white,
+            minimumSize: const Size(48, 48),
+            disabledBackgroundColor: const Color(
+              0xFFB82443,
+            ).withValues(alpha: .65),
+            disabledForegroundColor: Colors.white70,
+          ),
           onPressed: pending ? null : sendLike,
           icon: pending
               ? const SizedBox(

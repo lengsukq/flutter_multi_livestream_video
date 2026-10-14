@@ -144,7 +144,7 @@ class _ContentControlsState extends State<_ContentControls> {
                   decoration: BoxDecoration(
                     color: isDark
                         ? Colors.white.withValues(alpha: 0.12)
-                        : const Color(0xFFF1F5F9),
+                        : const Color(0xFFF5F5F7),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: isDark
@@ -166,7 +166,7 @@ class _ContentControlsState extends State<_ContentControls> {
                             size: 20,
                             color: isDark
                                 ? Colors.white
-                                : const Color(0xFF0F172A),
+                                : const Color(0xFF1D1D1F),
                           ),
                   ),
                 ),

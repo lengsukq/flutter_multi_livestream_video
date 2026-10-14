@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'color_picker_dialog.dart';
 import 'whiteboard_strings.dart';
@@ -65,7 +65,7 @@ class AnnotationToolbar extends StatelessWidget {
     final s = WhiteboardStrings.of(context);
     final theme = Theme.of(context);
     final showTools = drawingEnabled || fixedTop;
-    final borderRadius = BorderRadius.circular(fixedTop ? 16 : 20);
+    final borderRadius = BorderRadius.circular(RealtimeUiTokens.controlRadius);
 
     Widget divider() => Container(
       width: 1,
@@ -76,13 +76,13 @@ class AnnotationToolbar extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: borderRadius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+      child: RealtimeGlassSurface(
+        radius: RealtimeUiTokens.controlRadius,
+        blur: RealtimeUiTokens.subtleBlur,
+        shadow: false,
         child: Material(
-          color: theme.colorScheme.surface.withValues(
-            alpha: fixedTop ? .94 : .88,
-          ),
-          elevation: fixedTop ? 3 : 2,
+          color: theme.colorScheme.surface.withValues(alpha: 0),
+          elevation: 0,
           shadowColor: Colors.black12,
           shape: RoundedRectangleBorder(
             borderRadius: borderRadius,

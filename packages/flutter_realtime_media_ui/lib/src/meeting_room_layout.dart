@@ -30,8 +30,10 @@ class MeetingRoomViewLayout extends StatelessWidget {
   final Widget dock;
   @override
   Widget build(BuildContext context) {
-    final wide = constraints.maxWidth >= 1200;
-    final medium = constraints.maxWidth >= 760;
+    final wide =
+        constraints.maxWidth >= 1000 &&
+        MediaQuery.textScalerOf(context).scale(17) < 28;
+    final medium = constraints.maxWidth >= 600;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -45,10 +47,10 @@ class MeetingRoomViewLayout extends StatelessWidget {
               errorBanner,
               Expanded(
                 child: wide
-                    ? _buildWideStage(panelOpen)
+                    ? _buildWideStage(context, panelOpen)
                     : medium
                     ? _buildMediumStage(panelOpen, constraints)
-                    : _buildCompactStage(panelOpen, constraints),
+                    : _buildCompactStage(context, panelOpen, constraints),
               ),
               if (rtcData != null) rtcData!,
               dock,
@@ -59,7 +61,7 @@ class MeetingRoomViewLayout extends StatelessWidget {
     );
   }
 
-  Widget _buildWideStage(bool panelOpen) {
+  Widget _buildWideStage(BuildContext context, bool panelOpen) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -74,7 +76,9 @@ class MeetingRoomViewLayout extends StatelessWidget {
             width: 340,
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0.0, end: 1.0),
-              duration: RealtimeUiTokens.animNormal,
+              duration: RealtimeUiThemeExtension.of(
+                context,
+              ).duration(context, RealtimeUiTokens.animNormal),
               curve: Curves.easeOutCubic,
               builder: (context, progress, child) => Opacity(
                 opacity: progress,
@@ -118,7 +122,11 @@ class MeetingRoomViewLayout extends StatelessWidget {
     );
   }
 
-  Widget _buildCompactStage(bool panelOpen, BoxConstraints constraints) {
+  Widget _buildCompactStage(
+    BuildContext context,
+    bool panelOpen,
+    BoxConstraints constraints,
+  ) {
     final maxChatHeight = math.max(160.0, constraints.maxHeight - 140);
     final desiredChatHeight = (constraints.maxHeight * .45).clamp(180.0, 380.0);
     final chatHeight = math.min(desiredChatHeight, maxChatHeight);
@@ -136,7 +144,9 @@ class MeetingRoomViewLayout extends StatelessWidget {
             height: chatHeight,
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0.0, end: 1.0),
-              duration: RealtimeUiTokens.animNormal,
+              duration: RealtimeUiThemeExtension.of(
+                context,
+              ).duration(context, RealtimeUiTokens.animNormal),
               curve: Curves.easeOutCubic,
               builder: (context, progress, child) => Opacity(
                 opacity: progress,

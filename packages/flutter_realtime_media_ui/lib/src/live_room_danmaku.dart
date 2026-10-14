@@ -121,7 +121,7 @@ class LiveRoomDanmaku extends StatelessWidget {
                               vertical: 1.5,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0284C7),
+                              color: const Color(0xFF1D1D1F),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -143,7 +143,7 @@ class LiveRoomDanmaku extends StatelessWidget {
                           color: isAnchor
                               ? const Color(0xFFD97706)
                               : isOwn
-                              ? const Color(0xFF0284C7)
+                              ? const Color(0xFF1D1D1F)
                               : (isDark
                                     ? const Color(0xFFCBD5E1)
                                     : RealtimeUiTokens.text),

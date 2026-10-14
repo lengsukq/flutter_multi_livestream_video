@@ -58,7 +58,7 @@ class ChatComponentsChatComposerState extends State<ChatComposer> {
               decoration: BoxDecoration(
                 color: (isDark
                     ? const Color(0xFF2C2C2E)
-                    : const Color(0xFFF1F5F9)),
+                    : const Color(0xFFF5F5F7)),
                 borderRadius: BorderRadius.circular(12),
                 border: Border(
                   left: BorderSide(color: theme.colorScheme.primary, width: 3),
@@ -109,7 +109,7 @@ class ChatComponentsChatComposerState extends State<ChatComposer> {
           Container(
             padding: const EdgeInsets.fromLTRB(14, 2, 6, 2),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF5F5F7),
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
                 color: isDark

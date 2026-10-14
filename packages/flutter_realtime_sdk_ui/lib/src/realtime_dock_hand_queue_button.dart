@@ -36,7 +36,7 @@ class RealtimeDockHandQueueButton extends StatelessWidget {
           tooltip: strings.isZh ? '举手申请：$pending' : 'Hand requests: $pending',
           badgeCount: pending,
           isActive: pending > 0,
-          activeColor: RealtimeUiTokens.iosOrange,
+          activeColor: RealtimeUiTokens.primary,
           showLabel: showLabel,
           onPressed: onPressed,
         );

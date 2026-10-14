@@ -35,7 +35,6 @@ import 'live_room_layout.dart';
 import 'room_regions.dart';
 import 'background_effect_selector.dart';
 import 'realtime_strings.dart';
-import 'realtime_style.dart';
 import 'realtime_ui_style.dart';
 
 class MediaRoomView extends StatefulWidget {
@@ -137,7 +136,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   bool _copied = false;
   bool _initialSettingsApplied = false;
   String? _error;
-  MediaRoomLayoutMode _layoutMode = MediaRoomLayoutMode.grid;
+  MediaRoomLayoutMode _layoutMode = MediaRoomLayoutMode.speaker;
   bool _cleanScreen = false;
   BoxFit? _liveVideoFitOverride;
   int get _likeCount => _liveReactions.totalLikes;
@@ -318,7 +317,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
           await showDialog<bool>(
             context: context,
             useRootNavigator: true,
-            barrierColor: const Color(0xFF0F172A).withValues(alpha: 0.34),
+            barrierColor: const Color(0xFF1D1D1F).withValues(alpha: 0.34),
             builder: (context) => RealtimeGlassDialog(
               icon: Icons.call_end_rounded,
               iconColor: RealtimeUiTokens.danger,
@@ -727,10 +726,10 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   @override
   Widget build(BuildContext context) => StreamBuilder<MediaSnapshot>(
     key: ValueKey(widget.room),
-    stream: session.snapshots,
-    initialData: session.snapshot,
+    stream: widget.room.snapshots,
+    initialData: widget.room.snapshot,
     builder: (context, snap) {
-      final value = snap.data ?? session.snapshot;
+      final value = snap.data ?? widget.room.snapshot;
       if (value.state == MediaSessionState.connected &&
           widget.config.initialMediaSettings != null &&
           !_initialSettingsApplied) {
