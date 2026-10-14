@@ -117,16 +117,16 @@ rejects simultaneous one-click builds, checks for processes using Xcode's
 `build.db` before starting, and reports missing Flutter/Xcode/CocoaPods tools.
 If another build is active, wait for it to finish instead of deleting its
 database. A `build.db` lock is distinct from the `iris_method_channel` SwiftPM
-module/link errors; see [DEVELOPMENT.md](DEVELOPMENT.md) for troubleshooting.
+module/link errors; see [DEVELOPMENT.md](doc/DEVELOPMENT.md) for troubleshooting.
 The script never terminates other builds or automatically deletes build caches.
 It verifies the built executable
 contains `arm64`, and packages an Applications shortcut into the DMG. It builds
 the **Demo**, not an SDK framework. Dependencies should already be resolved in
 `example/` (`flutter pub get` there if needed). No Apple signing or notarization
 is performed; this is a local/development distribution package. More details
-and install permission alternatives are in [DEVELOPMENT.md](DEVELOPMENT.md).
+and install permission alternatives are in [DEVELOPMENT.md](doc/DEVELOPMENT.md).
 
-See [SDK architecture and error handling](doc/SDK_CODE_QUALITY.md), [provider integration](doc/PROVIDER_ADAPTER_GUIDE.md), [lightweight composition](doc/LIGHTWEIGHT_SDK.md), [capability matrix](SDK_CAPABILITY_MATRIX.zh-CN.md) and [acceptance boundaries](doc/INTERACTION_ACCEPTANCE.md).
+See [SDK architecture and error handling](doc/SDK_CODE_QUALITY.md), [provider integration](doc/PROVIDER_ADAPTER_GUIDE.md), [lightweight composition](doc/LIGHTWEIGHT_SDK.md), [capability matrix](doc/SDK_CAPABILITY_MATRIX.zh-CN.md) and [acceptance boundaries](doc/INTERACTION_ACCEPTANCE.md).
 
 For independent room controls, optional composed default pages, chat-only UI,
 Pre-Join scope ownership, RTC+IM member controls, package dependency direction,

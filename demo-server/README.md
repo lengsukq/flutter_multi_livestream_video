@@ -140,7 +140,7 @@ for the updated SDK/Demo/Backend ownership diagram and pending E2E gates.
 The current `example/` app consumes `Realtime.standard()` and
 `Realtime.open(RealtimeRequest)` through the public SDK facade, backed by
 the provider-neutral room contract documented in
-[`../MEDIA_BACKEND_CONTRACT.md`](../MEDIA_BACKEND_CONTRACT.md):
+[`../doc/MEDIA_BACKEND_CONTRACT.md`](../doc/MEDIA_BACKEND_CONTRACT.md):
 
 1. App: `POST /rooms {"nickname":"host","roomCode":"482913","role":"participant"}` — no provider field.
 2. Server selects the current dashboard provider and returns `provider` plus provider-specific short-lived join data.

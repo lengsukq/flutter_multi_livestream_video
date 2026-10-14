@@ -61,7 +61,7 @@ The backend returns the common room fields plus a `trtc` block:
 
 `participantId` must equal TRTC `userId`. Keep the SDK secret and all signing
 operations on the backend. See the root
-[`MEDIA_BACKEND_CONTRACT.md`](../../MEDIA_BACKEND_CONTRACT.md) for refresh
+[`MEDIA_BACKEND_CONTRACT.md`](../../doc/MEDIA_BACKEND_CONTRACT.md) for refresh
 request and response details.
 
 ## Roles and features
@@ -101,5 +101,5 @@ continues to work until the issued credentials expire.
 The repository's `demo-server` accepts `TRTC_SDK_APP_ID`,
 `TRTC_SDK_SECRET_KEY`, and optional `TRTC_TOKEN_TTL_SECONDS` (default 600).
 Enable Tencent Advanced Permission Control for server-issued PrivateMapKey
-rights to be enforced. Follow [`../../TRTC_E2E.md`](../../TRTC_E2E.md) to verify
+rights to be enforced. Follow [`../../doc/TRTC_E2E.md`](../../doc/TRTC_E2E.md) to verify
 host/viewer behavior and renewal on physical devices.

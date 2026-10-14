@@ -147,7 +147,7 @@ demo-server/server.ts            导出公开单入口（npm start）
                      ↘ providers/, chat/, classroom/, live/
 ```
 
-`app.ts` 负责依赖装配、通用中间件、路由注册以及定时回收调度。身份与角色规则、房间解析注册、并发锁/摘要、半关闭失败补偿、管理员会话鉴权、Provider 默认选择与持久化分别交给 `services/room-input.ts`、`room-registry-service.ts`、`room-operations.ts`、`room-closure.ts`、`admin-auth.ts`、`provider-selection.ts`。Dashboard Router 通过显式注入的可读写 Provider 选择状态保持切换行为。Node 服务端只做授权、短期凭证、逻辑房间、成员/互动控制和必要可信 Provider 管理调用；真正的媒体传输由 RTC 供应商负责。HTTP 请求与响应遵循 [MEDIA_BACKEND_CONTRACT](../MEDIA_BACKEND_CONTRACT.md)、[CHAT_BACKEND_CONTRACT](../CHAT_BACKEND_CONTRACT.md)，不应因重构改变状态码、鉴权、路径或合同版本。
+`app.ts` 负责依赖装配、通用中间件、路由注册以及定时回收调度。身份与角色规则、房间解析注册、并发锁/摘要、半关闭失败补偿、管理员会话鉴权、Provider 默认选择与持久化分别交给 `services/room-input.ts`、`room-registry-service.ts`、`room-operations.ts`、`room-closure.ts`、`admin-auth.ts`、`provider-selection.ts`。Dashboard Router 通过显式注入的可读写 Provider 选择状态保持切换行为。Node 服务端只做授权、短期凭证、逻辑房间、成员/互动控制和必要可信 Provider 管理调用；真正的媒体传输由 RTC 供应商负责。HTTP 请求与响应遵循 [MEDIA_BACKEND_CONTRACT](MEDIA_BACKEND_CONTRACT.md)、[CHAT_BACKEND_CONTRACT](CHAT_BACKEND_CONTRACT.md)，不应因重构改变状态码、鉴权、路径或合同版本。
 
 请勿把 `DEMO_BEARER_TOKEN`、供应商 Secret、`roomOwnerCredential` 写进 Flutter 源码、日志或版本库；生产部署需接入真实业务身份、限流、持久化和可信密钥管理，Demo Server **不是生产后端模板**。
 
@@ -182,4 +182,4 @@ demo-server/server.ts            导出公开单入口（npm start）
 - [Demo Server README](../demo-server/README.md)：服务端启动与控制面协议。
 - [Clean Code 原始基线](P1_CLEAN_CODE_BASELINE.md)：变更前状态和回归对照。
 - [SDK 工程质量](SDK_CODE_QUALITY.md)：错误与资源所有权。
-- [能力矩阵](../SDK_CAPABILITY_MATRIX.zh-CN.md)：供应商/平台能力，不应从 Demo 按钮推断支持。
+- [能力矩阵](SDK_CAPABILITY_MATRIX.zh-CN.md)：供应商/平台能力，不应从 Demo 按钮推断支持。

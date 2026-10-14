@@ -198,7 +198,7 @@ python3 scripts/generate_capability_matrix.py --check
   `/api/overview`，不得为新厂商在房间 create/join/heartbeat 等路由里加分支。
 - 后端选择 provider，Flutter 侧只发送请求；**Flutter 永不指定 provider**。
 - Demo Server 保持"路由只校验并委派服务"的形状，特权凭证与房间状态留在服务端。
-- 构建与平台注意事项以 `DEVELOPMENT.md` 为准（iOS 本地 checkout 目录名、
+- 构建与平台注意事项以 `doc/DEVELOPMENT.md` 为准（iOS 本地 checkout 目录名、
   macOS 依赖管理器开关、Windows 需要 Windows runner），本章不重复。
 
 ### 2.9 验收边界

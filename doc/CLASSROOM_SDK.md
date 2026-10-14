@@ -368,8 +368,8 @@ still needs real-device acceptance, and its macOS adapter does not expose
 publishing. Native Agora/ARTC/Chime adapters currently do not expose screen
 publishing. A receiving client may render a share even when it cannot publish.
 
-See the complete [feature/platform and screen-share matrices](../SDK_CAPABILITY_MATRIX.md#teaching-tools-and-live-interactions)
-([Chinese](../SDK_CAPABILITY_MATRIX.zh-CN.md#教学工具与直播互动)) and
+See the complete [feature/platform and screen-share matrices](SDK_CAPABILITY_MATRIX.md#teaching-tools-and-live-interactions)
+([Chinese](SDK_CAPABILITY_MATRIX.zh-CN.md#教学工具与直播互动)) and
 [outstanding work/acceptance record](INTERACTION_ACCEPTANCE.md).
 
 ## Independent whiteboard and unified content

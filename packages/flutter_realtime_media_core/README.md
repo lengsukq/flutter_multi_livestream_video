@@ -5,7 +5,7 @@ one-to-many live broadcasts.
 
 This package contains **no provider SDK dependency**. It defines the session,
 event, error, capability, and rendering interfaces, plus a backend HTTP client
-for the language-neutral [`MEDIA_BACKEND_CONTRACT.md`](../../MEDIA_BACKEND_CONTRACT.md).
+for the language-neutral [`MEDIA_BACKEND_CONTRACT.md`](../../doc/MEDIA_BACKEND_CONTRACT.md).
 Provider support is added by adapter packages that register a
 `MediaSessionFactory`:
 
@@ -122,7 +122,7 @@ The default `MediaPermissionProbe` reads current microphone/camera permission
 state only; it never requests permission. See
 [`PRE_JOIN_SETUP.md`](PRE_JOIN_SETUP.md) for Android/iOS host configuration.
 
-See [`SDK_CAPABILITY_MATRIX.md`](../../SDK_CAPABILITY_MATRIX.md) for the current provider
+See [`SDK_CAPABILITY_MATRIX.md`](../../doc/SDK_CAPABILITY_MATRIX.md) for the current provider
 matrix and the host room-management surface.
 
 Failures are typed:

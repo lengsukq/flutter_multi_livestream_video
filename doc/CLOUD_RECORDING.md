@@ -2,6 +2,8 @@
 
 本项目是 **Flutter 前端 SDK**。录制、混流、转码（若厂商提供）由 RTC 供应商的云端服务执行；`demo-server` 只负责调用厂商 REST/OpenAPI、持有服务器凭证、查询任务以及流式转发云存储里的 MP4 文件。**不需要部署 Linux 录制程序、Java Recording SDK、FFmpeg 或我们自己的媒体录制服务。**
 
+**云录制布局能力与跨厂商限制**请先阅读：[宫格、固定主画面、动态发言人布局说明](CLOUD_RECORDING_LAYOUTS.md)。Demo 已根据服务端真实能力过滤布局，不能把“演讲者”笼统视为所有供应商都能自动跟踪语音。
+
 ## 供应商能力现状
 
 | 媒体供应商 | Demo 录制执行器 | 厂商托管录制 | 存储要求 | MP4 下载 | 实际验收状态 |
@@ -99,15 +101,17 @@ ARTC_RECORDING_VOD_TRANSCODE_GROUP_ID=  # VOD 转码模板组（必须产生未�
 ARTC_RECORDING_VOD_HOSTS=               # 下载 HTTPS 域名白名单，逗号分隔，须精确匹配
 ```
 
-新适配器调用官方 `@alicloud/live20161101` 的 `StartRtcCloudRecording → StopRtcCloudRecording → DescribeRtcCloudRecordingFiles`，取得混流录像的 `VodMediaList[].MediaIds/MergedIds` 后，通过 `@alicloud/vod20170321` 的 `GetPlayInfo` 获取未加密 MP4 播放地址，由 Demo Server 代理 HTTP 下载，**不需要 AWS S3**。VOD 本身需要开通并配置存储，可能产生录制/存储/转码/下载费用。
+新适配器调用官方 `@alicloud/live20161101` 的 `StartRtcCloudRecording → UpdateRtcCloudRecording（成员变化时）→ StopRtcCloudRecording → DescribeRtcCloudRecordingFiles`，取得混流录像的 `VodMediaList[].MediaIds/MergedIds` 后，通过 `@alicloud/vod20170321` 的 `GetPlayInfo` 获取未加密 MP4 播放地址，由 Demo Server 代理 HTTP 下载，**不需要 AWS S3**。VOD 本身需要开通并配置存储，可能产生录制/存储/转码/下载费用。
 
-V1 录制开始时订阅当前房间内在线发布者；Grid 使用静态宫格，Speaker 固定突出第一个发布者，当前版本**尚不支持录制开始后自动同步新加入成员，也不支持自动切换当前发言人**。默认导出一个已完成、未加密且位于配置域名白名单内的 MP4；如果厂商返回多个媒体分段，则报明确错误，不误把单片段当作完整录像。必须在 VOD 模板中生成 MP4。
+录制开始时订阅当前房间内在线发布者；Grid 使用宫格、固定主画面优先突出房主。服务器在已鉴权的录制状态轮询和停止之前调用 `UpdateRtcCloudRecording` 尽力同步新入会/离会的成员，并重新计算宫格；**暂未接入成员事件主动推送，不保证轮询间隔内立即更新，也不会按说话人自动切换画面**。默认导出一个已完成、未加密且位于配置域名白名单内的 MP4；如果厂商返回多个媒体分段，则报明确错误，不误把单片段当作完整录像。必须在 VOD 模板中生成 MP4。
 
 ### Alibaba ARTC 旧 OSS 模式（保留兼容，不新增 S3）
 
 ```dotenv
 ARTC_RECORDING_STORAGE=oss
 ARTC_RECORDING_TEMPLATE_ID=
+ARTC_RECORDING_TEMPLATE_ID_GRID=       # 可选：显式指定宫格模板，覆盖上面的默认模板
+ARTC_RECORDING_TEMPLATE_ID_SPEAKER=    # 可选：固定主画面模板，未配置不会开放此布局
 ARTC_RECORDING_OSS_BUCKET=
 ARTC_RECORDING_OSS_REGION=             # 例如 oss-cn-shanghai
 ARTC_RECORDING_OSS_REGION_CODE=        # 阿里云 RTC 所需的数值地域编码
@@ -115,7 +119,7 @@ ARTC_RECORDING_OSS_ACCESS_KEY=
 ARTC_RECORDING_OSS_SECRET_KEY=
 ```
 
-旧模式继续使用 `@alicloud/rtc20180111` 的 `StartCloudRecord` 和 OSS；录制布局/编码由旧模板决定。该旧接口本身不支持 VOD，不能通过修改 `StorageConfig.Vendor` 实现 VOD。
+旧模式继续使用 `@alicloud/rtc20180111` 的 `StartCloudRecord` 和 OSS；录制布局/编码由旧模板决定。默认 `ARTC_RECORDING_TEMPLATE_ID`（或显式的 `ARTC_RECORDING_TEMPLATE_ID_GRID`）应指向宫格模板；若需要固定主画面，另设 `ARTC_RECORDING_TEMPLATE_ID_SPEAKER`，未配置时 Demo 不显示该选项。该旧接口本身不支持 VOD，不能通过修改 `StorageConfig.Vendor` 实现 VOD。
 
 ### AWS Chime SDK 云录制 / MP4 云端合成
 
@@ -134,7 +138,7 @@ CHIME_RECORDING_S3_BUCKET=
 [AWS S3 云录制权限配置](AWS_S3_RECORDING_PERMISSIONS.md)。**
 
 - `H264_720P_30` → Chime `Resolution=HD`；`H264_1080P_30` → `Resolution=FHD`。Chime composited video 没有按帧率单独设置的 API，录制帧率由 AWS 服务决定。
-- `grid` → Chime `GridView`，屏幕共享时 `PresenterOnly`；`speaker` → 屏幕共享时 `ActiveSpeakerOnly`。**没有屏幕共享时仍然是 GridView**，不是语音驱动的单人全屏布局。
+- 目前 Chime 只在 Demo 开放 `grid` → Chime `GridView`。`ActiveSpeakerOnly` 只能在**屏幕共享发生时**影响内容布局；普通摄像头会议录制不具备固定主画面或全屏动态发言人布局。因此服务端直接拒绝这两种意图，不再提供无实际区别的第二个选项。
 - **2026-10-13 使用验收：** 用户明确确认通过 **AWS Chime** 成功进行云端录制并下载录像到本地，记录为 **Chime 云录制与下载已可用（用户实测）**。尚未独立验证多种布局、不同画质、多人数/长时间录制及完整音画回放质量；不将这些细项标记为已验收。
 
 ### AWS IVS Cloud Composition + AWS MediaConvert（完全云端 MP4）
@@ -188,9 +192,9 @@ if (status.metadata['canDownload'] == true) {
 
 | 方法与路径 | 说明 |
 |---|---|
-| `POST /rooms/:code/recording/start` | 仅房主，真实调用对应供应商 API，参数只允许 grid/speaker + 720p/1080p |
+| `POST /rooms/:code/recording/start` | 仅房主，按供应商支持列表校验 `grid` / `featuredParticipant` / `activeSpeaker` + 720p/1080p；不可用布局返回 422，不会静默回退 |
 | `POST /rooms/:code/recording/stop` | 仅房主，提交云端停止与文件封装 |
-| `POST /rooms/:code/recording/status` | 仅房主，`state` + `recordingAvailable` + `recordingUnavailableReason` |
+| `POST /rooms/:code/recording/status` | 仅房主，`state` + `recordingAvailable` + `recordingUnavailableReason` + `supportedLayouts` |
 | `POST /rooms/:code/recording/download` | 仅房主，确认 MP4 可用后发放 **60 秒、一次有效、房间绑定**的票据 |
 | `GET /rooms/:code/recording/export/:ticket` | 服务器从 S3/OSS/腾讯 VOD 流式转发真实 MP4，浏览器直接下载 |
 | `POST /webhooks/recording/trtc` | TRTC 经过签名校验的 VOD 录制完成回调 |

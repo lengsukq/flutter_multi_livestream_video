@@ -44,7 +44,7 @@ unit/contract suites do not require a real cloud deployment.
 
 ## Optional Tencent TRTC integration test
 
-See [`../TRTC_E2E.md`](../TRTC_E2E.md) for the backend setup, one-device media
+See [`TRTC_E2E.md`](TRTC_E2E.md) for the backend setup, one-device media
 and rendering test, host plus two-viewer checks, server-enforced viewer
 permissions, and short-lived credential renewal test. These checks require a
 Tencent RTC project and physical Android/iOS devices; the offline suites use a

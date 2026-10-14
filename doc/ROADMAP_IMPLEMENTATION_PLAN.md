@@ -83,7 +83,7 @@ LiveKit MVP 通过验收后，第 3、4 项保持进行中状态。Agora、TRTC�
 
 全量入口保持兼容；新增供应商无关基础包、Realtime 和八组可选注册包。
 聊天缓存和界面区域更新已纳入回归，Web 效果按需加载。
-[声明矩阵](doc/generated/SDK_DECLARATIONS.md)由源码生成；
-[统一验收](doc/ACCEPTANCE.md)默认 20 次进退房和 30 分钟通话。
+[声明矩阵](generated/SDK_DECLARATIONS.md)由源码生成；
+[统一验收](ACCEPTANCE.md)默认 20 次进退房和 30 分钟通话。
 真实连麦和服务端聊天历史分页继续独立推进。
 真实供应商通话、Windows 原生构建与远端画面验收不得从本地单测或声明推定通过。

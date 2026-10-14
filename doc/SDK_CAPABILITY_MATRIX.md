@@ -8,9 +8,9 @@ platform or role.
 
 ## Generated declarations and acceptance evidence
 
-[Platform, role and feature declarations](doc/generated/SDK_DECLARATIONS.md) are generated from optional drivers and adapter source.
+[Platform, role and feature declarations](generated/SDK_DECLARATIONS.md) are generated from optional drivers and adapter source.
 `python3 scripts/generate_capability_matrix.py --check` rejects stale output.
-Declarations, target builds and real calls are separate evidence; the [unified acceptance entry point](doc/ACCEPTANCE.md) records devices, vendor versions, remote visuals and cleanup.
+Declarations, target builds and real calls are separate evidence; the [unified acceptance entry point](ACCEPTANCE.md) records devices, vendor versions, remote visuals and cleanup.
 
 
 ## Built-in platform drivers
@@ -393,10 +393,10 @@ a system-wide desktop drawing layer is not implemented.
 The implementation run recorded 55 backend + 156 Dart/Flutter tests (**211**)
 and successful Web/Android/iOS/macOS builds. This is separate from real-provider,
 multi-device and remote-pixel acceptance. See
-[delivery and acceptance](doc/INTERACTION_ACCEPTANCE.md),
-[Classroom SDK](doc/CLASSROOM_SDK.md) and
-[Live interaction SDK](doc/LIVE_INTERACTIONS_SDK.md).
+[delivery and acceptance](INTERACTION_ACCEPTANCE.md),
+[Classroom SDK](CLASSROOM_SDK.md) and
+[Live interaction SDK](LIVE_INTERACTIONS_SDK.md).
 
-See [Whiteboard SDK](doc/WHITEBOARD_SDK.md) for public APIs and compatibility. The current whiteboard
-delivery records 306 targeted passing tests in the [acceptance record](doc/INTERACTION_ACCEPTANCE.md#independent-whiteboard-delivery--2026-10-08).
+See [Whiteboard SDK](WHITEBOARD_SDK.md) for public APIs and compatibility. The current whiteboard
+delivery records 306 targeted passing tests in the [acceptance record](INTERACTION_ACCEPTANCE.md#independent-whiteboard-delivery--2026-10-08).
 State/drawing code is shared across all four platforms; capture and remote-pixel acceptance remain separate.

@@ -122,4 +122,4 @@ The common fields are returned by the v1 backend contract, with an ARTC block:
 
 `participantId` must equal `artc.userId`. `authInfo` is opaque to the adapter;
 the backend generates it with the ARTC single-parameter token format. See
-[`MEDIA_BACKEND_CONTRACT.md`](../../MEDIA_BACKEND_CONTRACT.md).
+[`MEDIA_BACKEND_CONTRACT.md`](../../doc/MEDIA_BACKEND_CONTRACT.md).

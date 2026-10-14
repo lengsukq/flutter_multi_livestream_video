@@ -287,7 +287,7 @@ error such as 5xx is a backend-health failure.
 
 The default microphone/camera permission probe uses `permission_handler`.
 See
-[`packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md`](packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md)
+[`packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md`](../packages/flutter_realtime_media_core/PRE_JOIN_SETUP.md)
 for the required Android/iOS host settings.
 
 The backend returns the actual provider with the join credentials. The

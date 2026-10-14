@@ -114,7 +114,7 @@ whiteboard share drawing models/renderer but retain separate canvases.
 
 See [interaction acceptance](INTERACTION_ACCEPTANCE.md) for this run's tests and
 builds. Web/Android/iOS/macOS use the same state and drawing implementation.
-Native capture remains subject to the [provider/platform matrix](../SDK_CAPABILITY_MATRIX.zh-CN.md#教学工具与直播互动).
+Native capture remains subject to the [provider/platform matrix](SDK_CAPABILITY_MATRIX.zh-CN.md#教学工具与直播互动).
 Actual vendor screen transport, distant pixels, physical orientation changes and
 multi-device reconnect still require separate acceptance. No persistence, file
 upload/storage, recording, courseware import or video composition is added.

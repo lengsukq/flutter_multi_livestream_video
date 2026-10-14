@@ -45,8 +45,8 @@ the two test totals overlap and must not be added together.
 
 For the full requirement-by-requirement table, four-platform feature status,
 Windows registration boundaries and teacher screen-share matrix, see
-[SDK capability matrix (Chinese)](../SDK_CAPABILITY_MATRIX.zh-CN.md#教学工具与直播互动)
-or [English](../SDK_CAPABILITY_MATRIX.md#teaching-tools-and-live-interactions).
+[SDK capability matrix (Chinese)](SDK_CAPABILITY_MATRIX.zh-CN.md#教学工具与直播互动)
+or [English](SDK_CAPABILITY_MATRIX.md#teaching-tools-and-live-interactions).
 
 ## Delivered in SDK
 

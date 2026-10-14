@@ -54,7 +54,7 @@ Host applications must keep the matching purpose text in iOS/macOS
 `Info.plist`; the example already includes camera and microphone descriptions.
 Windows and browser permission prompts are handled by their platform runtimes.
 Minimum OS support and provider/feature differences are listed in
-[`../SDK_CAPABILITY_MATRIX.md`](../SDK_CAPABILITY_MATRIX.md).
+[`../doc/SDK_CAPABILITY_MATRIX.md`](../doc/SDK_CAPABILITY_MATRIX.md).
 
 ### Run on Web
 
@@ -106,14 +106,14 @@ iOS to avoid local path package-identity ambiguity; the SDK packages themselves
 do not require applications to disable SwiftPM.
 
 Agora's optional real-service device E2E flow is documented in
-[`../AGORA_E2E.md`](../AGORA_E2E.md).
+[`../doc/AGORA_E2E.md`](../doc/AGORA_E2E.md).
 
 Applications that use the lower-level Core packages directly may still depend
 on only the provider adapters they need. The recommended high-level
 `flutter_realtime_sdk` intentionally acts as the batteries-included bundle so
 application runtime code does not maintain adapter registration. TRTC and ARTC
-device E2E instructions are in [`../TRTC_E2E.md`](../TRTC_E2E.md) and
-[`../ARTC_E2E.md`](../ARTC_E2E.md). The ARTC 7.11.0 iOS pod does not support
+device E2E instructions are in [`../doc/TRTC_E2E.md`](../doc/TRTC_E2E.md) and
+[`../doc/ARTC_E2E.md`](../doc/ARTC_E2E.md). The ARTC 7.11.0 iOS pod does not support
 simulator linking.
 
 

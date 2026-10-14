@@ -85,4 +85,4 @@ provider E2E, every native platform or remote processed-video pixels.
 
 See [the P1 architecture and integration guide](../../doc/P1_ARCHITECTURE_AND_INTEGRATION.zh-CN.md),
 [Core Pre-Join setup](../flutter_realtime_media_core/PRE_JOIN_SETUP.md),
-and [capability matrix](../../SDK_CAPABILITY_MATRIX.zh-CN.md).
+and [capability matrix](../../doc/SDK_CAPABILITY_MATRIX.zh-CN.md).

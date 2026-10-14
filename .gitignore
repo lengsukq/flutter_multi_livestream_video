@@ -115,4 +115,10 @@ node_modules/
 **/Flutter/ephemeral/
 **/linux/flutter/generated_*
 **/android/local.properties
+# Local Docs (personal verification notes, scan reports, filled acceptance
+# records). doc/ stays tracked and shared; doc-local/ never commits.
+# Note: doc/OPTIMIZATION_VALIDATION.md was moved to doc-local/ and untracked
+# via `git rm --cached` (gitignore alone does not cover tracked files).
+/doc-local/
+doc/acceptance-record.*.local.json
 **/devtools_options.yaml

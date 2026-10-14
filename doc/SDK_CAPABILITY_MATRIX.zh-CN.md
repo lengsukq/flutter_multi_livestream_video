@@ -6,7 +6,7 @@ Meeting 教学互动 V1 已提供可选 ClassroomSession 和 SDK UI，举手、�
 目前仅是 advisory（提示性许可），不能宣称强制禁麦。服务器参考实现
 用 HTTP 控制面校验身份，可选 CLASSROOM_STATE_DIR 本机持久化；
 IM System Hint / RTC Data 仅发送修订通知以加快同步。
-详见 [Classroom SDK](doc/CLASSROOM_SDK.md)。
+详见 [Classroom SDK](CLASSROOM_SDK.md)。
 
 **简体中文** | [English](SDK_CAPABILITY_MATRIX.md)
 
@@ -15,9 +15,9 @@ IM System Hint / RTC Data 仅发送修订通知以加快同步。
 
 ## 自动生成的声明与验收边界
 
-[平台、角色和功能声明](doc/generated/SDK_DECLARATIONS.md)从可选驱动和 Adapter 源码生成。
+[平台、角色和功能声明](generated/SDK_DECLARATIONS.md)从可选驱动和 Adapter 源码生成。
 `python3 scripts/generate_capability_matrix.py --check` 会拒绝过期内容。
-声明、平台构建和真实通话是三种独立证据；[统一验收入口](doc/ACCEPTANCE.md)记录设备、供应商版本、远端画面与资源清理。
+声明、平台构建和真实通话是三种独立证据；[统一验收入口](ACCEPTANCE.md)记录设备、供应商版本、远端画面与资源清理。
 
 
 ## 内置平台 Driver
@@ -223,7 +223,7 @@ Provider 专属接口。未支持的操作应返回有类型的错误，不能�
 > 需显式注册 `flutter_realtime_classroom_preset` 的 `ClassroomPreset`
 > 或 `flutter_realtime_live_preset` 的 `LivePreset`；
 > 主 SDK 也可仅使用 `room.interactions` 实现自己的瞬时互动。
-> 详见 [四种接入方式](doc/INTERACTION_PRESET_GUIDE.zh-CN.md)。
+> 详见 [四种接入方式](INTERACTION_PRESET_GUIDE.zh-CN.md)。
 > 下方平台能力及历史构建状态仍按 **2026-10-08** 记录，
 > 不代表本次重新完成了真实设备验收。
 
@@ -297,7 +297,7 @@ AWS Live 已取消强制绑定 IVS Chat。媒体与产品 Chat 自由组合，�
 | ARTC | △ Web 发送与远端显示待多设备验收 | △ Android 原生屏幕采集与远端独立轨道已接，待实机 | △ 远端屏幕接收已接，主动共享缺 ReplayKit | △ macOS 远端接收已接，发送与可选原生 Framework 待验收 |
 | AWS Chime | ✅ 浏览器能力允许时 | ❌ | ❌ | ❌ |
 
-详细的五平台 × 六引擎缺口、验证边界和本轮改动见 [屏幕共享实现矩阵](doc/SCREEN_SHARING_PROVIDER_STATUS.md)。
+详细的五平台 × 六引擎缺口、验证边界和本轮改动见 [屏幕共享实现矩阵](SCREEN_SHARING_PROVIDER_STATUS.md)。
 这里的 Web 指桌面浏览器；移动浏览器不能从桌面 Web 支持推断可发起共享。
 LiveKit iOS 当前设置 `useiOSBroadcastExtension: false`，不能将应用内采集
 描述为跨应用整屏共享。接收共享/标注也不意味着同平台可以发起共享。
@@ -316,8 +316,8 @@ LiveKit iOS 当前设置 `useiOSBroadcastExtension: false`，不能将应用内�
 
 上一轮实现验证记录为 55 项后端测试 + 156 项 Dart/Flutter 测试，共 **211 项**；
 Web、Android、iOS、macOS 构建通过。这些证据不替代真实多人/供应商或远端画面验收。
-详见 [交付与验收](doc/INTERACTION_ACCEPTANCE.md)、
-[Classroom SDK](doc/CLASSROOM_SDK.md) 和 [Live 互动 SDK](doc/LIVE_INTERACTIONS_SDK.md)。
+详见 [交付与验收](INTERACTION_ACCEPTANCE.md)、
+[Classroom SDK](CLASSROOM_SDK.md) 和 [Live 互动 SDK](LIVE_INTERACTIONS_SDK.md)。
 
-白板与统一内容舞台详见 [SDK 文档](doc/WHITEBOARD_SDK.md)。本批验证为 306 项相关测试，
-构建证据与真实共享/远端像素验收分开记录，详见[最新验收记录](doc/INTERACTION_ACCEPTANCE.md#independent-whiteboard-delivery--2026-10-08)。
+白板与统一内容舞台详见 [SDK 文档](WHITEBOARD_SDK.md)。本批验证为 306 项相关测试，
+构建证据与真实共享/远端像素验收分开记录，详见[最新验收记录](INTERACTION_ACCEPTANCE.md#independent-whiteboard-delivery--2026-10-08)。
