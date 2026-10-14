@@ -179,7 +179,8 @@ analyze 已强制：`package:lints/recommended` + `unawaited_futures` +
 
 ### 2.7 质量门禁
 
-改动 SDK 代码后，在仓库根目录执行：
+改动 SDK 代码后，默认只在受影响的包内跑快速反馈（analyze + test）；
+收尾/合入前，再在仓库根目录跑一次全量门禁：
 
 ```sh
 python3 scripts/check_sdk_quality.py --resolve --analyze --test
@@ -190,7 +191,7 @@ python3 scripts/generate_capability_matrix.py --check
 
 - vendored WebRTC 与 `flutter_aws_chime` 保留其原有 lint 策略，
   不参与 SDK 工具的格式化与 lint 变更。
-- 只改单个包时，可先在该包内跑 analyze/test 做快速反馈，再跑全量门禁。
+- 全量门禁是合入门槛，不是每次编辑的标配；包内快速反馈才是每次改完的必跑项。
 
 ### 2.8 Demo 快速构建工程约定
 
