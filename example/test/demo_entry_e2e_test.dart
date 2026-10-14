@@ -105,8 +105,6 @@ Future<void> _pumpDemo(
       localizationsDelegates: RealtimeStrings.localizationsDelegates,
       home: JoinScreen(
         onLocaleChanged: (_) {},
-        themeMode: ThemeMode.light,
-        onThemeModeChanged: (_) {},
         initialBackendUrl: 'http://fake-backend:3000',
         realtimeFactory: (_) => fake,
         backgroundPresets: () async => const [],

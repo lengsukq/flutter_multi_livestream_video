@@ -4,7 +4,8 @@ import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 import 'demo_strings.dart';
 
-/// Room discovery presentation. Filtering stays local to the panel.
+/// Next-gen room discovery presentation aligned with Apple HIG.
+/// Filtering stays local to the panel.
 class DemoAvailableRooms extends StatefulWidget {
   const DemoAvailableRooms({
     super.key,
@@ -33,6 +34,7 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
   @override
   Widget build(BuildContext context) {
     final style = RealtimeStyle.of(context);
+    final isDark = style.isDark;
     final strings = DemoStrings.of(context);
     final allRooms = widget.rooms;
     final rooms = _filter == null
@@ -45,50 +47,31 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
         Row(
           children: [
             Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      strings.availableRooms,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w800,
-                        color: style.text,
-                      ),
-                    ),
-                  ),
-                  if (allRooms.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    RealtimePill(
-                      label: '${allRooms.length}',
-                      foreground: style.primary,
-                      background: style.primarySubtle,
-                      borderColor: style.primaryBorder,
-                    ),
-                  ],
-                ],
+              child: Text(
+                '${strings.availableRooms} (${allRooms.length})',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
-            TextButton.icon(
+            IconButton(
+              tooltip: strings.refresh,
               onPressed: widget.loading || widget.busy
                   ? null
                   : widget.onRefresh,
               icon: widget.loading
                   ? const SizedBox(
-                      width: 14,
-                      height: 14,
+                      width: 20,
+                      height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.refresh_rounded, size: 17),
-              label: Text(strings.refresh),
+                  : const Icon(Icons.refresh_rounded),
             ),
           ],
         ),
         if (allRooms.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Row(
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               RealtimePill(
                 label: strings.allFilter,
@@ -120,47 +103,59 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
                 icon: Icons.podcasts_rounded,
                 foreground: _filter == MediaRoomMode.broadcast
                     ? Colors.white
-                    : (style.isDark
-                          ? const Color(0xFFFB7185)
-                          : const Color(0xFFE11D48)),
+                    : style.textMuted,
                 background: _filter == MediaRoomMode.broadcast
-                    ? const Color(0xFFE11D48)
-                    : (style.isDark
-                          ? const Color(0xFF3B1219)
-                          : const Color(0xFFFFF1F2)),
-                borderColor: _filter == MediaRoomMode.broadcast
-                    ? const Color(0xFFE11D48)
-                    : (style.isDark
-                          ? const Color(0xFF7F1D1D)
-                          : const Color(0xFFFECDD3)),
+                    ? style.primary
+                    : style.surfaceSubtle,
+                borderColor: style.border,
                 onTap: () => setState(() => _filter = MediaRoomMode.broadcast),
               ),
             ],
           ),
         ],
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         if (widget.error != null)
           Text(
             widget.error!,
             style: const TextStyle(fontSize: 11.5, color: Color(0xFFB91C1C)),
           )
         else if (rooms.isEmpty)
-          RealtimeGlassSurface(
-            radius: RealtimeUiTokens.cardRadius,
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-            shadow: false,
-            child: Text(
-              _filter == MediaRoomMode.broadcast
-                  ? strings.noActiveLiveStreams
-                  : (_filter == MediaRoomMode.meeting
-                        ? strings.noActiveMeetings
-                        : strings.noActiveRooms),
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: style.textMuted,
-                fontWeight: FontWeight.w600,
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.03)
+                  : Colors.black.withValues(alpha: 0.02),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.07)
+                    : Colors.black.withValues(alpha: 0.05),
+                width: 0.8,
               ),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.sensors_off_rounded,
+                  size: 28,
+                  color: style.textMuted.withValues(alpha: 0.6),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _filter == MediaRoomMode.broadcast
+                      ? strings.noActiveLiveStreams
+                      : (_filter == MediaRoomMode.meeting
+                            ? strings.noActiveMeetings
+                            : strings.noActiveRooms),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: style.textMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           )
         else

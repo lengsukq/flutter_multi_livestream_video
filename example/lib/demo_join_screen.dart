@@ -40,8 +40,6 @@ class JoinScreen extends StatefulWidget {
   const JoinScreen({
     super.key,
     required this.onLocaleChanged,
-    required this.themeMode,
-    required this.onThemeModeChanged,
     this.realtimeFactory,
     this.roomPageFactory,
     this.backgroundPresets,
@@ -50,8 +48,6 @@ class JoinScreen extends StatefulWidget {
   });
 
   final ValueChanged<Locale> onLocaleChanged;
-  final ThemeMode themeMode;
-  final ValueChanged<ThemeMode> onThemeModeChanged;
   final DemoRealtimeFactory? realtimeFactory;
   final DemoRoomPageFactory? roomPageFactory;
   final Future<List<MediaBackgroundImagePreset>> Function()? backgroundPresets;
@@ -68,12 +64,12 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   final _roomDirectory = DemoRoomDirectory();
 
   late final TabController _demoTabs;
-  late final TabController _roomTabs;
   late final Future<String> _deviceIdFuture;
   final _serverController = TextEditingController();
   final _createCodeController = TextEditingController();
   final _joinCodeController = TextEditingController();
   final _displayNameController = TextEditingController();
+  final _avatarUrlController = TextEditingController();
 
   DemoEntryPhase _entryPhase = DemoEntryPhase.idle;
   bool get _busy => _entryPhase != DemoEntryPhase.idle;
@@ -97,8 +93,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     super.initState();
     _diagnostics.addListener(_notifyBackendChanged);
     _roomDirectory.addListener(_notifyBackendChanged);
-    _demoTabs = TabController(length: 2, vsync: this);
-    _roomTabs = TabController(length: 3, vsync: this);
+    _demoTabs = TabController(length: 3, vsync: this);
     _deviceIdFuture = _entryCoordinator.deviceId;
     unawaited(_loadDisplayName());
     _serverController.text = widget.initialBackendUrl ?? _defaultBackendUrl;
@@ -106,7 +101,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     unawaited(_refreshRooms(silent: true));
     _serverStatusTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       unawaited(_testConnection(silent: true));
-      if (_demoTabs.index == 0 && _roomTabs.index == 0 && !_busy) {
+      if (_demoTabs.index == 0 && !_busy) {
         unawaited(_refreshRooms(silent: true));
       }
     });
@@ -138,11 +133,11 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     _roomDirectory.dispose();
     _serverStatusTimer?.cancel();
     _demoTabs.dispose();
-    _roomTabs.dispose();
     _serverController.dispose();
     _createCodeController.dispose();
     _joinCodeController.dispose();
     _displayNameController.dispose();
+    _avatarUrlController.dispose();
     super.dispose();
   }
 
@@ -171,8 +166,10 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   Future<void> _loadDisplayName() async {
     final id = await _deviceIdFuture;
     final name = await _identityStore.loadDisplayName(id);
+    final avatarUrl = await _identityStore.loadAvatarUrl();
     if (!mounted) return;
     _displayNameController.text = name;
+    _avatarUrlController.text = avatarUrl;
     setState(() {});
   }
 
@@ -233,6 +230,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
         backendUrl: _server,
         code: code,
         displayName: _displayNameController.text,
+        avatarUrl: _avatarUrlController.text,
         mode: mode,
         createRealtime: (url) =>
             widget.realtimeFactory?.call(url) ??
@@ -252,6 +250,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             providerId: providerId,
             roomCode: kind == DemoRoomEntryKind.join ? entry.roomCode : null,
             displayName: entry.user.name,
+            avatarUrl: entry.user.avatarUrl,
             roomLabel: entry.roomCode ?? DemoStrings.of(context).createAndJoin,
             onEnter: (preJoinContext, settings) async {
               final connection = await entry.connect();
@@ -277,6 +276,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     Realtime realtime, {
     required MediaRole role,
     required String displayName,
+    String? avatarUrl,
     required String roomLabel,
     required MediaPreJoinEnter onEnter,
     String? providerId,
@@ -303,6 +303,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             openPreview: (id, previewRole) =>
                 realtime.createLocalPreview(providerId: id, role: previewRole),
             displayName: displayName,
+            avatarUrl: avatarUrl,
             roomLabel: roomLabel,
             imagePresets: backgroundPresets,
             title: role == MediaRole.viewer
@@ -349,235 +350,121 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _selectDestination(int index) {
+    _demoTabs.index = index;
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      resizeToAvoidBottomInset: false,
-      body: RealtimeAmbientBackground(
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final desktop = constraints.maxWidth >= 980;
-              final compact = constraints.maxWidth < 600;
-              final horizontalPadding = constraints.maxWidth < 400
-                  ? 12.0
-                  : 24.0;
-              return SingleChildScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: EdgeInsets.fromLTRB(
-                  horizontalPadding,
-                  desktop ? 28 : 12,
-                  horizontalPadding,
-                  24 + bottomInset,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1320),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildTopBar(),
-                        SizedBox(
-                          height: desktop
-                              ? 36
-                              : compact
-                              ? 10
-                              : 18,
-                        ),
-                        if (desktop)
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 5,
-                                child: _homeHero(compact: false),
-                              ),
-                              const SizedBox(width: 28),
-                              Expanded(flex: 6, child: _buildHomeActions()),
-                            ],
-                          )
-                        else
-                          Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 680),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  if (compact)
-                                    _homeHero(compact: true)
-                                  else
-                                    _homeHero(compact: false),
-                                  SizedBox(height: compact ? 12 : 20),
-                                  _buildHomeActions(),
-                                ],
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHomeActions() => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      _buildDemoTabsCard(),
-      const SizedBox(height: 12),
-      AnimatedBuilder(
-        animation: _demoTabs,
-        builder: (context, _) => Stack(
-          children: [
-            Offstage(
-              offstage: _demoTabs.index != 0,
-              child: _buildActionTabsCard(),
-            ),
-            Offstage(
-              offstage: _demoTabs.index != 1,
-              child: FutureBuilder<String>(
-                future: _deviceIdFuture,
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const SizedBox.shrink();
-                  return StandaloneChatDemoPage(
-                    backendUrl: _server,
-                    realtime: _newRealtime(),
-                    userId: snapshot.data!,
-                    displayName: _displayNameController.text.trim().isEmpty
-                        ? _identityStore.defaultDisplayName(snapshot.data!)
-                        : _displayNameController.text.trim(),
-                    embedded: true,
-                    visible: _demoTabs.index == 1,
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-      AnimatedBuilder(
-        animation: _demoTabs,
-        builder: (context, _) =>
-            _demoTabs.index != 0 || (_error == null && _formError == null)
-            ? const SizedBox.shrink()
-            : Padding(
-                padding: const EdgeInsets.only(top: 14),
-                child: _buildErrorBanner(),
-              ),
-      ),
-    ],
-  );
-
-  Widget _buildTopBar() {
     final strings = DemoStrings.of(context);
-    final style = RealtimeStyle.of(context);
-    return Row(
-      children: [
-        Icon(Icons.hub_rounded, color: style.primary, size: 22),
-        const SizedBox(width: 9),
-        Expanded(
-          child: Text(
-            'REALTIME / DEMO',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
-              letterSpacing: 1.4,
-              color: style.textMuted,
-            ),
-          ),
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    return RealtimeWorkspaceShell(
+      selectedIndex: _demoTabs.index,
+      onDestinationSelected: _selectDestination,
+      destinations: [
+        NavigationDestination(
+          icon: const Icon(Icons.home_outlined),
+          selectedIcon: const Icon(Icons.home_rounded),
+          label: strings.home,
         ),
-        _buildThemeMenu(),
-        const SizedBox(width: 8),
-        _buildLanguageMenu(),
-        const SizedBox(width: 8),
-        RealtimeGlassSurface(
-          radius: RealtimeUiTokens.pillRadius,
-          opacity: 0.80,
-          shadow: false,
-          child: Tooltip(
-            message: strings.serverAndIdentitySettings,
-            child: IconButton(
-              icon: Icon(Icons.settings_outlined, size: 20, color: style.text),
-              onPressed: _showServerAndIdentitySheet,
-            ),
-          ),
+        NavigationDestination(
+          icon: const Icon(Icons.chat_bubble_outline_rounded),
+          selectedIcon: const Icon(Icons.chat_bubble_rounded),
+          label: strings.chatTab,
+        ),
+        NavigationDestination(
+          icon: const Icon(Icons.settings_outlined),
+          selectedIcon: const Icon(Icons.settings_rounded),
+          label: strings.settings,
         ),
       ],
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + inset),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1240),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildTopBar(),
+                const SizedBox(height: 24),
+                if (_demoTabs.index == 0) ...[
+                  _homeHero(compact: MediaQuery.sizeOf(context).width < 600),
+                  const SizedBox(height: 24),
+                  _buildActionTabsCard(),
+                  if (_error != null || _formError != null) ...[
+                    const SizedBox(height: 16),
+                    _buildErrorBanner(),
+                  ],
+                ],
+                // Keep the embedded chat host mounted when navigating away.
+                Offstage(
+                  offstage: _demoTabs.index != 1,
+                  child: FutureBuilder<String>(
+                    future: _deviceIdFuture,
+                    builder: (context, snapshot) => snapshot.hasData
+                        ? StandaloneChatDemoPage(
+                            backendUrl: _server,
+                            realtime: _newRealtime(),
+                            userId: snapshot.data!,
+                            displayName: _displayNameController.text,
+                            avatarUrl: _avatarUrlController.text,
+                            embedded: true,
+                            visible: _demoTabs.index == 1,
+                          )
+                        : const Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+                if (_demoTabs.index == 2) ...[
+                  Text(
+                    strings.settings,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildIdentitySettingsSection(),
+                  const SizedBox(height: 24),
+                  _buildServerSettingsSection(),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildThemeMenu() {
-    final strings = DemoStrings.of(context);
-    final style = RealtimeStyle.of(context);
+  Widget _buildTopBar() {
     return RealtimeGlassSurface(
       radius: RealtimeUiTokens.pillRadius,
-      opacity: 0.80,
-      shadow: false,
-      child: PopupMenuButton<ThemeMode>(
-        tooltip: strings.appearanceTheme,
-        color: style.surface.withValues(alpha: 0.96),
-        surfaceTintColor: Colors.transparent,
-        elevation: 6,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-          side: BorderSide(color: style.border),
-        ),
-        icon: Icon(
-          switch (widget.themeMode) {
-            ThemeMode.light => Icons.light_mode_rounded,
-            ThemeMode.dark => Icons.dark_mode_rounded,
-            ThemeMode.system => Icons.brightness_auto_rounded,
-          },
-          size: 20,
-          color: style.text,
-        ),
-        onSelected: widget.onThemeModeChanged,
-        itemBuilder: (_) => [
-          PopupMenuItem(
-            value: ThemeMode.light,
-            child: Row(
-              children: [
-                Icon(Icons.light_mode_rounded, size: 18, color: style.text),
-                const SizedBox(width: 8),
-                Text(strings.themeLight, style: TextStyle(color: style.text)),
-              ],
+      opacity: 0.78,
+      blur: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          const Icon(Icons.hub_rounded, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Realtime Media',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
-          PopupMenuItem(
-            value: ThemeMode.dark,
-            child: Row(
-              children: [
-                Icon(Icons.dark_mode_rounded, size: 18, color: style.text),
-                const SizedBox(width: 8),
-                Text(strings.themeDark, style: TextStyle(color: style.text)),
-              ],
+          const SizedBox(width: 6),
+          _buildLanguageMenu(),
+          IconButton(
+            tooltip: DemoStrings.of(context).settings,
+            onPressed: () => _selectDestination(2),
+            icon: RealtimeAvatar(
+              name: _displayNameController.text,
+              avatarUrl: _avatarUrlController.text,
+              size: 30,
             ),
           ),
-          PopupMenuItem(
-            value: ThemeMode.system,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.brightness_auto_rounded,
-                  size: 18,
-                  color: style.text,
-                ),
-                const SizedBox(width: 8),
-                Text(strings.themeSystem, style: TextStyle(color: style.text)),
-              ],
-            ),
-          ),
+          const SizedBox(width: 4),
         ],
       ),
     );
@@ -592,6 +479,8 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       shadow: false,
       child: PopupMenuButton<Locale>(
         tooltip: strings.language,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
         color: style.surface.withValues(alpha: 0.96),
         surfaceTintColor: Colors.transparent,
         elevation: 6,
@@ -599,7 +488,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
           side: BorderSide(color: style.border),
         ),
-        icon: Icon(Icons.language_rounded, size: 20, color: style.text),
+        icon: Icon(Icons.language_rounded, size: 18, color: style.text),
         onSelected: widget.onLocaleChanged,
         itemBuilder: (_) => [
           PopupMenuItem(
@@ -615,30 +504,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildDemoTabsCard() => AnimatedBuilder(
-    animation: _demoTabs,
-    builder: (context, _) => RealtimeSegmentedTabs<int>(
-      height: 48,
-      selectedValue: _demoTabs.index,
-      onChanged: (val) {
-        _demoTabs.animateTo(val);
-        setState(() {});
-      },
-      tabs: [
-        RealtimeSegmentTab(
-          value: 0,
-          icon: Icons.videocam_rounded,
-          label: DemoStrings.of(context).videoTab,
-        ),
-        RealtimeSegmentTab(
-          value: 1,
-          icon: Icons.chat_bubble_outline_rounded,
-          label: DemoStrings.of(context).chatTab,
-        ),
-      ],
-    ),
-  );
-
   Widget _homeHero({required bool compact}) => DemoHomeHero(
     compact: compact,
     mediaProviderId: _serverMediaProviderId,
@@ -646,75 +511,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     online: _serverOnline,
     testingServer: _testingServer,
   );
-
-  void _showServerAndIdentitySheet() {
-    unawaited(
-      showRealtimeGlassBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (sheetContext) => StatefulBuilder(
-          builder: (sheetContext, _) {
-            final style = RealtimeStyle.of(sheetContext);
-            final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 580),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(18, 6, 18, 16 + bottomInset),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.tune_rounded,
-                              size: 20,
-                              color: style.primary,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                DemoStrings.of(
-                                  sheetContext,
-                                ).serverAndIdentitySettings,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: style.text,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.close_rounded,
-                                color: style.textMuted,
-                              ),
-                              onPressed: () => Navigator.of(sheetContext).pop(),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        _buildServerSettingsSection(),
-                        const SizedBox(height: 12),
-                        _buildIdentitySettingsSection(),
-                        const SizedBox(height: 16),
-                        RealtimeGlassButton(
-                          onPressed: () => Navigator.of(sheetContext).pop(),
-                          child: Text(DemoStrings.of(sheetContext).done),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
 
   Widget _buildServerSettingsSection() => DemoServerSettingsPanel(
     controller: _serverController,
@@ -725,6 +521,11 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   Widget _buildIdentitySettingsSection() => DemoIdentitySettingsPanel(
     deviceId: _deviceIdFuture,
     displayNameController: _displayNameController,
+    avatarUrlController: _avatarUrlController,
+    onAvatarChanged: (value) {
+      unawaited(_identityStore.saveAvatarUrl(value));
+      setState(() {});
+    },
     onNameChanged: (value) {
       unawaited(_persistDisplayName(value));
       setState(() {});
@@ -732,194 +533,126 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   );
 
   Widget _buildActionTabsCard() {
+    final strings = DemoStrings.of(context);
     final style = RealtimeStyle.of(context);
-    return RealtimeGlassSurface(
-      radius: RealtimeUiTokens.cardRadius,
-      padding: const EdgeInsets.all(18),
+    final form = RealtimeCardSurface(
+      padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AnimatedBuilder(
-            animation: _roomTabs,
-            builder: (context, _) => RealtimeSegmentedTabs<int>(
-              height: 44,
-              selectedValue: _roomTabs.index,
-              onChanged: (val) {
-                _roomTabs.animateTo(val);
-                setState(() {});
-              },
-              tabs: [
-                RealtimeSegmentTab(
-                  value: 0,
-                  label: DemoStrings.of(context).joinRoomTab,
-                ),
-                RealtimeSegmentTab(
-                  value: 1,
-                  label: DemoStrings.of(context).createMeeting,
-                ),
-                RealtimeSegmentTab(
-                  value: 2,
-                  label: DemoStrings.of(context).startLive,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          AnimatedBuilder(
-            animation: _roomTabs,
-            builder: (context, _) {
-              final tab = _roomTabs.index;
-              if (tab == 0) {
-                final isLiveMode = _joinRoomMode == MediaRoomMode.broadcast;
-                return Column(
-                  key: const ValueKey('join-tab-content'),
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: RealtimePill(
-                              label: DemoStrings.of(
-                                context,
-                              ).joinMeetingParticipant,
-                              icon: Icons.groups_rounded,
-                              foreground: !isLiveMode
-                                  ? Colors.white
-                                  : style.textMuted,
-                              background: !isLiveMode
-                                  ? style.primary
-                                  : style.surfaceSubtle,
-                              borderColor: !isLiveMode
-                                  ? style.primary
-                                  : style.border,
-                              onTap: () => setState(
-                                () => _joinRoomMode = MediaRoomMode.meeting,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: RealtimePill(
-                              label: DemoStrings.of(context).watchLiveViewer,
-                              icon: Icons.podcasts_rounded,
-                              foreground: isLiveMode
-                                  ? Colors.white
-                                  : (style.isDark
-                                        ? const Color(0xFFFB7185)
-                                        : const Color(0xFFE11D48)),
-                              background: isLiveMode
-                                  ? const Color(0xFFE11D48)
-                                  : (style.isDark
-                                        ? const Color(0xFF3B1219)
-                                        : const Color(0xFFFFF1F2)),
-                              borderColor: isLiveMode
-                                  ? const Color(0xFFE11D48)
-                                  : (style.isDark
-                                        ? const Color(0xFF7F1D1D)
-                                        : const Color(0xFFFECDD3)),
-                              onTap: () => setState(
-                                () => _joinRoomMode = MediaRoomMode.broadcast,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _roomForm(
-                      code: _joinCodeController,
-                      codeLabel: DemoStrings.of(context).roomCode,
-                      actionLabel: DemoStrings.of(context).joinRoom,
-                      action: _joinRoom,
-                      isCreate: false,
-                    ),
-                    const SizedBox(height: 22),
-                    _buildAvailableRooms(),
-                  ],
-                );
-              }
-              final live = tab == 2;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: live
-                          ? (style.isDark
-                                ? const Color(0xFF3B1219)
-                                : const Color(
-                                    0xFFFFF1F2,
-                                  ).withValues(alpha: 0.8))
-                          : style.primarySubtle,
-                      borderRadius: BorderRadius.circular(
-                        RealtimeUiTokens.controlRadius,
-                      ),
-                      border: Border.all(
-                        color: live
-                            ? (style.isDark
-                                  ? const Color(0xFF7F1D1D)
-                                  : const Color(0xFFFECDD3))
-                            : style.primaryBorder,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          live ? Icons.sensors_rounded : Icons.groups_rounded,
-                          size: 20,
-                          color: live
-                              ? (style.isDark
-                                    ? const Color(0xFFFB7185)
-                                    : const Color(0xFFE11D48))
-                              : style.primary,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            live
-                                ? DemoStrings.of(context).liveBannerDescription
-                                : DemoStrings.of(
-                                    context,
-                                  ).meetingBannerDescription,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: live
-                                  ? (style.isDark
-                                        ? const Color(0xFFFB7185)
-                                        : const Color(0xFFE11D48))
-                                  : style.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _roomForm(
-                    code: _createCodeController,
-                    codeLabel: DemoStrings.of(context).optionalRoomCode,
-                    actionLabel: live
-                        ? DemoStrings.of(context).startLive
-                        : DemoStrings.of(context).createMeeting,
-                    action: () {
-                      _createRoomMode = live
-                          ? MediaRoomMode.broadcast
-                          : MediaRoomMode.meeting;
-                      return _createRoom();
-                    },
-                    isCreate: true,
-                  ),
-                ],
-              );
+          Text(strings.joinRoom, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 20),
+          RealtimeCupertinoSegmentedBar<MediaRoomMode>(
+            groupValue: _joinRoomMode,
+            onValueChanged: (mode) => setState(() => _joinRoomMode = mode),
+            children: {
+              MediaRoomMode.meeting: Text(strings.joinMeetingParticipant),
+              MediaRoomMode.broadcast: Text(strings.watchLiveViewer),
             },
           ),
+          const SizedBox(height: 20),
+          _roomForm(
+            code: _joinCodeController,
+            codeLabel: strings.roomCode,
+            actionLabel: strings.joinRoom,
+            action: _joinRoom,
+            isCreate: false,
+          ),
+          const SizedBox(height: 20),
+          Divider(color: style.border),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : () => _showCreateForm(false),
+            icon: const Icon(Icons.add_rounded),
+            label: Text(strings.createMeeting),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _busy ? null : () => _showCreateForm(true),
+            icon: const Icon(Icons.sensors_rounded),
+            label: Text(strings.startLive),
+          ),
         ],
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide =
+            constraints.maxWidth >= 850 &&
+            MediaQuery.textScalerOf(context).scale(17) < 28;
+        return wide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 360, child: form),
+                  const SizedBox(width: 24),
+                  Expanded(child: _buildAvailableRooms()),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  form,
+                  const SizedBox(height: 24),
+                  _buildAvailableRooms(),
+                ],
+              );
+      },
+    );
+  }
+
+  void _showCreateForm(bool live) {
+    final strings = DemoStrings.of(context);
+    final label = live ? strings.startLive : strings.createMeeting;
+    unawaited(
+      showRealtimeGlassBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (sheetContext) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            24,
+            8,
+            24,
+            24 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: RealtimeSheetHeader(title: label)),
+                  IconButton(
+                    tooltip: RealtimeStrings.of(context).close,
+                    onPressed: () => Navigator.pop(sheetContext),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                live
+                    ? strings.liveBannerDescription
+                    : strings.meetingBannerDescription,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 24),
+              _roomForm(
+                code: _createCodeController,
+                codeLabel: strings.optionalRoomCode,
+                actionLabel: label,
+                isCreate: true,
+                action: () async {
+                  _createRoomMode = live
+                      ? MediaRoomMode.broadcast
+                      : MediaRoomMode.meeting;
+                  Navigator.pop(sheetContext);
+                  await _createRoom();
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -931,7 +664,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     required Future<void> Function() action,
     required bool isCreate,
   }) {
-    final style = RealtimeStyle.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -941,21 +673,15 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           hintText: DemoStrings.of(context).roomCodeHelp,
           prefixIcon: Icons.tag_rounded,
           suffix: isCreate
-              ? RealtimePill(
+              ? RealtimeFieldAction(
                   label: DemoStrings.of(context).random,
                   icon: Icons.casino_outlined,
-                  foreground: style.primary,
-                  background: style.primarySubtle,
-                  borderColor: style.primaryBorder,
-                  onTap: _generateRandomCreateCode,
+                  onPressed: _busy ? null : _generateRandomCreateCode,
                 )
-              : RealtimePill(
+              : RealtimeFieldAction(
                   label: RealtimeStrings.of(context).paste,
                   icon: Icons.content_paste_rounded,
-                  foreground: style.primary,
-                  background: style.primarySubtle,
-                  borderColor: style.primaryBorder,
-                  onTap: _pasteJoinCode,
+                  onPressed: _busy ? null : () => unawaited(_pasteJoinCode()),
                 ),
         ),
         const SizedBox(height: 18),

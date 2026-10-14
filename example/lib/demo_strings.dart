@@ -55,6 +55,8 @@ class DemoStrings {
     ].join('\n');
   }
 
+  String get home => isZh ? '首页' : 'Home';
+
   String get appSubtitle =>
       isZh ? '多服务商直播与音视频 SDK' : 'Multi-Provider Livestream & Video SDK';
   String get workspaceEyebrow => isZh ? '实时互动工作台' : 'REALTIME WORKSPACE';
@@ -75,6 +77,13 @@ class DemoStrings {
       : 'Video, meetings, live sessions, and Chat share the same User ID and display name.';
   String get userId => 'User ID';
   String get displayName => isZh ? '显示名称' : 'Display name';
+  String get avatarUrl => isZh ? '头像图片链接（可选）' : 'Avatar image URL (optional)';
+  String get avatarFallback => isZh
+      ? '留空或图片无法加载时，显示名字的第一个字。'
+      : 'Use the first character of your name when empty or unavailable.';
+  String get invalidAvatarUrl => isZh
+      ? '请输入有效的 http:// 或 https:// 图片链接。'
+      : 'Enter a valid http:// or https:// image URL.';
   String get checking => isZh ? '检查中…' : 'Checking…';
   String get check => isZh ? '检查' : 'Check';
   String get defaultServer => isZh ? '默认' : 'Default';

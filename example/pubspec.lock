@@ -318,6 +318,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  flutter_realtime_design_ui:
+    dependency: transitive
+    description:
+      path: "../packages/flutter_realtime_design_ui"
+      relative: true
+    source: path
+    version: "0.1.0"
   flutter_realtime_foundation:
     dependency: transitive
     description:

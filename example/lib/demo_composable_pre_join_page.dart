@@ -15,6 +15,7 @@ class DemoComposablePreJoinPage extends StatefulWidget {
     required this.onEnter,
     required this.roomLabel,
     required this.displayName,
+    this.avatarUrl,
     this.title,
     this.imagePresets = const [],
     this.permissionRequester = const DefaultMediaPermissionProbe(),
@@ -25,6 +26,7 @@ class DemoComposablePreJoinPage extends StatefulWidget {
   final MediaPreJoinEnter onEnter;
   final MediaPermissionRequester permissionRequester;
   final String displayName;
+  final String? avatarUrl;
   final String roomLabel;
   final String? title;
   final List<MediaBackgroundImagePreset> imagePresets;
@@ -70,7 +72,7 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
   Widget _preview(BuildContext context) {
     final strings = RealtimeStrings.of(context);
     final theme = Theme.of(context);
-    return RealtimeGlassSurface(
+    return RealtimeCardSurface(
       radius: RealtimeUiTokens.cardRadius,
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -101,11 +103,15 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
                 color: const Color(0xFF151E2D),
                 child: controller.result?.role == MediaRole.viewer
                     ? _PreviewExplanation(
+                        avatarName: widget.displayName,
+                        avatarUrl: widget.avatarUrl,
                         icon: Icons.visibility_outlined,
                         label: DemoStrings.of(context).viewerPreviewHelp,
                       )
                     : RealtimePreJoinPreview(
                         placeholder: _PreviewExplanation(
+                          avatarName: widget.displayName,
+                          avatarUrl: widget.avatarUrl,
                           icon: Icons.videocam_off_outlined,
                           label: DemoStrings.of(context).previewDisabledHelp,
                         ),
@@ -123,7 +129,7 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
   Widget _settings(BuildContext context) {
     final strings = RealtimeStrings.of(context);
     final theme = Theme.of(context);
-    return RealtimeGlassSurface(
+    return RealtimeCardSurface(
       radius: RealtimeUiTokens.cardRadius,
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -196,6 +202,10 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
                                 IconButton(
                                   tooltip: strings.back,
                                   icon: const Icon(Icons.arrow_back),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 44,
+                                    minHeight: 44,
+                                  ),
                                   onPressed: controller.joining
                                       ? null
                                       : () => Navigator.pop(context),
@@ -233,7 +243,9 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
                           child: LayoutBuilder(
                             builder: (context, constraints) {
                               final wide =
-                                  constraints.maxWidth >= 820 &&
+                                  constraints.maxWidth >= 1000 &&
+                                  MediaQuery.textScalerOf(context).scale(17) <
+                                      28 &&
                                   constraints.maxHeight >= 420;
                               final padding = EdgeInsets.symmetric(
                                 horizontal: constraints.maxWidth < 420
@@ -241,7 +253,8 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
                                     : 18,
                                 vertical: 8,
                               );
-                              return Center(
+                              return Align(
+                                alignment: Alignment.topCenter,
                                 child: ConstrainedBox(
                                   constraints: const BoxConstraints(
                                     maxWidth: 1220,
@@ -254,14 +267,14 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Expanded(
-                                                flex: 6,
+                                                flex: 5,
                                                 child: SingleChildScrollView(
                                                   child: _preview(context),
                                                 ),
                                               ),
-                                              const SizedBox(width: 12),
+                                              const SizedBox(width: 24),
                                               Expanded(
-                                                flex: 5,
+                                                flex: 6,
                                                 child: SingleChildScrollView(
                                                   child: _settings(context),
                                                 ),
@@ -377,27 +390,52 @@ class _DemoComposablePreJoinPageState extends State<DemoComposablePreJoinPage>
 
 /// Demo-only explanation, independent of SDK camera capture or lifecycle.
 class _PreviewExplanation extends StatelessWidget {
-  const _PreviewExplanation({required this.icon, required this.label});
+  const _PreviewExplanation({
+    required this.icon,
+    required this.label,
+    this.avatarName,
+    this.avatarUrl,
+  });
+  final String? avatarName;
+  final String? avatarUrl;
 
   final IconData icon;
   final String label;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 38, color: Colors.white70),
-          const SizedBox(height: 12),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final compact =
+          constraints.maxHeight < 200 ||
+          MediaQuery.textScalerOf(context).scale(17) >= 28;
+      return SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 8 : 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (avatarName != null)
+                  RealtimeAvatar(
+                    name: avatarName!,
+                    avatarUrl: avatarUrl,
+                    size: compact ? 40 : 80,
+                  )
+                else
+                  Icon(icon, size: compact ? 22 : 38, color: Colors.white70),
+                SizedBox(height: compact ? 4 : 12),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
-    ),
+        ),
+      );
+    },
   );
 }

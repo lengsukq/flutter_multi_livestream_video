@@ -55,7 +55,7 @@ void main() {
       );
       final surfaces = find.descendant(
         of: find.byType(StandaloneChatDemoPage),
-        matching: find.byType(RealtimeGlassSurface),
+        matching: find.byType(RealtimeCardSurface),
       );
       expect(surfaces, findsAtLeastNWidgets(2));
       for (final i in [0, 1]) {

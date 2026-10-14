@@ -14,6 +14,7 @@ class StandaloneChatDemoPage extends StatefulWidget {
     required this.realtime,
     required this.userId,
     required this.displayName,
+    this.avatarUrl,
     this.embedded = false,
     this.visible = true,
   });
@@ -21,6 +22,7 @@ class StandaloneChatDemoPage extends StatefulWidget {
   final Realtime realtime;
   final String userId;
   final String displayName;
+  final String? avatarUrl;
   final bool embedded;
   final bool visible;
 
@@ -127,12 +129,20 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
       final request = create
           ? RealtimeRequest.create(
               type: RealtimeExperience.chat,
-              user: RealtimeUser(id: widget.userId, name: widget.displayName),
+              user: RealtimeUser(
+                id: widget.userId,
+                name: widget.displayName,
+                avatarUrl: widget.avatarUrl,
+              ),
               roomCode: roomCode.isEmpty ? null : roomCode,
             )
           : RealtimeRequest.join(
               type: RealtimeExperience.chat,
-              user: RealtimeUser(id: widget.userId, name: widget.displayName),
+              user: RealtimeUser(
+                id: widget.userId,
+                name: widget.displayName,
+                avatarUrl: widget.avatarUrl,
+              ),
               roomCode: roomCode,
             );
       final connection = await widget.realtime.open(request);
@@ -190,10 +200,10 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
             if (!widget.embedded) ...[
               Row(
                 children: [
-                  RealtimeGlassSurface(
+                  RealtimeCardSurface(
                     radius: RealtimeUiTokens.pillRadius,
                     padding: EdgeInsets.zero,
-                    opacity: .82,
+
                     shadow: false,
                     child: IconButton(
                       tooltip: MaterialLocalizations.of(
@@ -236,64 +246,86 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
             ],
 
             // 1. User Profile Card
-            RealtimeGlassSurface(
+            RealtimeCardSurface(
               radius: RealtimeUiTokens.cardRadius,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               margin: const EdgeInsets.only(bottom: 14),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: style.primarySubtle,
-                    child: Text(
-                      widget.displayName.isNotEmpty
-                          ? widget.displayName.characters.first.toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: style.primary,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact =
+                      constraints.maxWidth < 480 ||
+                      MediaQuery.textScalerOf(context).scale(17) >= 28;
+                  final profile = Row(
+                    children: [
+                      RealtimeAvatar(
+                        name: widget.displayName,
+                        avatarUrl: widget.avatarUrl,
+                        size: 40,
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.displayName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: style.text,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.userId,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: style.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                  final status = RealtimePill(
+                    label: strings.chatOnline,
+                    foreground: style.success,
+                    background: style.successSubtle,
+                    borderColor: RealtimeUiTokens.successBorder,
+                  );
+                  if (compact) {
+                    return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          widget.displayName,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: RealtimeStyle.of(context).text,
+                        profile,
+                        const SizedBox(height: 12),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: constraints.maxWidth,
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.userId,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            color: RealtimeStyle.of(context).textMuted,
-                          ),
+                          child: status,
                         ),
                       ],
-                    ),
-                  ),
-                  RealtimePill(
-                    label: strings.chatOnline,
-                    foreground: const Color(0xFF10B981),
-                    background: const Color(0xFFECFDF5),
-                    borderColor: const Color(0xFFA7F3D0),
-                  ),
-                ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: profile),
+                      const SizedBox(width: 12),
+                      Flexible(child: status),
+                    ],
+                  );
+                },
               ),
             ),
 
             // 2. Main Exploration Container
-            RealtimeGlassSurface(
+            RealtimeCardSurface(
               radius: RealtimeUiTokens.cardRadius,
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -368,13 +400,10 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                       controller: _room,
                       label: strings.roomCode,
                       prefixIcon: Icons.tag_rounded,
-                      suffix: RealtimePill(
+                      suffix: RealtimeFieldAction(
                         label: strings.randomCode,
                         icon: Icons.casino_outlined,
-                        foreground: style.primary,
-                        background: style.primarySubtle,
-                        borderColor: style.primaryBorder,
-                        onTap: _busy ? null : _generateRandomCode,
+                        onPressed: _busy ? null : _generateRandomCode,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -480,7 +509,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
             style: const TextStyle(fontSize: 11.5, color: Color(0xFFB91C1C)),
           )
         else if (rooms.isEmpty)
-          RealtimeGlassSurface(
+          RealtimeCardSurface(
             radius: RealtimeUiTokens.cardRadius,
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
             shadow: false,
@@ -508,13 +537,13 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
           ...rooms.map(
             (room) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: RealtimeGlassSurface(
+              child: RealtimeCardSurface(
                 radius: RealtimeUiTokens.controlRadius,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 12,
                 ),
-                opacity: 0.88,
+
                 shadow: false,
                 child: Row(
                   children: [

@@ -10,17 +10,20 @@ class DemoIdentitySettingsPanel extends StatelessWidget {
     required this.deviceId,
     required this.displayNameController,
     required this.onNameChanged,
+    required this.avatarUrlController,
+    required this.onAvatarChanged,
   });
   final Future<String> deviceId;
   final TextEditingController displayNameController;
   final ValueChanged<String> onNameChanged;
+  final TextEditingController avatarUrlController;
+  final ValueChanged<String> onAvatarChanged;
   @override
   Widget build(BuildContext context) {
     final style = RealtimeStyle.of(context);
-    return RealtimeGlassSurface(
+    return RealtimeCardSurface(
       radius: RealtimeUiTokens.cardRadius,
       padding: const EdgeInsets.all(16),
-      shadow: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -56,6 +59,23 @@ class DemoIdentitySettingsPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          Row(
+            children: [
+              RealtimeAvatar(
+                name: displayNameController.text,
+                avatarUrl: avatarUrlController.text,
+                size: 64,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  DemoStrings.of(context).avatarFallback,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           FutureBuilder<String>(
             future: deviceId,
             builder: (context, snapshot) {
@@ -145,6 +165,26 @@ class DemoIdentitySettingsPanel extends StatelessWidget {
               onNameChanged(value);
             },
           ),
+          const SizedBox(height: 12),
+          RealtimeGlassTextField(
+            controller: avatarUrlController,
+            label: DemoStrings.of(context).avatarUrl,
+            hintText: 'https://…',
+            prefixIcon: Icons.link_rounded,
+            keyboardType: TextInputType.url,
+            onChanged: onAvatarChanged,
+          ),
+          if (avatarUrlController.text.trim().isNotEmpty &&
+              RealtimeAvatarUrl.tryParse(avatarUrlController.text) == null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                DemoStrings.of(context).invalidAvatarUrl,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall!.copyWith(color: style.danger),
+              ),
+            ),
         ],
       ),
     );

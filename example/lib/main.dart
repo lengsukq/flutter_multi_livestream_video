@@ -6,9 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'demo_join_screen.dart';
 
 const _demoLocalePreferenceKey = 'realtime_media_demo_locale';
-const _demoThemeModePreferenceKey = 'realtime_media_demo_theme_mode';
 Locale? _initialDemoLocale;
-ThemeMode _initialDemoThemeMode = ThemeMode.light;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,7 +14,7 @@ Future<void> main() async {
   // Android, including screens that use custom headers instead of AppBar.
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
-      statusBarColor: Color(0xFFF4F7FB),
+      statusBarColor: Color(0xFFF5F5F7),
       statusBarIconBrightness: Brightness.dark,
       statusBarBrightness: Brightness.light,
     ),
@@ -27,12 +25,6 @@ Future<void> main() async {
     'zh' => const Locale('zh', 'CN'),
     'en' => const Locale('en'),
     _ => null,
-  };
-  final savedThemeMode = preferences.getString(_demoThemeModePreferenceKey);
-  _initialDemoThemeMode = switch (savedThemeMode) {
-    'dark' => ThemeMode.dark,
-    'system' => ThemeMode.system,
-    _ => ThemeMode.light,
   };
   runApp(const ChimeExampleApp());
 }
@@ -46,7 +38,6 @@ class ChimeExampleApp extends StatefulWidget {
 
 class _ChimeExampleAppState extends State<ChimeExampleApp> {
   Locale? _locale = _initialDemoLocale;
-  ThemeMode _themeMode = _initialDemoThemeMode;
 
   Future<void> _setLocale(Locale locale) async {
     setState(() => _locale = locale);
@@ -57,20 +48,13 @@ class _ChimeExampleAppState extends State<ChimeExampleApp> {
     );
   }
 
-  Future<void> _setThemeMode(ThemeMode mode) async {
-    setState(() => _themeMode = mode);
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_demoThemeModePreferenceKey, mode.name);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isDark = _themeMode == ThemeMode.dark;
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-        statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
       ),
     );
     return MaterialApp(
@@ -80,8 +64,7 @@ class _ChimeExampleAppState extends State<ChimeExampleApp> {
       supportedLocales: RealtimeStrings.supportedLocales,
       localizationsDelegates: RealtimeStrings.localizationsDelegates,
       theme: RealtimeUiTheme.light(),
-      darkTheme: RealtimeUiTheme.dark(),
-      themeMode: _themeMode,
+      themeMode: ThemeMode.light,
       builder: (context, child) {
         final currentLocale = _locale ?? Localizations.localeOf(context);
         final isZh = currentLocale.languageCode.toLowerCase() == 'zh';
@@ -92,11 +75,7 @@ class _ChimeExampleAppState extends State<ChimeExampleApp> {
           child: child ?? const SizedBox.shrink(),
         );
       },
-      home: JoinScreen(
-        onLocaleChanged: _setLocale,
-        themeMode: _themeMode,
-        onThemeModeChanged: _setThemeMode,
-      ),
+      home: JoinScreen(onLocaleChanged: _setLocale),
     );
   }
 }

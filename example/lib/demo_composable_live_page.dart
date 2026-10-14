@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
@@ -31,7 +30,6 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
   late final Future<List<MediaBackgroundImagePreset>> _presets;
   _LiveSidePanel _sidePanel = _LiveSidePanel.none;
   bool _cleanScreen = false;
-  bool _chatInputActive = false;
   BoxFit? _liveVideoFitOverride;
 
   @override
@@ -48,7 +46,6 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
         oldWidget.initialSettings != widget.initialSettings) {
       _preparing = _prepare();
       _sidePanel = _LiveSidePanel.none;
-      _chatInputActive = false;
     }
   }
 
@@ -109,7 +106,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
             height: MediaQuery.of(sheetContext).size.height * 0.68,
             decoration: BoxDecoration(
               color: isDark
-                  ? const Color(0xFF0F172A).withValues(alpha: 0.94)
+                  ? const Color(0xFF1D1D1F).withValues(alpha: 0.94)
                   : Colors.white.withValues(alpha: 0.97),
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(24),
@@ -118,7 +115,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                 top: BorderSide(
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.15)
-                      : const Color(0xFFE2E8F0),
+                      : const Color(0xFFE5E5EA),
                   width: 1,
                 ),
               ),
@@ -155,7 +152,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                         decoration: BoxDecoration(
                           color:
                               (panel == _LiveSidePanel.chat
-                                      ? const Color(0xFF0284C7)
+                                      ? const Color(0xFF1D1D1F)
                                       : const Color(0xFFE11D48))
                                   .withValues(alpha: 0.15),
                           shape: BoxShape.circle,
@@ -166,7 +163,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                               : Icons.people_alt_rounded,
                           size: 16,
                           color: panel == _LiveSidePanel.chat
-                              ? const Color(0xFF0284C7)
+                              ? const Color(0xFF1D1D1F)
                               : const Color(0xFFE11D48),
                         ),
                       ),
@@ -180,7 +177,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                           fontWeight: FontWeight.bold,
                           color: isDark
                               ? Colors.white
-                              : const Color(0xFF0F172A),
+                              : const Color(0xFF1D1D1F),
                         ),
                       ),
                       const Spacer(),
@@ -196,7 +193,7 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                   height: 1,
                   color: isDark
                       ? Colors.white.withValues(alpha: 0.10)
-                      : const Color(0xFFE2E8F0),
+                      : const Color(0xFFE5E5EA),
                 ),
                 Expanded(
                   child: SafeArea(
@@ -225,96 +222,14 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
     );
   }
 
-  Widget _panel() {
+  Widget _fitControl() {
     final strings = RealtimeStrings.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(0, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF0F172A).withValues(alpha: 0.88)
-            : Colors.white.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.15)
-              : const Color(0xFFE2E8F0),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 10),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color:
-                        (_sidePanel == _LiveSidePanel.chat
-                                ? const Color(0xFF0284C7)
-                                : const Color(0xFFE11D48))
-                            .withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _sidePanel == _LiveSidePanel.chat
-                        ? Icons.chat_bubble_rounded
-                        : Icons.people_alt_rounded,
-                    size: 16,
-                    color: _sidePanel == _LiveSidePanel.chat
-                        ? const Color(0xFF0284C7)
-                        : const Color(0xFFE11D48),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    _sidePanel == _LiveSidePanel.chat
-                        ? strings.chat
-                        : strings.participants,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: strings.closePanel,
-                  iconSize: 20,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () =>
-                      setState(() => _sidePanel = _LiveSidePanel.none),
-                  icon: Icon(
-                    Icons.close_rounded,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Divider(
-            height: 1,
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.10)
-                : const Color(0xFFE2E8F0),
-          ),
-          Expanded(
-            child: _sidePanel == _LiveSidePanel.chat
-                ? const RealtimeChatPanel()
-                : const RealtimeManagedParticipantList(),
-          ),
-        ],
+    final full = _liveVideoFitOverride == BoxFit.contain;
+    return RealtimeGlassIconButton(
+      icon: full ? Icons.crop_free_rounded : Icons.fit_screen_rounded,
+      tooltip: full ? strings.fillLiveScreen : strings.showFullVideo,
+      onPressed: () => setState(
+        () => _liveVideoFitOverride = full ? BoxFit.cover : BoxFit.contain,
       ),
     );
   }
@@ -349,26 +264,13 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
           body: RealtimeAmbientBackground(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final wide = constraints.maxWidth >= 760;
+                final wide =
+                    constraints.maxWidth >= 1000 &&
+                    MediaQuery.textScalerOf(context).scale(17) < 28;
                 final isHost = widget.room.media.role != MediaRole.viewer;
                 final strings = RealtimeStrings.of(context);
                 final isDark = Theme.of(context).brightness == Brightness.dark;
                 final controller = RealtimeRoomUiScope.of(context);
-                final viewerCount = controller.snapshot.participants.length;
-                final compactTopHud = constraints.maxWidth < 440;
-                final videoStageWidth =
-                    wide && _sidePanel != _LiveSidePanel.none
-                    ? constraints.maxWidth - 330
-                    : constraints.maxWidth;
-                final fitStageWidth = _cleanScreen
-                    ? constraints.maxWidth
-                    : videoStageWidth;
-                final liveVideoFit =
-                    _liveVideoFitOverride ??
-                    (constraints.maxHeight > fitStageWidth
-                        ? BoxFit.cover
-                        : BoxFit.contain);
-                final isCompactDock = videoStageWidth < 660;
 
                 if (_cleanScreen) {
                   return GestureDetector(
@@ -403,498 +305,107 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                   );
                 }
 
-                return Row(
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // 1. Live Video Canvas with Tap-to-Like
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () => unawaited(
-                              controller.sendLiveLike().catchError((_) {}),
-                            ),
-                            onDoubleTap: () {
-                              unawaited(
-                                controller.sendLiveLike().catchError((_) {}),
-                              );
-                              unawaited(
-                                controller.sendLiveLike().catchError((_) {}),
-                              );
+                if (wide) {
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: RealtimeLiveDesktopStage(
+                          videoFit: _liveVideoFitOverride,
+                          exitAction: RealtimeLeaveButton(
+                            iconOnly: true,
+                            onConfirm: (ctx) => _confirmLeave(ctx),
+                            onLeft: () {
+                              if (context.mounted &&
+                                  Navigator.canPop(context)) {
+                                Navigator.pop(context);
+                              }
                             },
-                            child: RealtimeLiveVideoStage(
-                              fit: _liveVideoFitOverride,
-                            ),
                           ),
-
-                          // 2. Top Scrim Gradient
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            height: 140,
-                            child: IgnorePointer(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: isDark
-                                        ? [
-                                            Colors.black.withValues(
-                                              alpha: 0.70,
-                                            ),
-                                            Colors.transparent,
-                                          ]
-                                        : [
-                                            Colors.black.withValues(
-                                              alpha: 0.45,
-                                            ),
-                                            Colors.transparent,
-                                          ],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                  ),
+                          onToggleCleanScreen: () =>
+                              setState(() => _cleanScreen = true),
+                          onViewAudience: () =>
+                              _toggle(_LiveSidePanel.members, isWide: true),
+                          customChatPanel: _sidePanel == _LiveSidePanel.members
+                              ? const RealtimeManagedParticipantList()
+                              : null,
+                          topTrailingActions: [
+                            _fitControl(),
+                            if (isHost) ...[
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.auto_fix_high_rounded,
+                                  color: Colors.white,
+                                  size: 20,
                                 ),
+                                tooltip: strings.isZh ? '主播工具' : 'Host Tools',
+                                onPressed: () => _openHostToolsSheet(context),
                               ),
+                              const SizedBox(width: 4),
+                            ],
+                            DemoRecordingBadge(
+                              room: widget.room,
+                              compact: true,
                             ),
-                          ),
-
-                          // 3. Bottom Scrim Gradient
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            right: 0,
-                            height: 260,
-                            child: IgnorePointer(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: isDark
-                                        ? [
-                                            Colors.transparent,
-                                            Colors.black.withValues(
-                                              alpha: 0.85,
-                                            ),
-                                          ]
-                                        : [
-                                            Colors.transparent,
-                                            Colors.black.withValues(
-                                              alpha: 0.65,
-                                            ),
-                                          ],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // 4. Floating Hearts Particle Layer
-                          Positioned(
-                            right: 16,
-                            bottom:
-                                (isCompactDock ? 104.0 : 64.0) +
-                                MediaQuery.viewInsetsOf(context).bottom,
-                            child: const IgnorePointer(
-                              child: RealtimeLiveHeartsOverlay(),
-                            ),
-                          ),
-
-                          // 5. Floating Gift Banner
-                          const Positioned(
-                            right: 16,
-                            top: 80,
-                            child: RealtimeLiveGiftBanner(),
-                          ),
-
-                          // 6. Floating Danmaku Chat Feed
-                          Positioned(
-                            left: 14,
-                            bottom:
-                                (isCompactDock ? 104.0 : 64.0) +
-                                MediaQuery.viewInsetsOf(context).bottom,
-                            width: math.min(320.0, videoStageWidth * 0.72),
-                            child: const IgnorePointer(
-                              child: RealtimeLiveChatFeed(),
-                            ),
-                          ),
-
-                          // 7. Top HUD (Anchor capsule + Audience pill + Leave button)
-                          Positioned(
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            child: SafeArea(
-                              bottom: false,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                child: Row(
-                                  children: [
-                                    // Anchor capsule
-                                    Container(
-                                      constraints: BoxConstraints(
-                                        maxWidth: wide ? 220 : 130,
-                                      ),
-                                      padding: const EdgeInsets.fromLTRB(
-                                        4,
-                                        4,
-                                        12,
-                                        4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? Colors.black.withValues(
-                                                alpha: 0.65,
-                                              )
-                                            : Colors.white.withValues(
-                                                alpha: 0.92,
-                                              ),
-                                        borderRadius: BorderRadius.circular(
-                                          RealtimeUiTokens.pillRadius,
-                                        ),
-                                        border: Border.all(
-                                          color: isDark
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.20,
-                                                )
-                                              : RealtimeUiTokens.border,
-                                          width: 1,
-                                        ),
-                                        boxShadow: isDark
-                                            ? null
-                                            : [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withValues(alpha: 0.05),
-                                                  blurRadius: 8,
-                                                  offset: const Offset(0, 2),
-                                                ),
-                                              ],
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Stack(
-                                            alignment: Alignment.center,
-                                            children: [
-                                              Container(
-                                                width: 34,
-                                                height: 34,
-                                                decoration: const BoxDecoration(
-                                                  shape: BoxShape.circle,
-                                                  gradient: LinearGradient(
-                                                    colors: [
-                                                      Color(0xFFF43F5E),
-                                                      Color(0xFFFB923C),
-                                                    ],
-                                                  ),
-                                                ),
-                                                child: const Center(
-                                                  child: Icon(
-                                                    Icons.person_rounded,
-                                                    size: 20,
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-                                              ),
-                                              Positioned(
-                                                bottom: -2,
-                                                child: Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 4,
-                                                        vertical: 1,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(
-                                                      0xFFE11D48,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          4,
-                                                        ),
-                                                  ),
-                                                  child: Text(
-                                                    strings.liveStatus,
-                                                    style: const TextStyle(
-                                                      fontSize: 7.5,
-                                                      fontWeight:
-                                                          FontWeight.w900,
-                                                      color: Colors.white,
-                                                      letterSpacing: 0.5,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Flexible(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Text(
-                                                  strings.liveStream,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w800,
-                                                    color: isDark
-                                                        ? Colors.white
-                                                        : RealtimeUiTokens.text,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  widget.room.roomCode,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: isDark
-                                                        ? Colors.white70
-                                                        : RealtimeUiTokens
-                                                              .textMuted,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-
-                                    // Viewers online count pill
-                                    RealtimePill(
-                                      label: compactTopHud
-                                          ? '$viewerCount'
-                                          : strings.viewingCount(viewerCount),
-                                      icon: Icons.visibility_rounded,
-                                      foreground: isDark
-                                          ? Colors.white
-                                          : RealtimeUiTokens.text,
-                                      background: isDark
-                                          ? Colors.black.withValues(alpha: 0.55)
-                                          : Colors.white.withValues(
-                                              alpha: 0.92,
-                                            ),
-                                      borderColor: isDark
-                                          ? Colors.white.withValues(alpha: 0.20)
-                                          : RealtimeUiTokens.border,
-                                    ),
-
-                                    const Spacer(),
-
-                                    DemoRecordingBadge(
-                                      room: widget.room,
-                                      compact: constraints.maxWidth < 520,
-                                    ),
-
-                                    RealtimeGlassIconButton(
-                                      tooltip: liveVideoFit == BoxFit.contain
-                                          ? strings.fillLiveScreen
-                                          : strings.showFullVideo,
-                                      icon: liveVideoFit == BoxFit.contain
-                                          ? Icons.crop_free_rounded
-                                          : Icons.fit_screen_rounded,
-                                      active: liveVideoFit == BoxFit.cover,
-                                      size: 36,
-                                      radius: RealtimeUiTokens.pillRadius,
-                                      onPressed: () => setState(() {
-                                        _liveVideoFitOverride =
-                                            liveVideoFit == BoxFit.contain
-                                            ? BoxFit.cover
-                                            : BoxFit.contain;
-                                      }),
-                                    ),
-                                    const SizedBox(width: 8),
-
-                                    // Clean Screen button (wide screens)
-                                    if (wide) ...[
-                                      RealtimeGlassIconButton(
-                                        tooltip: strings.cleanScreen,
-                                        icon: Icons.fullscreen_rounded,
-                                        size: 36,
-                                        radius: RealtimeUiTokens.pillRadius,
-                                        onPressed: () =>
-                                            setState(() => _cleanScreen = true),
-                                      ),
-                                      const SizedBox(width: 8),
-                                    ],
-
-                                    // Leave button
-                                    RealtimeLeaveButton(
-                                      iconOnly: true,
-                                      onConfirm: (ctx) => _confirmLeave(ctx),
-                                      onLeft: () {
-                                        if (context.mounted &&
-                                            Navigator.canPop(context)) {
-                                          Navigator.pop(context);
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // 8. Bottom Interaction Dock (Pure icon buttons + in-place comment)
-                          Positioned(
-                            left: 12,
-                            right: 12,
-                            bottom: 0,
-                            child: SafeArea(
-                              top: false,
-                              child: Padding(
-                                padding: EdgeInsets.only(
-                                  bottom:
-                                      MediaQuery.viewInsetsOf(context).bottom +
-                                      8,
-                                ),
-                                child: LayoutBuilder(
-                                  builder: (context, dockConstraints) {
-                                    final compact =
-                                        dockConstraints.maxWidth < 640;
-                                    final actionButtons = SingleChildScrollView(
-                                      scrollDirection: Axis.horizontal,
-                                      reverse: true,
-                                      physics: const BouncingScrollPhysics(),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (isHost) ...[
-                                            const RealtimeMicrophoneButton(
-                                              iconOnly: true,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            const RealtimeCameraButton(
-                                              iconOnly: true,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            const RealtimeSwitchCameraButton(
-                                              iconOnly: true,
-                                            ),
-                                            const SizedBox(width: 6),
-                                            RealtimeGlassIconButton(
-                                              tooltip: strings.isZh
-                                                  ? '主播工具'
-                                                  : 'Host Tools',
-                                              icon: Icons.tune_rounded,
-                                              size: 40,
-                                              radius:
-                                                  RealtimeUiTokens.pillRadius,
-                                              onPressed: () =>
-                                                  _openHostToolsSheet(context),
-                                            ),
-                                            const SizedBox(width: 6),
-                                          ],
-                                          const RealtimeLiveGiftButton(
-                                            showLabel: false,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          const RealtimeLiveLikeButton(
-                                            iconOnly: true,
-                                          ),
-                                          const SizedBox(width: 6),
-                                          RealtimeGlassIconButton(
-                                            tooltip: strings.participants,
-                                            icon: Icons.people_outline_rounded,
-                                            size: 40,
-                                            radius: RealtimeUiTokens.pillRadius,
-                                            onPressed: () => _toggle(
-                                              _LiveSidePanel.members,
-                                              isWide: wide,
-                                            ),
-                                          ),
-                                          if (widget.room.chat != null) ...[
-                                            const SizedBox(width: 6),
-                                            RealtimeGlassIconButton(
-                                              tooltip: strings.chat,
-                                              icon: Icons
-                                                  .chat_bubble_outline_rounded,
-                                              size: 40,
-                                              radius:
-                                                  RealtimeUiTokens.pillRadius,
-                                              onPressed: () => _toggle(
-                                                _LiveSidePanel.chat,
-                                                isWide: wide,
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    );
-
-                                    if (compact) {
-                                      return Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          if (widget.room.chat != null) ...[
-                                            _LiveInPlaceChatInput(
-                                              room: widget.room,
-                                              isActive: _chatInputActive,
-                                              onActivate: () => setState(
-                                                () => _chatInputActive = true,
-                                              ),
-                                              onDeactivate: () => setState(
-                                                () => _chatInputActive = false,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                          ],
-                                          Align(
-                                            alignment: Alignment.centerRight,
-                                            child: actionButtons,
-                                          ),
-                                        ],
-                                      );
-                                    }
-
-                                    return Row(
-                                      children: [
-                                        if (widget.room.chat != null)
-                                          Expanded(
-                                            child: _LiveInPlaceChatInput(
-                                              room: widget.room,
-                                              isActive: _chatInputActive,
-                                              onActivate: () => setState(
-                                                () => _chatInputActive = true,
-                                              ),
-                                              onDeactivate: () => setState(
-                                                () => _chatInputActive = false,
-                                              ),
-                                            ),
-                                          ),
-                                        if (widget.room.chat != null)
-                                          const SizedBox(width: 8),
-                                        actionButtons,
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
+                  );
+                }
 
-                    // Wide screen side panel
-                    if (wide && _sidePanel != _LiveSidePanel.none)
-                      SizedBox(width: 330, child: _panel()),
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => unawaited(
+                        controller.sendLiveLike().catchError(
+                          controller.reportActionError,
+                        ),
+                      ),
+                      onDoubleTap: () {
+                        unawaited(
+                          controller.sendLiveLike().catchError(
+                            controller.reportActionError,
+                          ),
+                        );
+                        unawaited(
+                          controller.sendLiveLike().catchError(
+                            controller.reportActionError,
+                          ),
+                        );
+                      },
+                      child: RealtimeLiveVideoStage(fit: _liveVideoFitOverride),
+                    ),
+                    RealtimeLiveMobileOverlay(
+                      exitAction: RealtimeLeaveButton(
+                        iconOnly: true,
+                        onConfirm: (ctx) => _confirmLeave(ctx),
+                        onLeft: () {
+                          if (context.mounted && Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                      onViewAudience: () =>
+                          _openMobileSheet(_LiveSidePanel.members),
+                      onOpenHostTools: isHost
+                          ? () => _openHostToolsSheet(context)
+                          : null,
+                      videoFit: _liveVideoFitOverride,
+                      onToggleVideoFit: () => setState(
+                        () => _liveVideoFitOverride =
+                            _liveVideoFitOverride == BoxFit.contain
+                            ? BoxFit.cover
+                            : BoxFit.contain,
+                      ),
+                      onToggleCleanScreen: () =>
+                          setState(() => _cleanScreen = true),
+                      extraBottomActions: [
+                        DemoRecordingBadge(room: widget.room, compact: true),
+                      ],
+                    ),
                   ],
                 );
               },
@@ -904,193 +415,4 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
       );
     },
   );
-}
-
-/// In-place live chat comment capsule directly embedded in the bottom dock.
-class _LiveInPlaceChatInput extends StatefulWidget {
-  const _LiveInPlaceChatInput({
-    required this.room,
-    required this.isActive,
-    required this.onActivate,
-    required this.onDeactivate,
-  });
-
-  final RealtimeRoom room;
-  final bool isActive;
-  final VoidCallback onActivate;
-  final VoidCallback onDeactivate;
-
-  @override
-  State<_LiveInPlaceChatInput> createState() => _LiveInPlaceChatInputState();
-}
-
-class _LiveInPlaceChatInputState extends State<_LiveInPlaceChatInput> {
-  final TextEditingController _textController = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
-  bool _sending = false;
-
-  @override
-  void didUpdateWidget(covariant _LiveInPlaceChatInput oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _focusNode.requestFocus();
-      });
-    } else if (!widget.isActive && oldWidget.isActive) {
-      _focusNode.unfocus();
-    }
-  }
-
-  @override
-  void dispose() {
-    _textController.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    final text = _textController.text.trim();
-    if (text.isEmpty || _sending) return;
-    setState(() => _sending = true);
-    try {
-      await widget.room.chat?.sendMessage(text);
-      if (mounted) {
-        _textController.clear();
-        widget.onDeactivate();
-      }
-    } finally {
-      if (mounted) setState(() => _sending = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final strings = RealtimeStrings.of(context);
-    final style = RealtimeStyle.of(context);
-    final isDark = style.isDark;
-
-    if (!widget.isActive) {
-      return InkWell(
-        onTap: widget.onActivate,
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
-        child: Container(
-          height: 40,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.52)
-                : Colors.white.withValues(alpha: 0.88),
-            borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.20)
-                  : RealtimeUiTokens.border,
-              width: 1,
-            ),
-            boxShadow: isDark
-                ? null
-                : [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.chat_bubble_outline_rounded,
-                size: 16,
-                color: isDark ? Colors.white70 : RealtimeUiTokens.textMuted,
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  strings.sendComment,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.white60 : RealtimeUiTokens.textMuted,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.black.withValues(alpha: 0.76)
-            : style.surface.withValues(alpha: 0.98),
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
-        border: Border.all(
-          color: isDark
-              ? style.primary.withValues(alpha: 0.8)
-              : style.primaryBorder,
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: style.primary.withValues(alpha: 0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.chat_bubble_rounded, size: 16, color: style.primary),
-          const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: _textController,
-              focusNode: _focusNode,
-              style: TextStyle(
-                color: isDark ? Colors.white : style.text,
-                fontSize: 13.5,
-              ),
-              decoration: InputDecoration(
-                hintText: strings.sendComment,
-                hintStyle: TextStyle(
-                  color: isDark ? Colors.white60 : style.textMuted,
-                  fontSize: 13,
-                ),
-                filled: false,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _send(),
-            ),
-          ),
-          IconButton(
-            icon: _sending
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send_rounded, size: 18),
-            color: style.primary,
-            onPressed: _sending ? null : _send,
-          ),
-          IconButton(
-            icon: const Icon(Icons.close_rounded, size: 18),
-            color: style.textMuted,
-            onPressed: widget.onDeactivate,
-          ),
-        ],
-      ),
-    );
-  }
 }

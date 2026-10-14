@@ -23,29 +23,25 @@ class DemoServerSettingsPanel extends StatelessWidget {
   );
   Widget _contents(BuildContext context) {
     final style = RealtimeStyle.of(context);
-    return RealtimeGlassSurface(
+    return RealtimeCardSurface(
       radius: RealtimeUiTokens.cardRadius,
       padding: const EdgeInsets.all(16),
-      shadow: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  DemoStrings.of(context).backendServiceEndpoint,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: style.text,
-                  ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final heading = Text(
+                DemoStrings.of(context).backendServiceEndpoint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: style.text,
                 ),
-              ),
-              const SizedBox(width: 8),
-              RealtimePill(
+              );
+              final status = RealtimePill(
                 label: DemoStrings.of(context).backendStatus(
                   diagnostics.providerInfo,
                   checkingNow: diagnostics.testing,
@@ -56,7 +52,7 @@ class DemoServerSettingsPanel extends StatelessWidget {
                     ? style.success
                     : diagnostics.online == false
                     ? style.danger
-                    : const Color(0xFF94A3B8),
+                    : style.textMuted,
                 foreground: diagnostics.online == true
                     ? style.success
                     : diagnostics.online == false
@@ -81,8 +77,31 @@ class DemoServerSettingsPanel extends StatelessWidget {
                     : () async {
                         await onTest();
                       },
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 430 ||
+                  MediaQuery.textScalerOf(context).scale(13) >= 22) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    heading,
+                    const SizedBox(height: 8),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: constraints.maxWidth,
+                      ),
+                      child: status,
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: heading),
+                  const SizedBox(width: 8),
+                  Flexible(child: status),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 12),
           RealtimeGlassTextField(

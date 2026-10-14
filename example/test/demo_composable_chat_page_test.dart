@@ -1,3 +1,4 @@
+import 'support/design_capture.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_example/demo_composable_chat_page.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
@@ -5,6 +6,8 @@ import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(initializeDesignCapture);
   testWidgets('standalone Chat Demo composes SDK widgets at any width', (
     tester,
   ) async {
@@ -24,10 +27,14 @@ void main() {
     for (final width in [390.0, 768.0, 1280.0, 1440.0]) {
       await tester.binding.setSurfaceSize(Size(width, 850));
       await tester.pumpWidget(
-        MaterialApp(
-          home: DemoComposableChatPage(
-            chatRoom: chatRoom,
-            title: 'Product chat',
+        designCaptureApp(
+          MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: designTestTheme(),
+            home: DemoComposableChatPage(
+              chatRoom: chatRoom,
+              title: 'Product chat',
+            ),
           ),
         ),
       );
@@ -38,6 +45,9 @@ void main() {
       expect(find.byType(ChatComposer), findsOneWidget);
       expect(find.text('Product chat'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      if ([390.0, 1440.0].contains(width)) {
+        await captureDesign(tester, 'chat-room-${width.toInt()}');
+      }
     }
     await tester.binding.setSurfaceSize(null);
   });
