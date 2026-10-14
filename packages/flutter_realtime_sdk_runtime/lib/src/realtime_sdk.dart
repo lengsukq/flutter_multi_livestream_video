@@ -451,6 +451,7 @@ class RealtimeSdk {
     required StandaloneChatProvisioner provisioner,
     required String userId,
     required String displayName,
+    String? avatarUrl,
     ChatRole role = ChatRole.host,
     String? roomCode,
   }) => _guard(() async {
@@ -458,6 +459,7 @@ class RealtimeSdk {
       provisioner: provisioner,
       userId: userId,
       displayName: displayName,
+      avatarUrl: avatarUrl,
       role: role,
       roomCode: roomCode,
     );
@@ -468,6 +470,7 @@ class RealtimeSdk {
     required String roomCode,
     required String userId,
     required String displayName,
+    String? avatarUrl,
     ChatRole role = ChatRole.participant,
   }) => _guard(() async {
     return createClient().joinChatRoom(
@@ -475,6 +478,7 @@ class RealtimeSdk {
       roomCode: roomCode,
       userId: userId,
       displayName: displayName,
+      avatarUrl: avatarUrl,
       role: role,
     );
   });

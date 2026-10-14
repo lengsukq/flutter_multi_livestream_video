@@ -9,6 +9,7 @@ type Question = {
   id: string;
   userId: string;
   displayName: string;
+  avatarUrl?: string;
   text: string;
   status: QuestionStatus;
   createdAt: string;
@@ -18,6 +19,7 @@ type SeenStudent = {
   userId: string;
   participantId: string;
   displayName: string;
+  avatarUrl?: string;
   lastSeenMs: number;
   online: boolean;
   firstJoinedAt?: string;
@@ -182,6 +184,7 @@ export class ClassroomStateDirectory {
         state.seenStudents.set(userId, {
           userId, participantId: attendee.attendeeId,
           displayName: attendee.displayName ?? attendee.externalUserId ?? userId,
+          avatarUrl: attendee.avatarUrl,
           lastSeenMs: now, online: true,
           firstJoinedAt: previous?.firstJoinedAt ?? attendee.joinedAt,
           lastJoinedAt: !previous?.online || previous.participantId !== attendee.attendeeId ? attendee.joinedAt : previous.lastJoinedAt,
@@ -216,6 +219,7 @@ export class ClassroomStateDirectory {
       userId: person.userId,
       participantId: attendees.get(person.userId)?.attendeeId ?? person.participantId,
       displayName: person.displayName,
+      ...(person.avatarUrl ? {avatarUrl: person.avatarUrl} : {}),
       role: entry.classroomTeacherUserId === person.userId ? 'teacher' : 'student',
       online: person.online,
       handRaised: state.raised.has(person.userId),
@@ -239,6 +243,7 @@ export class ClassroomStateDirectory {
       attendance: [...state.seenStudents.values()]
         .filter(person => person.userId !== entry.classroomTeacherUserId && (isTeacher || person.userId === selfUserId))
         .map(person => ({ userId: person.userId, displayName: person.displayName,
+          ...(person.avatarUrl ? {avatarUrl: person.avatarUrl} : {}),
           online: person.online, firstJoinedAt: person.firstJoinedAt ?? null,
           lastJoinedAt: person.lastJoinedAt ?? null, lastLeftAt: person.lastLeftAt ?? null,
           onlineMilliseconds: (person.accumulatedMs ?? 0) + (person.online ? Math.max(0, now - (person.onlineSinceMs ?? now)) : 0),
@@ -304,6 +309,7 @@ export class ClassroomStateDirectory {
         state.feedback.push({
           id: crypto.randomUUID(), userId,
           displayName: requester.displayName ?? userId,
+          ...(requester.avatarUrl ? {avatarUrl: requester.avatarUrl} : {}),
           kind: kind!, createdAt: new Date(now).toISOString(),
         });
         if (state.feedback.length > 200) state.feedback.splice(0, state.feedback.length - 200);
@@ -358,6 +364,7 @@ export class ClassroomStateDirectory {
           const id = crypto.randomUUID();
           state.questions.set(id, {
           id, userId, displayName: requester.displayName ?? userId,
+          ...(requester.avatarUrl ? {avatarUrl: requester.avatarUrl} : {}),
           text, status: 'pending', createdAt: new Date().toISOString(),
           });
         }

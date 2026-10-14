@@ -18,6 +18,7 @@ const { roomDirectory, providerRegistry, classroomDirectory, resolveRoom, withRo
 
 
   try {
+    const avatarUrl = normalizeAvatarUrl(input.body?.avatarUrl);
     const entry = await resolveRoom(input.params.code);
     if (!entry) {
       logEvent('error', `join ${input.params.code} failed: not found`);
@@ -110,6 +111,8 @@ const { roomDirectory, providerRegistry, classroomDirectory, resolveRoom, withRo
       deviceId,
       role,
     );
+    const joinedPerson = entry.attendees.find(person => person.attendeeId === response.participantId);
+    if (joinedPerson) joinedPerson.avatarUrl = avatarUrl;
     response.participantCredential = issueParticipantCredential(
       entry,
       response.participantId,
@@ -121,7 +124,7 @@ const { roomDirectory, providerRegistry, classroomDirectory, resolveRoom, withRo
       );
     }
     logEvent('join', `${response.displayName} joined room ${entry.roomCode} via ${provider.displayName}`);
-    return reply(exposeVendorResponse(response));
+    return reply(exposeVendorResponse({...response, avatarUrl, participantProfiles: publicParticipantProfiles(entry)}));
     });
   } catch (error) {
     if (error instanceof ProviderOperationError) throw error;
@@ -132,3 +135,4 @@ const { roomDirectory, providerRegistry, classroomDirectory, resolveRoom, withRo
   }
 
 }
+import { normalizeAvatarUrl, publicParticipantProfiles } from '../participant-profile.ts';

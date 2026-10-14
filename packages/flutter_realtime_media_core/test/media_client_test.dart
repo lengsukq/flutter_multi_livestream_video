@@ -34,6 +34,36 @@ void main() {
 
   group('createRoomAndJoin', () {
     test(
+      'identity avatars survive backend responses that omit profile fields',
+      () async {
+        final client = clientFor(
+          (_) => jsonResponse(liveKitJoinPayload(provider: 'fake')),
+          heartbeatInterval: Duration.zero,
+        );
+        addTearDown(client.dispose);
+        const identity = MediaIdentity(
+          userId: 'user',
+          displayName: 'My name',
+          avatarUrl: 'https://avatar.test/self.png',
+        );
+        for (final create in [true, false]) {
+          final room = create
+              ? await client.createRoomAndJoinIdentity(identity: identity)
+              : await client.joinRoomIdentity(
+                  roomCode: '482913',
+                  identity: identity,
+                );
+          expect(room.snapshot.localParticipant?.avatarUrl, identity.avatarUrl);
+          expect(
+            room.snapshot.localParticipant?.displayName,
+            identity.displayName,
+          );
+          await room.dispose();
+        }
+      },
+    );
+
+    test(
       'failed creator media join closes new room instead of reserving its code',
       () async {
         final failingFactory = FakeMediaSessionFactory(

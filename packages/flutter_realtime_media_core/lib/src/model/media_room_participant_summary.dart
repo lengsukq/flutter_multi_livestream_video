@@ -8,11 +8,13 @@ class MediaRoomParticipantSummary {
     required this.displayName,
     this.role,
     this.joinedAt,
+    this.avatarUrl,
   });
 
   final String participantId;
   final String userId;
   final String displayName;
+  final String? avatarUrl;
   final MediaRole? role;
   final DateTime? joinedAt;
 
@@ -21,6 +23,7 @@ class MediaRoomParticipantSummary {
         participantId: json['participantId']?.toString().trim() ?? '',
         userId: json['userId']?.toString().trim() ?? '',
         displayName: json['displayName']?.toString().trim() ?? '',
+        avatarUrl: json['avatarUrl']?.toString().trim(),
         role: MediaRole.tryParse(json['role']),
         joinedAt: DateTime.tryParse(json['joinedAt']?.toString() ?? ''),
       );

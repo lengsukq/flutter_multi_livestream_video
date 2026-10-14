@@ -11,6 +11,7 @@ class MediaParticipant {
     this.isSpeaking = false,
     this.videoTrack,
     this.joinedAt,
+    this.avatarUrl,
   });
 
   /// Provider participant identifier (Chime attendee id, LiveKit identity, ...).
@@ -18,6 +19,7 @@ class MediaParticipant {
 
   /// Human-readable name shown in UI. Falls back to [id] when unavailable.
   final String displayName;
+  final String? avatarUrl;
 
   /// Whether this participant is the local user.
   final bool isLocal;
@@ -39,6 +41,8 @@ class MediaParticipant {
 
   MediaParticipant copyWith({
     String? displayName,
+    String? avatarUrl,
+    bool clearAvatarUrl = false,
     bool? isMuted,
     bool? isVideoEnabled,
     bool? isSpeaking,
@@ -47,6 +51,7 @@ class MediaParticipant {
   }) => MediaParticipant(
     id: id,
     displayName: displayName ?? this.displayName,
+    avatarUrl: clearAvatarUrl ? null : avatarUrl ?? this.avatarUrl,
     isLocal: isLocal,
     isMuted: isMuted ?? this.isMuted,
     isVideoEnabled: isVideoEnabled ?? this.isVideoEnabled,

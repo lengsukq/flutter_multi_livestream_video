@@ -15,6 +15,7 @@ const { chatRoomDirectory, chatProviderRegistry, chatManagementCapabilities, nor
 
 
   try {
+    const avatarUrl = normalizeAvatarUrl(input.body?.avatarUrl);
     const entry = chatRoomDirectory.get(input.params.code ?? '');
     if (!entry || !entry.chatProvider) {
       return fail( 404, 'room-not-found', 'The requested chat room was not found.');
@@ -31,6 +32,7 @@ const { chatRoomDirectory, chatProviderRegistry, chatManagementCapabilities, nor
       externalUserId: userId,
       userId,
       displayName,
+      avatarUrl,
       role,
       joinedAt: new Date().toISOString(),
       lastHeartbeatMs: Date.now(),
@@ -41,6 +43,7 @@ const { chatRoomDirectory, chatProviderRegistry, chatManagementCapabilities, nor
     const participantCredential = issueParticipantCredential(entry, participantId);
     return reply({
       ...response,
+      avatarUrl,
       participantCredential,
       context: 'standalone',
       management: chatManagementCapabilities(provider, attendee.role === 'host'),
@@ -52,3 +55,4 @@ const { chatRoomDirectory, chatProviderRegistry, chatManagementCapabilities, nor
   }
 
 }
+import { normalizeAvatarUrl } from '../participant-profile.ts';

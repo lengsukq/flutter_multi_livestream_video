@@ -14,6 +14,7 @@ class RoomManagedMember {
 
   final String userId;
   final String displayName;
+  String? get avatarUrl => media?.avatarUrl ?? chat?.avatarUrl;
   final MediaRoomParticipantSummary? media;
   final ChatMember? chat;
   final bool isSelf;
@@ -94,9 +95,30 @@ List<RoomManagedMember> mergeSnapshotMembers(
 }) {
   final members = [...directory];
   for (final participant in snapshot.participants) {
-    if (members.any(
-      (member) => member.media?.participantId == participant.id,
-    )) {
+    final index = members.indexWhere(
+      (member) =>
+          member.media?.participantId == participant.id ||
+          (member.media != null && member.isSelf && participant.isLocal),
+    );
+    if (index >= 0) {
+      final existing = members[index];
+      final media = existing.media;
+      if (media != null && participant.avatarUrl != null) {
+        members[index] = RoomManagedMember(
+          userId: existing.userId,
+          displayName: existing.displayName,
+          isSelf: existing.isSelf,
+          chat: existing.chat,
+          media: MediaRoomParticipantSummary(
+            participantId: media.participantId,
+            userId: media.userId,
+            displayName: media.displayName,
+            role: media.role,
+            joinedAt: media.joinedAt,
+            avatarUrl: participant.avatarUrl,
+          ),
+        );
+      }
       continue;
     }
     members.add(
@@ -108,6 +130,7 @@ List<RoomManagedMember> mergeSnapshotMembers(
         media: MediaRoomParticipantSummary(
           participantId: participant.id,
           displayName: participant.displayName,
+          avatarUrl: participant.avatarUrl,
           role: participant.isLocal ? localRole : null,
         ),
         isSelf: participant.isLocal,

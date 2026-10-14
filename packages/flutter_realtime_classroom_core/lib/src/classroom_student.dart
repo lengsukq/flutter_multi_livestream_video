@@ -12,8 +12,10 @@ class ClassroomStudent {
     this.role = ClassroomRole.student,
     this.microphoneOn,
     this.cameraOn,
+    this.avatarUrl,
   });
   final String userId, participantId, displayName;
+  final String? avatarUrl;
   final bool online, handRaised, canSpeak;
   final ClassroomRole role;
   // Null means the provider has not supplied media telemetry.
@@ -23,6 +25,7 @@ class ClassroomStudent {
         userId: userId,
         participantId: participantId,
         displayName: displayName,
+        avatarUrl: avatarUrl,
         online: online,
         handRaised: handRaised,
         canSpeak: canSpeak,
@@ -37,6 +40,7 @@ class ClassroomStudent {
         userId: JsonReader(data).required<String>('userId'),
         participantId: JsonReader(data).required<String>('participantId'),
         displayName: JsonReader(data).optional<String>('displayName') ?? '',
+        avatarUrl: JsonReader(data).optional<String>('avatarUrl'),
         online: JsonReader(data).optional<bool>('online') ?? false,
         handRaised: JsonReader(data).optional<bool>('handRaised') ?? false,
         canSpeak: JsonReader(data).optional<bool>('canSpeak') ?? false,

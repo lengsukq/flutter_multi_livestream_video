@@ -60,7 +60,7 @@ test('failed initial creator join rolls back the reserved room code for retry', 
     logEvent: () => {},
   } as unknown as RoomApplicationDependencies;
   const request: ApplicationInput = {
-    params: {}, query: {}, body: {roomCode: 'fixedroom', roomMode: 'meeting', displayName: 'Creator'},
+    params: {}, query: {}, body: {roomCode: 'fixedroom', roomMode: 'meeting', displayName: 'Creator', avatarUrl: 'https://avatar.test/creator.png'},
   };
   await assert.rejects(postRooms(request, dependencies),
     (error: unknown) => error instanceof ProviderOperationError && error.status === 500);
@@ -70,4 +70,5 @@ test('failed initial creator join rolls back the reserved room code for retry', 
   assert.equal(retry.status, 200);
   assert.equal(roomDirectory.has('fixedroom'), true);
   assert.equal(joins, 2);
+  assert.equal(roomDirectory.get('fixedroom')?.attendees[0]?.avatarUrl, 'https://avatar.test/creator.png');
 });

@@ -249,6 +249,7 @@ void main() {
           roomCode: '482913',
           userId: 'device-creator',
           displayName: 'Creator',
+          avatarUrl: 'https://avatar.test/creator.png',
           deviceId: 'device-creator',
           roomMode: MediaRoomMode.broadcast,
         );
@@ -256,6 +257,7 @@ void main() {
         expect(transport.requests.single.json, {
           'userId': 'device-creator',
           'displayName': 'Creator',
+          'avatarUrl': 'https://avatar.test/creator.png',
           'nickname': 'Creator',
           'roomMode': 'broadcast',
           'deviceId': 'device-creator',

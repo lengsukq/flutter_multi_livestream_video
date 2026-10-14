@@ -27,6 +27,8 @@ class LiveKitTrackRenderer extends MediaTrackRenderer {
     }
     return lk.VideoTrackRenderer(
       track.liveKitTrack,
+      // Match the published orientation instead of mirroring self-view.
+      mirrorMode: lk.VideoViewMirrorMode.off,
       fit: fit == BoxFit.contain
           ? lk.VideoViewFit.contain
           : lk.VideoViewFit.cover,

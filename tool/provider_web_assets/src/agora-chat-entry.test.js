@@ -96,6 +96,7 @@ test('logs into the room, sends normalized text, refreshes token, and tears down
     message: 'hello',
     userId: 'logical-user',
     displayName: 'Ada',
+    avatarUrl: 'https://avatar.test/ada.png',
     participantId: 'participant-1',
   }));
   assert.equal(connection.lastMessage.chatType, 'chatRoom');
@@ -105,6 +106,7 @@ test('logs into the room, sends normalized text, refreshes token, and tears down
   assert.equal(sent.id, 'server-message-1');
   assert.equal(sent.userId, 'logical-user');
   assert.equal(sent.displayName, 'Ada');
+  assert.equal(sent.attributes.avatarUrl, 'https://avatar.test/ada.png');
   assert.equal(sent.message, 'hello');
 
   const handler = [...connection.handlers.values()][0];

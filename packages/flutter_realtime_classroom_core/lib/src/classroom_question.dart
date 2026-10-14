@@ -10,8 +10,10 @@ class ClassroomQuestion {
     required this.status,
     required this.createdAt,
     this.answer,
+    this.avatarUrl,
   });
   final String id, userId, displayName, text;
+  final String? avatarUrl;
   final ClassroomQuestionStatus status;
   final DateTime createdAt;
   final String? answer;
@@ -22,6 +24,7 @@ class ClassroomQuestion {
         id: JsonReader(data).required<String>('id'),
         userId: JsonReader(data).required<String>('userId'),
         displayName: JsonReader(data).optional<String>('displayName') ?? '',
+        avatarUrl: JsonReader(data).optional<String>('avatarUrl'),
         text: JsonReader(data).required<String>('text'),
         status: JsonReader(
           data,

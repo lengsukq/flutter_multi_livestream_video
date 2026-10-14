@@ -44,6 +44,7 @@ class AgoraTrackRenderer extends MediaTrackRenderer {
           canvas: agora.VideoCanvas(
             uid: 0,
             renderMode: renderMode,
+            mirrorMode: agora.VideoMirrorModeType.videoMirrorModeDisabled,
             sourceType: track.isScreenShare
                 ? agora.VideoSourceType.videoSourceScreen
                 : agora.VideoSourceType.videoSourceCamera,
@@ -55,7 +56,11 @@ class AgoraTrackRenderer extends MediaTrackRenderer {
     return agora.AgoraVideoView(
       controller: agora.VideoViewController.remote(
         rtcEngine: track.engine,
-        canvas: agora.VideoCanvas(uid: track.uid, renderMode: renderMode),
+        canvas: agora.VideoCanvas(
+          uid: track.uid,
+          renderMode: renderMode,
+          mirrorMode: agora.VideoMirrorModeType.videoMirrorModeDisabled,
+        ),
         connection: agora.RtcConnection(channelId: track.channelId),
       ),
     );

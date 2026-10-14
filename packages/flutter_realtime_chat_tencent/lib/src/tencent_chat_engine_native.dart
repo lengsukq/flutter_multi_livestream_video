@@ -103,6 +103,7 @@ class _TencentSdkChatEngine implements TencentChatEngine {
     final metadata = jsonEncode({
       'userId': info.userId,
       'displayName': info.displayName,
+      if (info.avatarUrl != null) 'avatarUrl': info.avatarUrl,
       'participantId': info.participantId,
     });
     final result = await messageManager.sendMessage(
@@ -229,6 +230,7 @@ class _TencentSdkChatEngine implements TencentChatEngine {
       'message': text,
       'timestampMs': timestamp,
       'attributes': <String, String>{
+        if (metadata['avatarUrl'] != null) 'avatarUrl': metadata['avatarUrl']!,
         'providerUserId': message.sender?.toString() ?? '',
         if (metadata['participantId'] != null)
           'participantId': metadata['participantId']!,

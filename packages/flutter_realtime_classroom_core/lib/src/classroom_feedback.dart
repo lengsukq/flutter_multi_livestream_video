@@ -8,8 +8,10 @@ class ClassroomFeedback {
     required this.displayName,
     required this.kind,
     required this.createdAt,
+    this.avatarUrl,
   });
   final String id, userId, displayName;
+  final String? avatarUrl;
   final ClassroomFeedbackKind kind;
   final DateTime createdAt;
 
@@ -19,6 +21,7 @@ class ClassroomFeedback {
           id: JsonReader(data).required<String>('id'),
           userId: JsonReader(data).required<String>('userId'),
           displayName: JsonReader(data).optional<String>('displayName') ?? '',
+          avatarUrl: JsonReader(data).optional<String>('avatarUrl'),
           kind: JsonReader(
             data,
           ).enumValue('kind', ClassroomFeedbackKind.values),

@@ -71,6 +71,7 @@ const { chatProviderRegistry, resolveRoom, isRoomPartiallyClosed, pruneStaleAtte
     });
     return reply({
       ...response,
+      avatarUrl: attendee.avatarUrl,
       participantCredential: String(
         input.body?.participantCredential ?? '',
       ).trim(),

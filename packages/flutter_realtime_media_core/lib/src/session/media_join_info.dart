@@ -14,6 +14,7 @@ class MediaJoinInfo {
     required this.participantId,
     required this.role,
     this.displayName = '',
+    this.avatarUrl,
     Map<String, Object?> payload = const {},
   }) : payload = Map.unmodifiable(payload);
 
@@ -31,6 +32,7 @@ class MediaJoinInfo {
 
   /// Display name to publish to other participants, when supported.
   final String displayName;
+  final String? avatarUrl;
 
   /// Provider payload, passed through to the adapter untouched.
   final Map<String, Object?> payload;

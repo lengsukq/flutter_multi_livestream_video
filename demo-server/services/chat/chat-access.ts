@@ -18,6 +18,7 @@ export function chatMemberPayload(item: RoomAttendee) {
   return {
     userId: item.userId ?? item.externalUserId,
     displayName: item.displayName ?? item.externalUserId,
+    avatarUrl: item.avatarUrl,
     role: item.role ?? 'participant',
   };
 }

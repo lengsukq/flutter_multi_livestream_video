@@ -192,6 +192,7 @@ export function createAgoraChatBridge(AC, root = globalThis) {
         ext: {
           userId: args.userId,
           displayName: args.displayName,
+          ...(args.avatarUrl ? { avatarUrl: args.avatarUrl } : {}),
           participantId: args.participantId,
         },
       });

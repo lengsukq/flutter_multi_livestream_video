@@ -10,6 +10,7 @@ class LiveKitJoinInfo extends MediaJoinInfo {
     required this.token,
     required this.identity,
     super.displayName,
+    super.avatarUrl,
   }) : super(
          providerId: providerIdValue,
          payload: <String, Object?>{
@@ -99,6 +100,7 @@ class LiveKitJoinInfo extends MediaJoinInfo {
       token: token,
       identity: identity,
       displayName: displayName,
+      avatarUrl: json['avatarUrl']?.toString(),
     );
   }
 }

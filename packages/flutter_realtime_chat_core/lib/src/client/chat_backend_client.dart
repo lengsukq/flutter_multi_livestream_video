@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'standalone_chat_profile_provisioner.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -27,16 +28,49 @@ class ChatBackendJoinResponse {
 }
 
 class HttpStandaloneChatProvisioner
-    implements StandaloneChatProvisioner, StandaloneChatModerationProvider {
+    implements
+        StandaloneChatProfileProvisioner,
+        StandaloneChatModerationProvider {
   HttpStandaloneChatProvisioner(ChatBackendConfig config)
     : _backend = ChatBackendClient(config);
 
   final ChatBackendClient _backend;
 
   @override
+  Future<ChatJoinInfo> createWithProfile({
+    required String userId,
+    required String displayName,
+    String? avatarUrl,
+    ChatRole role = ChatRole.host,
+    String? roomCode,
+  }) => create(
+    userId: userId,
+    displayName: displayName,
+    avatarUrl: avatarUrl,
+    role: role,
+    roomCode: roomCode,
+  );
+
+  @override
+  Future<ChatJoinInfo> joinWithProfile({
+    required String roomCode,
+    required String userId,
+    required String displayName,
+    String? avatarUrl,
+    ChatRole role = ChatRole.participant,
+  }) => join(
+    roomCode: roomCode,
+    userId: userId,
+    displayName: displayName,
+    avatarUrl: avatarUrl,
+    role: role,
+  );
+
+  @override
   Future<ChatJoinInfo> create({
     required String userId,
     required String displayName,
+    String? avatarUrl,
     ChatRole role = ChatRole.host,
     String? roomCode,
   }) async {
@@ -46,6 +80,7 @@ class HttpStandaloneChatProvisioner
       body: {
         'userId': userId,
         'displayName': displayName,
+        if (avatarUrl != null) 'avatarUrl': avatarUrl,
         if (roomCode != null && roomCode.trim().isNotEmpty)
           'roomCode': roomCode.trim(),
       },
@@ -75,6 +110,7 @@ class HttpStandaloneChatProvisioner
     required String roomCode,
     required String userId,
     required String displayName,
+    String? avatarUrl,
     ChatRole role = ChatRole.participant,
   }) async {
     final data = await _backend._request(
@@ -84,6 +120,7 @@ class HttpStandaloneChatProvisioner
         'userId': userId,
         'displayName': displayName,
         'role': role.wireName,
+        if (avatarUrl != null) 'avatarUrl': avatarUrl,
       },
     );
     final providerId =
@@ -219,6 +256,7 @@ class _HttpStandaloneChatModeration
           return ChatMember(
             userId: item['userId']?.toString() ?? '',
             displayName: item['displayName']?.toString() ?? '',
+            avatarUrl: item['avatarUrl']?.toString(),
             role: ChatRole.tryParse(item['role']) ?? ChatRole.participant,
           );
         })

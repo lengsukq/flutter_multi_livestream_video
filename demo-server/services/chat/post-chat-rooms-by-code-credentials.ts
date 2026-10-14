@@ -29,6 +29,7 @@ const { chatRoomDirectory, chatProviderRegistry, chatManagementCapabilities } = 
     const response = await provider.issueToken({ entry, attendee });
     return reply({
       ...response,
+      avatarUrl: attendee.avatarUrl,
       participantCredential: String(input.body?.participantCredential ?? '').trim(),
       context: 'standalone',
       management: chatManagementCapabilities(provider, attendee.role === 'host'),

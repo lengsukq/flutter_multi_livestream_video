@@ -7,6 +7,7 @@ import '../session/chat_session_factory.dart';
 import 'chat_backend_client.dart';
 import 'chat_backend_config.dart';
 import 'chat_provisioner.dart';
+import 'standalone_chat_profile_provisioner.dart';
 
 class ChatClient {
   ChatClient.direct({ChatRegistry? registry, this.provisioner})
@@ -55,17 +56,27 @@ class ChatClient {
   Future<ChatRoomSession> createStandaloneRoom({
     required String userId,
     required String displayName,
+    String? avatarUrl,
     ChatRole role = ChatRole.host,
     String? roomCode,
   }) async {
     final controller = _standaloneProvisioner;
     final joinInfo = _parseProvisionedJoinInfo(
-      await controller.create(
-        userId: userId,
-        displayName: displayName,
-        role: role,
-        roomCode: roomCode,
-      ),
+      controller is StandaloneChatProfileProvisioner
+          ? await controller.createWithProfile(
+              userId: userId,
+              displayName: displayName,
+              avatarUrl: avatarUrl,
+              role: role,
+              roomCode: roomCode,
+            )
+          : await controller.create(
+              userId: userId,
+              displayName: displayName,
+              role: role,
+              roomCode: roomCode,
+            ),
+      avatarUrl: avatarUrl,
     );
     Future<ChatJoinInfo> credentials() async => _parseProvisionedJoinInfo(
       await controller.provision(
@@ -75,6 +86,7 @@ class ChatClient {
             ?.toString(),
       ),
       expected: joinInfo,
+      avatarUrl: joinInfo.avatarUrl,
     );
     return connect(joinInfo, credentialProvider: credentials);
   }
@@ -83,16 +95,26 @@ class ChatClient {
     required String roomCode,
     required String userId,
     required String displayName,
+    String? avatarUrl,
     ChatRole role = ChatRole.participant,
   }) async {
     final controller = _standaloneProvisioner;
     final joinInfo = _parseProvisionedJoinInfo(
-      await controller.join(
-        roomCode: roomCode,
-        userId: userId,
-        displayName: displayName,
-        role: role,
-      ),
+      controller is StandaloneChatProfileProvisioner
+          ? await controller.joinWithProfile(
+              roomCode: roomCode,
+              userId: userId,
+              displayName: displayName,
+              avatarUrl: avatarUrl,
+              role: role,
+            )
+          : await controller.join(
+              roomCode: roomCode,
+              userId: userId,
+              displayName: displayName,
+              role: role,
+            ),
+      avatarUrl: avatarUrl,
     );
     Future<ChatJoinInfo> credentials() async => _parseProvisionedJoinInfo(
       await controller.provision(
@@ -102,6 +124,7 @@ class ChatClient {
             ?.toString(),
       ),
       expected: joinInfo,
+      avatarUrl: joinInfo.avatarUrl,
     );
     return connect(joinInfo, credentialProvider: credentials);
   }
@@ -112,10 +135,14 @@ class ChatClient {
   ChatJoinInfo _parseProvisionedJoinInfo(
     ChatJoinInfo provisioned, {
     ChatJoinInfo? expected,
+    String? avatarUrl,
   }) {
     final providerId = provisioned.providerId.trim().toLowerCase();
     final factory = registry.require(providerId);
-    final parsed = factory.parseJoinInfo(provisioned.json);
+    final parsed = factory.parseJoinInfo({
+      ...provisioned.json,
+      if (avatarUrl != null) 'avatarUrl': avatarUrl,
+    });
     final baseline = expected ?? provisioned;
     if (providerId != baseline.providerId.trim().toLowerCase() ||
         parsed.providerId.trim().toLowerCase() != providerId ||

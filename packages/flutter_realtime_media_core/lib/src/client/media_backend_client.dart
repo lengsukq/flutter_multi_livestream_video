@@ -242,6 +242,7 @@ class MediaBackendClient
     required String userId,
     required String displayName,
     String? deviceId,
+    String? avatarUrl,
     String? roomOwnerCredential,
     MediaRole? role,
   }) async {
@@ -249,6 +250,7 @@ class MediaBackendClient
     final data = await _post('/rooms/${Uri.encodeComponent(code)}/join', {
       'userId': _required(userId, 'userId'),
       'displayName': _required(displayName, 'displayName'),
+      if (avatarUrl != null) 'avatarUrl': avatarUrl,
       if (role != null) 'role': role.wireName,
       if (deviceId != null && deviceId.trim().isNotEmpty)
         'deviceId': deviceId.trim(),
@@ -263,6 +265,7 @@ class MediaBackendClient
     required String userId,
     required String displayName,
     String? deviceId,
+    String? avatarUrl,
     MediaRoomMode roomMode = MediaRoomMode.meeting,
     MediaRole? role,
   }) async {
@@ -270,6 +273,7 @@ class MediaBackendClient
       'userId': _required(userId, 'userId'),
       'displayName': _required(displayName, 'displayName'),
       'nickname': displayName.trim(),
+      if (avatarUrl != null) 'avatarUrl': avatarUrl,
       'roomMode': roomMode.wireName,
       if (role != null) 'role': role.wireName,
       if (deviceId != null && deviceId.trim().isNotEmpty)

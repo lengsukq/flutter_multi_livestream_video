@@ -8,10 +8,12 @@ class ChatMember {
     this.role = ChatRole.participant,
     this.muted = false,
     this.banned = false,
+    this.avatarUrl,
   });
 
   final String userId;
   final String displayName;
+  final String? avatarUrl;
   final ChatRole role;
   final bool muted;
   final bool banned;

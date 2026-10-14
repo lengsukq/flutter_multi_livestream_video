@@ -116,6 +116,7 @@ class RealtimeClient {
     required StandaloneChatProvisioner provisioner,
     required String userId,
     required String displayName,
+    String? avatarUrl,
     ChatRole role = ChatRole.host,
     String? roomCode,
   }) async {
@@ -127,6 +128,7 @@ class RealtimeClient {
       final room = await client.createStandaloneRoom(
         userId: userId,
         displayName: displayName,
+        avatarUrl: avatarUrl,
         role: role,
         roomCode: roomCode,
       );
@@ -149,6 +151,7 @@ class RealtimeClient {
     required String roomCode,
     required String userId,
     required String displayName,
+    String? avatarUrl,
     ChatRole role = ChatRole.participant,
   }) async {
     final client = ChatClient.direct(
@@ -160,6 +163,7 @@ class RealtimeClient {
         roomCode: roomCode,
         userId: userId,
         displayName: displayName,
+        avatarUrl: avatarUrl,
         role: role,
       );
       return RealtimeChatRoom(room: room, disposeClient: client.dispose);

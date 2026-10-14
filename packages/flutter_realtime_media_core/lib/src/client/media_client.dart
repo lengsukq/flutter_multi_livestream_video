@@ -107,6 +107,13 @@ class MediaClient {
         roomCode: joinInfo.roomCode,
         participantId: joinInfo.participantId,
         session: session,
+        identity: MediaIdentity(
+          userId: joinInfo.participantId,
+          displayName: joinInfo.displayName.isEmpty
+              ? joinInfo.participantId
+              : joinInfo.displayName,
+          avatarUrl: joinInfo.avatarUrl,
+        ),
       );
     } catch (error, stack) {
       final cleanup = Cleanup();
@@ -197,6 +204,7 @@ class MediaClient {
           roomOwnerCredential: roomOwnerCredential,
         ),
         credentialRefresher: custom,
+        identity: value,
       );
     }
     return _joinResponse(
@@ -207,9 +215,11 @@ class MediaClient {
         roomCode: roomCode,
         userId: value.userId,
         displayName: value.displayName,
+        avatarUrl: value.avatarUrl,
         deviceId: value.deviceId,
         roomOwnerCredential: roomOwnerCredential,
       ),
+      identity: value,
     );
   }
 
@@ -230,6 +240,7 @@ class MediaClient {
           roomCode: roomCode,
         ),
         credentialRefresher: custom,
+        identity: value,
       );
     }
     return _joinCreatedResponse(
@@ -239,8 +250,10 @@ class MediaClient {
         roomCode: roomCode,
         userId: value.userId,
         displayName: value.displayName,
+        avatarUrl: value.avatarUrl,
         deviceId: value.deviceId,
       ),
+      identity: value,
     );
   }
 
@@ -284,10 +297,15 @@ class MediaClient {
   /// room back if parsing, provider initialization or the media join fails;
   /// leaving only the attendee would reserve the room code for the next retry.
   Future<MediaRoomSession> _joinCreatedResponse(
-    MediaRoomJoinResponse response,
-  ) async {
+    MediaRoomJoinResponse response, {
+    MediaIdentity? identity,
+  }) async {
     try {
-      return await _joinResponse(response, leaveOnFailure: false);
+      return await _joinResponse(
+        response,
+        leaveOnFailure: false,
+        identity: identity,
+      );
     } catch (error, stack) {
       final cleanup = Cleanup();
       await cleanup.run('created-room.rollback', () async {
@@ -322,6 +340,7 @@ class MediaClient {
     MediaRoomJoinResponse response, {
     MediaRoomProvisioner? credentialRefresher,
     bool leaveOnFailure = true,
+    MediaIdentity? identity,
   }) async {
     final backend = this.backend;
     final factory = registry.require(response.providerId);
@@ -377,6 +396,8 @@ class MediaClient {
           roomCode: response.roomCode,
           participantId: joinInfo.participantId,
           session: session,
+          backendMetadata: response.json,
+          identity: identity,
         );
       }
       return MediaRoomSession.attach(
@@ -394,6 +415,7 @@ class MediaClient {
           response.json['chatProvider'],
         ),
         backendMetadata: response.json,
+        identity: identity,
         session: session,
         presence: backend,
         management: backend,

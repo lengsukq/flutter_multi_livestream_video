@@ -64,6 +64,7 @@ export class RoomDirectory {
             providerParticipantId: a.providerParticipantId,
             participantCredentialHash: a.participantCredentialHash,
             userId: a.userId, displayName: a.displayName,
+            avatarUrl: a.avatarUrl,
             role: a.role, joinedAt: a.joinedAt,
             lastHeartbeatMs: a.lastHeartbeatMs, deviceId: a.deviceId,
           })),

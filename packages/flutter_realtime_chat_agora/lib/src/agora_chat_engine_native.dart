@@ -200,6 +200,7 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
     outgoing.attributes = <String, dynamic>{
       'userId': info.userId,
       'displayName': info.displayName,
+      if (info.avatarUrl != null) 'avatarUrl': info.avatarUrl,
       'participantId': info.participantId,
     };
     final localId = outgoing.msgId;
@@ -356,6 +357,8 @@ class AgoraSdkChatEngine implements AgoraChatEngine {
           : DateTime.now().millisecondsSinceEpoch,
       'attributes': <String, String>{
         'providerUserId': message.from ?? '',
+        if (attributes['avatarUrl'] != null)
+          'avatarUrl': attributes['avatarUrl'].toString(),
         if (attributes['participantId'] != null)
           'participantId': attributes['participantId'].toString(),
       },

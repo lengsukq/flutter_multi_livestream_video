@@ -9,6 +9,7 @@ class ChimeJoinInfo extends MediaJoinInfo {
     required super.role,
     required this.chimeJoinInfo,
     super.displayName,
+    super.avatarUrl,
   }) : super(providerId: providerIdValue);
 
   static const String providerIdValue = 'chime';
@@ -65,6 +66,7 @@ class ChimeJoinInfo extends MediaJoinInfo {
       participantId: attendeeId,
       role: role,
       displayName: displayName,
+      avatarUrl: json['avatarUrl']?.toString(),
       chimeJoinInfo: chimeInfo,
     );
   }

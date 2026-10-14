@@ -4,6 +4,74 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'unmatched local RTC presence is retained beside chat-only membership',
+    () {
+      final members = mergeSnapshotMembers(
+        const [
+          RoomManagedMember(
+            userId: 'chat-user',
+            displayName: 'Chat user',
+            isSelf: true,
+            chat: ChatMember(userId: 'chat-user'),
+          ),
+        ],
+        MediaSnapshot(
+          participants: const [
+            MediaParticipant(
+              id: 'media-user',
+              displayName: 'Media user',
+              isLocal: true,
+            ),
+          ],
+        ),
+      );
+      expect(members, hasLength(2));
+      expect(members.last.media?.participantId, 'media-user');
+    },
+  );
+
+  test(
+    'roster keeps administrative fields while adopting snapshot avatars',
+    () {
+      for (final id in ['local', 'different-provider-id']) {
+        final joined = DateTime(2026);
+        final members = mergeSnapshotMembers(
+          [
+            RoomManagedMember(
+              userId: 'user',
+              displayName: 'Backend name',
+              isSelf: true,
+              media: MediaRoomParticipantSummary(
+                participantId: 'local',
+                displayName: 'Backend name',
+                userId: 'user',
+                role: MediaRole.host,
+                joinedAt: joined,
+              ),
+            ),
+          ],
+          MediaSnapshot(
+            participants: [
+              MediaParticipant(
+                id: id,
+                displayName: 'Presentation name',
+                isLocal: true,
+                avatarUrl: 'https://avatar.test/self.png',
+              ),
+            ],
+          ),
+        );
+        expect(members, hasLength(1));
+        expect(members.single.avatarUrl, 'https://avatar.test/self.png');
+        expect(members.single.displayName, 'Backend name');
+        expect(members.single.media?.participantId, 'local');
+        expect(members.single.media?.role, MediaRole.host);
+        expect(members.single.media?.joinedAt, joined);
+      }
+    },
+  );
+
   test('live media snapshot fallback is usable without optional UI', () {
     final members = mergeSnapshotMembers(
       const [],

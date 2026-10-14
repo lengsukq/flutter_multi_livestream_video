@@ -1,4 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
+import '../model/media_identity.dart';
+import '../model/media_send_options.dart';
+import 'media_data_controller.dart';
 
 import '../client/media_backend_error.dart';
 import '../model/media_background_effect.dart';
@@ -20,6 +25,7 @@ import 'media_room_extensions.dart';
 part 'room_presence.dart';
 part 'room_recovery.dart';
 part 'room_management.dart';
+part 'room_participant_profiles.dart';
 
 /// High-level room lifecycle returned by `MediaClient`.
 ///
@@ -35,6 +41,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     required String roomCode,
     required String participantId,
     required MediaSession session,
+    MediaIdentity? identity,
+    Map<String, dynamic> backendMetadata = const {},
   }) => MediaRoomSession._(
     null,
     null,
@@ -42,6 +50,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     roomCode: roomCode,
     participantId: participantId,
     session: session,
+    identity: identity,
+    backendMetadata: Map.unmodifiable(backendMetadata),
   );
   MediaRoomSession._(
     this._presence,
@@ -54,10 +64,18 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     this.chatProvider,
     this.backendMetadata = const {},
     required this.session,
+    MediaIdentity? identity,
   }) {
     _stateSubscription = session.states.listen(_onStateChanged);
     _eventSubscription = session.events.listen(_onSessionEvent);
     _presenceOwner.start();
+    _profiles = _RoomParticipantProfiles(
+      session,
+      participantId,
+      identity: identity,
+      metadata: backendMetadata,
+      reportError: _presenceOwner._reportBackendError,
+    );
   }
 
   /// Attaches backend presence handling to an already joined [session].
@@ -68,6 +86,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     String? roomOwnerCredential,
     String? chatProvider,
     Map<String, dynamic> backendMetadata = const {},
+    MediaIdentity? identity,
     required MediaSession session,
     required MediaRoomPresence presence,
     required MediaRoomManagement management,
@@ -83,6 +102,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     chatProvider: chatProvider,
     backendMetadata: Map.unmodifiable(backendMetadata),
     session: session,
+    identity: identity,
   );
 
   final String roomCode;
@@ -95,6 +115,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   /// orchestration such as capability negotiation.
   final Map<String, dynamic> backendMetadata;
   final MediaSession session;
+  late final _RoomParticipantProfiles _profiles;
   final MediaRoomPresence? _presence;
   final MediaRoomManagement? _management;
   final Duration _heartbeatInterval;
@@ -129,7 +150,8 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
       _roomManagement.capabilities;
 
   /// Latest media snapshot.
-  MediaSnapshot get snapshot => session.snapshot;
+  MediaSnapshot get snapshot => _profiles.snapshot;
+  Stream<MediaSnapshot> get snapshots => _profiles.snapshots;
 
   /// Background effects supported by the active media adapter.
   @override
@@ -302,6 +324,7 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
     _disposed = true;
     _presenceOwner.stop();
     final cleanup = Cleanup(timeout: cleanupTimeout);
+    await cleanup.run('participant.profiles', _profiles.dispose);
     await cleanup.run('presence.heartbeat', _presenceOwner.drain);
     await cleanup.run('session.states', () async {
       await _stateSubscription?.cancel();

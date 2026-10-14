@@ -1,5 +1,6 @@
 import '../model/chat_role.dart';
 import '../model/chat_room_context.dart';
+import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
 
 class ChatJoinInfo {
   const ChatJoinInfo({
@@ -18,6 +19,8 @@ class ChatJoinInfo {
   final String participantId;
   final String userId;
   final String displayName;
+  String? get avatarUrl =>
+      RealtimeAvatarUrl.tryParse(json['avatarUrl']?.toString());
   final ChatRole role;
   final Map<String, dynamic> json;
   final ChatRoomContext context;

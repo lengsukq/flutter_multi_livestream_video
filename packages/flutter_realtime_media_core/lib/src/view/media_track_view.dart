@@ -35,6 +35,7 @@ class MediaTrackView extends StatelessWidget {
     this.track,
     this.placeholder,
     this.fit = BoxFit.contain,
+    this.rendererManagesFit = false,
   });
 
   /// Provider renderer, for example `LiveKitTrackRenderer()`.
@@ -50,11 +51,25 @@ class MediaTrackView extends StatelessWidget {
   /// frame, with empty space when the video and view have different proportions.
   final BoxFit fit;
 
+  /// Let the provider renderer determine the frame's actual aspect ratio
+  /// inside the full viewport. Camera metadata may still report 16:9 while
+  /// decoded frames are portrait; an outer FittedBox based on that metadata
+  /// would letterbox the viewport *before* the native renderer fits the frame.
+  ///
+  /// Keep false for screen-sharing/other callers that depend on the supplied
+  /// track dimensions for explicit aspect-ratio layout.
+  final bool rendererManagesFit;
+
   @override
   Widget build(BuildContext context) {
     final current = track;
     if (current == null) {
       return placeholder ?? const SizedBox.expand();
+    }
+    if (rendererManagesFit) {
+      return SizedBox.expand(
+        child: renderer.buildViewWithFit(context, current, fit: fit),
+      );
     }
     return FittedBox(
       fit: fit,

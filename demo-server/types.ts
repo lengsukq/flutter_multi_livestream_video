@@ -30,6 +30,7 @@ export interface RoomAttendee {
   externalUserId: string;
   userId?: string;
   displayName?: string;
+  avatarUrl?: string;
   joinedAt: string;
   lastHeartbeatMs?: number;
   role?: MediaRole;

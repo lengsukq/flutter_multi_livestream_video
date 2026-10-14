@@ -26,6 +26,32 @@ class DemoIdentityStore {
 
   static const deviceIdKey = 'realtime_media_demo_device_id';
   static const displayNameKey = 'realtime_media_demo_display_name';
+  static const avatarUrlKey = 'realtime_media_demo_avatar_url';
+
+  Future<String> loadAvatarUrl() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(avatarUrlKey)?.trim() ?? '';
+    } catch (error, stack) {
+      _report(error, stack);
+      return '';
+    }
+  }
+
+  Future<void> saveAvatarUrl(String value) async {
+    final avatar = value.trim();
+    if (avatar.isNotEmpty && RealtimeAvatarUrl.tryParse(avatar) == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (avatar.isEmpty) {
+        await prefs.remove(avatarUrlKey);
+      } else {
+        await prefs.setString(avatarUrlKey, avatar);
+      }
+    } catch (error, stack) {
+      _report(error, stack);
+    }
+  }
 
   Future<String> loadDeviceId() async {
     try {

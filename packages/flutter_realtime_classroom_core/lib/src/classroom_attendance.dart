@@ -9,8 +9,10 @@ class ClassroomAttendance {
     this.firstJoinedAt,
     this.lastJoinedAt,
     this.lastLeftAt,
+    this.avatarUrl,
   });
   final String userId, displayName;
+  final String? avatarUrl;
   final bool online;
   final Duration onlineDuration;
   final DateTime? firstJoinedAt, lastJoinedAt, lastLeftAt;
@@ -22,6 +24,7 @@ class ClassroomAttendance {
       ClassroomAttendance(
         userId: JsonReader(value).required<String>('userId'),
         displayName: JsonReader(value).required<String>('displayName'),
+        avatarUrl: JsonReader(value).optional<String>('avatarUrl'),
         online: JsonReader(value).required<bool>('online'),
         onlineDuration: Duration(
           milliseconds:

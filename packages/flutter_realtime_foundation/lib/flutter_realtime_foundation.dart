@@ -1,5 +1,7 @@
 library;
 
+export 'src/realtime_avatar_url.dart';
+
 export 'src/failure.dart';
 export 'src/cleanup.dart';
 export 'src/http_executor.dart';

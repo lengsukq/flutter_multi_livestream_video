@@ -50,6 +50,7 @@ class DemoPreparedRoomEntry {
       mode: mode,
       deviceId: user.id,
       displayName: user.name,
+      avatarUrl: user.avatarUrl,
       roomCode: roomCode,
     ),
     DemoRoomEntryKind.join => flow.join(
@@ -57,6 +58,7 @@ class DemoPreparedRoomEntry {
       mode: mode,
       deviceId: user.id,
       displayName: user.name,
+      avatarUrl: user.avatarUrl,
     ),
   };
 }
@@ -75,6 +77,7 @@ class DemoJoinCoordinator {
     required String backendUrl,
     required String code,
     required String displayName,
+    String? avatarUrl,
     required MediaRoomMode mode,
     required Realtime Function(String) createRealtime,
   }) async {
@@ -96,13 +99,20 @@ class DemoJoinCoordinator {
       final name = displayName.trim().isEmpty
           ? identity.defaultDisplayName(id)
           : displayName.trim();
+      final user = RealtimeUser(
+        id: id,
+        name: name,
+        deviceId: id,
+        avatarUrl: avatarUrl,
+      ).normalized();
       await identity.saveDisplayName(name);
+      if (avatarUrl != null) await identity.saveAvatarUrl(user.avatarUrl ?? '');
       final realtime = createRealtime(backend);
       return DemoJoinPrepared(
         DemoPreparedRoomEntry(
           realtime: realtime,
           kind: kind,
-          user: RealtimeUser(id: id, name: name, deviceId: id),
+          user: user,
           mode: mode,
           role: mode == MediaRoomMode.broadcast
               ? (kind == DemoRoomEntryKind.create

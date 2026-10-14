@@ -20,13 +20,19 @@ class DemoRoomFlow {
     required MediaRoomMode mode,
     required String deviceId,
     required String displayName,
+    String? avatarUrl,
     String? roomCode,
   }) => RealtimeRequest.create(
     type: mode == MediaRoomMode.broadcast
         ? RealtimeExperience.live
         : RealtimeExperience.meeting,
     roomCode: roomCode?.trim().isEmpty == true ? null : roomCode,
-    user: RealtimeUser(id: deviceId, name: displayName, deviceId: deviceId),
+    user: RealtimeUser(
+      id: deviceId,
+      name: displayName,
+      deviceId: deviceId,
+      avatarUrl: avatarUrl,
+    ),
   );
 
   static RealtimeRequest joinRequest({
@@ -34,6 +40,7 @@ class DemoRoomFlow {
     required MediaRoomMode? mode,
     required String deviceId,
     required String displayName,
+    String? avatarUrl,
     String? ownerCredential,
   }) => RealtimeRequest.join(
     type: mode == MediaRoomMode.broadcast
@@ -41,13 +48,19 @@ class DemoRoomFlow {
         : RealtimeExperience.meeting,
     roomCode: code,
     roomOwnerCredential: ownerCredential,
-    user: RealtimeUser(id: deviceId, name: displayName, deviceId: deviceId),
+    user: RealtimeUser(
+      id: deviceId,
+      name: displayName,
+      deviceId: deviceId,
+      avatarUrl: avatarUrl,
+    ),
   );
 
   Future<RealtimeConnection> create({
     required MediaRoomMode mode,
     required String deviceId,
     required String displayName,
+    String? avatarUrl,
     String? roomCode,
   }) async {
     final connection = await _open(
@@ -55,6 +68,7 @@ class DemoRoomFlow {
         mode: mode,
         deviceId: deviceId,
         displayName: displayName,
+        avatarUrl: avatarUrl,
         roomCode: roomCode,
       ),
     );
@@ -67,6 +81,7 @@ class DemoRoomFlow {
     required MediaRoomMode? mode,
     required String deviceId,
     required String displayName,
+    String? avatarUrl,
   }) async {
     final connection = await _open(
       joinRequest(
@@ -74,6 +89,7 @@ class DemoRoomFlow {
         mode: mode,
         deviceId: deviceId,
         displayName: displayName,
+        avatarUrl: avatarUrl,
         ownerCredential: _ownerCredentials[code],
       ),
     );

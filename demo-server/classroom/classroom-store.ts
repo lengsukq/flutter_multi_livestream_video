@@ -22,12 +22,12 @@ export interface ClassroomStoredState {
   handledIds: Array<[string, string]>;
   questionTimes: Array<[string, number[]]>;
   seenStudents: Array<[string, {
-    userId: string; participantId: string; displayName: string;
+    userId: string; participantId: string; displayName: string; avatarUrl?: string;
     lastSeenMs: number; online: boolean;
   }]>;
   speakGrants: number;
   feedback?: Array<{
-    id: string; userId: string; displayName: string;
+    id: string; userId: string; displayName: string; avatarUrl?: string;
     kind: 'understood' | 'great' | 'idea' | 'question' | 'clap';
     createdAt: string;
   }>;

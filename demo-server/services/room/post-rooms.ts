@@ -24,6 +24,7 @@ const provisionRoom = createRoomProvisioner({
   });
 
   try {
+    const avatarUrl = normalizeAvatarUrl(input.body?.avatarUrl);
     let roomCode = normalizeRoomCode(input.body?.roomCode);
     if (input.body?.roomCode && !roomCode) {
       return fail( 400, 'bad-room-code', 'roomCode must be 4-12 letters/digits.');
@@ -103,6 +104,8 @@ const provisionRoom = createRoomProvisioner({
       deviceId,
       'host',
     );
+    const joinedPerson = created.entry.attendees.find(person => person.attendeeId === response.participantId);
+    if (joinedPerson) joinedPerson.avatarUrl = avatarUrl;
     response.participantCredential = issueParticipantCredential(
       created.entry,
       response.participantId,
@@ -112,7 +115,7 @@ const provisionRoom = createRoomProvisioner({
       classroomDirectory.snapshot(created.entry, true, userId);
     }
     logEvent('join', `${response.displayName} created+joined room ${roomCode} via ${provider.displayName}`);
-    return reply(exposeVendorResponse(response));
+    return reply(exposeVendorResponse({...response, avatarUrl, participantProfiles: publicParticipantProfiles(created.entry)}));
       } catch (error) {
         // Creation already reserved the code. A failed initial participant
         // join must release both the provider room and local directory entry.
@@ -133,3 +136,4 @@ const provisionRoom = createRoomProvisioner({
   }
 
 }
+import { normalizeAvatarUrl, publicParticipantProfiles } from '../participant-profile.ts';

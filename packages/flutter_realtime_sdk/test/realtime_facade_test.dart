@@ -8,6 +8,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/fake_media_session.dart';
 
 void main() {
+  test('shared identity normalizes the avatar and preserves it for media', () {
+    final user = const RealtimeUser(
+      id: ' u ',
+      name: '小明',
+      avatarUrl: ' https://avatar.test/a.png ',
+    ).normalized();
+    expect(user.avatarUrl, 'https://avatar.test/a.png');
+    expect(user.toMediaIdentity().avatarUrl, user.avatarUrl);
+    expect(
+      const RealtimeUser(
+        id: 'u',
+        name: '小明',
+        avatarUrl: ' ',
+      ).normalized().avatarUrl,
+      isNull,
+    );
+    expect(
+      () => const RealtimeUser(
+        id: 'u',
+        name: '小明',
+        avatarUrl: 'file:///private/a.png',
+      ).normalized(),
+      throwsArgumentError,
+    );
+  });
   group('Realtime facade', () {
     test('media bundles leave video effects unregistered', () {
       final realtime = Realtime(providers: [createLivekitProvider()]);
@@ -283,13 +308,21 @@ void main() {
         final connection = await realtime.open(
           RealtimeRequest.create(
             type: RealtimeExperience.chat,
-            user: const RealtimeUser(id: 'host-1', name: 'Host'),
+            user: const RealtimeUser(
+              id: 'host-1',
+              name: 'Host',
+              avatarUrl: 'https://avatar.test/host.png',
+            ),
             roomCode: 'chat-1',
           ),
         );
 
         expect(connection.roomCode, 'chat-1');
         expect(connection.providerId, 'product-chat');
+        expect(
+          chatFactory.latestJoinInfo!.avatarUrl,
+          'https://avatar.test/host.png',
+        );
         expect(provisioner.lastCreateRole, ChatRole.host);
         await connection.dispose();
 
@@ -597,6 +630,7 @@ class _FakeStandaloneChatProvisioner implements StandaloneChatProvisioner {
 }
 
 class _FakeChatFactory implements ChatSessionFactory {
+  ChatJoinInfo? latestJoinInfo;
   _FakeChatFactory(this.providerId);
 
   @override
@@ -619,8 +653,10 @@ class _FakeChatFactory implements ChatSessionFactory {
   }
 
   @override
-  ChatSession createSession(ChatJoinInfo joinInfo) =>
-      _FakeChatSession(providerId, joinInfo.role);
+  ChatSession createSession(ChatJoinInfo joinInfo) {
+    latestJoinInfo = joinInfo;
+    return _FakeChatSession(providerId, joinInfo.role);
+  }
 }
 
 class _FakeChatSession implements ChatSession {

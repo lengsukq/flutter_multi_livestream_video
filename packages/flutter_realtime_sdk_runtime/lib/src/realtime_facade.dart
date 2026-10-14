@@ -264,6 +264,7 @@ class Realtime {
           provisioner: provisioner,
           userId: user.id,
           displayName: user.name,
+          avatarUrl: user.avatarUrl,
           role: request.chatRole ?? ChatRole.host,
           roomCode: roomCode,
         );
@@ -273,6 +274,7 @@ class Realtime {
           roomCode: roomCode!,
           userId: user.id,
           displayName: user.name,
+          avatarUrl: user.avatarUrl,
           role: request.chatRole ?? ChatRole.participant,
         );
       }
@@ -369,6 +371,9 @@ class Realtime {
     payload.putIfAbsent('participantId', () => user.id);
     payload.putIfAbsent('userId', () => user.id);
     payload.putIfAbsent('displayName', () => user.name);
+    if (user.avatarUrl != null) {
+      payload.putIfAbsent('avatarUrl', () => user.avatarUrl);
+    }
     if (user.deviceId != null) {
       payload.putIfAbsent('deviceId', () => user.deviceId);
     }
@@ -417,6 +422,9 @@ class Realtime {
       'role',
       () => (request.chatRole ?? _defaultChatRole(request)).wireName,
     );
+    if (user.avatarUrl != null) {
+      payload.putIfAbsent('avatarUrl', () => user.avatarUrl);
+    }
     return payload;
   }
 

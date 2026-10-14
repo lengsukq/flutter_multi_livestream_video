@@ -26,6 +26,10 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
     participantId: room.participantId,
     userId: userId,
     displayName: displayName,
+    avatarUrl: room.snapshot.localParticipant?.avatarUrl,
+    participantProfile: (id) => room.snapshot.participants
+        .where((member) => member.id == id)
+        .firstOrNull,
     maxMessages: maxMessages,
     topic: topic,
   );
@@ -36,10 +40,13 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
     required String participantId,
     String? userId,
     String? displayName,
+    String? avatarUrl,
+    this._participantProfile,
     this.maxMessages = 200,
     this.topic = rtcDataChatTopic,
   }) : _buffer = ChatMessageBuffer(maxMessages: maxMessages),
        _media = session,
+       _avatarUrl = RealtimeAvatarUrl.tryParse(avatarUrl),
        _participantId = participantId,
        _mediaProviderId = session.providerId,
        _userId = _normalizedIdentity(userId, participantId),
@@ -99,6 +106,8 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
   final String _mediaProviderId;
   final String _userId;
   final String _displayName;
+  final String? _avatarUrl;
+  final MediaParticipant? Function(String participantId)? _participantProfile;
   final int maxMessages;
   final String topic;
   final ChatMessageBuffer _buffer;
@@ -195,6 +204,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
       'senderId': _userId,
       'participantId': _participantId,
       'displayName': _displayName,
+      if (_avatarUrl != null) 'avatarUrl': _avatarUrl,
       'message': value,
       'timestampMs': now.millisecondsSinceEpoch,
     };
@@ -215,6 +225,7 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
         id: id,
         userId: _participantId,
         displayName: _displayName,
+        avatarUrl: _avatarUrl,
         message: value,
         timestamp: now,
         topic: topic,
@@ -356,7 +367,10 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
     final claimedUserId = json['senderId']?.toString().trim() ?? '';
     final claimedDisplayName = json['displayName']?.toString().trim() ?? '';
     final providerDisplayName = incoming.displayName.trim();
-    final displayName = providerDisplayName.isNotEmpty
+    final profile = _participantProfile?.call(participantId);
+    final displayName = profile?.displayName.trim().isNotEmpty == true
+        ? profile!.displayName
+        : providerDisplayName.isNotEmpty
         ? providerDisplayName
         : participantId;
     final claimedTimestampMs = _readInt(json['timestampMs']);
@@ -367,6 +381,9 @@ class RtcDataChatSession implements ChatSession, ChatSessionIdentity {
         id: id,
         userId: participantId,
         displayName: displayName,
+        avatarUrl:
+            profile?.avatarUrl ??
+            (json['avatarUrl'] is String ? json['avatarUrl'] as String : null),
         message: message,
         timestamp: timestamp,
         topic: incoming.topic,

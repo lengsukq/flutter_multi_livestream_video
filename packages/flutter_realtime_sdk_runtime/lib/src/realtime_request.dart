@@ -6,16 +6,30 @@ enum RealtimeExperience { meeting, live, chat }
 enum RealtimeAction { create, join }
 
 class RealtimeUser {
-  const RealtimeUser({required this.id, required this.name, this.deviceId});
+  const RealtimeUser({
+    required this.id,
+    required this.name,
+    this.deviceId,
+    this.avatarUrl,
+  });
 
   final String id;
   final String name;
   final String? deviceId;
+  final String? avatarUrl;
 
   RealtimeUser normalized() {
     final normalizedId = id.trim();
     final normalizedName = name.trim();
     final normalizedDeviceId = deviceId?.trim();
+    final avatar = RealtimeAvatarUrl.tryParse(avatarUrl);
+    if (avatarUrl?.trim().isNotEmpty == true && avatar == null) {
+      throw ArgumentError.value(
+        avatarUrl,
+        'avatarUrl',
+        'must be an HTTP(S) image URL',
+      );
+    }
     if (normalizedId.isEmpty) {
       throw ArgumentError.value(id, 'id', 'must not be empty');
     }
@@ -25,6 +39,7 @@ class RealtimeUser {
     return RealtimeUser(
       id: normalizedId,
       name: normalizedName,
+      avatarUrl: avatar,
       deviceId: normalizedDeviceId == null || normalizedDeviceId.isEmpty
           ? null
           : normalizedDeviceId,
@@ -34,6 +49,7 @@ class RealtimeUser {
   MediaIdentity toMediaIdentity() => MediaIdentity(
     userId: id,
     displayName: name,
+    avatarUrl: avatarUrl,
     deviceId: deviceId,
   ).normalized();
 }

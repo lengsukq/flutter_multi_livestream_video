@@ -104,6 +104,7 @@ class _AgoraChatMacOSDriver implements WebChatDriver<AgoraChatJoinInfo> {
         'message': message,
         'userId': info.userId,
         'displayName': info.displayName,
+        if (info.avatarUrl != null) 'avatarUrl': info.avatarUrl,
         'participantId': info.participantId,
       }),
     });

@@ -15,6 +15,7 @@ const { chatRoomDirectory, chatProviderRegistry, currentChatProvider, contractVe
 
 
   try {
+    const avatarUrl = normalizeAvatarUrl(input.body?.avatarUrl);
     const providerId = String(
       input.body?.chatProvider ?? currentChatProvider() ?? '',
     ).trim().toLowerCase();
@@ -50,6 +51,7 @@ const { chatRoomDirectory, chatProviderRegistry, currentChatProvider, contractVe
         externalUserId: userId,
         userId,
         displayName,
+        avatarUrl,
         role: 'host',
         joinedAt: new Date(now).toISOString(),
         lastHeartbeatMs: now,
@@ -59,6 +61,7 @@ const { chatRoomDirectory, chatProviderRegistry, currentChatProvider, contractVe
       const response = await provider.issueToken({ entry, attendee });
       return replyStatus(201, {
         ...response,
+        avatarUrl,
         participantCredential,
         context: 'standalone',
         management: chatManagementCapabilities(provider, attendee.role === 'host'),
@@ -77,3 +80,4 @@ const { chatRoomDirectory, chatProviderRegistry, currentChatProvider, contractVe
   }
 
 }
+import { normalizeAvatarUrl } from '../participant-profile.ts';

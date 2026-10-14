@@ -36,6 +36,7 @@ const { contractVersion, resolveRoom } = dependencies;
       participantId: attendee.attendeeId,
       userId: attendee.userId ?? attendee.externalUserId,
       displayName: attendee.displayName ?? attendee.externalUserId,
+      avatarUrl: attendee.avatarUrl,
       role: attendee.role ?? 'participant',
       joinedAt: attendee.joinedAt,
     })),

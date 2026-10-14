@@ -7,6 +7,7 @@ class TrtcJoinInfo extends MediaJoinInfo {
     required super.participantId,
     required super.role,
     required super.displayName,
+    super.avatarUrl,
     required this.sdkAppId,
     required this.strRoomId,
     required this.userId,
@@ -103,6 +104,7 @@ class TrtcJoinInfo extends MediaJoinInfo {
       participantId: participantId,
       role: role,
       displayName: json['displayName']?.toString() ?? '',
+      avatarUrl: json['avatarUrl']?.toString(),
       sdkAppId: sdkAppId,
       strRoomId: MediaJoinInfo.requireStringIn(
         trtc,

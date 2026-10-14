@@ -30,6 +30,7 @@ export interface IvsChatApi {
     roomArn: string;
     userId: string;
     displayName: string;
+    avatarUrl?: string;
     role: MediaRole;
     durationMinutes: number;
   }): Promise<IvsChatToken>;
@@ -94,6 +95,7 @@ function createAwsApi(region: string): IvsChatApi {
       roomArn,
       userId,
       displayName,
+      avatarUrl,
       role,
       durationMinutes,
     }) {
@@ -106,6 +108,7 @@ function createAwsApi(region: string): IvsChatApi {
           sessionDurationInMinutes: durationMinutes,
           attributes: {
             displayName,
+            ...(avatarUrl ? { avatarUrl } : {}),
             role,
           },
         }),
@@ -263,6 +266,7 @@ export function createIvsChatProvider({
           roomArn: entry.chatRoomArn,
           userId: identity.userId,
           displayName: identity.displayName,
+          avatarUrl: attendee.avatarUrl,
           role: identity.role,
           durationMinutes,
         });

@@ -7,6 +7,10 @@ class ProviderWebJoinInfo extends MediaJoinInfo {
     required super.participantId,
     required super.role,
     required super.displayName,
+    String? avatarUrl,
     required Map<String, Object?> backendPayload,
-  }) : super(payload: backendPayload);
+  }) : super(
+         payload: backendPayload,
+         avatarUrl: avatarUrl ?? backendPayload['avatarUrl']?.toString(),
+       );
 }

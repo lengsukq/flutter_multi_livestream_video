@@ -11,6 +11,7 @@ class AgoraJoinInfo extends MediaJoinInfo {
     required this.token,
     required this.uid,
     super.displayName,
+    super.avatarUrl,
   }) : super(
          providerId: providerIdValue,
          payload: <String, Object?>{
@@ -107,6 +108,7 @@ class AgoraJoinInfo extends MediaJoinInfo {
       token: token,
       uid: uid,
       displayName: displayName,
+      avatarUrl: json['avatarUrl']?.toString(),
     );
   }
 
