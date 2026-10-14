@@ -15,6 +15,7 @@ class RealtimeMeetingTopBar extends StatelessWidget {
     this.userAvatarUrl,
     this.userDisplayName,
     this.compact = false,
+    this.dense = false,
   });
   final String title;
   final String? subtitle;
@@ -28,6 +29,10 @@ class RealtimeMeetingTopBar extends StatelessWidget {
   final String? userAvatarUrl;
   final String? userDisplayName;
   final bool compact;
+
+  /// Single-line stage overlay: omit the decorative badge and secondary
+  /// identity row while retaining the recording and leave controls.
+  final bool dense;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -44,35 +49,52 @@ class RealtimeMeetingTopBar extends StatelessWidget {
               MediaQuery.textScalerOf(context).scale(17) >= 28;
           final style = RealtimeStyle.of(context);
           final identity = Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+            child: dense
+                ? Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      if (statusWidgets.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        ...statusWidgets,
+                      ],
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      if (statusWidgets.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: statusWidgets,
+                        ),
+                      ],
+                      if (subtitle != null && !small)
+                        Text(
+                          subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
                   ),
-                ),
-                if (statusWidgets.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: statusWidgets,
-                  ),
-                ],
-                if (subtitle != null && !small)
-                  Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-              ],
-            ),
           );
           final split = small && trailingActions.length > 2;
           return Column(
@@ -86,7 +108,7 @@ class RealtimeMeetingTopBar extends StatelessWidget {
                       onPressed: onHome,
                       icon: const Icon(Icons.home_outlined),
                     ),
-                  if (!small) ...[
+                  if (!small && !dense) ...[
                     Container(
                       width: 36,
                       height: 36,

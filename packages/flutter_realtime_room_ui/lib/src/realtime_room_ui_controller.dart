@@ -326,15 +326,37 @@ class RealtimeRoomUiController extends ChangeNotifier {
 
   /// Ends the underlying room only when requested, never on UI disposal.
   /// The caller owns navigation and the optional confirmation dialog.
-  Future<void> leave({bool? closeForEveryone}) =>
-      execute(RealtimeRoomUiAction.leave, () async {
-        if (closeForEveryone ??
-            (room.media.role == MediaRole.host &&
-                room.media.managementCapabilities.closeRoom.supported)) {
-          await room.media.closeRoom();
-        }
-        await room.dispose();
-      });
+  Future<void> leave({
+    bool? closeForEveryone,
+  }) => execute(RealtimeRoomUiAction.leave, () async {
+    final endsRoom =
+        closeForEveryone ??
+        (room.media.role == MediaRole.host &&
+            room.media.managementCapabilities.closeRoom.supported);
+    if (endsRoom) {
+      // Stop before closing the room: the recording endpoint requires
+      // the still-live room and host credential to authorize Agora Stop.
+      // On failure leave the room open so the host can retry safely.
+      final state = room.recordingStatus;
+      if (state == RecordingStatus.starting ||
+          state == RecordingStatus.stopping) {
+        throw const RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message:
+              'Wait for the cloud recording operation to finish before ending the room.',
+        );
+      }
+      final remote = state == RecordingStatus.unknown
+          ? (await room.queryCloudRecording()).taskState
+          : null;
+      if (state == RecordingStatus.recording ||
+          remote == RecordingTaskState.recording) {
+        await room.stopRecording();
+      }
+      await room.media.closeRoom();
+    }
+    await room.dispose();
+  });
 
   Future<void>? _disposal;
 

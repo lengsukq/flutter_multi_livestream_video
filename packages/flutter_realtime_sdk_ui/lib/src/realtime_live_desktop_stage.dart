@@ -7,6 +7,7 @@ import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
 import 'realtime_audience_avatar_row.dart';
 import 'realtime_live_chat_feed.dart';
 import 'realtime_live_gift_button.dart';
+import 'realtime_live_gift_banner.dart';
 import 'realtime_live_hearts_overlay.dart';
 import 'realtime_live_like_button.dart';
 import 'realtime_live_video_stage.dart';
@@ -112,14 +113,18 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
                   ),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF0A0D14) : Colors.black,
+                      // Camera-off is not a black video texture. Let the
+                      // participant placeholder blend into the light stage.
+                      color: isDark
+                          ? const Color(0xFF181B22)
+                          : RealtimeUiTokens.surfaceSubtle,
                       borderRadius: BorderRadius.circular(
                         RealtimeUiTokens.radiusCard,
                       ),
                       border: Border.all(
                         color: isDark
                             ? Colors.white.withValues(alpha: 0.12)
-                            : Colors.black.withValues(alpha: 0.10),
+                            : RealtimeUiTokens.border,
                         width: 0.8,
                       ),
                     ),
@@ -171,6 +176,21 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
                             height: 280,
                             child: IgnorePointer(
                               child: RealtimeLiveHeartsOverlay(),
+                            ),
+                          ),
+
+                        // All viewers and the host receive gift events even
+                        // when their gift panel is closed.
+                        if (controller.room.liveInteractions != null)
+                          const Positioned(
+                            left: 16,
+                            right: 150,
+                            bottom: 88,
+                            child: IgnorePointer(
+                              child: Align(
+                                alignment: Alignment.bottomLeft,
+                                child: RealtimeLiveGiftBanner(),
+                              ),
                             ),
                           ),
 

@@ -81,16 +81,11 @@ class DemoServerSettingsPanel extends StatelessWidget {
               if (constraints.maxWidth < 430 ||
                   MediaQuery.textScalerOf(context).scale(13) >= 22) {
                 return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     heading,
                     const SizedBox(height: 8),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: constraints.maxWidth,
-                      ),
-                      child: status,
-                    ),
+                    Align(alignment: Alignment.centerRight, child: status),
                   ],
                 );
               }
@@ -98,7 +93,7 @@ class DemoServerSettingsPanel extends StatelessWidget {
                 children: [
                   Expanded(child: heading),
                   const SizedBox(width: 8),
-                  Flexible(child: status),
+                  status,
                 ],
               );
             },

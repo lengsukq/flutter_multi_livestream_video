@@ -9,6 +9,8 @@ import 'realtime_live_chat_feed.dart';
 import 'realtime_live_gift_button.dart';
 import 'realtime_live_hearts_overlay.dart';
 import 'realtime_live_like_button.dart';
+import 'realtime_live_gift_banner.dart';
+import 'realtime_role_presentation.dart';
 import 'realtime_live_media_controls.dart';
 import 'room_ui_controller.dart';
 import 'room_chat_components.dart';
@@ -51,7 +53,9 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = RealtimeRoomUiScope.of(context);
-    final isHost = controller.room.media.role != MediaRole.viewer;
+    final isHost = RealtimePresentationRole.forLive(
+      controller.room.media.role,
+    ).canShowLiveHostTools;
     return LayoutBuilder(
       builder: (context, viewport) {
         final narrowHud = viewport.maxWidth < 300;
@@ -202,6 +206,19 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                 width: 120,
                 height: 260,
                 child: IgnorePointer(child: RealtimeLiveHeartsOverlay()),
+              ),
+
+            if (controller.room.liveInteractions != null)
+              const Positioned(
+                left: 12,
+                right: 12,
+                bottom: 214,
+                child: IgnorePointer(
+                  child: Align(
+                    alignment: Alignment.bottomLeft,
+                    child: RealtimeLiveGiftBanner(),
+                  ),
+                ),
               ),
 
             // 5. Floating Chat Feed & Bottom Action Bar

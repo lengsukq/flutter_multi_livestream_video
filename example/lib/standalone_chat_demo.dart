@@ -300,16 +300,11 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                   );
                   if (compact) {
                     return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         profile,
                         const SizedBox(height: 12),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: constraints.maxWidth,
-                          ),
-                          child: status,
-                        ),
+                        Align(alignment: Alignment.centerRight, child: status),
                       ],
                     );
                   }
@@ -317,7 +312,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                     children: [
                       Expanded(child: profile),
                       const SizedBox(width: 12),
-                      Flexible(child: status),
+                      status,
                     ],
                   );
                 },

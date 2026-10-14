@@ -68,13 +68,21 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
     final host =
         widget.room.media.role == MediaRole.host &&
         widget.room.media.managementCapabilities.closeRoom.supported;
+    final recordingMayBeActive = {
+      RecordingStatus.starting,
+      RecordingStatus.recording,
+      RecordingStatus.stopping,
+      RecordingStatus.unknown,
+    }.contains(widget.room.recordingStatus);
     return await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: Text(host ? strings.endLive : strings.leaveRoomTitle),
             content: Text(
               host
-                  ? strings.endLiveConfirmation
+                  ? recordingMayBeActive
+                        ? '${strings.endLiveConfirmation}\n\n${strings.isZh ? "当前云录制仍在进行或状态未确认。结束直播前会尝试停止录制；如需下载，请先停止录制并保存 MP4。" : "Cloud recording may still be running. Ending the live will first attempt to stop it. To keep the MP4, stop and download before leaving."}'
+                        : strings.endLiveConfirmation
                   : strings.leaveRoomConfirmation,
             ),
             actions: [
@@ -267,7 +275,9 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                 final wide =
                     constraints.maxWidth >= 1000 &&
                     MediaQuery.textScalerOf(context).scale(17) < 28;
-                final isHost = widget.room.media.role != MediaRole.viewer;
+                final isHost = RealtimePresentationRole.forLive(
+                  widget.room.media.role,
+                ).canShowLiveHostTools;
                 final strings = RealtimeStrings.of(context);
                 final isDark = Theme.of(context).brightness == Brightness.dark;
                 final controller = RealtimeRoomUiScope.of(context);
@@ -280,6 +290,17 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                       fit: StackFit.expand,
                       children: [
                         RealtimeLiveVideoStage(fit: _liveVideoFitOverride),
+                        if (widget.room.liveInteractions != null)
+                          Positioned(
+                            left: 16,
+                            right: 16,
+                            bottom: 24,
+                            child: IgnorePointer(
+                              child: LiveGiftBanner(
+                                session: widget.room.liveInteractions!,
+                              ),
+                            ),
+                          ),
                         Positioned(
                           top: 16,
                           right: 16,

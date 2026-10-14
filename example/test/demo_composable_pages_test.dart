@@ -60,6 +60,36 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
+  testWidgets('non-host live participant never receives broadcaster controls', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final room = RealtimeRoom(
+      media: MediaRoomSession.direct(
+        roomCode: 'role-test',
+        participantId: 'guest',
+        session: _LiveMediaSession(role: MediaRole.participant),
+      ),
+      renderer: const _Renderer(),
+      disposeClients: () {},
+    );
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DemoComposableLivePage(
+          room: room,
+          initialSettings: const MediaLocalPreviewSettings(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(RealtimeLiveMediaControls), findsNothing);
+    expect(find.byTooltip('Host tools'), findsNothing);
+    expect(find.byTooltip('Turn on microphone'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'Live host can operate media at every width without crowded header actions',
     (tester) async {

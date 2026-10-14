@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_example/demo_join_screen.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -67,6 +68,18 @@ void main() {
           if (scale == 1 && [390.0, 1440.0].contains(size.width)) {
             await captureDesign(tester, 'settings-${size.width.toInt()}');
           }
+          if (scale == 1 && size.width == 1440) {
+            final badge = find.text('Default: LiveKit');
+            expect(badge, findsOneWidget);
+            final card = find
+                .ancestor(of: badge, matching: find.byType(RealtimeCardSurface))
+                .first;
+            expect(
+              tester.getRect(card).right - tester.getRect(badge).right,
+              lessThan(42),
+              reason: 'Backend status should hug the trailing edge of its card',
+            );
+          }
           await tester.tap(find.text('Chat').last);
           await tester.pump(const Duration(milliseconds: 400));
           expect(
@@ -76,6 +89,19 @@ void main() {
           );
           if (scale == 1 && size.width == 1440) {
             await captureDesign(tester, 'chat-entry-1440');
+            final chatBadge = find.text('Chat online');
+            expect(chatBadge, findsOneWidget);
+            final card = find
+                .ancestor(
+                  of: chatBadge,
+                  matching: find.byType(RealtimeCardSurface),
+                )
+                .first;
+            expect(
+              tester.getRect(card).right - tester.getRect(chatBadge).right,
+              lessThan(42),
+              reason: 'Chat status should be aligned to the profile card right',
+            );
           }
           await tester.tap(find.text('Home').last);
           await tester.pump(const Duration(milliseconds: 400));

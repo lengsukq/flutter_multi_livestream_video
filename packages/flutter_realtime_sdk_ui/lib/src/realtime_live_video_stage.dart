@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'room_ui_controller.dart';
 import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart'
@@ -46,7 +47,16 @@ class RealtimeLiveVideoStage extends StatelessWidget {
                   members.where((p) => !p.isLocal).firstOrNull);
         if (host == null) {
           return placeholder ??
-              const Center(child: Icon(Icons.videocam_off_outlined, size: 56));
+              ColoredBox(
+                color: RealtimeUiTokens.surfaceSubtle,
+                child: Center(
+                  child: Icon(
+                    Icons.videocam_off_outlined,
+                    size: 42,
+                    color: RealtimeUiTokens.textMuted,
+                  ),
+                ),
+              );
         }
         return LayoutBuilder(
           builder: (context, constraints) {

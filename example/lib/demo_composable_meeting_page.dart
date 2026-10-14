@@ -216,17 +216,24 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                   // Compact (<600pt, e.g. phones): dock collapses to core
                   // actions + More so nothing overflows; timer moves up.
                   final compact = constraints.maxWidth < 600;
+                  // When a wide desktop sidebar opens, the available *video*
+                  // pane is narrower by 330pt. Collapse secondary dock
+                  // actions into More rather than leaving buttons visually
+                  // behind the sidebar or outside the hit-testable scroll.
+                  final collapseDock =
+                      compact || (wide && _panel != DemoMeetingPanel.closed);
                   final dock = Padding(
                     padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
                     child: RealtimeMeetingDock(
-                      showLabels: wide,
-                      leadingStatus: compact
+                      showLabels:
+                          wide && !collapseDock && constraints.maxWidth >= 1150,
+                      leadingStatus: collapseDock
                           ? null
                           : const DemoMeetingTimerBadge(),
                       mediaGroup: [
                         RealtimeDockMicrophoneButton(showLabel: wide),
                         RealtimeDockCameraButton(showLabel: wide),
-                        if (compact)
+                        if (collapseDock)
                           RealtimeDockSharedContentButton(showLabel: wide)
                         else ...[
                           RealtimeDockRaiseHandButton(showLabel: wide),
@@ -236,7 +243,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                           ),
                         ],
                       ],
-                      collaborationGroup: compact
+                      collaborationGroup: collapseDock
                           ? const []
                           : [
                               RealtimeDockSharedContentButton(showLabel: wide),
@@ -252,7 +259,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                     : null,
                               ),
                             ],
-                      panelsGroup: compact
+                      panelsGroup: collapseDock
                           ? const []
                           : [
                               if (widget.room.chat != null)
@@ -329,7 +336,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                               items: [
                                 // Compact overflow: actions hidden from the
                                 // dock stay one tap away in More.
-                                if (compact && canRaise)
+                                if (collapseDock && canRaise)
                                   RealtimeDockMoreItem(
                                     icon: Icons.pan_tool_outlined,
                                     title: RealtimeStrings.of(
@@ -338,7 +345,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                     onTap: () =>
                                         unawaited(_toggleRaiseHand(context)),
                                   ),
-                                if (compact)
+                                if (collapseDock)
                                   RealtimeDockMoreItem(
                                     icon: Icons.group_outlined,
                                     title: RealtimeStrings.of(
@@ -347,7 +354,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                     onTap: () =>
                                         _openClassroomHands(isWide: false),
                                   ),
-                                if (compact &&
+                                if (collapseDock &&
                                     widget
                                         .room
                                         .interactions
@@ -358,16 +365,16 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                     title: RealtimeStrings.of(context).wave,
                                     onTap: () => unawaited(_sendWave(context)),
                                   ),
-                                if (compact && widget.room.chat != null)
+                                if (collapseDock && widget.room.chat != null)
                                   RealtimeDockMoreItem(
                                     icon: Icons.chat_bubble_outline_rounded,
                                     title: RealtimeStrings.of(context).chat,
                                     onTap: () => _toggle(
                                       DemoMeetingPanel.chat,
-                                      isWide: false,
+                                      isWide: wide,
                                     ),
                                   ),
-                                if (compact)
+                                if (collapseDock)
                                   RealtimeDockMoreItem(
                                     icon: Icons.people_outline_rounded,
                                     title: RealtimeStrings.of(
@@ -375,10 +382,11 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                     ).participants,
                                     onTap: () => _toggle(
                                       DemoMeetingPanel.participants,
-                                      isWide: false,
+                                      isWide: wide,
                                     ),
                                   ),
-                                if (compact && widget.room.classroom != null)
+                                if (collapseDock &&
+                                    widget.room.classroom != null)
                                   RealtimeDockMoreItem(
                                     icon: Icons.school_outlined,
                                     title: RealtimeStrings.of(
@@ -386,7 +394,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                     ).classroom,
                                     onTap: () => _toggle(
                                       DemoMeetingPanel.classroom,
-                                      isWide: false,
+                                      isWide: wide,
                                     ),
                                   ),
                                 RealtimeDockMoreItem(
@@ -471,28 +479,35 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                       ),
                     ),
                   );
-                  final stage = Row(
-                    children: [
-                      Expanded(
-                        child: _DemoMeetingStage(
-                          bottomControlsInset: compact ? 0 : 90,
-                          useGrid: _useGrid,
-                          topOverlayInset: wide ? 96 : 0,
-                        ),
-                      ),
-                      if (wide && _panel != DemoMeetingPanel.closed)
-                        SizedBox(width: 330, child: _sidePanel()),
-                    ],
+                  final stage = _DemoMeetingStage(
+                    bottomControlsInset: compact ? 0 : 90,
+                    useGrid: _useGrid,
+                    topOverlayInset: wide ? 58 : 0,
                   );
                   final roomController = RealtimeRoomUiScope.of(context);
                   final header = ListenableBuilder(
                     listenable: roomController,
                     builder: (context, _) => RealtimeMeetingTopBar(
                       compact: !wide,
+                      dense: wide,
                       title: widget.room.media.roomCode,
-                      subtitle: widget.room.media.participantId,
+                      // The UUID is available in the members panel. It made
+                      // the floating header three lines tall over the video.
+                      subtitle: wide ? null : widget.room.media.participantId,
                       statusWidgets: [
-                        DemoRecordingBadge(room: widget.room, compact: compact),
+                        Tooltip(
+                          message: RealtimePresentationRole.forMeeting(
+                            widget.room.media,
+                          ).label(isZh: RealtimeStrings.of(context).isZh),
+                          child: Icon(
+                            widget.room.media.isLogicalOwner
+                                ? Icons.admin_panel_settings_outlined
+                                : Icons.person_outline_rounded,
+                            size: 16,
+                            color: RealtimeUiTokens.textMuted,
+                          ),
+                        ),
+                        DemoRecordingBadge(room: widget.room, compact: true),
                         if (compact) const DemoMeetingTimerBadge(),
                       ],
                       trailingActions: [
@@ -544,10 +559,28 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                   dock,
                                 ],
                               )
+                            : wide
+                            // Header and dock belong to the *video pane*
+                            // only. When a right sidebar is open, it must
+                            // remain a sibling rather than sit behind the
+                            // full-width header's Stack/hit testing.
+                            ? Row(
+                                children: [
+                                  Expanded(
+                                    child: RealtimeIdleControls(
+                                      child: stage,
+                                      controls: dock,
+                                      topControls: header,
+                                      controlsMaxWidth: 1100,
+                                    ),
+                                  ),
+                                  if (_panel != DemoMeetingPanel.closed)
+                                    SizedBox(width: 330, child: _sidePanel()),
+                                ],
+                              )
                             : RealtimeIdleControls(
                                 child: stage,
                                 controls: dock,
-                                topControls: wide ? header : null,
                               ),
                       ),
                     ],
@@ -867,7 +900,9 @@ class _DemoMeetingStageState extends State<_DemoMeetingStage> {
               RealtimeVideoGrid(
                 padding: EdgeInsets.fromLTRB(
                   8,
-                  widget.topOverlayInset + 8,
+                  // Video remains edge-to-edge even when the floating header
+                  // is visible; only notification toasts avoid its footprint.
+                  8,
                   8,
                   widget.bottomControlsInset + 8,
                 ),
