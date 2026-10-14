@@ -19,8 +19,13 @@ void deriveClassroomChanges(
       ClassroomNotificationKind kind,
     ) {
       final ids = prior.map(id).toSet();
-      if (current.any((item) => !ids.contains(id(item)))) {
-        onNotification(ClassroomNotification(kind, next.revision));
+      for (final item in current) {
+        final itemId = id(item);
+        if (!ids.contains(itemId)) {
+          onNotification(
+            ClassroomNotification(kind, next.revision, itemId: itemId),
+          );
+        }
       }
     }
 
@@ -36,6 +41,45 @@ void deriveClassroomChanges(
       (a) => a.id,
       ClassroomNotificationKind.activityPublished,
     );
+    final previousActivities = {
+      for (final activity in old.tools!.activities) activity.id: activity,
+    };
+    for (final activity in next.tools!.activities) {
+      final previous = previousActivities[activity.id];
+      if (previous == null) continue;
+      if (!previous.closed && activity.closed) {
+        onNotification(
+          ClassroomNotification(
+            ClassroomNotificationKind.activityClosed,
+            next.revision,
+            itemId: activity.id,
+          ),
+        );
+      } else if (next.isTeacher &&
+          (activity.responseCount > previous.responseCount ||
+              activity.answers.length != previous.answers.length ||
+              activity.answers.entries.any(
+                (answer) => previous.answers[answer.key] != answer.value,
+              ))) {
+        onNotification(
+          ClassroomNotification(
+            ClassroomNotificationKind.activityUpdated,
+            next.revision,
+            itemId: activity.id,
+          ),
+        );
+      } else if (!next.isTeacher &&
+          previous.selfAnswer != activity.selfAnswer &&
+          activity.selfAnswer != null) {
+        onNotification(
+          ClassroomNotification(
+            ClassroomNotificationKind.activityUpdated,
+            next.revision,
+            itemId: activity.id,
+          ),
+        );
+      }
+    }
     added(
       old.tools!.homework,
       next.tools!.homework,

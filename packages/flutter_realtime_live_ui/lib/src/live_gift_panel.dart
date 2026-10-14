@@ -52,6 +52,8 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
   Object? _error;
   ({String giftId, int quantity, String eventId})? _retry;
   StreamSubscription<Object>? _errors;
+  Timer? _rateLimitTimer;
+  bool _rateLimited = false;
 
   @override
   void initState() {
@@ -73,12 +75,13 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
 
   @override
   void dispose() {
+    _rateLimitTimer?.cancel();
     observeDetached(_errors?.cancel());
     super.dispose();
   }
 
   Future<void> _send(String giftId, {bool retry = false}) async {
-    if (_busy) return;
+    if (_busy || _rateLimited) return;
     final request = retry
         ? _retry!
         : (
@@ -99,7 +102,25 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
       _retry = null;
     } catch (e) {
       _retry = request;
-      if (mounted) setState(() => _error = e);
+      if (e is RealtimeException && e.statusCode == 429) {
+        _rateLimitTimer?.cancel();
+        _rateLimitTimer = Timer(const Duration(seconds: 10), () {
+          if (mounted) {
+            setState(() {
+              _rateLimited = false;
+              _error = null;
+            });
+          }
+        });
+        if (mounted) {
+          setState(() {
+            _rateLimited = true;
+            _error = null;
+          });
+        }
+      } else if (mounted) {
+        setState(() => _error = e);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -209,6 +230,19 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
                     ],
                   ),
                 ),
+                if (_rateLimited) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      _text(
+                        context,
+                        '连送太快，稍等约 10 秒即可继续。',
+                        'Gift combo is cooling down. Try again in about 10 seconds.',
+                      ),
+                      style: TextStyle(color: style.textMuted, fontSize: 13),
+                    ),
+                  ),
+                ],
                 if (_error != null) ...[
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -659,7 +693,7 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
     final color = _giftColor(gift.id);
     final icon = _icon(gift.icon);
     final name = _name(context, gift);
-    final canSend = !_busy && state.canSendGift;
+    final canSend = !_busy && !_rateLimited && state.canSendGift;
 
     return RealtimeGlassPressable(
       onTap: canSend ? () => _send(gift.id) : null,

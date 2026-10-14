@@ -3,6 +3,69 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 void main() {
+  testWidgets('student sees every announcement from a batch and poll close', (
+    tester,
+  ) async {
+    final repo = _TestRepository()..role = ClassroomRole.student;
+    final session = ClassroomSession(
+      repo,
+      pollInterval: const Duration(hours: 1),
+    );
+    await session.start();
+    await tester.pumpWidget(_app(session));
+    final now = DateTime.now();
+    repo.notices.addAll([
+      ClassroomNotice(
+        id: 'first',
+        kind: 'announcement',
+        text: 'First',
+        createdAt: now,
+      ),
+      ClassroomNotice(
+        id: 'second',
+        kind: 'focus',
+        text: 'Second',
+        createdAt: now,
+      ),
+    ]);
+    repo.revision++;
+    await session.refresh();
+    await tester.pump();
+    expect(find.text('Announcement: First'), findsOneWidget);
+    expect(find.text('Announcement: Second'), findsOneWidget);
+
+    repo.activities.add(
+      ClassroomActivity(
+        id: 'poll1',
+        kind: ClassroomActivityKind.poll,
+        title: 'Poll',
+        options: ['Yes', 'No'],
+        closed: false,
+      ),
+    );
+    repo.revision++;
+    await session.refresh();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Activity published: Poll'), findsOneWidget);
+
+    repo.activities[0] = ClassroomActivity(
+      id: 'poll1',
+      kind: ClassroomActivityKind.poll,
+      title: 'Poll',
+      options: ['Yes', 'No'],
+      closed: true,
+    );
+    repo.revision++;
+    await session.refresh();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Activity closed: Poll'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await session.dispose();
+  });
+
   testWidgets('student gets a microphone reminder after speaking grant', (
     tester,
   ) async {
@@ -122,6 +185,8 @@ class _TestRepository implements ClassroomRepository {
   int revision = 0;
   ClassroomTimer? timer;
   final List<ClassroomHomework> homework = [];
+  final List<ClassroomNotice> notices = [];
+  final List<ClassroomActivity> activities = [];
 
   ClassroomState _snapshot() => ClassroomState(
     roomCode: 'test-room',
@@ -140,7 +205,12 @@ class _TestRepository implements ClassroomRepository {
     ],
     questions: const [],
     stats: const ClassroomStats(),
-    tools: ClassroomToolsState(homework: homework, timer: timer),
+    tools: ClassroomToolsState(
+      notices: notices,
+      homework: homework,
+      activities: activities,
+      timer: timer,
+    ),
   );
 
   @override

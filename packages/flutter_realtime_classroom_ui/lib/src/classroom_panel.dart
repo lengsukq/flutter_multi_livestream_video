@@ -355,7 +355,12 @@ class _ClassroomControlButtonState extends State<ClassroomControlButton> {
       if (notification.kind == ClassroomNotificationKind.noticePublished &&
           state?.isTeacher == false &&
           state!.tools!.notices.isNotEmpty) {
-        final notice = state.tools!.notices.last;
+        final notice = state.tools!.notices
+            .where(
+              (n) => notification.itemId == null || n.id == notification.itemId,
+            )
+            .lastOrNull;
+        if (notice == null) return;
         ScaffoldMessenger.maybeOf(
           context,
         )?.showSnackBar(SnackBar(content: Text(notice.text)));
@@ -504,7 +509,12 @@ class _ClassroomOverlayButtonState extends State<ClassroomOverlayButton> {
       if (notification.kind == ClassroomNotificationKind.noticePublished &&
           state?.isTeacher == false &&
           state!.tools!.notices.isNotEmpty) {
-        final notice = state.tools!.notices.last;
+        final notice = state.tools!.notices
+            .where(
+              (n) => notification.itemId == null || n.id == notification.itemId,
+            )
+            .lastOrNull;
+        if (notice == null) return;
         ScaffoldMessenger.maybeOf(
           context,
         )?.showSnackBar(SnackBar(content: Text(notice.text)));

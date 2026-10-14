@@ -33,7 +33,53 @@ class Repository implements LiveInteractionRepository {
   void close() {}
 }
 
+class _RateLimitedRepository extends Repository {
+  int sends = 0;
+
+  @override
+  Future<LiveInteractionState> sendGift(
+    String giftId,
+    int quantity, {
+    required String eventId,
+  }) {
+    sends++;
+    throw const RealtimeException(
+      code: RealtimeErrorCode.serverError,
+      statusCode: 429,
+      message: 'Gift combo paused',
+    );
+  }
+}
+
 void main() {
+  testWidgets(
+    '429 shows a temporary readable cooldown rather than raw API error',
+    (tester) async {
+      final repository = _RateLimitedRepository();
+      final session = LiveInteractionSession(
+        repository,
+        pollInterval: const Duration(hours: 1),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: LiveGiftPanel(session: session)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Star × 1'));
+      await tester.pump();
+      expect(find.textContaining('cooling down'), findsOneWidget);
+      expect(find.textContaining('429'), findsNothing);
+      await tester.tap(find.text('Star × 1'));
+      await tester.pump();
+      expect(repository.sends, 1);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+      expect(find.textContaining('cooling down'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await session.dispose();
+    },
+  );
   testWidgets('gift panel retries the same event id and fits a phone', (
     tester,
   ) async {

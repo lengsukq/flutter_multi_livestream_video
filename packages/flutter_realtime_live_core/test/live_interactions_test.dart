@@ -68,6 +68,41 @@ class Hints implements LiveRevisionTransport {
 
 void main() {
   test(
+    'gift sent by a viewer reaches another client via authoritative snapshot',
+    () async {
+      // Both clients use the same simulated backend but have separate local
+      // revisions, as on two real devices connected to one broadcast room.
+      final backend = Repository();
+      final sender = LiveInteractionSession(
+        backend,
+        pollInterval: const Duration(hours: 1),
+      );
+      final receiver = LiveInteractionSession(
+        backend,
+        pollInterval: const Duration(hours: 1),
+      );
+      final received = <LiveGiftEvent>[];
+      final subscription = receiver.events.listen(received.add);
+      await receiver.start();
+      await sender.start();
+
+      backend.next = state(2);
+      await sender.sendGift('star', eventId: 'gift-across-client-1');
+      await receiver.refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(received.map((event) => event.sequence), [2]);
+      expect(received.single.giftId, 'star');
+      await receiver.refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(received.length, 1, reason: 'Polls must not replay the same gift');
+
+      await subscription.cancel();
+      await receiver.dispose();
+      await sender.dispose();
+    },
+  );
+
+  test(
     'initial history is quiet; newer revisions animate once even with bounded history',
     () async {
       final repository = Repository();

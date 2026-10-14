@@ -156,12 +156,16 @@ class _RealtimeClassroomEventOverlayState
     // Hand, speaking and Q&A already arrive via events; do not double-toast.
     switch (notice.kind) {
       case ClassroomNotificationKind.noticePublished:
-        final latest = tools?.notices.lastOrNull;
+        final latest = notice.itemId == null
+            ? tools?.notices.lastOrNull
+            : tools?.notices.where((n) => n.id == notice.itemId).firstOrNull;
         if (latest != null) {
           _show('课堂通知：${latest.text}', 'Announcement: ${latest.text}');
         }
       case ClassroomNotificationKind.homeworkPublished:
-        final latest = tools?.homework.lastOrNull;
+        final latest = notice.itemId == null
+            ? tools?.homework.lastOrNull
+            : tools?.homework.where((h) => h.id == notice.itemId).firstOrNull;
         if (latest != null) {
           _show(
             '老师发布了作业：${latest.title}',
@@ -169,17 +173,42 @@ class _RealtimeClassroomEventOverlayState
           );
         }
       case ClassroomNotificationKind.materialShared:
-        final latest = tools?.materials.lastOrNull;
+        final latest = notice.itemId == null
+            ? tools?.materials.lastOrNull
+            : tools?.materials.where((m) => m.id == notice.itemId).firstOrNull;
         if (latest != null) {
           _show('老师分享了资料：${latest.title}', 'Material shared: ${latest.title}');
         }
       case ClassroomNotificationKind.activityPublished:
-        final latest = tools?.activities.lastOrNull;
+        final latest = notice.itemId == null
+            ? tools?.activities.lastOrNull
+            : tools?.activities.where((a) => a.id == notice.itemId).firstOrNull;
         if (latest != null) {
           _show(
             '老师发布了互动：${latest.title}',
             'Activity published: ${latest.title}',
           );
+        }
+      case ClassroomNotificationKind.activityUpdated:
+        final item = tools?.activities
+            .where((a) => a.id == notice.itemId)
+            .firstOrNull;
+        if (item != null) {
+          _show(
+            widget.classroom.state?.isTeacher == true
+                ? '${item.title}：有学生提交了回答（共 ${item.responseCount} 人）'
+                : '你已提交互动回答：${item.title}',
+            widget.classroom.state?.isTeacher == true
+                ? 'New response to ${item.title} (${item.responseCount} participants)'
+                : 'Your answer was submitted: ${item.title}',
+          );
+        }
+      case ClassroomNotificationKind.activityClosed:
+        final item = tools?.activities
+            .where((a) => a.id == notice.itemId)
+            .firstOrNull;
+        if (item != null) {
+          _show('互动已结束：${item.title}', 'Activity closed: ${item.title}');
         }
       case ClassroomNotificationKind.timerChanged:
         final timer = tools?.timer;

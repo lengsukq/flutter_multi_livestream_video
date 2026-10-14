@@ -5,6 +5,8 @@ enum ClassroomNotificationKind {
   speakGranted,
   noticePublished,
   activityPublished,
+  activityUpdated,
+  activityClosed,
   homeworkPublished,
   materialShared,
   timerChanged,

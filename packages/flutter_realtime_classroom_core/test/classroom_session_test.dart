@@ -38,6 +38,329 @@ class FakeRevisionTransport implements ClassroomRevisionTransport {
 }
 
 void main() {
+  test(
+    'coalesced notices retain each item and poll answers/closure reach recipients',
+    () async {
+      final now = DateTime.utc(2026);
+      ClassroomState snapshot(
+        int revision,
+        ClassroomRole role,
+        ClassroomToolsState tools,
+      ) => ClassroomState(
+        roomCode: 'shared-lesson',
+        role: role,
+        selfUserId: role == ClassroomRole.teacher ? 'teacher' : 'alice',
+        revision: revision,
+        students: const [],
+        questions: const [],
+        stats: const ClassroomStats(),
+        tools: tools,
+      );
+      final teacherRepo = FakeClassroomRepository(
+        snapshot(1, ClassroomRole.teacher, ClassroomToolsState()),
+      );
+      final studentRepo = FakeClassroomRepository(
+        snapshot(1, ClassroomRole.student, ClassroomToolsState()),
+      );
+      final teacher = ClassroomSession(
+        teacherRepo,
+        pollInterval: const Duration(hours: 1),
+      );
+      final student = ClassroomSession(
+        studentRepo,
+        pollInterval: const Duration(hours: 1),
+      );
+      final teacherNotices = <ClassroomNotification>[];
+      final studentNotices = <ClassroomNotification>[];
+      final a = teacher.notifications.listen(teacherNotices.add);
+      final b = student.notifications.listen(studentNotices.add);
+      await teacher.start();
+      await student.start();
+      final initialTools = ClassroomToolsState(
+        notices: [
+          ClassroomNotice(
+            id: 'n1',
+            kind: 'announcement',
+            text: 'First',
+            createdAt: now,
+          ),
+          ClassroomNotice(
+            id: 'n2',
+            kind: 'focus',
+            text: 'Second',
+            createdAt: now,
+          ),
+        ],
+        activities: [
+          ClassroomActivity(
+            id: 'poll1',
+            kind: ClassroomActivityKind.poll,
+            title: 'Question?',
+            options: ['A', 'B'],
+            closed: false,
+          ),
+        ],
+      );
+      teacherRepo.next = snapshot(2, ClassroomRole.teacher, initialTools);
+      studentRepo.next = snapshot(2, ClassroomRole.student, initialTools);
+      await teacher.refresh();
+      await student.refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        studentNotices
+            .where((n) => n.kind == ClassroomNotificationKind.noticePublished)
+            .map((n) => n.itemId),
+        ['n1', 'n2'],
+      );
+      expect(
+        studentNotices.last.kind,
+        ClassroomNotificationKind.activityPublished,
+      );
+
+      final responded = ClassroomToolsState(
+        notices: initialTools.notices,
+        activities: [
+          ClassroomActivity(
+            id: 'poll1',
+            kind: ClassroomActivityKind.poll,
+            title: 'Question?',
+            options: ['A', 'B'],
+            closed: false,
+            responseCount: 1,
+            selfAnswer: 0,
+            answers: {'alice': 0},
+          ),
+        ],
+      );
+      teacherRepo.next = snapshot(3, ClassroomRole.teacher, responded);
+      studentRepo.next = snapshot(3, ClassroomRole.student, responded);
+      await teacher.refresh();
+      await student.refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        teacherNotices.last.kind,
+        ClassroomNotificationKind.activityUpdated,
+      );
+      expect(
+        studentNotices.last.kind,
+        ClassroomNotificationKind.activityUpdated,
+      );
+      expect(studentNotices.last.itemId, 'poll1');
+
+      // An answer can be changed without changing responseCount.
+      final changedAnswer = ClassroomToolsState(
+        notices: initialTools.notices,
+        activities: [
+          ClassroomActivity(
+            id: 'poll1',
+            kind: ClassroomActivityKind.poll,
+            title: 'Question?',
+            options: ['A', 'B'],
+            closed: false,
+            responseCount: 1,
+            selfAnswer: 1,
+            answers: {'alice': 1},
+          ),
+        ],
+      );
+      teacherRepo.next = snapshot(4, ClassroomRole.teacher, changedAnswer);
+      studentRepo.next = snapshot(4, ClassroomRole.student, changedAnswer);
+      await teacher.refresh();
+      await student.refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        teacherNotices.where(
+          (n) => n.kind == ClassroomNotificationKind.activityUpdated,
+        ),
+        hasLength(2),
+      );
+      expect(
+        studentNotices.last.kind,
+        ClassroomNotificationKind.activityUpdated,
+      );
+
+      final finished = ClassroomToolsState(
+        notices: initialTools.notices,
+        activities: [
+          ClassroomActivity(
+            id: 'poll1',
+            kind: ClassroomActivityKind.poll,
+            title: 'Question?',
+            options: ['A', 'B'],
+            closed: true,
+            responseCount: 1,
+            selfAnswer: 1,
+            answers: {'alice': 1},
+          ),
+        ],
+      );
+      studentRepo.next = snapshot(5, ClassroomRole.student, finished);
+      await student.refresh();
+      await student.refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        studentNotices.where(
+          (n) => n.kind == ClassroomNotificationKind.activityClosed,
+        ),
+        hasLength(1),
+      );
+
+      await a.cancel();
+      await b.cancel();
+      await teacher.dispose();
+      await student.dispose();
+    },
+  );
+
+  test(
+    'teacher and student each observe the other side of classroom actions',
+    () async {
+      const user = 'alice';
+      final allQuestions = <ClassroomQuestion>[];
+      var hand = false;
+      var speaking = false;
+      var revision = 1;
+      ClassroomToolsState tools = ClassroomToolsState();
+      ClassroomState snapshot(ClassroomRole role) => ClassroomState(
+        roomCode: 'shared-lesson',
+        role: role,
+        selfUserId: role == ClassroomRole.teacher ? 'teacher' : user,
+        revision: revision,
+        students: [
+          ClassroomStudent(
+            userId: user,
+            participantId: 'p-alice',
+            displayName: 'Alice',
+            online: true,
+            handRaised: hand,
+            canSpeak: speaking,
+          ),
+        ],
+        questions: allQuestions,
+        stats: const ClassroomStats(),
+        tools: tools,
+      );
+      final teacherRepo = FakeClassroomRepository(
+        snapshot(ClassroomRole.teacher),
+      );
+      final studentRepo = FakeClassroomRepository(
+        snapshot(ClassroomRole.student),
+      );
+      final teacher = ClassroomSession(
+        teacherRepo,
+        pollInterval: const Duration(hours: 1),
+      );
+      final student = ClassroomSession(
+        studentRepo,
+        pollInterval: const Duration(hours: 1),
+      );
+      final hostEvents = <ClassroomStateEvent>[];
+      final studentEvents = <ClassroomStateEvent>[];
+      final studentNotices = <ClassroomNotification>[];
+      final teacherSubscription = teacher.events.listen(hostEvents.add);
+      final studentSubscription = student.events.listen(studentEvents.add);
+      final noticeSubscription = student.notifications.listen(
+        studentNotices.add,
+      );
+      Future<void> update(
+        ClassroomSession recipient,
+        FakeClassroomRepository repo,
+        ClassroomRole role,
+      ) async {
+        repo.next = snapshot(role);
+        await recipient.refresh();
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      await teacher.start();
+      await student.start();
+      hand = true;
+      revision++;
+      studentRepo.next = snapshot(ClassroomRole.student);
+      await student.raiseHand();
+      await update(teacher, teacherRepo, ClassroomRole.teacher);
+      expect(hostEvents.last.kind, ClassroomStateEventKind.handRaised);
+      expect(hostEvents.last.userId, user);
+
+      speaking = true;
+      revision++;
+      teacherRepo.next = snapshot(ClassroomRole.teacher);
+      await teacher.grantSpeak(user);
+      await update(student, studentRepo, ClassroomRole.student);
+      expect(studentEvents.last.kind, ClassroomStateEventKind.speakGranted);
+      expect(studentNotices.last.kind, ClassroomNotificationKind.speakGranted);
+
+      allQuestions.add(
+        ClassroomQuestion(
+          id: 'question1',
+          userId: user,
+          displayName: 'Alice',
+          text: 'Can you explain?',
+          status: ClassroomQuestionStatus.pending,
+          createdAt: DateTime.utc(2026),
+        ),
+      );
+      revision++;
+      studentRepo.next = snapshot(ClassroomRole.student);
+      await student.askQuestion('Can you explain?');
+      await update(teacher, teacherRepo, ClassroomRole.teacher);
+      expect(hostEvents.last.kind, ClassroomStateEventKind.questionAsked);
+
+      allQuestions[0] = ClassroomQuestion(
+        id: 'question1',
+        userId: user,
+        displayName: 'Alice',
+        text: 'Can you explain?',
+        status: ClassroomQuestionStatus.answered,
+        answer: 'Of course',
+        createdAt: DateTime.utc(2026),
+      );
+      revision++;
+      teacherRepo.next = snapshot(ClassroomRole.teacher);
+      await teacher.answerQuestion('question1', 'Of course');
+      await update(student, studentRepo, ClassroomRole.student);
+      expect(studentEvents.last.kind, ClassroomStateEventKind.questionAnswered);
+      expect(
+        studentNotices.last.kind,
+        ClassroomNotificationKind.questionAnswered,
+      );
+
+      tools = ClassroomToolsState(
+        notices: [
+          ClassroomNotice(
+            id: 'n1',
+            kind: 'announcement',
+            text: 'Class starts',
+            createdAt: DateTime.utc(2026),
+          ),
+        ],
+      );
+      revision++;
+      teacherRepo.next = snapshot(ClassroomRole.teacher);
+      await teacher.publishAnnouncement('Class starts');
+      await update(student, studentRepo, ClassroomRole.student);
+      expect(
+        studentNotices.last.kind,
+        ClassroomNotificationKind.noticePublished,
+      );
+      await student.refresh();
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        studentNotices.where(
+          (n) => n.kind == ClassroomNotificationKind.noticePublished,
+        ),
+        hasLength(1),
+        reason: 'A repeated snapshot must not repeat a remote notification',
+      );
+
+      await teacherSubscription.cancel();
+      await studentSubscription.cancel();
+      await noticeSubscription.cancel();
+      await teacher.dispose();
+      await student.dispose();
+    },
+  );
+
   ClassroomState state(int revision, {bool hand = false, int questions = 0}) =>
       ClassroomState(
         roomCode: 'room1',
