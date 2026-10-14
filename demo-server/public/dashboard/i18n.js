@@ -160,6 +160,7 @@ const translationPairs = [
       ['双轴通道调度中枢', 'Dual-axis provider routing control'],
       ['会话与系统日志工作区', 'Sessions and audit log workspace'],
     ];
+    translationPairs.push(['概览', 'Overview'], ['房间', 'Rooms'], ['服务', 'Services'], ['事件', 'Events'], ['管理导航', 'Console navigation'], ['管理密码', 'Admin password']);
     const zhToEn = new Map(translationPairs);
     const enToZh = new Map(translationPairs.map(([zh, en]) => [en, zh]));
 export let currentLanguage = (() => {

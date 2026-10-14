@@ -4,9 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Media Live Console · 智能直播控制台</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/dashboard/dashboard.css">
 </head>
 <body>
@@ -24,7 +21,7 @@
       <h1 id="login-title">管理台登录</h1>
       <p>输入服务端配置的管理密码。登录成功后会签发仅供本机管理台使用的安全 Cookie。</p>
       <form id="login-form" onsubmit="login(event)">
-        <input class="input-field" id="admin-password" type="password" autocomplete="current-password" placeholder="管理密码" required />
+        <input class="input-field" id="admin-password" type="password" autocomplete="current-password" placeholder="管理密码" aria-label="管理密码" required />
         <p class="auth-error" id="login-error" role="alert"></p>
         <button class="btn btn-primary" type="submit" id="login-button">登录</button>
       </form>
@@ -49,7 +46,7 @@
   </div>
 
   <!-- Main Workbench -->
-  <div class="workbench auth-hidden" id="dashboard-root">
+  <div class="workbench auth-hidden" id="dashboard-root" data-console-view="overview">
     <!-- Tier 1: Unified Top Command Bar -->
     <header class="console-topbar">
       <div class="brand">
@@ -91,7 +88,14 @@
     </header>
 
     <!-- Compact Telemetry & Status Strip -->
-    <section class="telemetry-strip" aria-label="系统核心指标">
+    <nav class="console-navigation" aria-label="管理导航">
+      <button type="button" data-console-destination="overview" aria-current="page" onclick="navigateConsole('overview')"><span aria-hidden="true">◫</span><span>概览</span></button>
+      <button type="button" data-console-destination="rooms" onclick="navigateConsole('rooms')"><span aria-hidden="true">▤</span><span>房间</span></button>
+      <button type="button" data-console-destination="services" onclick="navigateConsole('services')"><span aria-hidden="true">⚙</span><span>服务</span></button>
+      <button type="button" data-console-destination="events" onclick="navigateConsole('events')"><span aria-hidden="true">≡</span><span>事件</span></button>
+    </nav>
+    <div class="console-view-heading"><h2 id="console-view-title" tabindex="-1">概览</h2></div>
+    <section data-console-section="overview" class="telemetry-strip" aria-label="系统核心指标">
       <div class="telemetry-item">
         <div class="telemetry-label">
           <span class="telemetry-dot emerald"></span>
@@ -138,12 +142,12 @@
     </section>
 
     <!-- Connection Service Status Strip -->
-    <div class="connection-banner" id="connection-banner" role="status">
+    <div data-console-section="overview" class="connection-banner" id="connection-banner" role="status">
       正在读取连接服务状态…
     </div>
 
     <!-- Tier 2: Dual-Axis Provider Routing Control Deck -->
-    <section class="routing-grid" aria-label="双轴通道调度中枢">
+    <section data-console-section="services" hidden class="routing-grid" aria-label="双轴通道调度中枢">
       <!-- Axis 1: Media Provider -->
       <div class="card provider-panel provider-panel-with-matrix">
         <div class="provider-panel-main">
@@ -216,7 +220,7 @@
     </section>
 
     <!-- Tier 3: Unified Operations & Diagnostics Workspace -->
-    <section class="card workspace-shell" aria-label="会话与系统日志工作区">
+    <section data-console-section="workspace" hidden class="card workspace-shell" aria-label="会话与系统日志工作区">
       <!-- Workspace Navigation Tabs -->
       <div class="workspace-nav" role="tablist">
         <div class="workspace-tabs">
@@ -244,17 +248,6 @@
             <span class="badge-count" id="standalone-chat-room-badge-count">0</span>
           </button>
 
-          <button
-            type="button"
-            role="tab"
-            aria-selected="false"
-            class="workspace-tab"
-            data-workspace-tab="events"
-            onclick="switchWorkspaceTab('events')">
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-            <span>系统事件审计流</span>
-            <span class="badge-count" id="event-badge-count">0</span>
-          </button>
         </div>
       </div>
 

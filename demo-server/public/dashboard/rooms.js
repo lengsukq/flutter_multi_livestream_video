@@ -43,10 +43,10 @@ export function generateRandomCode() {
         const roomChatProviderLabel = r.chatProvider
           ? t(roomChatProvider.displayName || roomChatProvider.label || r.chatProvider)
           : t('Chat 已关闭');
-        const hue = providerHue(r.provider);
-        const providerStyle = `background:hsl(${hue} 80% 97%);color:hsl(${hue} 58% 38%);border-color:hsl(${hue} 65% 86%)`;
-        const chatHue = r.chatProvider ? providerHue(r.chatProvider) : 215;
-        const chatProviderStyle = `background:hsl(${chatHue} 55% 97%);color:hsl(${chatHue} 42% 42%);border-color:hsl(${chatHue} 45% 88%)`;
+
+        const providerStyle = 'background:var(--surface-subtle);color:var(--text-main);border-color:var(--border-subtle)';
+
+        const chatProviderStyle = 'background:var(--surface-subtle);color:var(--text-main);border-color:var(--border-subtle)';
         const idleText = r.idleSec > 0
           ? t('{seconds}s 前心跳', { seconds: r.idleSec })
           : t('🟢 活跃在线');
@@ -113,6 +113,8 @@ export function generateRandomCode() {
           </td>
         </tr>`;
       }).join('');
+      labelMobileRows();
+
     }
 
     export function renderStandaloneChatRoomsTable() {
@@ -138,8 +140,8 @@ export function generateRandomCode() {
       tb.innerHTML = list.map(r => {
         const provider = chatProviderInfo(r.chatProvider);
         const providerLabel = t(provider.displayName || provider.label || r.chatProvider || 'Unknown');
-        const hue = providerHue(r.chatProvider || 'chat');
-        const providerStyle = `background:hsl(${hue} 55% 97%);color:hsl(${hue} 42% 42%);border-color:hsl(${hue} 45% 88%)`;
+
+        const providerStyle = 'background:var(--surface-subtle);color:var(--text-main);border-color:var(--border-subtle)';
         const remoteId = r.providerRoomId || '';
         const displayCode = r.roomCode || '—';
         const trackedLabel = r.tracked ? t('本地已关联') : t('云端遗留');
@@ -194,6 +196,8 @@ export function generateRandomCode() {
           </td>
         </tr>`;
       }).join('');
+      labelMobileRows();
+
     }
 
     export async function createRoom() {
@@ -295,3 +299,12 @@ export function generateRandomCode() {
         toast(t('链接: {link}', { link }));
       });
     }
+
+function labelMobileRows() {
+  document.querySelectorAll('table').forEach(table => {
+    const headers = Array.from(table.querySelectorAll('thead th'), header => header.textContent.trim());
+    table.querySelectorAll('tbody tr').forEach(row => {
+      Array.from(row.cells).forEach((cell, index) => cell.dataset.label = headers[index] || '');
+    });
+  });
+}

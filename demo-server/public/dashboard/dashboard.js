@@ -31,6 +31,32 @@ export function switchWorkspaceTab(tabName) {
       });
     }
 
+let roomWorkspaceTab = 'rooms';
+const consoleTitles = { overview: '概览', rooms: '房间', services: '服务', events: '事件' };
+
+export function navigateConsole(view) {
+  if (!Object.hasOwn(consoleTitles, view)) return;
+  const root = document.getElementById('dashboard-root');
+  if (root.dataset.consoleView === 'rooms') {
+    roomWorkspaceTab = document.querySelector('[data-workspace-tab][aria-selected="true"]')?.dataset.workspaceTab || 'rooms';
+  }
+  root.dataset.consoleView = view;
+  document.querySelectorAll('[data-console-destination]').forEach(button => {
+    if (button.dataset.consoleDestination === view) button.setAttribute('aria-current', 'page');
+    else button.removeAttribute('aria-current');
+  });
+  document.querySelectorAll('[data-console-section]').forEach(section => {
+    section.hidden = section.dataset.consoleSection === 'workspace'
+      ? !['rooms', 'events'].includes(view)
+      : section.dataset.consoleSection !== view;
+  });
+  if (view === 'rooms') switchWorkspaceTab(roomWorkspaceTab);
+  if (view === 'events') switchWorkspaceTab('events');
+  const heading = document.getElementById('console-view-title');
+  heading.textContent = t(consoleTitles[view]);
+  heading.focus({ preventScroll: true });
+}
+
 export async function refresh() {
       const refreshBtn = document.getElementById('refresh-btn');
       refreshBtn.style.opacity = '0.6';
@@ -115,10 +141,11 @@ export async function refresh() {
       void refresh().finally(() => event.detail());
     });
     document.addEventListener('dashboard:language', () => {
+      document.getElementById('console-view-title').textContent = t(consoleTitles[document.getElementById('dashboard-root').dataset.consoleView]);
       renderRoomsTable(); renderStandaloneChatRoomsTable(); renderEvents();
       if (!document.getElementById('dashboard-root').classList.contains('auth-hidden')) void refresh();
     });
-Object.assign(window, { setLanguage, switchWorkspaceTab, switchProvider, switchChatProvider, providerInfo, providerLabel, chatProviderInfo, chatProviderLabel, providerHue, capabilityStateLabel, getCapabilityTooltipElement, updateCapabilityTooltip, renderCapabilityMatrix, renderProviderCapabilityMatrix, renderChatProviderCapabilityMatrix, renderProviderSwitcher, renderChatProviderSwitcher, generateRandomCode, renderRoomsTable, renderStandaloneChatRoomsTable, createRoom, promptCloseRoom, promptCloseChatRoom, closeConfirmModal, executeCloseRoom, executeCloseChatRoom, copyRoom, copyLink, eventTagClass, setEventFilter, renderEvents, showLogin, showDashboard, login, logout, initialize });
+Object.assign(window, { navigateConsole, refresh, setLanguage, switchWorkspaceTab, switchProvider, switchChatProvider, providerInfo, providerLabel, chatProviderInfo, chatProviderLabel, providerHue, capabilityStateLabel, getCapabilityTooltipElement, updateCapabilityTooltip, renderCapabilityMatrix, renderProviderCapabilityMatrix, renderChatProviderCapabilityMatrix, renderProviderSwitcher, renderChatProviderSwitcher, generateRandomCode, renderRoomsTable, renderStandaloneChatRoomsTable, createRoom, promptCloseRoom, promptCloseChatRoom, closeConfirmModal, executeCloseRoom, executeCloseChatRoom, copyRoom, copyLink, eventTagClass, setEventFilter, renderEvents, showLogin, showDashboard, login, logout, initialize });
     // Enter key creates room
     document.getElementById('new-code').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') createRoom();

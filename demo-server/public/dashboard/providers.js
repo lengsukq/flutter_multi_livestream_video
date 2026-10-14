@@ -326,7 +326,7 @@ export async function switchProvider(provider) {
       const providers = [...store.providers.values()];
       switcher.innerHTML = providers.map(provider => {
         const active = provider.id === activeProvider;
-        const accent = `hsl(${providerHue(provider.id)} 65% 45%)`;
+        const accent = '#1d1d1f';
         const title = !provider.configured
           ? t(provider.configurationError || '{provider} 尚未完成服务端配置', { provider: provider.displayName })
           : (!store.providerSelectionEnabled && !active
@@ -362,7 +362,7 @@ export async function switchProvider(provider) {
         const active = providerId === activeProvider;
         const accent = provider.id === 'none'
           ? '#94a3b8'
-          : `hsl(${providerHue(provider.id)} 65% 45%)`;
+          : '#1d1d1f';
         const title = !provider.configured
           ? t(provider.configurationError || '{provider} 尚未完成服务端配置', { provider: provider.displayName })
           : (providerId
