@@ -80,9 +80,9 @@ class CloudRecordingBlueprints {
       RecordingLayout.featuredParticipant,
       RecordingLayout.speaker,
     });
-    final uid = participantId ?? '10001';
-    final tokenPlaceholder =
-        'demo-client-request-token-${DateTime.now().millisecondsSinceEpoch}';
+    // The recording service must join with a fresh numeric UID. A normal
+    // participant ID is not necessarily valid and must not be reused.
+    const uid = '{recordingUid}';
 
     // Map RecordingLayout to Agora mixedVideoLayout:
     // 0: Floating, 1: Best-Fit (Grid), 2: Vertical
@@ -102,14 +102,12 @@ class CloudRecordingBlueprints {
       RecordingStreamType.both => 2,
     };
 
-    final basePayload = <String, dynamic>{
-      'cname': roomCode,
-      'uid': uid,
-      'clientRequestToken': tokenPlaceholder,
+    final startParams = <String, dynamic>{
+      'token': '{serverGeneratedRecordingRtcToken}',
       'recordingConfig': {
-        'channelType': 0, // 0: Communication, 1: Live Broadcast
+        'channelType':
+            1, // Agora Flutter adapter joins live broadcasting channels.
         'streamTypes': streamTypes,
-        'transcodeMode': 0, // 0: Mixed stream, 1: Individual streams
         'transcodingConfig': {
           'mixedVideoLayout': agoraLayout,
           'width': 1280,
@@ -119,33 +117,43 @@ class CloudRecordingBlueprints {
         },
       },
       'recordingFileConfig': {
-        'avFileType': [options.containerFormat.name, 'hls'],
+        'avFileType': ['hls', 'mp4'],
       },
       'storageConfig': {
-        'vendor': 1, // 1: AWS S3, 2: Aliyun OSS, 3: Tencent COS, etc.
+        'vendor': 1, // AWS S3; actual values belong to the backend only.
         'region': 0,
         'bucket': 'your-recording-bucket',
         'accessKey': 'YOUR_STORAGE_ACCESS_KEY',
         'secretKey': 'YOUR_STORAGE_SECRET_KEY',
-        'fileNamePrefix': ['recordings', roomCode],
+        'fileNamePrefix': ['recordings', 'uniqueRecordingId123'],
       },
     };
 
-    _deepMerge(basePayload, options.rawProviderParams);
+    _deepMerge(startParams, options.rawProviderParams);
+    final basePayload = <String, dynamic>{
+      'cname': roomCode,
+      'uid': uid,
+      'clientRequest': action == 'start' ? startParams : <String, dynamic>{},
+    };
+    final modePath =
+        'https://api.sd-rtn.com/v1/apps/{appId}/cloud_recording/'
+        'resourceid/{resourceId}/sid/{sid}/mode/mix/';
 
     return CloudRecordingDescriptor(
       providerId: 'agora',
       action: action,
-      endpoint:
-          'https://api.agora.io/v1/apps/{appId}/cloud_recording/resourceid/{resourceId}/mode/composite/$action',
-      httpMethod: 'POST',
+      endpoint: action == 'start'
+          ? 'https://api.sd-rtn.com/v1/apps/{appId}/cloud_recording/'
+                'resourceid/{resourceId}/mode/mix/start'
+          : '$modePath$action',
+      httpMethod: action == 'query' ? 'GET' : 'POST',
       suggestedHeaders: const {
         'Content-Type': 'application/json;charset=utf-8',
-        'Authorization': 'Basic <BASE64(CustomerKey:CustomerSecret)>',
+        'Authorization': 'Basic <BASE64(CustomerID:CustomerSecret)>',
       },
       payload: basePayload,
       documentationUrl:
-          'https://doc.shengwang.cn/doc/cloud-recording/restful/overview',
+          'https://docs.agora.io/en/api-reference/api-ref/cloud-recording/start',
       description: 'Agora Cloud Recording REST API (Composite Recording Mode)',
     );
   }

@@ -40,30 +40,45 @@ void main() {
         expect(descriptor.providerId, 'agora');
         expect(descriptor.action, 'start');
         expect(descriptor.httpMethod, 'POST');
-        expect(descriptor.endpoint, contains('api.agora.io'));
+        expect(descriptor.endpoint, contains('api.sd-rtn.com'));
+        expect(descriptor.endpoint, contains('/mode/mix/start'));
         expect(
           descriptor.suggestedHeaders['Content-Type'],
           contains('application/json'),
         );
         expect(descriptor.suggestedHeaders['Authorization'], contains('Basic'));
-        expect(descriptor.documentationUrl, contains('shengwang.cn'));
+        expect(descriptor.documentationUrl, contains('docs.agora.io'));
 
         final payload = descriptor.payload;
+        final parameters = payload['clientRequest'];
         expect(payload['cname'], 'room_101');
-        expect(payload['uid'], 'user_888');
+        expect(payload['uid'], '{recordingUid}');
         expect(
-          payload['recordingConfig']['transcodingConfig']['mixedVideoLayout'],
+          parameters['recordingConfig']['transcodingConfig']['mixedVideoLayout'],
           1,
         ); // 1 = Best-Fit Grid
+        expect(parameters['recordingConfig']['channelType'], 1);
+        expect(parameters['recordingFileConfig']['avFileType'], ['hls', 'mp4']);
         // Deep merge check:
-        expect(payload['storageConfig']['bucket'], 'my-custom-bucket');
+        expect(parameters['storageConfig']['bucket'], 'my-custom-bucket');
         expect(
-          payload['storageConfig']['vendor'],
+          parameters['storageConfig']['vendor'],
           1,
         ); // Preserves existing vendor
-        expect(payload['extraTrackingTag'], 'agora-prod');
+        expect(parameters['extraTrackingTag'], 'agora-prod');
       },
     );
+
+    test('Agora example query endpoint uses GET and mix, never composite', () {
+      final query = CloudRecordingBlueprints.buildDescriptor(
+        providerId: 'agora',
+        roomCode: 'room_101',
+        action: 'query',
+      );
+      expect(query.httpMethod, 'GET');
+      expect(query.endpoint, contains('/sid/{sid}/mode/mix/query'));
+      expect(query.endpoint, isNot(contains('composite')));
+    });
 
     test('AWS Chime blueprint emits only valid webcam grid layout', () {
       final gridDescriptor = CloudRecordingBlueprints.buildDescriptor(
