@@ -54,11 +54,15 @@ test('invalid, excessive and offline-host gifts fail without incrementing totals
   for (const quantity of [0, -1, 100, 1.5, '1']) assert.throws(() => directory.send(entry, alice,
     { giftId: 'star', quantity, eventId: 'bad-gift-001' }), /quantity/);
   assert.throws(() => directory.send(entry, alice, { giftId: 'money', quantity: 1, eventId: 'bad-gift-001' }), /Unknown gift/);
-  for (let i = 0; i < 5; i++) directory.send(entry, alice, { giftId: 'star', quantity: 1, eventId: `gift-event-00${i}` });
-  assert.throws(() => directory.send(entry, alice, { giftId: 'star', quantity: 1, eventId: 'gift-event-006' }), /wait/);
-  assert.equal(directory.snapshot(entry, alice).totals.star, 5);
+  for (let i = 0; i < 20; i++) directory.send(entry, alice, {
+    giftId: 'star', quantity: 1, eventId: `gift-event-${i.toString().padStart(3, '0')}`,
+  });
+  assert.throws(() => directory.send(entry, alice, {
+    giftId: 'star', quantity: 1, eventId: 'gift-event-021',
+  }), /combo paused/);
+  assert.equal(directory.snapshot(entry, alice).totals.star, 20);
   entry.attendees.shift();
   assert.equal(directory.snapshot(entry, alice).canSendGift, false);
-  assert.throws(() => directory.send(entry, alice, { giftId: 'star', quantity: 1, eventId: 'gift-event-007' }), /offline/);
+  assert.throws(() => directory.send(entry, alice, { giftId: 'star', quantity: 1, eventId: 'gift-event-offline' }), /offline/);
   assert.throws(() => directory.snapshot({ ...entry, roomMode: 'meeting' }, alice), /broadcast/);
 });

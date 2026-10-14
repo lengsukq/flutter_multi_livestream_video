@@ -32,43 +32,72 @@ const env: NodeJS.ProcessEnv = {
   AGORA_RECORDING_S3_SECRET_KEY: 'test-secret',
 };
 
-function fixture() {
+function fixture(options: {omitStopFileList?: boolean; acquireStatus?: number} = {}) {
   const calls: Array<{method: string; path: string; payload: Record<string, any> | null}> = [];
   const files = new Map<string, Buffer>();
   let fileKey = '';
   const transport = (async (request: string | URL | Request, init?: RequestInit) => {
-    const path = new URL(String(request)).pathname;
+    const url = new URL(String(request));
+    assert.equal(url.origin, 'https://api.sd-rtn.com');
+    const path = url.pathname;
     const method = init?.method ?? '';
     const payload = init?.body ? JSON.parse(String(init.body)) : null;
     const auth = new Headers(init?.headers).get('Authorization');
     assert.equal(auth, 'Basic ' + Buffer.from('agora-customer-id:customer-secret').toString('base64'));
     calls.push({method, path, payload});
     if (path.endsWith('/acquire')) {
+      if (options.acquireStatus) return new Response(null, {status: options.acquireStatus});
       return Response.json({resourceId: 'res-1'});
     }
     if (path.endsWith('/start')) {
+      assert.match(path, /\/mode\/mix\/start$/);
+      assert.equal(payload.cname, room.providerRoomName);
+      assert.match(payload.uid, /^[1-9][0-9]*$/);
       assert.equal(payload.clientRequest.storageConfig.vendor, 1);
       assert.equal(payload.clientRequest.storageConfig.bucket, 'recordings-example-bucket');
-      assert.deepEqual(payload.clientRequest.recordingFileConfig.avFileType, ['mp4']);
+      assert.deepEqual(payload.clientRequest.recordingFileConfig.avFileType, ['hls', 'mp4']);
       assert.equal(payload.clientRequest.recordingConfig.streamTypes, 2);
+      assert.equal(payload.clientRequest.recordingConfig.channelType, 1);
+      assert.equal(typeof payload.clientRequest.token, 'string');
       const video = payload.clientRequest.recordingConfig.transcodingConfig;
       assert.ok(video.width === 1280 || video.width === 1920);
       assert.equal(video.height, video.width === 1920 ? 1080 : 720);
       assert.ok(video.mixedVideoLayout === 0 || video.mixedVideoLayout === 1);
       assert.equal(payload.clientRequest.transcodingConfig, undefined);
-      fileKey = [...payload.clientRequest.storageConfig.fileNamePrefix, 'video.mp4'].join('/');
+      const prefix = payload.clientRequest.storageConfig.fileNamePrefix as string[];
+      assert.ok(prefix.every((part) => /^[a-zA-Z0-9]+$/.test(part)));
+      assert.ok(prefix.join('/').length <= 128);
+      fileKey = [...prefix, 'video.mp4'].join('/');
       return Response.json({resourceId: 'res-1', sid: 'sid-1'});
     }
-    if (path.endsWith('/query')) return Response.json({resourceId: 'res-1', sid: 'sid-1', serverResponse: {}});
+    if (path.endsWith('/query')) {
+      assert.match(path, /\/mode\/mix\/query$/);
+      assert.equal(method, 'GET');
+      return Response.json({resourceId: 'res-1', sid: 'sid-1', serverResponse: {}});
+    }
     if (path.endsWith('/stop')) {
+      assert.match(path, /\/mode\/mix\/stop$/);
+      assert.equal(payload.clientRequest.async_stop, false);
       return Response.json({
         resourceId: 'res-1', sid: 'sid-1',
-        serverResponse: {fileList: [{fileName: 'video.mp4', trackType: 'audio_and_video'}]},
+        serverResponse: {
+          uploadingStatus: 'uploaded',
+          ...(options.omitStopFileList ? {} : {
+            fileListMode: 'json',
+            fileList: [
+              {fileName: 'video.m3u8', trackType: 'audio_and_video'},
+              {fileName: 'video.mp4', trackType: 'audio_and_video'},
+            ],
+          }),
+        },
       });
     }
     throw Error('Unexpected Agora action: ' + path);
   }) as typeof fetch;
   const store: RecordingObjectReader = {
+    async list(_bucket, prefix) {
+      return [...files.keys()].filter((key) => key.startsWith(prefix) && key.endsWith('.mp4'));
+    },
     async exists(_bucket, key) {
       assert.equal(key, fileKey);
       return files.has(key);
@@ -95,6 +124,42 @@ test('Agora hosted recorder accepts blank storage configuration until start, wit
   assert.equal(recorder.readiness().available, false);
   await assert.rejects(recorder.start(room, 'grid', 'H264_720P_30'), RecordingConfigurationError);
   assert.equal((await recorder.status(room)).state, 'idle');
+});
+
+test('Agora room closure stops active capture exactly once without waiting for S3 upload', async () => {
+  const {recorder, calls} = fixture();
+  await recorder.stopIfActive(room);
+  assert.equal(calls.length, 0, 'no recording requires no Agora API calls');
+  await recorder.start(room, 'grid', 'H264_720P_30');
+  await recorder.stopIfActive(room);
+  assert.equal(calls.filter((call) => call.path.endsWith('/stop')).length, 1);
+  await recorder.stopIfActive(room);
+  assert.equal(calls.filter((call) => call.path.endsWith('/stop')).length, 1);
+});
+
+test('Agora stop can omit fileList: locate the uploaded MP4 using the owned S3 prefix', async () => {
+  const {recorder, files, key} = fixture({omitStopFileList: true});
+  await recorder.start(room, 'grid', 'H264_720P_30');
+  assert.equal((await recorder.stop(room)).state, 'processing');
+  files.set(key(), Buffer.from('test-mp4'));
+  const status = await recorder.status(room);
+  assert.equal(status.state, 'completed');
+  assert.equal(status.fileName, 'video.mp4');
+  assert.equal(status.canDownload, true);
+});
+
+test('Agora REST 401 reports Customer ID/Secret guidance without exposing credentials', async () => {
+  const {recorder} = fixture({acquireStatus: 401});
+  await assert.rejects(
+    recorder.start(room, 'grid', 'H264_720P_30'),
+    (error: unknown) => {
+      assert.match(String(error), /HTTP 401/);
+      assert.match(String(error), /Customer ID\/Secret/);
+      assert.doesNotMatch(String(error), /customer-secret/);
+      return true;
+    },
+  );
+  assert.equal((await recorder.status(room)).state, 'failed');
 });
 
 test('Agora cloud recording calls Acquire, Start, Query, Stop and waits for remote MP4', async () => {

@@ -8,7 +8,7 @@
 
 | 媒体供应商 | Demo 录制执行器 | 厂商托管录制 | 存储要求 | MP4 下载 | 实际验收状态 |
 |---|---|---|---|---|---|
-| Agora | `agora-cloud-recording.ts` | Agora Cloud Recording：Acquire/Start/Query/Stop | S3（第一版下载适配；Agora 也支持其他厂商存储，但需对应下载适配） | 通过 S3 读取后由 Demo 下载 | ❌ 真实调用 `acquire` 返回 HTTP 401；未验收 |
+| Agora | `agora-cloud-recording.ts` | Agora Cloud Recording：Acquire/Start/Query/Stop（`mode/mix`） | S3（第一版下载适配；Agora 也支持其他厂商存储，但需对应下载适配） | 通过 S3 读取后由 Demo 下载 | ⏳ 模拟 API 契约已对齐；历史真实调用 `acquire` 返回 HTTP 401，修复后待重新验收 |
 | LiveKit | `livekit-cloud-recording.ts` | LiveKit Egress API，配 LiveKit Cloud 服务 | S3 | 通过 S3 读取后由 Demo 下载 | ✅ **用户确认已可用（2026-10-12）** |
 | Tencent TRTC | `trtc-cloud-recording.ts` | 腾讯云 Create/Describe/DeleteCloudRecording | 默认腾讯 VOD；可选直接写入 AWS S3 | VOD HTTPS 转发，或从 S3 私有读取后由 Demo 下载 | ⏳ 真实环境待验收 |
 | Alibaba ARTC | `artc-vod-recording.ts`（默认）/ `artc-cloud-recording.ts`（旧 OSS） | 阿里云 Live RTC Start/Stop/DescribeRtcCloudRecordingFiles | 默认阿里云 VOD；旧 OSS 可显式启用；**不新增 AWS S3** | VOD GetPlayInfo MP4 HTTPS 转发；旧 OSS 流式下载 | ⏳ 真实环境待验收 |
@@ -40,7 +40,21 @@ AGORA_RECORDING_S3_ACCESS_KEY=
 AGORA_RECORDING_S3_SECRET_KEY=
 ```
 
-Demo Server 使用 **Basic Customer ID/Secret** 调用 `https://api.agora.io/v1/apps/{appid}/cloud_recording`，由后端生成不与客户端重复的录制 UID 和录制专用 RTC Token，执行 `acquire → mode/composite/start → query → stop`。请求中携带服务端 `recordingConfig`、`transcodingConfig`、`recordingFileConfig`（MP4）和 S3 `storageConfig`。只有厂商返回录制标识并且停止后的 MP4 真正出现在存储桶里，才向 Demo 提供下载。**不需要 `AGORA_RECORDING_SDK_JAR` / `AGORA_RECORDING_NATIVE_LIB_DIR` 或 Linux。**
+Demo Server 使用 **Basic Customer ID/Secret** 调用官方 `https://api.sd-rtn.com/v1/apps/{appid}/cloud_recording`，由后端生成不与客户端重复的录制 UID 和录制专用 RTC Token，执行 `acquire → mode/mix/start → mode/mix/query → mode/mix/stop`。请求中携带服务端 `recordingConfig`、嵌套的 `transcodingConfig`、`recordingFileConfig: {avFileType: ['hls', 'mp4']}` 和 S3 `storageConfig`；Agora 官方 **不允许只配置 `['mp4']`**。录制专用 `fileNamePrefix` 由服务端生成，仅含字母数字。停止时请求 `async_stop: false`；若 Stop 响应没有提供 MP4 文件名，则仅在当前任务的独立 S3 前缀下查找 MP4。必须真实确认对象存在，才向 Demo 提供下载。**不需要 `AGORA_RECORDING_SDK_JAR` / `AGORA_RECORDING_NATIVE_LIB_DIR` 或 Linux。**
+
+**本地模拟验收已通过，但未发起 Agora 实际录制请求。** 当前 Demo 下载接口只导出单个 MP4；Agora 混合模式若超过约 2 小时或 2GB 可能自动分段成多个 MP4，完整多段导出尚未实现。另外启用 HLS+MP4 会生成 M3U8/TS 等附加文件，当前 Demo 的下载清理仅删除已下载的 MP4，不会自动清理该任务的所有 HLS 文件；如需清理全部录制产物，应另行设计安全的存储生命周期策略。正式验收请检查 **多人音频是否真的被混入 MP4**，而不仅是文件存在。
+
+新加入的 S3 前缀回退查找使用 `ListObjectsV2`，因此 Agora 使用的 S3 凭据除上传所需的 `s3:PutObject` 外，还需要给**指定存储桶**授予 `s3:ListBucket`、`s3:GetObject`；Demo 下载完成后删除文件还需要 `s3:DeleteObject`。为安全起见，请按录制专用桶和 `flutterrealtimedemo/` 前缀收紧权限，不要使用账户级全权限密钥。如果没有 `s3:ListBucket`，Stop 不返回 `fileList` 时将无法可靠发现 MP4。权限调整必须由用户在 AWS 侧执行，本次没有访问或修改云资源。
+
+官方文档：[Acquire](https://docs.agora.io/en/api-reference/api-ref/cloud-recording/acquire)、[Start](https://docs.agora.io/en/api-reference/api-ref/cloud-recording/start)、[Query](https://docs.agora.io/en/api-reference/api-ref/cloud-recording/query)、[Stop](https://docs.agora.io/en/api-reference/api-ref/cloud-recording/stop)。
+
+#### 结束直播时的录制防漏停策略
+
+普通点击「停止云录制」使用房主鉴权的 `POST /rooms/:code/recording/stop`，Agora 执行 `mode/mix/stop`。房主在直播页点击「结束直播」时，Flutter Room UI **先停止仍在运行的云录制、再请求关闭房间**；录制操作正在启动/停止时会要求等待，避免请求竞态。
+
+服务端有第二道保护：Agora 录制执行器在当前 Demo Server 进程内与路由、房间关闭逻辑共享同一任务表；**房主关闭房间、最后一名成员离开，以及服务器在约 90 秒无心跳后自动清理房间**时，均会先调用 Agora Stop，确认调用成功才删除房间。Stop 失败时保留房间及凭据，以便重试；开始/停止录制与关闭房间操作通过现有的房间队列串行化。手动停止或随后重复关闭不会重复调用 Agora Stop。
+
+**边界**：以上保护覆盖正常请求和服务器仍在运行时的空闲回收，但尚无跨 Demo Server 进程重启的云录制任务持久化；服务器突然崩溃/重启、客户端断网或 Agora REST 持续不可用时，无法绝对保证立刻停止云端录制。Agora `maxIdleTime=30` 是没有订阅到媒体流时的自动结束兜底，而非固定 30 秒最大计费时间；如果房内仍有发布者，不能仅依赖该参数。**建议先点击「停止云录制」、等文件生成并下载，再点击「结束直播」**：直播间删除后原鉴权下载地址将不再可用。
 
 Agora Cloud Recording 可以配置其他云存储厂商，但本次真正写好的 Agora MP4 **读取/下载**适配器是 S3；不要仅把 `storageConfig.vendor` 改成 COS/OSS 却继续使用 S3 下载器。
 

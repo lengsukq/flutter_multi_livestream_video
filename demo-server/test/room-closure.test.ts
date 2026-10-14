@@ -56,3 +56,44 @@ test('partial closure retries only failing provider and retains room until fully
   assert.deepEqual(forgotten, ['classroom', 'live']);
   assert.deepEqual(logs, ['error', 'delete']);
 });
+
+test('a live room is not deleted until its active cloud recorder stops', async () => {
+  const operations: string[] = [];
+  let failStop = true;
+  const provider = {
+    id: 'agora', isConfigured: () => true,
+    closeRoom: async () => { operations.push('media'); },
+  } as unknown as ProviderAdapter;
+  const providerRegistry = new ProviderRegistry([provider]);
+  const roomDirectory = new RoomDirectory();
+  const entry = {
+    provider: 'agora', roomCode: '123456',
+    attendees: [], createdAt: new Date().toISOString(),
+    lastHeartbeatMs: Date.now(),
+  } as unknown as RoomEntry;
+  roomDirectory.register(entry);
+  const close = createRoomClosure({
+    providerRegistry,
+    chatProviderRegistry: new ChatProviderRegistry([]),
+    roomDirectory,
+    classroomDirectory: {forget: () => operations.push('classroom')} as never,
+    liveInteractionDirectory: {forget: () => operations.push('live')} as never,
+    stopActiveRecording: async () => {
+      operations.push('recording-stop');
+      if (failStop) throw Error('Agora Stop HTTP 502');
+    },
+    logEvent: () => {},
+  });
+
+  await assert.rejects(close(entry, 'host ended live'), /Agora Stop HTTP 502/);
+  assert.equal(roomDirectory.get(entry.roomCode), entry);
+  assert.equal(entry.closePending, undefined);
+  assert.deepEqual(operations, ['recording-stop']);
+
+  failStop = false;
+  await close(entry, 'retry ending live');
+  assert.equal(roomDirectory.get(entry.roomCode), null);
+  assert.deepEqual(operations, [
+    'recording-stop', 'recording-stop', 'media', 'classroom', 'live',
+  ]);
+});

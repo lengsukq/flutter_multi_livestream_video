@@ -1,12 +1,14 @@
 import {Readable} from 'node:stream';
 import {
-  GetObjectCommand, HeadObjectCommand, DeleteObjectCommand, S3Client,
+  GetObjectCommand, HeadObjectCommand, DeleteObjectCommand, ListObjectsV2Command, S3Client,
 } from '@aws-sdk/client-s3';
 import {RecordingProviderError} from './livekit-cloud-recording.ts';
 
 /** Credentialed server-side read of files uploaded by a cloud recording vendor. */
 export interface RecordingObjectReader {
   exists(bucket: string, key: string): Promise<boolean>;
+  /** Enumerate verified objects under a server-generated recording prefix. */
+  list?(bucket: string, prefix: string): Promise<string[]>;
   open(bucket: string, key: string): Promise<AsyncIterable<Uint8Array>>;
   remove?(bucket: string, key: string): Promise<void>;
 }
@@ -27,6 +29,26 @@ export function s3RecordingReader(options: {
     ...(options.endpoint ? {endpoint: options.endpoint, forcePathStyle: true} : {}),
   });
   return {
+    async list(bucket, prefix) {
+      try {
+        const keys: string[] = [];
+        let token: string | undefined;
+        do {
+          const page = await client.send(new ListObjectsV2Command({
+            Bucket: bucket, Prefix: prefix, ContinuationToken: token,
+          }));
+          for (const item of page.Contents ?? []) {
+            if (item.Key && item.Key.endsWith('.mp4') && (item.Size ?? 0) > 0) {
+              keys.push(item.Key);
+            }
+          }
+          token = page.IsTruncated ? page.NextContinuationToken : undefined;
+        } while (token);
+        return keys;
+      } catch {
+        throw new RecordingProviderError('Cannot discover recorded MP4 files in the configured S3 bucket.');
+      }
+    },
     async exists(bucket, key) {
       try {
         const response = await client.send(new HeadObjectCommand({Bucket: bucket, Key: key}));

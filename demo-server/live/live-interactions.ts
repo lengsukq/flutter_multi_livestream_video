@@ -7,6 +7,9 @@ export const demoGiftCatalog = Object.freeze([
   { id: 'flower', name: 'Flower', icon: 'flower' },
   { id: 'star', name: 'Star', icon: 'star' },
 ]);
+// Lightweight protection for a payment-free demo, not a virtual-currency
+// spending limit. Allow short gift combos without overwhelming polling clients.
+const maxGiftEventsPerTenSeconds = 20;
 type GiftEvent = { id: string; sequence: number; userId: string; displayName: string;
   recipientId: string; giftId: string; quantity: number; timestamp: string };
 type LikeEvent = { id: string; sequence: number; userId: string; quantity: number; timestamp: string };
@@ -55,7 +58,9 @@ export class LiveInteractionDirectory {
     if (!host) fail('The host is offline', 'invalid-state', 409);
     const now = Date.now();
     const recent = (state.recent.get(userId) ?? []).filter(time => now - time < 10000);
-    if (recent.length >= 5) fail('Please wait before sending more gifts', 'rate-limited', 429);
+    if (recent.length >= maxGiftEventsPerTenSeconds) {
+      fail('Gift combo paused. Try again in a few seconds.', 'rate-limited', 429);
+    }
     recent.push(now); state.recent.set(userId, recent);
     state.revision++;
     state.events.push({ id: crypto.randomUUID(), sequence: state.revision,

@@ -11,6 +11,8 @@ import {
 
 export function registerRecordingRoutes(app: Express, dependencies: {
   resolveRoom(ref: unknown): Promise<RoomEntry | null>;
+  /** Serialize Start/Stop against host close and automatic idle closure. */
+  withRoomOperation?<T>(entry: RoomEntry, operation: () => Promise<T>): Promise<T>;
   recorder?: CloudRecordingExecutor;
   recorders?: ReadonlyMap<string, CloudRecordingExecutor>;
   contractError(
@@ -85,9 +87,15 @@ export function registerRecordingRoutes(app: Express, dependencies: {
               `Available: ${supportedLayouts.join(', ') || 'none'}.`);
           }
           // Native provider integrations continue using their own layout names.
-          return res.json(await recorder.start(room, layout === 'grid' ? 'grid' : 'speaker', preset));
+          const start = () => recorder.start(room, layout === 'grid' ? 'grid' : 'speaker', preset);
+          return res.json(await (dependencies.withRoomOperation
+            ? dependencies.withRoomOperation(entry, start) : start()));
         }
-        if (action === 'stop') return res.json(await recorder.stop(room));
+        if (action === 'stop') {
+          const stop = () => recorder.stop(room);
+          return res.json(await (dependencies.withRoomOperation
+            ? dependencies.withRoomOperation(entry, stop) : stop()));
+        }
         if (action === 'status') {
           const status = await recorder.status(room);
           const readiness = await recorder.readiness?.();

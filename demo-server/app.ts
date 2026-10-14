@@ -82,6 +82,7 @@ import type {
   RoomAttendee,
   RoomMode,
   RoomEntry,
+  NamedRoomEntry,
   RoomSummary,
 } from './types.ts';
 
@@ -279,6 +280,9 @@ const chatProviderRegistry = new ChatProviderRegistry([
 ]);
 const roomDirectory = new RoomDirectory(env.DEMO_ROOM_STATE_PATH?.trim());
 const chatRoomDirectory = new ChatRoomDirectory();
+// Shared between the authenticated recording routes and room closure:
+// a separate executor instance would lose all in-memory Agora resource IDs.
+const agoraCloudRecorder = new AgoraCloudRecording(env);
 
 const {
   generateRoomCode, registerRoom, assertRole, resolveRoom, resolveChimeRoom,
@@ -287,6 +291,11 @@ const {
 const closeRoomUnlocked = createRoomClosure({
   providerRegistry, chatProviderRegistry, roomDirectory,
   classroomDirectory, liveInteractionDirectory, logEvent,
+  stopActiveRecording: async (entry) => {
+    if (entry.provider === 'agora') {
+      await agoraCloudRecorder.stopIfActive(entry as NamedRoomEntry);
+    }
+  },
 });
 const {
   pruneStaleAttendees, withRoomOperation, assertRoomOpen, closeRoom,
@@ -495,10 +504,11 @@ registerLegacyChimeRoutes(app, {
 
 registerRecordingRoutes(app, {
   resolveRoom,
+  withRoomOperation,
   recorders: new Map<string, CloudRecordingExecutor>([
     ['livekit', new LiveKitCloudRecording(env)],
     ['trtc', trtcCloudRecorder],
-    ['agora', new AgoraCloudRecording(env)],
+    ['agora', agoraCloudRecorder],
     ['artc', env.ARTC_RECORDING_STORAGE === 'oss'
       ? new ArtcCloudRecording(env) : new ArtcVodRecording(env)],
     ['chime', new ChimeCloudRecording(env)],

@@ -89,7 +89,7 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
   private async call(method: 'GET' | 'POST', route: string, payload?: object) {
     this.ensureConfigured();
     const response = await this.transport(
-      `https://api.agora.io/v1/apps/${this.appId}/cloud_recording/${route}`,
+      `https://api.sd-rtn.com/v1/apps/${this.appId}/cloud_recording/${route}`,
       {
         method,
         headers: {
@@ -103,9 +103,18 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
         signal: AbortSignal.timeout(15_000),
       },
     );
-    if (!response.ok) throw new RecordingProviderError(
-      `Agora Cloud Recording ${method} ${route.split('/').at(-1)} failed (HTTP ${response.status}).`,
-    );
+    if (!response.ok) {
+      const hint = response.status === 401
+        ? 'Verify the Agora Customer ID/Secret (not the App ID/Certificate).'
+        : response.status === 403
+          ? 'Verify that Cloud Recording is enabled and authorized for this Agora project.'
+          : response.status === 404
+            ? 'Check the Cloud Recording resource ID, SID, mode and endpoint.'
+            : 'Check the Agora REST API response and recording configuration.';
+      throw new RecordingProviderError(
+        `Agora Cloud Recording ${route.split('/').at(-1)} failed (HTTP ${response.status}). ${hint}`,
+      );
+    }
     const data: unknown = await response.json();
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
       throw new RecordingProviderError('Agora Cloud Recording returned invalid JSON.');
@@ -130,7 +139,8 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
       throw new RecordingProviderError('Another Agora cloud recording is active.');
     }
     const uid = String(crypto.randomInt(1, 0x7fffffff));
-    const prefix = ['flutter-realtime-demo', crypto.randomUUID()];
+    // Agora storageConfig.fileNamePrefix permits alphanumerics only.
+    const prefix = ['flutterrealtimedemo', crypto.randomUUID().replaceAll('-', '')];
     const job: Job = {
       id: '', resourceId: '', uid, roomName: room.providerRoomName, roomCode: room.roomCode,
       layout, state: 'starting', bucket: this.bucket, prefix, fileKey: null,
@@ -138,6 +148,13 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
     };
     this.jobs.set(room.roomCode, job);
     try {
+      // Generate the RTC token before acquiring the resource so the paired
+      // acquire/start requests run back-to-back as Agora recommends.
+      const token = buildAgoraRtcToken({
+        appId: this.appId, appCertificate: this.certificate,
+        channelName: job.roomName, uid: Number(uid), role: 'viewer',
+        ttlSeconds: 24 * 60 * 60,
+      });
       const acquired = await this.call('POST', 'acquire', {
         cname: job.roomName, uid, clientRequest: {},
       });
@@ -145,14 +162,9 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
         throw new RecordingProviderError('Agora acquire did not return resourceId.');
       }
       job.resourceId = acquired.resourceId;
-      const token = buildAgoraRtcToken({
-        appId: this.appId, appCertificate: this.certificate,
-        channelName: job.roomName, uid: Number(uid), role: 'viewer',
-        ttlSeconds: 24 * 60 * 60,
-      });
-      // Agora's REST path uses composite; the recording service does mixing.
+      // Agora calls composite (mixed) recording mode "mix" in REST paths.
       const response = await this.call('POST',
-        `resourceid/${encodeURIComponent(job.resourceId)}/mode/composite/start`, {
+        `resourceid/${encodeURIComponent(job.resourceId)}/mode/mix/start`, {
           cname: job.roomName, uid,
           clientRequest: {
             token,
@@ -175,10 +187,9 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
                 backgroundColor: '#000000',
               },
             },
-            // The Demo promises one downloadable MP4 containing both audio
-            // and video; enabling HLS alongside MP4 can produce an MP4 whose
-            // audio is emitted separately as AAC.
-            recordingFileConfig: {avFileType: ['mp4']},
+            // Agora requires HLS together with MP4 in composite mode.
+            // ['mp4'] alone is rejected by the Cloud Recording REST API.
+            recordingFileConfig: {avFileType: ['hls', 'mp4']},
             storageConfig: {
               vendor: 1, region: this.storageRegionCode, bucket: this.bucket,
               accessKey: this.accessKey, secretKey: this.secretKey,
@@ -201,7 +212,7 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
   }
 
   private route(job: Job, action: 'stop' | 'query') {
-    return `resourceid/${encodeURIComponent(job.resourceId)}/sid/${encodeURIComponent(job.id)}/mode/composite/${action}`;
+    return `resourceid/${encodeURIComponent(job.resourceId)}/sid/${encodeURIComponent(job.id)}/mode/mix/${action}`;
   }
 
   private applyFileList(job: Job, response: Record<string, unknown>) {
@@ -214,7 +225,10 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
     const file = files.find((entry: unknown) => {
       const name = entry && typeof entry === 'object'
         ? (entry as {fileName?: unknown}).fileName : null;
-      return typeof name === 'string' && name.endsWith('.mp4') &&
+      const trackType = entry && typeof entry === 'object'
+        ? (entry as {trackType?: unknown}).trackType : undefined;
+      return (trackType == null || trackType === 'audio_and_video') &&
+        typeof name === 'string' && name.endsWith('.mp4') &&
         !name.split('/').some((piece) => !piece || piece === '.' || piece === '..');
     }) as {fileName: string} | undefined;
     if (!file) return;
@@ -223,17 +237,33 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
     job.fileKey = name.startsWith(prefix + '/') ? name : `${prefix}/${name}`;
   }
 
-  async stop(room: NamedRoomEntry) {
-    const job = this.jobs.get(room.roomCode);
-    if (!job?.id) throw new RecordingProviderError('No Agora cloud recording is active.');
+  private async stopRemote(job: Job): Promise<void> {
     if (!job.stopped) {
       const response = await this.call('POST', this.route(job, 'stop'), {
-        cname: job.roomName, uid: job.uid, clientRequest: {},
+        cname: job.roomName, uid: job.uid, clientRequest: {async_stop: false},
       });
       job.stopped = true;
       job.state = 'processing';
       this.applyFileList(job, response);
     }
+  }
+
+  /** Fail-safe for room closure, not a public stop command.
+   * Do not delete the room if Agora has an active recording we cannot stop.
+   */
+  async stopIfActive(room: NamedRoomEntry): Promise<void> {
+    const job = this.jobs.get(room.roomCode);
+    if (!job || job.stopped || job.state === 'completed' || job.state === 'failed') return;
+    if (!job.id) {
+      throw new RecordingProviderError('Agora recording is still starting. Retry ending the room.');
+    }
+    await this.stopRemote(job);
+  }
+
+  async stop(room: NamedRoomEntry) {
+    const job = this.jobs.get(room.roomCode);
+    if (!job?.id) throw new RecordingProviderError('No Agora cloud recording is active.');
+    await this.stopRemote(job);
     return this.status(room);
   }
 
@@ -247,8 +277,24 @@ export class AgoraCloudRecording implements CloudRecordingExecutor {
       const response = await this.call('GET', this.route(job, 'query'));
       this.applyFileList(job, response);
     }
-    if (job.stopped && job.fileKey && job.state !== 'completed') {
-      if (await this.objectReader.exists(job.bucket, job.fileKey)) job.state = 'completed';
+    if (job.stopped && job.state !== 'completed') {
+      if (job.fileKey && await this.objectReader.exists(job.bucket, job.fileKey)) {
+        job.state = 'completed';
+        return this.view(job);
+      }
+      // Agora stop/query may omit fileList. Find the MP4 by the unique,
+      // server-generated S3 prefix instead of leaving the job processing.
+      // Also recover when a returned relative fileName is incorrect.
+      if (this.objectReader.list) {
+        const prefix = job.prefix.join('/') + '/';
+        const candidates = await this.objectReader.list(job.bucket, prefix);
+        job.fileKey = candidates
+          .filter((key) => key.startsWith(prefix) && key.endsWith('.mp4'))
+          .sort()[0] ?? null;
+      }
+      if (job.fileKey && await this.objectReader.exists(job.bucket, job.fileKey)) {
+        job.state = 'completed';
+      }
     }
     return this.view(job);
   }

@@ -11,6 +11,8 @@ export interface RoomClosureDependencies {
   roomDirectory: RoomDirectory;
   classroomDirectory: ClassroomStateDirectory;
   liveInteractionDirectory: LiveInteractionDirectory;
+  /** Stop billable vendor capture before removing room lookup and credentials. */
+  stopActiveRecording?(entry: RoomEntry): Promise<void>;
   logEvent(type: string, message: string): void;
 }
 
@@ -23,6 +25,9 @@ export function createRoomClosure(deps: RoomClosureDependencies) {
     classroomDirectory, liveInteractionDirectory, logEvent } = deps;
 return async function closeRoomUnlocked(entry: RoomEntry, reason: string): Promise<void> {
   const provider = providerRegistry.require(entry.provider);
+  // If the recorder fails to stop, preserve the room and its owner credential
+  // so the host or idle sweeper can retry. Never silently drop the stop route.
+  await deps.stopActiveRecording?.(entry);
   entry.closePending = true;
   let chatError: unknown;
   if (entry.chatProvider && !entry.chatClosed) {
