@@ -88,175 +88,278 @@ class SharedContentStageBar extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Badge Icon & Title
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      badgeIcon ?? Icons.present_to_all_rounded,
-                      size: 16,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: theme.colorScheme.primary,
+          child: LayoutBuilder(
+            builder: (context, constraints) => constraints.maxWidth < 480
+                ? _compactBar(context, s, theme)
+                : Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    runSpacing: 4,
+                    children: [
+                      // Badge Icon & Title
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.12,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              badgeIcon ?? Icons.present_to_all_rounded,
+                              size: 16,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(width: 8),
-                Text(
-                  subtitle!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+                      if (subtitle != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          subtitle!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
 
-              // Whiteboard Pagination Section
-              if (pageCount != null && pageCount! > 0) ...[
-                const SizedBox(width: 8),
-                Container(
-                  height: 18,
-                  width: 1,
-                  color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.5,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                IconButton(
-                  iconSize: 18,
-                  padding: const EdgeInsets.all(4),
-                  constraints: const BoxConstraints(
-                    minWidth: 28,
-                    minHeight: 28,
-                  ),
-                  tooltip: s.t('prevPage'),
-                  onPressed: onPreviousPage,
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    '${(pageIndex ?? 0) + 1} / $pageCount',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  iconSize: 18,
-                  padding: const EdgeInsets.all(4),
-                  constraints: const BoxConstraints(
-                    minWidth: 28,
-                    minHeight: 28,
-                  ),
-                  tooltip: s.t('nextPage'),
-                  onPressed: onNextPage,
-                  icon: const Icon(Icons.chevron_right_rounded),
-                ),
-                if (onAddPage != null)
-                  IconButton(
-                    iconSize: 18,
-                    padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(
-                      minWidth: 28,
-                      minHeight: 28,
-                    ),
-                    tooltip: s.t('addPage'),
-                    onPressed: canAddPage ? onAddPage : null,
-                    icon: const Icon(Icons.add_circle_outline_rounded),
-                  ),
-                if (onDeletePage != null)
-                  IconButton(
-                    iconSize: 18,
-                    padding: const EdgeInsets.all(4),
-                    constraints: const BoxConstraints(
-                      minWidth: 28,
-                      minHeight: 28,
-                    ),
-                    tooltip: s.t('deletePage'),
-                    onPressed: canDeletePage ? onDeletePage : null,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                  ),
-              ],
+                      // Whiteboard Pagination Section
+                      if (pageCount != null && pageCount! > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          height: 18,
+                          width: 1,
+                          color: theme.colorScheme.outlineVariant.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          iconSize: 18,
+                          padding: const EdgeInsets.all(4),
+                          constraints: const BoxConstraints(
+                            minWidth: 28,
+                            minHeight: 28,
+                          ),
+                          tooltip: s.t('prevPage'),
+                          onPressed: onPreviousPage,
+                          icon: const Icon(Icons.chevron_left_rounded),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            '${(pageIndex ?? 0) + 1} / $pageCount',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          iconSize: 18,
+                          padding: const EdgeInsets.all(4),
+                          constraints: const BoxConstraints(
+                            minWidth: 28,
+                            minHeight: 28,
+                          ),
+                          tooltip: s.t('nextPage'),
+                          onPressed: onNextPage,
+                          icon: const Icon(Icons.chevron_right_rounded),
+                        ),
+                        if (onAddPage != null)
+                          IconButton(
+                            iconSize: 18,
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
+                            tooltip: s.t('addPage'),
+                            onPressed: canAddPage ? onAddPage : null,
+                            icon: const Icon(Icons.add_circle_outline_rounded),
+                          ),
+                        if (onDeletePage != null)
+                          IconButton(
+                            iconSize: 18,
+                            padding: const EdgeInsets.all(4),
+                            constraints: const BoxConstraints(
+                              minWidth: 28,
+                              minHeight: 28,
+                            ),
+                            tooltip: s.t('deletePage'),
+                            onPressed: canDeletePage ? onDeletePage : null,
+                            icon: const Icon(Icons.delete_outline_rounded),
+                          ),
+                      ],
 
-              if (extraActions != null) ...[
-                const SizedBox(width: 6),
-                ...extraActions!,
-              ],
+                      if (extraActions != null) ...[
+                        const SizedBox(width: 6),
+                        ...extraActions!,
+                      ],
 
-              // Annotation Toggle
-              if (onToggleAnnotation != null && canAnnotate) ...[
-                const SizedBox(width: 6),
-                Container(
-                  height: 18,
-                  width: 1,
-                  color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.5,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                IconButton.filledTonal(
-                  iconSize: 18,
-                  padding: const EdgeInsets.all(6),
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                  isSelected: annotationEnabled,
-                  tooltip: s.t('annotate'),
-                  onPressed: onToggleAnnotation,
-                  icon: Icon(
-                    annotationEnabled
-                        ? Icons.edit_rounded
-                        : Icons.edit_outlined,
-                  ),
-                ),
-              ],
+                      // Annotation Toggle
+                      if (onToggleAnnotation != null && canAnnotate) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          height: 18,
+                          width: 1,
+                          color: theme.colorScheme.outlineVariant.withValues(
+                            alpha: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton.filledTonal(
+                          iconSize: 18,
+                          padding: const EdgeInsets.all(6),
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                          isSelected: annotationEnabled,
+                          tooltip: s.t('annotate'),
+                          onPressed: onToggleAnnotation,
+                          icon: Icon(
+                            annotationEnabled
+                                ? Icons.edit_rounded
+                                : Icons.edit_outlined,
+                          ),
+                        ),
+                      ],
 
-              // Stop sharing action
-              if (onStop != null) ...[
-                const SizedBox(width: 6),
-                IconButton.filledTonal(
-                  iconSize: 18,
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(
-                      0xFFFF3B30,
-                    ).withValues(alpha: isDark ? 0.25 : 0.12),
-                    foregroundColor: const Color(0xFFFF3B30),
+                      // Stop sharing action
+                      if (onStop != null) ...[
+                        const SizedBox(width: 6),
+                        IconButton.filledTonal(
+                          iconSize: 18,
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(
+                              0xFFFF3B30,
+                            ).withValues(alpha: isDark ? 0.25 : 0.12),
+                            foregroundColor: const Color(0xFFFF3B30),
+                          ),
+                          padding: const EdgeInsets.all(6),
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                          tooltip: stopTooltip ?? s.t('stopSharing'),
+                          onPressed: onStop,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ],
                   ),
-                  padding: const EdgeInsets.all(6),
-                  constraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: 32,
-                  ),
-                  tooltip: stopTooltip ?? s.t('stopSharing'),
-                  onPressed: onStop,
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
-            ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _compactBar(
+    BuildContext context,
+    WhiteboardStrings s,
+    ThemeData theme,
+  ) {
+    final actions = <({String title, VoidCallback? action})>[
+      if (pageCount != null && pageCount! > 0) ...[
+        (title: s.t('prevPage'), action: onPreviousPage),
+        (title: s.t('nextPage'), action: onNextPage),
+        if (onAddPage != null)
+          (title: s.t('addPage'), action: canAddPage ? onAddPage : null),
+        if (onDeletePage != null)
+          (
+            title: s.t('deletePage'),
+            action: canDeletePage ? onDeletePage : null,
+          ),
+      ],
+      if (onToggleAnnotation != null && canAnnotate)
+        (title: s.t('annotate'), action: onToggleAnnotation),
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Icon(
+              badgeIcon ?? Icons.present_to_all_rounded,
+              size: 16,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  if (pageCount != null && pageCount! > 0)
+                    Text(
+                      '${(pageIndex ?? 0) + 1} / $pageCount',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                ],
+              ),
+            ),
+            if (actions.isNotEmpty)
+              PopupMenuButton<VoidCallback>(
+                tooltip: s.zh ? '共享内容操作' : 'Shared content actions',
+                onSelected: (action) => action(),
+                itemBuilder: (_) => [
+                  for (final item in actions)
+                    PopupMenuItem<VoidCallback>(
+                      value: item.action,
+                      enabled: item.action != null,
+                      child: Text(item.title),
+                    ),
+                ],
+              ),
+            if (onStop != null)
+              IconButton(
+                tooltip: stopTooltip ?? s.t('stopSharing'),
+                onPressed: onStop,
+                color: const Color(0xFFFF3B30),
+                icon: const Icon(Icons.close_rounded),
+              ),
+          ],
+        ),
+        if (extraActions != null) Wrap(children: extraActions!),
+      ],
     );
   }
 }

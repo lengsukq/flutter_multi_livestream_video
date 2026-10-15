@@ -15,6 +15,7 @@ class RealtimeMeetingFilmstripStage extends StatelessWidget {
     this.onToggleLayout,
     this.filmstripHeight = 110.0,
     this.bottomControlsInset = 0,
+    this.showFilmstrip = true,
   });
 
   final RealtimeMeetingTileData primaryParticipant;
@@ -22,6 +23,7 @@ class RealtimeMeetingFilmstripStage extends StatelessWidget {
   final ValueChanged<RealtimeMeetingTileData>? onSelectParticipant;
   final VoidCallback? onToggleLayout;
   final double filmstripHeight;
+  final bool showFilmstrip;
 
   /// Space reserved for a floating dock beneath the filmstrip on wide stages.
   final double bottomControlsInset;
@@ -34,10 +36,10 @@ class RealtimeMeetingFilmstripStage extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 600;
+        final hasFilmstrip = showFilmstrip && participants.isNotEmpty;
         final overlayThumbnails = !compact && constraints.maxHeight >= 360;
         final overlayLabelBottom = overlayThumbnails
-            ? bottomControlsInset +
-                  (participants.isNotEmpty ? filmstripHeight + 22 : 14)
+            ? bottomControlsInset + (hasFilmstrip ? filmstripHeight + 22 : 14)
             : 14.0;
 
         final mainVideo = Padding(
@@ -114,37 +116,11 @@ class RealtimeMeetingFilmstripStage extends StatelessWidget {
             ),
           ),
         );
-        final filmstrip = participants.isEmpty
-            ? const SizedBox.shrink()
-            : Container(
-                height: compact ? 92 : filmstripHeight,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                child: LayoutBuilder(
-                  builder: (context, stripConstraints) {
-                    final tileWidth = compact ? 120.0 : 156.0;
-                    final contentWidth =
-                        participants.length * tileWidth +
-                        (participants.length - 1) * 10;
-                    final inset = contentWidth < stripConstraints.maxWidth
-                        ? (stripConstraints.maxWidth - contentWidth) / 2
-                        : 0.0;
-                    return ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: EdgeInsets.symmetric(horizontal: inset),
-                      itemCount: participants.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 10),
-                      itemBuilder: (context, index) => _buildFilmstripTile(
-                        context,
-                        participants[index],
-                        compact: compact,
-                      ),
-                    );
-                  },
-                ),
-              );
+        final filmstrip = RealtimeMeetingParticipantStrip(
+          participants: participants,
+          onSelectParticipant: onSelectParticipant,
+          height: filmstripHeight,
+        );
 
         // Keep the stage dominant like the reference: on roomy viewports
         // thumbnails float over the video; on phones/short windows they get
@@ -153,7 +129,7 @@ class RealtimeMeetingFilmstripStage extends StatelessWidget {
           return Column(
             children: [
               Expanded(child: mainVideo),
-              if (participants.isNotEmpty) filmstrip,
+              if (hasFilmstrip) filmstrip,
             ],
           );
         }
@@ -161,7 +137,7 @@ class RealtimeMeetingFilmstripStage extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             mainVideo,
-            if (participants.isNotEmpty)
+            if (hasFilmstrip)
               Positioned(
                 left: 0,
                 right: 0,
@@ -171,102 +147,6 @@ class RealtimeMeetingFilmstripStage extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildFilmstripTile(
-    BuildContext context,
-    RealtimeMeetingTileData item, {
-    required bool compact,
-  }) {
-    final style = RealtimeStyle.of(context);
-    final isDark = style.isDark;
-    final width = compact ? 120.0 : 156.0;
-
-    return RealtimeGlassPressable(
-      borderRadius: 14,
-      onTap: () => onSelectParticipant?.call(item),
-      child: Container(
-        width: width,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(
-            RealtimeUiThemeExtension.of(context).controlRadius,
-          ),
-          border: Border.all(
-            color: item.isSpeaking
-                ? RealtimeUiTokens.appleTeal
-                : (isDark ? const Color(0x2EFFFFFF) : const Color(0x1F000000)),
-            width: item.isSpeaking ? 1.8 : 0.8,
-          ),
-          color: isDark
-              ? RealtimeUiTokens.canvasDarkElevated
-              : const Color(0xFFF5F5F7),
-          boxShadow: RealtimeUiTokens.iosCardShadow,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(13),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              item.videoWidget ??
-                  _buildAvatarFallback(context, item, small: true),
-
-              // Bottom Overlay: Mute icon + Name
-              Positioned(
-                left: 6,
-                right: 6,
-                bottom: 6,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.compactRadius,
-                  ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.compactRadius,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            item.isMuted
-                                ? Icons.mic_off_rounded
-                                : Icons.mic_rounded,
-                            size: 13,
-                            color: item.isMuted
-                                ? RealtimeUiTokens.appleDanger
-                                : RealtimeUiTokens.appleTeal,
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              item.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11.0,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 

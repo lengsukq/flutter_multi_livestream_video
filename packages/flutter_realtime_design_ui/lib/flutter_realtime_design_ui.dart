@@ -39,4 +39,5 @@ part 'src/show_realtime_glass_bottom_sheet.dart';
 part 'src/realtime_workspace_shell.dart';
 part 'src/realtime_meeting_tile_data.dart';
 part 'src/realtime_meeting_filmstrip_stage.dart';
+part 'src/realtime_meeting_participant_strip.dart';
 part 'src/realtime_idle_controls.dart';

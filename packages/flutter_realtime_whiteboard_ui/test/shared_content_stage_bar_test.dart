@@ -95,4 +95,38 @@ void main() {
       expect(stopped, true);
     },
   );
+  testWidgets(
+    'shared content actions remain reachable at narrow widths with large text',
+    (tester) async {
+      var stopped = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SizedBox(
+              width: 220,
+              child: SharedContentStageBar(
+                title: 'Whiteboard presentation with a long name',
+                subtitle: 'Shared by a participant with a long name',
+                pageIndex: 0,
+                pageCount: 20,
+                onNextPage: () {},
+                onAddPage: () {},
+                canAddPage: true,
+                onStop: () => stopped = true,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      expect(stopped, isTrue);
+    },
+  );
 }

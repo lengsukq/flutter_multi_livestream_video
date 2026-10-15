@@ -64,6 +64,11 @@ Existing imports through media UI and SDK UI continue to work.
   navigation below that width; the host owns selection and content state.
 - `RealtimeMeetingFilmstripStage`, `RealtimeMeetingTileData`: arbitrary widget
   content in a focused media stage and participant strip, without media types.
+- `RealtimeMeetingParticipantStrip`: scrollable, keyboard-accessible participant
+  thumbnails with an optional leading content preview. `showFilmstrip` hides
+  the strip in `RealtimeMeetingFilmstripStage` without changing its main tile.
+- `RealtimeIdleControls.reserveControlsSpace`: reserve the dock's actual height
+  below a document stage; normal camera layouts retain floating controls.
 
 Use standard `FilledButton`, `IconButton`, `TextField` and `NavigationDestination`
 with `RealtimeUiTheme` when a custom component is unnecessary. Use glass for

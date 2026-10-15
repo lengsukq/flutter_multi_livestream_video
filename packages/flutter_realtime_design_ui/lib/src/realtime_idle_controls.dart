@@ -15,6 +15,7 @@ class RealtimeIdleControls extends StatefulWidget {
     this.hideAfter = const Duration(seconds: 4),
     this.controlsBottom = 8,
     this.controlsMaxWidth = 800,
+    this.reserveControlsSpace = false,
   });
 
   final Widget child;
@@ -26,6 +27,10 @@ class RealtimeIdleControls extends StatefulWidget {
   final Duration hideAfter;
   final double controlsBottom;
   final double controlsMaxWidth;
+
+  /// Lay controls below the stage instead of covering shared documents.
+  /// Space stays reserved while controls fade so the content does not jump.
+  final bool reserveControlsSpace;
 
   /// Whether controls should be shown inside a descendant stage overlay.
   /// Standalone stages without an idle container always show their actions.
@@ -124,6 +129,29 @@ class _RealtimeIdleControlsState extends State<RealtimeIdleControls> {
         MediaQuery.disableAnimationsOf(context) ||
         !RealtimeUiThemeExtension.of(context).motionEnabled;
     final duration = reduceMotion ? Duration.zero : RealtimeUiTokens.animNormal;
+    final controls = IgnorePointer(
+      ignoring: hidden,
+      child: AnimatedSlide(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        offset: hidden ? const Offset(0, 0.25) : Offset.zero,
+        child: AnimatedOpacity(
+          duration: duration,
+          opacity: hidden ? 0 : 1,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: widget.controlsMaxWidth),
+              child: _focusableControls(
+                widget.controls,
+                _controlsFocus,
+                hidden,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     return Focus(
       canRequestFocus: false,
       onKeyEvent: (_, _) {
@@ -141,7 +169,23 @@ class _RealtimeIdleControlsState extends State<RealtimeIdleControls> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              widget.child,
+              if (widget.reserveControlsSpace)
+                Column(
+                  children: [
+                    Expanded(child: widget.child),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        12,
+                        0,
+                        12,
+                        widget.controlsBottom,
+                      ),
+                      child: controls,
+                    ),
+                  ],
+                )
+              else
+                widget.child,
               if (widget.topControls != null)
                 Positioned(
                   top: 8,
@@ -165,36 +209,13 @@ class _RealtimeIdleControlsState extends State<RealtimeIdleControls> {
                     ),
                   ),
                 ),
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: widget.controlsBottom,
-                child: IgnorePointer(
-                  ignoring: hidden,
-                  child: AnimatedSlide(
-                    duration: duration,
-                    curve: Curves.easeOutCubic,
-                    offset: hidden ? const Offset(0, 0.25) : Offset.zero,
-                    child: AnimatedOpacity(
-                      duration: duration,
-                      opacity: hidden ? 0 : 1,
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: widget.controlsMaxWidth,
-                          ),
-                          child: _focusableControls(
-                            widget.controls,
-                            _controlsFocus,
-                            hidden,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+              if (!widget.reserveControlsSpace)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: widget.controlsBottom,
+                  child: controls,
                 ),
-              ),
             ],
           ),
         ),
