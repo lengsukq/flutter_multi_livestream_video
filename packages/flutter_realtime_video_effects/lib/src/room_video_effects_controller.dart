@@ -4,7 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_realtime_video_effects/flutter_realtime_video_effects.dart';
 
 /// Owns the single processed source and serializes source/publication changes.
-class RoomVideoEffectsController implements RealtimeVideoEffectsController {
+class RoomVideoEffectsController
+    implements RealtimeVideoEffectsController, RealtimeCameraEffectsController {
   RoomVideoEffectsController({
     required this.media,
     required this.providerId,
@@ -61,6 +62,58 @@ class RoomVideoEffectsController implements RealtimeVideoEffectsController {
   @override
   Future<void> prepareVideoEffects(MediaLocalPreviewSettings settings) =>
       _serializeVideoOperation(() => _prepareVideoEffects(settings));
+
+  @override
+  Future<void> setCameraEnabled(bool enabled) =>
+      _serializeVideoOperation(() async {
+        if (_disposed) {
+          throw RealtimeException(
+            code: RealtimeErrorCode.invalidState,
+            message: 'The room has been disposed.',
+            providerId: providerId,
+          );
+        }
+        final active = media.session;
+        if (active is! InteractiveMediaSession ||
+            !active.capabilities.canPublishVideo) {
+          throw RealtimeException(
+            code: RealtimeErrorCode.unsupportedFeature,
+            message: 'Camera publishing is unavailable for this room.',
+            providerId: providerId,
+          );
+        }
+
+        final source = _processedVideoSource;
+        if (!enabled) {
+          // Stop provider publication first, then stop the camera capture.
+          await active.setVideoEnabled(false);
+          if (source != null) {
+            await _videoEffectsBridge.setEnabled(source, false);
+          }
+          return;
+        }
+
+        // Source capture must be running before the provider publishes an
+        // already attached source. A previously closed camera is the case
+        // where merely setting the provider's video flag can be black.
+        if (source != null) {
+          await _videoEffectsBridge.setEnabled(source, true);
+        }
+        try {
+          await active.setVideoEnabled(true);
+        } catch (_) {
+          // Never leave the processed camera capturing after a failed
+          // publish. The caller still receives the original error.
+          if (source != null) {
+            try {
+              await _videoEffectsBridge.setEnabled(source, false);
+            } catch (_) {
+              // Preserve the actual publish failure.
+            }
+          }
+          rethrow;
+        }
+      });
 
   Future<void> _prepareVideoEffects(MediaLocalPreviewSettings settings) async {
     final active = media.session;

@@ -8,6 +8,15 @@ abstract interface class RealtimeVideoEffectsController
   Future<void> dispose();
 }
 
+/// Optional camera coordination for video-effects implementations.
+///
+/// Kept separate from [RealtimeVideoEffectsController] to preserve
+/// compatibility with third-party effects controllers. When supported,
+/// camera publication and background changes share one operation queue.
+abstract interface class RealtimeCameraEffectsController {
+  Future<void> setCameraEnabled(bool enabled);
+}
+
 abstract interface class RealtimeVideoEffects {
   Future<bool> isSupported();
   Future<MediaLocalPreviewSession> createPreview({

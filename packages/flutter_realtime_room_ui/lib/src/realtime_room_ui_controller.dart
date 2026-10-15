@@ -287,7 +287,7 @@ class RealtimeRoomUiController extends ChangeNotifier {
     if (!canUseCamera) return;
     await execute(
       RealtimeRoomUiAction.camera,
-      () => _interactive!.setVideoEnabled(!_snapshot.localVideoEnabled),
+      () => room.setCameraEnabled(!_snapshot.localVideoEnabled),
     );
   }
 

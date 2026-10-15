@@ -210,6 +210,42 @@ class RealtimeRoom implements MediaBackgroundEffectsController {
       _effects?.backgroundEffect ?? const MediaBackgroundEffect.none();
   Future<void> prepareVideoEffects(MediaLocalPreviewSettings settings) =>
       _effects?.prepareVideoEffects(settings) ?? Future<void>.value();
+
+  /// Set camera publication through the SDK's video-effects pipeline.
+  ///
+  /// Unlike calling `room.media.session.setVideoEnabled` directly, this
+  /// serializes camera changes with background selection when the installed
+  /// effects controller supports coordination. Headless clients should use
+  /// this whenever they expose virtual backgrounds.
+  Future<void> setCameraEnabled(bool enabled) {
+    if (_disposed) {
+      return Future<void>.error(
+        const RealtimeException(
+          code: RealtimeErrorCode.invalidState,
+          message: 'The room has been disposed.',
+        ),
+      );
+    }
+    final effects = _effects;
+    if (effects is RealtimeCameraEffectsController) {
+      return (effects as RealtimeCameraEffectsController).setCameraEnabled(
+        enabled,
+      );
+    }
+    final session = media.session;
+    if (session is InteractiveMediaSession &&
+        session.capabilities.canPublishVideo) {
+      return session.setVideoEnabled(enabled);
+    }
+    return Future<void>.error(
+      RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message: 'Camera publishing is unavailable for this room.',
+        providerId: providerId,
+      ),
+    );
+  }
+
   @override
   Future<void> setBackgroundEffect(MediaBackgroundEffect effect) =>
       _effects?.setBackgroundEffect(effect) ??

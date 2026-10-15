@@ -55,6 +55,30 @@ void main() {
     );
 
     test(
+      'composable SDK camera button shares the headless effects pipeline',
+      () async {
+        final platform = _FakeEffectsPlatform();
+        final session = _FakeProcessedMediaSession();
+        await session.join(
+          MediaJoinInfo(
+            providerId: session.providerId,
+            roomCode: 'effects',
+            participantId: 'local',
+            role: session.role,
+          ),
+        );
+        final room = _effectsRoom(platform, session);
+        final ui = RealtimeRoomUiController(room);
+        await ui.setBackgroundEffect(const MediaBackgroundEffect.blur());
+        await ui.toggleCamera();
+        expect(platform.enabled.last, isTrue);
+        expect(session.snapshot.localVideoEnabled, isTrue);
+        ui.dispose();
+        await room.dispose();
+      },
+    );
+
+    test(
       'successful protection restores only a previously enabled camera',
       () async {
         final platform = _FakeEffectsPlatform();
@@ -76,6 +100,83 @@ void main() {
       expect(room.backgroundEffect, const MediaBackgroundEffect.blur());
       await room.dispose();
     });
+
+    test(
+      'headless camera-off background selection then camera-on enables capture',
+      () async {
+        final platform = _FakeEffectsPlatform();
+        final session = _FakeProcessedMediaSession();
+        final room = _effectsRoom(platform, session);
+        expect(session.snapshot.localVideoEnabled, isFalse);
+
+        await room.setBackgroundEffect(const MediaBackgroundEffect.blur());
+        expect(platform.enabled.last, isFalse);
+        expect(session.snapshot.localVideoEnabled, isFalse);
+
+        await room.setCameraEnabled(true);
+        expect(session.snapshot.localVideoEnabled, isTrue);
+        expect(platform.enabled.last, isTrue);
+        expect(session.attachedSources, hasLength(1));
+        expect(room.backgroundEffect, const MediaBackgroundEffect.blur());
+
+        await room.setCameraEnabled(false);
+        expect(session.snapshot.localVideoEnabled, isFalse);
+        expect(platform.enabled.last, isFalse);
+
+        await room.setBackgroundEffect(const MediaBackgroundEffect.none());
+        await room.setCameraEnabled(true);
+        expect(session.snapshot.localVideoEnabled, isTrue);
+        expect(platform.enabled.last, isTrue);
+        expect(room.backgroundEffect, const MediaBackgroundEffect.none());
+        await room.dispose();
+      },
+    );
+
+    test(
+      'camera-on waits for pending background creation before publication',
+      () async {
+        final gate = Completer<void>();
+        final platform = _FakeEffectsPlatform()..createGate = gate;
+        final session = _FakeProcessedMediaSession();
+        final room = _effectsRoom(platform, session);
+
+        final apply = room.setBackgroundEffect(
+          const MediaBackgroundEffect.blur(),
+        );
+        final camera = room.setCameraEnabled(true);
+        await Future<void>.delayed(Duration.zero);
+        expect(session.snapshot.localVideoEnabled, isFalse);
+        expect(session.attachedSources, isEmpty);
+
+        gate.complete();
+        await Future.wait([apply, camera]);
+        expect(session.snapshot.localVideoEnabled, isTrue);
+        expect(platform.enabled.last, isTrue);
+        expect(session.attachedSources, hasLength(1));
+        await room.dispose();
+      },
+    );
+
+    test(
+      'queued camera-off wins over a concurrent background switch',
+      () async {
+        final gate = Completer<void>();
+        final platform = _FakeEffectsPlatform()..createGate = gate;
+        final session = _FakeProcessedMediaSession();
+        final room = _effectsRoom(platform, session);
+        final apply = room.setBackgroundEffect(
+          const MediaBackgroundEffect.blur(),
+        );
+        final start = room.setCameraEnabled(true);
+        final stop = room.setCameraEnabled(false);
+        await Future<void>.delayed(Duration.zero);
+        gate.complete();
+        await Future.wait([apply, start, stop]);
+        expect(session.snapshot.localVideoEnabled, isFalse);
+        expect(platform.enabled.last, isFalse);
+        await room.dispose();
+      },
+    );
 
     test('unsupported effects preserve baseline camera when off', () async {
       final platform = _FakeEffectsPlatform();
