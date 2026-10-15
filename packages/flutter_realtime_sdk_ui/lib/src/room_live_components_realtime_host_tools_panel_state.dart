@@ -479,6 +479,24 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                   ),
 
                   // 1.3 Virtual Background Effects
+                  if (controller.snapshot.capabilities.canPublishVideo &&
+                      !controller.room.backgroundCapabilities.isSupported)
+                    RealtimeCard(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(14),
+                      radius: RealtimeUiTokens.cardRadius,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.blur_off_outlined),
+                        title: Text(strings.virtualBackground),
+                        subtitle: Text(
+                          isZh
+                              ? '当前设备、平台或供应商暂不支持，或未配置视频特效服务。'
+                              : 'Unavailable for this device, platform or provider, or video effects are not configured.',
+                        ),
+                        enabled: false,
+                      ),
+                    ),
                   if (controller.room.backgroundCapabilities.isSupported)
                     RealtimeCard(
                       margin: const EdgeInsets.only(bottom: 16),
@@ -516,7 +534,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      strings.backgroundEffects,
+                                      strings.virtualBackground,
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,

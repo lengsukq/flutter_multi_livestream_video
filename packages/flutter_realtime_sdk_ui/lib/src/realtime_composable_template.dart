@@ -114,6 +114,7 @@ class _RealtimeComposableRoomTemplateState
                         if (!isViewer) ...[
                           const RealtimeMicrophoneButton(),
                           const RealtimeCameraButton(),
+                          RealtimeBackgroundEffectsButton(iconOnly: !wide),
                           const RealtimeSwitchCameraButton(),
                           const RealtimeMediaDevicePicker(
                             kind: MediaDeviceKind.microphone,

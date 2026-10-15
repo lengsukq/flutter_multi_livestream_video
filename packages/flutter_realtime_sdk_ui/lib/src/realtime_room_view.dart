@@ -137,6 +137,7 @@ class _RealtimeRoomViewState extends State<RealtimeRoomView> {
           room: widget.room.media,
           renderer: widget.room.renderer,
           backgroundEffects: widget.room,
+          onSetCameraEnabled: widget.room.setCameraEnabled,
           chatSession: widget.room.chat,
           chatModeration: widget.room.chatModeration,
           liveLikes: _liveLikes,

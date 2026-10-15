@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'room_ui_controller.dart';
+import 'realtime_background_effects_button.dart';
 
 class RealtimeRoomActionButton extends StatelessWidget {
   const RealtimeRoomActionButton({
@@ -33,6 +34,8 @@ class RealtimeRoomActionButton extends StatelessWidget {
           RealtimeRoomUiAction.microphone => !snapshot.localMuted,
           RealtimeRoomUiAction.camera => snapshot.localVideoEnabled,
           RealtimeRoomUiAction.screenShare => snapshot.localScreenShareEnabled,
+          RealtimeRoomUiAction.backgroundEffect =>
+            controller.room.backgroundEffect.enabled,
           _ => false,
         };
         final supported = switch (action) {
@@ -46,7 +49,8 @@ class RealtimeRoomActionButton extends StatelessWidget {
           RealtimeRoomUiAction.sendMessage => controller.room.chat != null,
           RealtimeRoomUiAction.participantManagement => false,
           RealtimeRoomUiAction.classroom => false,
-          RealtimeRoomUiAction.backgroundEffect => false,
+          RealtimeRoomUiAction.backgroundEffect =>
+            snapshot.capabilities.canPublishVideo,
           RealtimeRoomUiAction.liveLike =>
             controller.room.liveInteractions != null,
         };
@@ -101,7 +105,8 @@ class RealtimeRoomActionButton extends StatelessWidget {
             RealtimeRoomUiAction.sendMessage => Future.value(),
             RealtimeRoomUiAction.participantManagement => Future.value(),
             RealtimeRoomUiAction.classroom => Future.value(),
-            RealtimeRoomUiAction.backgroundEffect => Future.value(),
+            RealtimeRoomUiAction.backgroundEffect =>
+              showRealtimeBackgroundEffectsSheet(context),
             RealtimeRoomUiAction.liveLike => controller.sendLiveLike(),
           };
           unawaited(

@@ -18,6 +18,7 @@ class LiveRoomDock extends StatelessWidget {
     required this.onOpenInput,
     required this.onCloseInput,
     required this.runAction,
+    this.onSetCameraEnabled,
     required this.backgroundCapabilities,
     required this.backgroundEffect,
     required this.onBackground,
@@ -36,6 +37,7 @@ class LiveRoomDock extends StatelessWidget {
   final VoidCallback onOpenInput;
   final VoidCallback onCloseInput;
   final Future<void> Function(Future<void> Function()) runAction;
+  final Future<void> Function(bool enabled)? onSetCameraEnabled;
   final MediaBackgroundCapabilities backgroundCapabilities;
   final MediaBackgroundEffect backgroundEffect;
   final VoidCallback onBackground;
@@ -97,7 +99,9 @@ class LiveRoomDock extends StatelessWidget {
               danger: !snapshot.localVideoEnabled,
               active: snapshot.localVideoEnabled,
               onPressed: () => runAction(
-                () => interactive.setVideoEnabled(!snapshot.localVideoEnabled),
+                () => (onSetCameraEnabled ?? interactive.setVideoEnabled)(
+                  !snapshot.localVideoEnabled,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -121,9 +125,7 @@ class LiveRoomDock extends StatelessWidget {
           ],
 
           // Host tool: Virtual Background / Beauty
-          if (isHost &&
-              caps.canPublishVideo &&
-              backgroundCapabilities.isSupported) ...[
+          if (isHost && caps.canPublishVideo) ...[
             RealtimeGlassIconButton(
               tooltip: strings.virtualBackground,
               icon: Icons.auto_fix_high_rounded,

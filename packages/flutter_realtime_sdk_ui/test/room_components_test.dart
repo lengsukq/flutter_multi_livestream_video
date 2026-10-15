@@ -6,6 +6,102 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 void main() {
+  testWidgets('background controls explain unavailable platform support', (
+    tester,
+  ) async {
+    final room = _room(_FakeMediaSession());
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(
+            body: Column(
+              children: [
+                RealtimeBackgroundEffectsButton(),
+                RealtimeRoomActionButton(
+                  action: RealtimeRoomUiAction.backgroundEffect,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(OutlinedButton));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('video-effects service is not configured'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(RealtimeRoomActionButton));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('video-effects service is not configured'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('background effects are hidden from viewer media roles', (
+    tester,
+  ) async {
+    final media = _FakeMediaSession(role: MediaRole.viewer);
+    media._emit(
+      media.snapshot.copyWith(
+        capabilities: const MediaCapabilities.broadcastViewer(),
+      ),
+    );
+    final room = _room(media);
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(body: RealtimeBackgroundEffectsButton()),
+        ),
+      ),
+    );
+    expect(find.byType(OutlinedButton), findsNothing);
+  });
+
+  testWidgets('background selector applies blur via SDK shared controller', (
+    tester,
+  ) async {
+    final media = _FakeMediaSession();
+    final effects = _FakeRealtimeVideoEffects();
+    final room = _room(
+      media,
+      videoEffects: effects,
+      effectsCapabilities: const MediaBackgroundCapabilities(canBlur: true),
+    );
+    addTearDown(room.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimeRoomUiScope(
+          room: room,
+          child: const Scaffold(body: RealtimeBackgroundEffectsButton()),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(OutlinedButton));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(BackgroundEffectSelector),
+        matching: find.text('Virtual background'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Background blur'));
+    await tester.pumpAndSettle();
+    expect(
+      effects.controller.backgroundEffect.type,
+      MediaBackgroundEffectType.blur,
+    );
+  });
+
   testWidgets('broadcast controls toggle media and disappear for viewers', (
     tester,
   ) async {
@@ -375,6 +471,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(RealtimeHostToolsPanel), findsOneWidget);
+      // Background capability guidance adds an item above extra tools.
+      // Verify that host controls remain reachable through normal scrolling
+      // rather than assuming every section fits the initial viewport.
+      await tester.scrollUntilVisible(
+        find.text('SheetExtraTool'),
+        220,
+        scrollable: find.descendant(
+          of: find.byType(RealtimeHostToolsPanel),
+          matching: find.byType(Scrollable),
+        ),
+      );
       expect(find.text('SheetExtraTool'), findsOneWidget);
 
       // Tap close button in header
@@ -441,6 +548,7 @@ void main() {
       expect(find.byType(RealtimeRoomUiScope), findsOneWidget);
       expect(find.byType(RealtimeVideoGrid), findsOneWidget);
       expect(find.byType(RealtimeMicrophoneButton), findsOneWidget);
+      expect(find.byType(RealtimeBackgroundEffectsButton), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
     await tester.binding.setSurfaceSize(null);
@@ -620,6 +728,49 @@ void main() {
   });
 }
 
+class _FakeRealtimeVideoEffects implements RealtimeVideoEffects {
+  final controller = _FakeVideoEffectsController();
+
+  @override
+  Future<bool> isSupported() async => true;
+  @override
+  Future<MediaLocalPreviewSession> createPreview({
+    required String providerId,
+    required MediaRole role,
+  }) => throw UnimplementedError();
+  @override
+  RealtimeVideoEffectsController createController({
+    required MediaRoomSession media,
+    required MediaBackgroundCapabilities capabilities,
+    required void Function(RealtimeException) reportError,
+  }) => controller;
+}
+
+class _FakeVideoEffectsController implements RealtimeVideoEffectsController {
+  MediaBackgroundEffect _effect = const MediaBackgroundEffect.none();
+
+  @override
+  MediaBackgroundCapabilities get backgroundCapabilities =>
+      const MediaBackgroundCapabilities(canBlur: true);
+
+  @override
+  MediaBackgroundEffect get backgroundEffect => _effect;
+
+  @override
+  Future<void> setBackgroundEffect(MediaBackgroundEffect effect) async {
+    _effect = effect;
+  }
+
+  @override
+  Future<void> prepareVideoEffects(MediaLocalPreviewSettings settings) async {}
+  @override
+  Future<void> release() async {}
+  @override
+  void beginDisposal() {}
+  @override
+  Future<void> dispose() async {}
+}
+
 class _DeferredMuteSession extends _FakeMediaSession {
   final Completer<void> _ready = Completer<void>();
   void complete() => _ready.complete();
@@ -784,13 +935,20 @@ class _RosterModeration extends Fake
   Future<void> removeMember(String userId) async {}
 }
 
-RealtimeRoom _room(_FakeMediaSession media) => RealtimeRoom(
+RealtimeRoom _room(
+  _FakeMediaSession media, {
+  RealtimeVideoEffects? videoEffects,
+  MediaBackgroundCapabilities effectsCapabilities =
+      const MediaBackgroundCapabilities.none(),
+}) => RealtimeRoom(
   media: MediaRoomSession.direct(
     roomCode: 'room-123',
     participantId: 'self',
     session: media,
   ),
   renderer: const _FakeRenderer(),
+  videoEffects: videoEffects,
+  effectsCapabilities: effectsCapabilities,
   disposeClients: () {},
 );
 

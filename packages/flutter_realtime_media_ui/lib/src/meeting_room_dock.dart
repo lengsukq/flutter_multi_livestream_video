@@ -11,6 +11,7 @@ class MeetingRoomDock extends StatelessWidget {
     required this.interactive,
     required this.canEnableMicrophone,
     required this.runAction,
+    this.onSetCameraEnabled,
     required this.contentControls,
     required this.extraControls,
     required this.participantsOpen,
@@ -20,6 +21,8 @@ class MeetingRoomDock extends StatelessWidget {
     required this.unreadChatCount,
     required this.onChat,
     required this.onMore,
+    this.onBackgroundEffects,
+    this.backgroundEffectsActive = false,
     required this.onLeave,
   });
   final MediaSnapshot snapshot;
@@ -27,6 +30,7 @@ class MeetingRoomDock extends StatelessWidget {
   final InteractiveMediaSession? interactive;
   final bool Function()? canEnableMicrophone;
   final Future<void> Function(Future<void> Function()) runAction;
+  final Future<void> Function(bool enabled)? onSetCameraEnabled;
   final Widget? contentControls;
   final List<Widget> extraControls;
   final bool participantsOpen;
@@ -36,6 +40,8 @@ class MeetingRoomDock extends StatelessWidget {
   final int unreadChatCount;
   final VoidCallback onChat;
   final VoidCallback onMore;
+  final VoidCallback? onBackgroundEffects;
+  final bool backgroundEffectsActive;
   final VoidCallback onLeave;
   @override
   Widget build(BuildContext context) {
@@ -78,8 +84,23 @@ class MeetingRoomDock extends StatelessWidget {
           isActive: snapshot.localVideoEnabled,
           isAlert: !snapshot.localVideoEnabled,
           onTap: () => runAction(
-            () => interactive.setVideoEnabled(!snapshot.localVideoEnabled),
+            () => (onSetCameraEnabled ?? interactive.setVideoEnabled)(
+              !snapshot.localVideoEnabled,
+            ),
           ),
+        ),
+      );
+    }
+
+    // Full-width meeting UI exposes this alongside the camera. Narrow rooms
+    // retain the same action in More, rather than overflowing the dock.
+    if (onBackgroundEffects != null && caps.canPublishVideo) {
+      items.add(
+        _MeetingDockAction(
+          icon: Icons.blur_on_outlined,
+          label: strings.virtualBackground,
+          isActive: backgroundEffectsActive,
+          onTap: onBackgroundEffects!,
         ),
       );
     }

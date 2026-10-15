@@ -150,6 +150,12 @@ void main() {
           final more = tester.getRect(find.byTooltip('Display options'));
           expect((more.center.dy - exit.center.dy).abs(), lessThan(1));
           expect(find.byIcon(Icons.fit_screen_rounded), findsNothing);
+        } else {
+          expect(
+            find.byTooltip('Virtual background'),
+            findsOneWidget,
+            reason: 'Desktop host should have a direct camera-effects action',
+          );
         }
         expect(tester.takeException(), isNull, reason: 'Host $size');
         if ([390.0, 550.0, 1440.0].contains(size.width)) {
@@ -172,6 +178,7 @@ void main() {
       await tester.tap(find.byTooltip('Display options'));
       await tester.pumpAndSettle();
       expect(find.text('Show full video'), findsOneWidget);
+      expect(find.text('Virtual background'), findsOneWidget);
       await tester.tap(find.text('Show full video'));
       await tester.pumpAndSettle();
       expect(

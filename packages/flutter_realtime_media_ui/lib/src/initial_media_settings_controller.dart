@@ -5,6 +5,7 @@ class InitialMediaSettingsController {
   Future<void> apply({
     required MediaSession session,
     required MediaBackgroundEffectsController effects,
+    Future<void> Function(bool enabled)? setCameraEnabled,
     required MediaLocalPreviewSettings settings,
     required bool Function() isCurrent,
     required bool Function() canEnableMicrophone,
@@ -58,7 +59,9 @@ class InitialMediaSettingsController {
         !settings.microphoneEnabled || !canEnableMicrophone(),
       );
       if (!isCurrent()) return;
-      await session.setVideoEnabled(settings.cameraEnabled && allowVideo);
+      await (setCameraEnabled ?? session.setVideoEnabled)(
+        settings.cameraEnabled && allowVideo,
+      );
     } catch (error, stack) {
       if (isCurrent()) {
         onError(

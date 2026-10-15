@@ -90,37 +90,9 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
 
   Future<void> _openEffects(BuildContext context) async {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
-    final presets = await DemoBackground.loadPresets(isZh: zh);
-    if (!context.mounted) return;
-    final controller = RealtimeRoomUiScope.of(context);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, updateSheet) => SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: BackgroundEffectSelector(
-              capabilities: controller.room.backgroundCapabilities,
-              effect: controller.room.backgroundEffect,
-              imagePresets: presets,
-              busy: controller.isPending(RealtimeRoomUiAction.backgroundEffect),
-              onChanged: (effect) async {
-                try {
-                  await controller.setBackgroundEffect(effect);
-                  if (sheetContext.mounted) updateSheet(() {});
-                } catch (error) {
-                  if (sheetContext.mounted) {
-                    ScaffoldMessenger.maybeOf(
-                      sheetContext,
-                    )?.showSnackBar(SnackBar(content: Text(error.toString())));
-                  }
-                }
-              },
-            ),
-          ),
-        ),
-      ),
+    await showRealtimeBackgroundEffectsSheet(
+      context,
+      loadImagePresets: () => DemoBackground.loadPresets(isZh: zh),
     );
   }
 
@@ -222,6 +194,11 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                   // behind the sidebar or outside the hit-testable scroll.
                   final collapseDock =
                       compact || (wide && _panel != DemoMeetingPanel.closed);
+                  // At 1024px the existing meeting actions already use the
+                  // available dock width. Keep virtual background in More
+                  // until there is room for a dedicated, hit-testable action.
+                  final showBackgroundInDock =
+                      !collapseDock && constraints.maxWidth >= 1280;
                   final dock = Padding(
                     padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
                     child: RealtimeMeetingDock(
@@ -233,6 +210,45 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                       mediaGroup: [
                         RealtimeDockMicrophoneButton(showLabel: wide),
                         RealtimeDockCameraButton(showLabel: wide),
+                        if (showBackgroundInDock)
+                          Builder(
+                            builder: (context) {
+                              final controller = RealtimeRoomUiScope.of(
+                                context,
+                              );
+                              return ListenableBuilder(
+                                listenable: controller,
+                                builder: (context, _) =>
+                                    controller
+                                        .snapshot
+                                        .capabilities
+                                        .canPublishVideo
+                                    ? RealtimeDockItem(
+                                        icon: Icons.blur_on_outlined,
+                                        label: RealtimeStrings.of(
+                                          context,
+                                        ).virtualBackground,
+                                        showLabel: wide,
+                                        isActive: controller
+                                            .room
+                                            .backgroundEffect
+                                            .enabled,
+                                        tooltip:
+                                            controller
+                                                .room
+                                                .backgroundCapabilities
+                                                .isSupported
+                                            ? null
+                                            : (RealtimeStrings.of(context).isZh
+                                                  ? '当前不可用，点击查看原因'
+                                                  : 'Unavailable — tap for details'),
+                                        onPressed: () =>
+                                            unawaited(_openEffects(context)),
+                                      )
+                                    : const SizedBox.shrink(),
+                              );
+                            },
+                          ),
                         if (collapseDock)
                           RealtimeDockSharedContentButton(showLabel: wide)
                         else ...[
@@ -408,14 +424,28 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                                     unawaited(controller.switchCamera());
                                   },
                                 ),
-                                RealtimeDockMoreItem(
-                                  icon: Icons.blur_on_rounded,
-                                  title: RealtimeStrings.of(
-                                    context,
-                                  ).backgroundEffects,
-                                  subtitle: isZh ? '背景特效' : 'Effects',
-                                  onTap: () => unawaited(_openEffects(context)),
-                                ),
+                                if (!showBackgroundInDock &&
+                                    roomController
+                                        .snapshot
+                                        .capabilities
+                                        .canPublishVideo)
+                                  RealtimeDockMoreItem(
+                                    icon: Icons.blur_on_rounded,
+                                    title: RealtimeStrings.of(
+                                      context,
+                                    ).virtualBackground,
+                                    subtitle:
+                                        roomController
+                                            .room
+                                            .backgroundCapabilities
+                                            .isSupported
+                                        ? (isZh ? '背景特效' : 'Effects')
+                                        : (isZh
+                                              ? '查看不可用原因'
+                                              : 'Why unavailable'),
+                                    onTap: () =>
+                                        unawaited(_openEffects(context)),
+                                  ),
                                 RealtimeDockMoreItem(
                                   icon: isRecording
                                       ? Icons.stop_circle_rounded
@@ -535,7 +565,7 @@ class _DemoComposableMeetingPageState extends State<DemoComposableMeetingPage> {
                           icon: const Icon(Icons.blur_on_rounded, size: 20),
                           tooltip: RealtimeStrings.of(
                             context,
-                          ).backgroundEffects,
+                          ).virtualBackground,
                           onPressed: () => unawaited(_openEffects(context)),
                         ),
                         RealtimeLeaveButton(

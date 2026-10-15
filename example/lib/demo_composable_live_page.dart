@@ -39,6 +39,15 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
     _presets = DemoBackground.presets;
   }
 
+  void _openBackgroundEffects(BuildContext context) {
+    unawaited(
+      showRealtimeBackgroundEffectsSheet(
+        context,
+        loadImagePresets: () => _presets,
+      ),
+    );
+  }
+
   @override
   void didUpdateWidget(covariant DemoComposableLivePage oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -351,6 +360,21 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                               : null,
                           topTrailingActions: [
                             _fitControl(),
+                            if (isHost &&
+                                controller
+                                    .snapshot
+                                    .capabilities
+                                    .canPublishVideo) ...[
+                              IconButton(
+                                tooltip: strings.virtualBackground,
+                                icon: const Icon(
+                                  Icons.blur_on_outlined,
+                                  color: Colors.white,
+                                ),
+                                onPressed: () =>
+                                    _openBackgroundEffects(context),
+                              ),
+                            ],
                             if (isHost) ...[
                               IconButton(
                                 icon: const Icon(
@@ -413,6 +437,11 @@ class _DemoComposableLivePageState extends State<DemoComposableLivePage> {
                           _openMobileSheet(_LiveSidePanel.members),
                       onOpenHostTools: isHost
                           ? () => _openHostToolsSheet(context)
+                          : null,
+                      onOpenBackgroundEffects:
+                          isHost &&
+                              controller.snapshot.capabilities.canPublishVideo
+                          ? () => _openBackgroundEffects(context)
                           : null,
                       videoFit: _liveVideoFitOverride,
                       onToggleVideoFit: () => setState(

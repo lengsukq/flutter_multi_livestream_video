@@ -29,6 +29,7 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
     this.exitAction,
     this.onViewAudience,
     this.onOpenHostTools,
+    this.onOpenBackgroundEffects,
     this.onOpenGiftSheet,
     this.extraBottomActions,
     this.extraTopActions = const [],
@@ -42,6 +43,9 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
   final Widget? exitAction;
   final VoidCallback? onViewAudience;
   final VoidCallback? onOpenHostTools;
+
+  /// Optional shortcut in the mobile More menu. Shown for publishers only.
+  final VoidCallback? onOpenBackgroundEffects;
   final VoidCallback? onOpenGiftSheet;
   final List<Widget>? extraBottomActions;
   final List<Widget> extraTopActions;
@@ -157,7 +161,9 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                                   maxAvatars: compactHud ? 0 : 1,
                                 ),
                               ),
-                            if (onToggleVideoFit != null ||
+                            if (onOpenBackgroundEffects != null ||
+                                onOpenHostTools != null ||
+                                onToggleVideoFit != null ||
                                 onToggleCleanScreen != null ||
                                 narrowHud ||
                                 extraTopActions.isNotEmpty)
@@ -362,6 +368,15 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                       onTap: () {
                         Navigator.pop(sheetContext);
                         onOpenHostTools!();
+                      },
+                    ),
+                  if (onOpenBackgroundEffects != null)
+                    ListTile(
+                      leading: const Icon(Icons.blur_on_outlined),
+                      title: Text(strings.virtualBackground),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        onOpenBackgroundEffects!();
                       },
                     ),
                   if (onToggleVideoFit != null)

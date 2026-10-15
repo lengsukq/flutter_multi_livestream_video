@@ -106,6 +106,13 @@ void main() {
         expect(find.byType(RealtimeDockRaiseHandButton), findsOneWidget);
         expect(find.byType(RealtimeDockHandQueueButton), findsOneWidget);
       }
+      if (width >= 1280) {
+        expect(
+          find.byIcon(Icons.blur_on_outlined),
+          findsWidgets,
+          reason: 'Desktop meeting background action must be visible at $width',
+        );
+      }
       final leave = tester.getRect(find.byType(RealtimeLeaveButton));
       final page = tester.getRect(find.byType(DemoComposableMeetingPage));
       final scaffold = tester.getRect(find.byType(Scaffold).first);

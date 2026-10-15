@@ -51,6 +51,7 @@ class MediaRoomView extends StatefulWidget {
     this.onLeave,
     this.onActionError,
     this.backgroundEffects,
+    this.onSetCameraEnabled,
     this.canEnableMicrophone,
     this.microphonePermissionUpdates,
     this.screenShareOverlayBuilder,
@@ -73,6 +74,9 @@ class MediaRoomView extends StatefulWidget {
   final VoidCallback? onLeave;
   final ValueChanged<RealtimeException>? onActionError;
   final MediaBackgroundEffectsController? backgroundEffects;
+
+  /// Optional SDK-owned camera controller, serialized with background effects.
+  final Future<void> Function(bool enabled)? onSetCameraEnabled;
 
   /// Optional SDK-layer advisory classroom microphone gate.
   /// Backend/provider enforcement must be implemented separately.
@@ -269,6 +273,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
     await _initialSettings.apply(
       session: session,
       effects: _backgroundEffects,
+      setCameraEnabled: widget.onSetCameraEnabled,
       settings: settings,
       isCurrent: () => mounted && targetRoom == widget.room,
       canEnableMicrophone: () => widget.canEnableMicrophone?.call() != false,
@@ -647,8 +652,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                         );
                       },
                     ),
-                  if (caps.canPublishVideo &&
-                      _backgroundEffects.backgroundCapabilities.isSupported)
+                  if (caps.canPublishVideo)
                     _moreTile(
                       icon: Icons.blur_on_rounded,
                       label: strings.virtualBackground,
@@ -1073,6 +1077,34 @@ class _MediaRoomViewState extends State<MediaRoomView> {
   );
 
   Future<void> _openBackgroundEffects() async {
+    if (!_backgroundEffects.backgroundCapabilities.isSupported) {
+      final strings = RealtimeStrings.of(context);
+      await showRealtimeGlassBottomSheet<void>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  strings.virtualBackground,
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  strings.isZh
+                      ? '当前平台、供应商或设备未提供背景处理能力，或应用未配置视频特效服务。'
+                      : 'Background effects are not available for this platform, provider or device, or the video-effects service is not configured.',
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     var effect = _backgroundEffects.backgroundEffect;
     var busy = false;
     String? errorMessage;
@@ -1100,7 +1132,13 @@ class _MediaRoomViewState extends State<MediaRoomView> {
                   try {
                     await _backgroundEffects.setBackgroundEffect(next);
                     effect = next;
-                    if (mounted) setState(() => _error = null);
+                    if (mounted) {
+                      setState(() => _error = null);
+                      // RoomRegion caches dock controls until its revision
+                      // changes. Keep the active state in Meeting and Live
+                      // toolbars synchronized with the selected effect.
+                      _controlRevision.value++;
+                    }
                   } catch (error) {
                     errorMessage = error.toString();
                   } finally {
@@ -1167,6 +1205,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         snapshot: value,
         compact: constraints.maxWidth < 520,
         interactive: _interactive,
+        onSetCameraEnabled: widget.onSetCameraEnabled,
         canEnableMicrophone: widget.canEnableMicrophone,
         runAction: _run,
         contentControls: widget.contentControlsBuilder?.call(context),
@@ -1178,6 +1217,11 @@ class _MediaRoomViewState extends State<MediaRoomView> {
         unreadChatCount: _unreadChatCount,
         onChat: _toggleChat,
         onMore: () => _showMeetingMoreSheet(value, _interactive),
+        onBackgroundEffects:
+            constraints.maxWidth >= 1280 && value.capabilities.canPublishVideo
+            ? () => observeDetached(_openBackgroundEffects())
+            : null,
+        backgroundEffectsActive: _backgroundEffects.backgroundEffect.enabled,
         onLeave: () => observeDetached(_showMeetingLeaveConfirmation()),
       ),
     ),
@@ -1235,6 +1279,7 @@ class _MediaRoomViewState extends State<MediaRoomView> {
             snapshot: value,
             isHost: widget.room.role == MediaRole.host,
             interactive: _interactive,
+            onSetCameraEnabled: widget.onSetCameraEnabled,
             chatSession: widget.chatSession,
             inputOpen: _liveChatInputOpen,
             chatController: _chatPresentation,
