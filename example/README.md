@@ -24,7 +24,7 @@ and saves logical owner credentials for rejoin. None of these modules
 imports an individual vendor media implementation.
 
 The room lifecycle is create/join/discover → `Realtime.preJoin` →
-`DemoComposablePreJoinPage` → `Realtime.open(RealtimeRequest)` → room
+`RealtimePreJoinPage` → `Realtime.open(RealtimeRequest)` → room
 route → `RealtimeConnection.dispose()`. A failed entry remains in Pre-Join
 for retry; a connected room that cannot be handed to a route must be
 disposed. The `initialMediaSettings` returned by preparation must be
@@ -32,8 +32,10 @@ carried into the room UI so camera, microphone and video background choices
 apply before publish.
 
 Below 600px, the homepage uses a compact top header instead of the large
-desktop hero. Meeting/Live/Chat/Pre-Join pages are Demo-owned arrangements
-of reusable SDK UI widgets, not fixed full-page SDK templates.
+desktop hero. Meeting/Live/Chat/Pre-Join directly use the SDK’s public
+`RealtimeRoomView`, `RealtimeLivePage`, `RealtimeChatPage` and
+`RealtimePreJoinPage`. Meeting/Live adapters inject local background pictures and the custom wave
+event; Pre-Join and Chat routes call SDK pages directly; page layout and recording controls live in SDK UI.
 `MediaRole.host` is not a reliable substitute for an explicit
 meeting/live mode during creation. **After joining, the backend-returned
 `roomMode` and assigned credentials take precedence over Pre-Join hints.**

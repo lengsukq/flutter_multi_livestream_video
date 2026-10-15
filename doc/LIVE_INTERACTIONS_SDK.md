@@ -12,11 +12,9 @@ Neither package imports a media or Chat vendor SDK.
 The host must explicitly register `LivePreset()` in `featurePlugins`, and
 the provisioned room must advertise `liveInteractions: true`. The reference server advertises this for
 Broadcast rooms. `RealtimeRoomView` renders the gift entry and incoming-event
-animation on both hosts and viewers. In the live bottom bar the gift button
-opens the gift panel in one tap via `MediaRoomView.liveGiftPanelOpener`
-(`showLiveGiftsBottomSheet`); the extra-controls sheet remains only as a
-fallback when no opener is injected (e.g. plain `MediaRoomView` users). `showLiveInteractions: false` suppresses
-this optional UI. Session lifecycle and errors remain accessible to custom UI.
+animation on both hosts and viewers. The Live page's gift button uses `RealtimeLiveGiftButton` to open the shared
+gift panel. `showLiveInteractions: false` suppresses this optional UI.
+Session lifecycle and errors remain accessible to custom UI.
 Applications can inject `LivePreset(repositoryFactory: ...)` for their own
 trusted store; direct credentials do not silently create a reference backend.
 For custom direct rooms without backend metadata, opt in via

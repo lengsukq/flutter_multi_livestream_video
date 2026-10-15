@@ -10,7 +10,7 @@
 ## 版本说明
 
 - [`0.1.0-dev.1`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1)：**已发布的单包预览版**。
-- `0.1.0-dev.3`：**本地准备中，尚未发布**；新增 Headless 虚拟背景摄像头协调及 UI 修复。
+- `0.1.0-dev.4`：**本地发布校验通过，等待上传**；统一 Demo/SDK 页面，移除旧 UI 模板，包含 Headless 摄像头协调修复。
 - 本目录：源码开发使用的 Facade，版本与发布单包不应混为一谈。
 
 ## 一、何时使用此目录？
@@ -84,7 +84,7 @@ final room = connection.mediaRoom!;
 `room.setBackgroundEffect(...)` 串行化，避免关摄像头选背景后，直接调用
 底层 `media.session.setVideoEnabled(true)` 导致摄像头源状态不一致。
 源码开发时如需实际背景处理，还需配置视频特效 Factory；
-pub.dev 单包在 `0.1.0-dev.3` 发布后可直接从公共 import 获取
+pub.dev 单包在 `0.1.0-dev.4` 发布后可直接从公共 import 获取
 `DefaultRealtimeVideoEffects`。请始终检查能力支持，并处理初始化异常。
 
 详见 [SDK / Headless 接入](../../doc/SDK_RUNTIME_INTEGRATION.zh-CN.md)。

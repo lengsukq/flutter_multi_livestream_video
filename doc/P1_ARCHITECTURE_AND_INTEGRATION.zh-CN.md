@@ -17,7 +17,7 @@
 ```text
 ┌────────────────── 业务 App / example/ ──────────────────────┐
 │  Realtime(providers: ...) / RealtimeRequest / Connection    │
-│  Demo 自由组合 SDK UI Widgets（或使用纯 Runtime 自定义 UI）   │
+│  Demo 展示 SDK 标准页面（也支持纯 Runtime 自定义 UI）   │
 └────────────────────────────┬────────────────────────────────┘
                              │ 公共 SDK API
 ┌────────────────────────────▼────────────────────────────────┐
@@ -80,59 +80,53 @@ await connection.dispose();
 创建和加入（包括从发现列表选择房间）统一为：
 
 1. Demo 从本地身份存储读取 `deviceId`、`displayName`，构建 `RealtimeRequest`。
-2. `Realtime.preJoin(...)` 运行检查，`createLocalPreview(...)` 获取可用的本地预览；UI 通过 `MediaPreJoinPage.show` 呈现。
+2. `Realtime.preJoin(...)` 运行检查，`createLocalPreview(...)` 获取可用的本地预览；UI 通过 `RealtimePreJoinPage` 呈现。
 3. 用户确认后触发 `onEnter`，调用 `Realtime.open(request)`。
 4. SDK 根据后端返回的 Provider、角色、短期凭证创建连接；只有成功建立后才由 Demo 导航到房间页面。
 5. 连接所有者在房间路由结束后 `connection.dispose()`。失败应仍停留在 Pre-Join，便于重试；中途页面卸载必须释放已经建立但未接管的连接。
 
 房间列表与当前默认 Provider 无必然对应关系：**已有房间始终绑定创建时的 Provider**。移动首页采用紧凑 Hero，桌面端保留完整介绍。布局优化不应改变上述流程。
 
-## 4. Media UI：状态、布局和能力边界
+## 4. 标准页面与组件边界
 
-主要代码在 `packages/flutter_realtime_media_ui/lib/src/`。
+`flutter_realtime_sdk_ui` 维护唯一的完整页面：`RealtimeRoomView` 根据后端
+权威模式选择 `RealtimeMeetingPage` / `RealtimeLivePage`，独立聊天使用
+`RealtimeChatPage`。`RealtimeRoomViewConfig` 是对应配置；其模式字段仅作
+无后端元数据时的提示，不能授予主播或教师权限。
 
 | 组件 | 所有权 / 责任 |
 | --- | --- |
-| `MediaRoomView` | 房间状态协调、单一视频 stage、UI 生命周期函数 |
-| `MeetingRoomViewLayout`、`LiveRoomViewLayout` | 会议/直播独立排版，依赖 `MediaRoomLayoutHost` typed 接口，不依赖具体 Provider |
-| `RoomChatEventsController` | 消息事件、弹幕/未读通知与订阅 |
-| `RoomMembersController` | 成员同步、合并与管理操作 |
-| `LiveReactionsController` / `LiveLikesController` | 直播飘心/点赞状态 |
-| `InitialMediaSettingsController` | 入会初始音视频偏好 |
-| `RoomRegion` / revision notifiers | 控件局部刷新，不因每条聊天或点赞事件重建 VideoTrack |
+| 标准会议/直播页面 | 响应式排版、侧栏/弹层、工具栏及交互展示 |
+| `RealtimeRoomUiController` | 共享 UI 订阅、操作去重、权限与错误投影 |
+| `RealtimeMeetingStage` | 聚焦/网格和权威共享内容展示 |
+| Runtime `RoomMembersController` | 逻辑 RTC/IM 成员同步与管理 |
+| `InitialMediaSettingsController` | 设备与初始媒体设置，处理房间切换竞态 |
+| `flutter_realtime_media_ui` | Media Core + 设计系统上的独立组件，无 Runtime/Chat 依赖 |
 
-**重要：`host` 不等于 `live`。** 优先明确传 `MediaRoomViewConfig(roomMode: MediaRoomMode.meeting / MediaRoomMode.broadcast)`。仅在无显式模式时，UI 可依据 viewer 角色推断直播；普通会议的 host 应使用会议管理布局。产品 Chat 必须有真实 `chatSession` 才显示聊天入口；RTC Data 不等于完整产品 IM。点赞等互动入口也应有真实 SDK Controller，不能显示“假按钮”。
+摄像头、麦克风和屏幕共享仍由 SDK/provider 契约控制；RTC Data 不等于产品
+Chat。完整页面和自定义组件共享同一套会话。卸载 UI 只释放订阅和界面资源，
+连接所有者在房间路由结束后调用 `connection.dispose()`。
 
-带现成 UI 的 `RealtimeRoomView` 已组装基础会议 UI、课堂/直播扩展以及虚拟背景准备流程，适合作为 App 优先接入的 UI 层；自定义 UI 可直接读取 `RealtimeConnection`/`RealtimeRoom` 的公共状态和能力。
-
-## 5. Pre-Join：公开入口与资源所有权
-
-**唯一公开页面入口为 `MediaPreJoinPage.show(...)`**，旧 `MediaPreJoinDialog` 已退出本轮使用流程。参数包括 `runCheck`、`openPreview`、可选 `onEnter`、`permissionRequester`、显示信息和背景预设。
+## 5. Pre-Join：公开页面与资源所有权
 
 ```dart
-await MediaPreJoinPage.show(
-  context,
-  runCheck: () => realtime.preJoin(
-    role: MediaRole.participant,
-    roomCode: roomCode,
-  ),
+RealtimePreJoinPage(
+  roomLabel: roomCode,
+  displayName: displayName,
+  runCheck: () => realtime.preJoin(role: MediaRole.participant, roomCode: roomCode),
   openPreview: (providerId, role) =>
       realtime.createLocalPreview(providerId: providerId, role: role),
   onEnter: (pageContext, settings) async {
-    // 在这里建立真实连接，并由宿主使用 pageContext 导航。
-    // settings 必须传给房间 UI 的 initialMediaSettings。
+    // 建立真实连接，然后使用仍 mounted 的 pageContext 导航。
+    // settings 传入 RealtimeRoomViewConfig.initialMediaSettings。
   },
 );
 ```
 
-| 控制器 | 所有权与竞态规则 |
-| --- | --- |
-| `PreJoinPreviewOwner` | 预览会话唯一所有者，退出/重试/多次释放幂等 |
-| `PreJoinPermissionCoordinator` | 权限读取、失败回退、检查项状态映射 |
-| `PreJoinMediaSetupController` | 设备枚举/选择、旧异步结果丢弃、背景选择 |
-| `MediaPreJoinPage` | 用户交互、错误提示、入会导航，不应重复释放正在转交的连接 |
-
-阻断级检查失败不得继续入会；unknown/unsupported 不能伪装成通过。摄像头背景处理不支持时应如实禁用；开启了受保护的背景效果后，不能悄悄回退发布未经处理的原始视频。Web 的摄像头/麦克风权限受浏览器安全上下文约束；其他平台依赖对应系统权限与 Provider 能力。
+页面拥有 `RealtimePreJoinController`；底层预览所有者负责幂等释放，权限协调器
+负责状态读取，设备设置控制器丢弃过期异步结果。失败留在同一页面重试；进入中
+阻止重复提交。默认麦克风/摄像头关闭，设备枚举与背景选择不隐式采集。
+阻断级检查失败不得入会，未知能力不能伪装成支持，受保护背景失败不得发布原始帧。
 
 ## 6. Demo Server：控制面模块
 

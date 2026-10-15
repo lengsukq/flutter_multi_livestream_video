@@ -1,6 +1,6 @@
 # Flutter Realtime SDK：纯功能调用与可选 UI 接入
 
-本指南只提供 SDK 接入方法与**短代码片段**，不新增 Headless 示例工程或第二套 Demo。现有 `example/` 只演示如何自由组合 SDK 自带的 UI 组件。
+本指南只提供 SDK 接入方法与**短代码片段**，不新增 Headless 示例工程或第二套 Demo。现有 `example/` 直接展示 SDK 内置页面，同时演示内容与自定义交互的参数注入。
 
 **首次在独立宿主 App 接入**，请先按 [完整分步接入清单](APP_INTEGRATION_QUICKSTART.zh-CN.md)
 准备 Flutter 依赖、可信后端、Provider、权限与创建/加入链路。当前包尚未发布
@@ -188,7 +188,9 @@ RealtimeRoomUiScope(
 );
 ```
 
-宿主自由决定 `Scaffold`、路由、`Row` / `Column` / `Stack`、弹窗与多端断点。现有 `example/lib/demo_composable_*_page.dart` 是 UI 快速组装的参考，不承担第二套业务逻辑；完整 `RealtimeComposableRoomTemplate` 为可选快捷模板。
+SDK 同时提供完整页面与可组合组件。`RealtimeRoomView(room: room)` 按后端权威模式选择 `RealtimeMeetingPage` / `RealtimeLivePage`，这就是 Demo 使用的页面；独立聊天使用 `RealtimeChatPage(chatRoom: chatRoom)`，入会准备使用 `RealtimePreJoinPage`。Demo 的 Meeting/Live 适配层只注入背景图片与自定义挥手示例，Chat/Pre-Join 路由直接调用 SDK 页面，不维护第二套布局。完整页面已有桌面侧栏、手机弹层、工具栏收纳、虚拟背景与云录制入口。
+
+宿主依然负责连接、路由和 `connection.dispose()`；卸载页面只清理 UI 资源。可以通过 `RealtimeRoomViewConfig`、`header`、`participantBuilder`、`loadImagePresets`、`onCustomReaction` 和 `stageOverlayBuilder` 调整内置页面，也可继续使用原子组件完全自定义布局。旧页面和兼容模板已移除，不提供旧名字别名。
 
 ## 7. 验证
 

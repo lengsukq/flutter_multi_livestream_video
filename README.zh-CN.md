@@ -9,7 +9,7 @@
 | 版本/形态 | 状态 | 如何接入 |
 | --- | --- | --- |
 | [`flutter_realtime_sdk 0.1.0-dev.1`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1) | **已发布预览版** | 一个 pub.dev 包，一个公开 import |
-| `0.1.0-dev.3` | **仅本地准备，尚未发布** | 新增 Headless 摄像头与虚拟背景时序修复 |
+| `0.1.0-dev.4` | **本地发布校验通过，等待上传** | Demo/SDK 页面统一、旧 UI 清理与 Headless 摄像头修复 |
 | 源码仓库 | 开发用 | Facade + 选定的 Provider/UI 内部包 |
 
 **不要混淆两种使用方式：** pub.dev 发布物把 44 个内部模块组装为**一个公开 SDK 包**；本仓库开发时仍然是多模块源码，依赖配置不同。支持列表不代表每个供应商和设备都完成实机验收，Windows/Linux、部分平台组合和第三方许可审查仍有待完成。
@@ -50,10 +50,10 @@ UI 可以选择 `RealtimeRoomView`、组合式按钮/网格，或全部自己实
 
 ### 新版 Headless 摄像头及虚拟背景（尚未发布）
 
-本地 **`0.1.0-dev.3`** 预览候选版新增 `room.setCameraEnabled(bool)`，并且从**同一个公开 import** 导出 `DefaultRealtimeVideoEffects`。它保证背景处理源的采集与摄像头发布进入统一操作队列；**该 API 不适用于已经发布的 dev.1**。
+本地 **`0.1.0-dev.4`** 预览候选版新增 `room.setCameraEnabled(bool)`，并且从**同一个公开 import** 导出 `DefaultRealtimeVideoEffects`。它保证背景处理源的采集与摄像头发布进入统一操作队列；**该 API 不适用于已经发布的 dev.1**。
 
 ~~~dart
-// 等 dev.3 正式发布且升级依赖后使用：
+// 等 dev.4 正式发布且升级依赖后使用：
 final realtime = Realtime(
   backendUrl: 'https://your-backend.example',
   providers: [createLivekitProvider()],
@@ -107,7 +107,7 @@ cd demo-server && npm install && npm start
 cd example && flutter pub get && flutter run -d macos
 ~~~
 
-Demo 负责把 SDK 组件排版成 Meeting/Live/Chat/Pre-Join 页面，不应该重复实现 SDK 业务。项目根目录运行 `./build_macos_arm64.command` 可以打包 Apple Silicon macOS **Demo 安装包**，它不是 pub.dev SDK 包。
+Demo 直接调用 SDK 内置的 Meeting/Live/Chat/Pre-Join 页面，只保留连接配置、导航与示例内容注入，不维护第二套 UI。项目根目录运行 `./build_macos_arm64.command` 可以打包 Apple Silicon macOS **Demo 安装包**，它不是 pub.dev SDK 包。
 
 ## 四、平台能力、安全与发布限制
 

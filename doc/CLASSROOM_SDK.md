@@ -15,8 +15,8 @@ The independent packages are:
 - flutter_realtime_sdk_runtime: **does not import Classroom Core**. Its generic
   Feature Registry attaches only the business plugins selected by the host.
 
-The Demo explicitly registers `ClassroomPreset` and composes existing SDK UI
-components in its own meeting layout. It contains no duplicate classroom
+The Demo explicitly registers `ClassroomPreset` and displays the standard SDK
+meeting page. It contains no duplicate classroom
 business logic; hosts may omit the preset and use a plain meeting.
 
 ## Raise-hand flow in the Demo
@@ -338,8 +338,8 @@ supports pen, highlight, circle, arrow and text with normalized points.
 `SharedContentController`; legacy backends retain the former shared-track path.
 Its default annotation widget is placed inside the **contained video content
 rectangle**, excluding letterboxes. Hosts can instead use the lower-level
-`MediaRoomView.screenShareOverlayBuilder`, `ClassroomAnnotationOverlay` and
-`AnnotationPainter`. `showAnnotations: false` hides the default overlay.
+`RealtimeSharedContentStage`, `ClassroomAnnotationOverlay` and
+`AnnotationPainter` in a custom layout. `showAnnotations: false` hides the default overlay.
 The toolbar is only editable for teachers sharing their own screen; students
 are view-only. The first implementation operates in the SDK preview, not as a
 system-wide drawing layer over other desktop applications.

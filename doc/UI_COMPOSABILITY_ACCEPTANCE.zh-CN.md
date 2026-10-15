@@ -1,152 +1,89 @@
-# Flutter Realtime UI 组件化：架构、接入与验收
+# Flutter Realtime UI：标准页面、组件与验收
 
-> 状态：2026-10-10，本地静态/自动化/构建验收记录。真实云厂商与真机联网验收是独立的工作，不因 Widget 测试通过而视为已完成。主目标是 **SDK 管状态与命令，App/Demo 决定布局**。
+> 2026-10-15：只维护当前 UI。旧完整页面、兼容模板、旧配置名和 Demo 转发别名已删除，不保留 Deprecated 入口。历史质量基线见 `P1_CLEAN_CODE_BASELINE.md`，其中旧类型名不能用于当前接入。
 
-## 1. 模块依赖与资源所有权
+## 1. 完整页面
+
+| 场景 | 公开入口 |
+| --- | --- |
+| 自动选择会议 / 直播 | `RealtimeRoomView(room: room)` |
+| 会议 / 直播页面单独使用 | `RealtimeMeetingPage` / `RealtimeLivePage` |
+| 独立产品聊天 | `RealtimeChatPage(chatRoom: chatRoom)` |
+| 入会准备 | `RealtimePreJoinPage` |
+| 房间页面配置 | `RealtimeRoomViewConfig` |
+| 异步预加入回调 | `RealtimePreJoinEnter` |
+
+```dart
+RealtimeRoomView(
+  room: room,
+  config: RealtimeRoomViewConfig(initialMediaSettings: settings),
+  onLeave: () => Navigator.of(context).pop(),
+);
+```
+
+后端权威 `roomMode` 选择会议或直播，配置的模式仅作无元数据时的提示。
+RTC 角色不能代替逻辑房主、教师或主播权限。默认麦克风和摄像头关闭；
+预加入设备与媒体选择在准备完成、权限允许后应用。
+
+Demo 的 Chat / Pre-Join 路由直接调用 SDK 页面；Meeting / Live 适配层只注入
+本地背景图片及自定义挥手事件。断点、侧栏、手机弹层、浮动工具栏、聚焦/网格、
+清屏、虚拟背景和录制交互均在 SDK 中维护。
+
+## 2. 可组合组件与依赖边界
 
 ```text
-flutter_realtime_foundation + domain_core
-  ├─ flutter_realtime_sdk_runtime     (无 UI、无具体 Provider driver)
-  ├─ flutter_realtime_chat_ui         (仅 Chat Core + Flutter)
-  └─ flutter_realtime_media_ui        (Media Core + Chat UI，旧模板可选)
+Domain Core / Foundation
+  ├─ Runtime                  会话、成员、功能插件、生命周期，无 UI/厂商依赖
+  ├─ chat_ui                  独立聊天组件，不依赖 Media UI / RTC
+  ├─ design_ui                设计系统
+  └─ media_ui                 Media Core + design_ui + Flutter 组件
        ↑
-flutter_realtime_sdk_ui                (可选聚合：Room、Live、Chat、Classroom、Whiteboard)
+room_ui                       房间作用域、媒体组件与控制器
        ↑
-App / Demo (Scaffold / Row / Column / Stack / Navigator / Breakpoints)
-
-flutter_realtime_sdk                  (轻量公开入口，仅依赖 Runtime)
+sdk_ui                        标准页面与可选 Classroom / Live / 共享内容组合
+       ↑
+App / Demo                    连接、路由、内容注入；也可自由组合组件
 ```
 
-使用 `flutter_realtime_chat_ui` 不需要引入会议/直播及原生 RTC SDK；无 UI 的工程直接引用 Runtime 和需要的 Driver；真正的移动/桌面包体必须以各自的 Release 构建测量，而非凭源码行数推断。
+独立 UI 组件继续公开。完整页面和自定义布局共享相同会话与权威状态，
+不需要复制业务操作或引入供应商实现。
 
-资源生命周期：
+- `RealtimeRoomUiScope` 清理它创建的 UI Controller，传入自建 controller 则由调用方释放。
+- Room/Chat UI 卸载不关闭连接；显式离开操作先离开/关闭房间再回调导航，连接所有者最终调用 `connection.dispose()`。
+- 完整预加入页面拥有并释放 `RealtimePreJoinController`；自行组合时由宿主初始化和关闭它。预览在入会前释放，失败后可保留选择并重试，过期操作不能触发晚到导航。
+- Classroom/Live 是显式注册的可选插件，权限与快照以可信后端为准，瞬时消息不能授权。
+- RTC Data 调试不等于产品 Chat；成员目录按 Runtime 的逻辑身份合并，媒体/Chat 管理能力分别判断。
 
-- `RealtimeRoomUiScope(room: ...)` **持有并销毁它创建的 UI Controller**，不会在 widget unmount 时断开 Provider 会话；传入自建 controller 时，调用者负责释放 UI controller。
-- `RealtimeRoomUiController.leave()` 会退出/销毁底层 room，应用负责路由导航。
-- `RealtimePreJoinController` 由应用创建、`initialize()`，页面销毁时由应用 `dispose()`；重试/进入房间释放预览由 Controller 管理。
-- `ChatUiController` 只拥有 UI 订阅，不拥有 `ChatSession`。同一 `RealtimeRoomUiScope` 中的列表与输入框共享 Chat UI controller。
-- 成员权限以 `MediaRoomSession.managementCapabilities` 和 `ChatManagementCapabilities` 为准；`RoomMembersController` 已迁移至 Runtime，UI 只展示结果、处理 pending/error；UI 不签发 Token，不独立裁决权限。
+## 3. 扩展与录制
 
-## 2. 两种可运行的组织方式
+通过 `header`、`participantBuilder`、`loadImagePresets`、
+`onCustomReaction`、`stageOverlayBuilder` 以及功能可见性参数调整标准页面。
+原子组件可以放入宿主的 `Row`、`Column`、`Stack`、抽屉或弹窗。
 
-**默认快速模板：** App 打开 `RealtimeRoom` 后直接渲染：
+录制是否可用由注入的执行器决定，布局由后端报告，不维护厂商名字名单。
+会议和直播共用启动/停止/结果流程。结果对话框展示中英文权威任务状态，
+卸载或切换房间后失效旧查询，完成后才提供下载。
+背景处理需要显式注册特效服务；不支持时展示原因，不能静默发布未经保护的帧。
 
-```dart
-RealtimeComposableRoomTemplate(
-  room: room,
-  isLive: false, // 直播传 true
-  onLeft: () => Navigator.of(context).maybePop(),
-)
-```
-
-独立 Chat 用 `ChatDefaultPage(session: chatSession, roomCode: roomCode)`。
-预加入使用 `RealtimeComposablePreJoinTemplate(controller: controller,
-onEnter: (settings) async { /* 调用 App 的统一 open/join */ })`；必须在
-宿主的 init/dispose 时初始化/清理该 `RealtimePreJoinController`。历史
-`MediaRoomView`、`RealtimeRoomView`、`RealtimeChatView`、
-`MediaPreJoinPage` 为保留高级操作和原 UI 风格的**可选旧模板**。
-
-**完全自由布局：**
-
-```dart
-RealtimeRoomUiScope(
-  room: room,
-  child: Scaffold(
-    body: Column(
-      children: [
-        const Row(children: [
-          Expanded(child: RealtimeRoomInfo()),
-          RealtimeLeaveButton(), // App 自己决定位置/导航
-        ]),
-        const Expanded(child: RealtimeSharedContentStage(
-          members: RealtimeVideoGrid(),
-        )),
-        const Wrap(children: [
-          RealtimeMicrophoneButton(),
-          RealtimeCameraButton(),
-          RealtimeSwitchCameraButton(),
-          RealtimeScreenShareButton(),
-        ]),
-      ],
-    ),
-  ),
-)
-```
-
-用户可把任一 `Realtime*` 功能组件移到抽屉、弹窗、悬浮层、会议页面任何区域，不依赖父级 `MediaRoomLayoutHost` 或供应商的具体 Session 类型。
-
-## 3. 可复用组件目录
-
-| 领域 | 公开 UI | SDK 权威逻辑 |
-| --- | --- | --- |
-| 房间 | `RealtimeRoomInfo`、`RealtimeConnectionIndicator`、`RealtimeVideoTile`、`RealtimeVideoGrid`、`RealtimeScreenShareStage`、`RealtimeSharedContentStage` | MediaSnapshot、SharedContentState |
-| 媒体控制 | `RealtimeMicrophoneButton`、`RealtimeCameraButton`、`RealtimeSwitchCameraButton`、`RealtimeScreenShareButton`、`RealtimeLeaveButton`、`RealtimeBackgroundEffectsButton` | UI Controller + MediaCapabilities + Video Effects |
-| 设备 | `RealtimeMediaDevicePicker`（microphone / camera / audioOutput）、`RealtimeAudioOutputButton` | MediaDeviceController，可选能力、失败原样报告 |
-| 成员管理 | `RealtimeParticipantList`（RTC-only）、`RealtimeManagedParticipantList`（RTC+IM）、`RealtimeBulkMuteButton` | Runtime `RealtimeRoom.memberDirectory`：统一逻辑 userId、主持人权限、静音失败重试 |
-| 聊天 | `ChatUiScope`、`ChatSearchField`、`ChatMessageList`、`ChatComposer`、`ChatMemberList`、`ChatManagementButton`、`ChatDefaultPage`；会议组合的 `RealtimeChatPanel` | ChatUiController / ChatModeration / IM |
-| 直播 | `RealtimeLiveVideoStage`、`RealtimeLiveLikeButton`、`RealtimeLiveGiftButton`、`RealtimeLiveStatus` | LiveInteractionSession |
-| 课堂 | `RealtimeRaiseHandButton`、`RealtimeClassroomHandQueue`、`RealtimeClassroomRoster`、`RealtimeClassroomQuestions`、`RealtimeClassroomQuestionComposer`、`RealtimeClassroomFeedbackButton`、`RealtimeClassroomToolsButton`、`RealtimeClassroomActivityList`、`RealtimeClassroomEngagement` | ClassroomSession + authoritative classroom snapshot |
-| Pre-Join | `RealtimePreJoinScope`、`RealtimePreJoinPreview`、`RealtimePreJoinCheckList`、`RealtimePreJoinPermissions`、`RealtimePreJoinMediaControls`、`RealtimePreJoinDevicePicker`、`RealtimePreJoinBackgroundSelector`、`RealtimePreJoinJoinButton` | RealtimePreJoinController：权限/设备/预览/进房竞态 |
-
-Demo 页面位于 `example/lib/demo_composable_{meeting,live,chat,pre_join}_page.dart`。
-常见断点和页面导航属于 Demo，而不是 SDK Widgets。
-
-## 4. 旧 UI 收敛说明
-
-- `realtime_ui_style.dart` 分离基础视觉、控件、卡片/对话框。
-- `media_room_view.dart` 拆出 `RoomChatEventsController`、
-  `RoomAuxiliarySubscriptions`、`RoomMembersController`、
-  `legacy_room_media_stage.dart`、`room_members_actions.dart` 等。
-- `realtime_chat_view.dart` 已使用 `ChatUiController`，原输入/管理
-  视图拆至 `legacy_chat_actions.dart`；Pre-Join 的业务控制器也可脱离整页运行。
-- `RealtimeRoomView` 与组合式视图共用 SharedContentStage renderer；
-  旧完整模板保留的高级 UI 功能**不能**在未完成等价验证前直接删掉。
-
-## 5. 自动化、构建与仍待验证事项
-
-本地验收命令：
+## 4. 本地验证与验收边界
 
 ```sh
-python3 scripts/check_sdk_architecture.py
 python3 scripts/check_sdk_quality.py --resolve --analyze --test
+python3 scripts/check_sdk_architecture.py
 python3 scripts/format_sdk.py --check
-flutter build web --release --no-pub  # 在 example 目录执行
+python3 scripts/generate_capability_matrix.py --check
 ```
 
-全仓包清单包含 `flutter_realtime_chat_ui`，应验证无循环依赖、Runtime
-无 UI 依赖、没有跨包 `src/` 私有类型导入。独立 Widget 测试覆盖不同窗口尺寸、
-Chat 单订阅、RTC/IM 成员身份合并、主持人 capability、设备选择、房间切换订阅
-释放、媒体操作去重、Pre-Join 重试、直播/课堂组合。
+重点回归：单一标准页面入口、角色权限、重复操作保护、预览幂等释放、
+失败重试、设备/媒体/背景选择、房间切换、订阅释放和手机/桌面布局。
+移除旧模板时，其实现专属测试随之移除；仍适用的生命周期和交互行为迁移至
+新页面、公共组件及控制器测试。
 
-2026-10-10 Web **Release 构建成功**；`example/build/web/main.dart.js`
-最终复测产物大小 **4,579,427 bytes**（未压缩、未计其他资源）。这**不是**
-按需依赖改造前后的 A/B 比较，也不是 APK/IPA/macOS 体积；WASM dry-run
-另有不兼容依赖警告，不可称已通过 WASM。
+本次全量验证：44 个 SDK 包离线 resolve/analyze/test 门禁通过，Failures 为空；
+架构检查和能力声明检查通过。定向测试包括 SDK UI 65 项、Media UI 17 项、Chat UI 7 项、Room UI 2 项
+及 Demo 29 项测试通过；Demo 静态检查和单包组装 8 项回归通过。生成候选的
+`tool/single_import_smoke.dart` 已验证新版配置、预加入回调、预加入页和聊天页
+可从单一 SDK 入口导入。格式检查覆盖 737 个 Dart 文件，0 待格式化。
 
-**最终本地验收结果（2026-10-10）**：
-
-| 项目 | 结果 |
-| --- | --- |
-| 37 包 `python3 scripts/check_sdk_quality.py --analyze --test` | 通过，`Failures:` 空 |
-| `python3 scripts/check_sdk_architecture.py` | 通过：37 包依赖无环、Runtime 无 UI 依赖 |
-| `python3 scripts/format_sdk.py --check` | 通过：485 Dart 文件、0 待格式化 |
-| `python3 scripts/generate_capability_matrix.py --check` | 通过；声明文档已重新生成 |
-| `flutter analyze --no-pub`（Demo） | 无问题 |
-| `flutter test --no-pub`（Demo） | 14/14 通过 |
-| `flutter build web --release --no-pub`（Demo） | 构建成功；WASM dry-run 仅发出警告 |
-| `git diff --check` | 通过 |
-
-上述验收面向当前仓库代码和 Web 编译产物；与真实远端 Provider
-连接或各 OS 原生权限、音视频采集的端到端验收是两个不同维度。
-
-**真实厂商与真机待验**（不能用 Fake / Widget tests 代替）：
-Android、iOS、Web、macOS、Windows 的媒体捕获、渲染、屏幕共享、
-前后摄像头、虚拟背景处理帧、音频设备输出选择；LiveKit、Agora、AWS
-Chime/IVS、TRTC、ARTC 的双端 RTC/IM、host 权限/设备 E2E；课堂授权/
-撤权、送礼、点赞、网络重连、多设备用户身份。缺少真机、长期运营
-凭证或可连接测试服务时，以上事项只能标记 `blocked/unverified`。
-
-后续想测“轻量接入节省多少”时必须对同一平台、相同 Dart/Flutter
-版本分别构建：①仅 Runtime+指定 Provider ②Runtime+chat_ui
-③sdk_ui 聚合 ④全 Provider `flutter_realtime_sdk`，对比 Release
-安装包/JS 产物（必要时 gzip）及构建日志，不能简单相减源码体积。
+本地 Widget 测试与模拟会话预览不代表真实厂商、真机、远端处理后像素、
+发布构建、Windows runner 或云资源清理验收。本次清理未运行这些独立验收。

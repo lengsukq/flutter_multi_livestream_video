@@ -13,9 +13,10 @@ remain optional; all shipped vendor SDK dependencies may still enter the app.
 
 The hosted single-package preview `0.1.0-dev.1` was published on
 [pub.dev](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1).
-The latest `0.1.0-dev.3` release candidate is **prepared locally, not yet
-published**. It adds effects-aware `RealtimeRoom.setCameraEnabled` and
-improves the default virtual-background UI. Unlike the hosted package, this
+The latest `0.1.0-dev.4` release candidate has **passed local publication
+validation; upload is pending**. It unifies the Demo and SDK pages, removes
+legacy UI templates, and includes effects-aware `RealtimeRoom.setCameraEnabled`.
+Unlike the hosted package, this
 development module has `publish_to: none` and is not published independently.
 
 **First integration into your own app:** follow the

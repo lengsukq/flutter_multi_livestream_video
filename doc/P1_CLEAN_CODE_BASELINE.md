@@ -1,4 +1,8 @@
-# P1 Clean Code phase 1 — baseline and migration boundaries
+# P1 Clean Code phase 1 — historical baseline
+
+> Archived baseline from 2026-10-09. Several UI types named below were removed
+> on 2026-10-15. For current APIs, use SDK_RUNTIME_INTEGRATION.zh-CN.md and
+> UI_COMPOSABILITY_ACCEPTANCE.zh-CN.md. This record is not current integration guidance.
 
 ## Scope and unchanged behavior
 

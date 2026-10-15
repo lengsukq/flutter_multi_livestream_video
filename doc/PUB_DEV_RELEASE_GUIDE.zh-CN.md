@@ -1,10 +1,12 @@
 # Flutter Realtime SDK — pub.dev 单包发布清单
 
-> **2026-10-15 后续预览准备：** 本地正在准备 `0.1.0-dev.3`，包含
-> Headless 第三方 Demo 使用的 `RealtimeRoom.setCameraEnabled`（处理源与
-> 摄像头发布串行化）、单包入口导出 `DefaultRealtimeVideoEffects` 和
-> 默认会议/直播虚拟背景 UI 优化。该版本只有通过单包静态分析、测试和
-> pub.dev dry-run 后才能作为候选；尚未上传 pub.dev。外部 Demo 请将
+> **2026-10-15 dev.4 发布准备：** `0.1.0-dev.4` 已完成单包静态分析与
+> pub.dev dry-run（0 warnings），发布包约 19 MB。包含 Demo/SDK 的
+> Meeting、Live、Chat、Pre-Join 页面统一及旧 UI 接口/模板删除，保留
+> Headless 摄像头/背景协调与 `DefaultRealtimeVideoEffects` 导出。
+> 首次上传被服务端以当前出口地区不可用拒绝，尚未发布；直连尝试已停止，交由维护者手动发布。
+> 日志：`build/quality/pub-dev4-dry-run.log`、`pub-dev4-publish.log`。
+> 外部 Demo 请将
 > `room.media.session.setVideoEnabled` 切换为
 > `room.setCameraEnabled`，参见 [SDK Runtime 接入指南](SDK_RUNTIME_INTEGRATION.zh-CN.md)。
 
@@ -69,9 +71,9 @@ Windows/Linux 尚需各自在目标 OS 编译；需要双设备实际音视频�
 可供 pub dry-run 验证的公开元数据目录，不改源码，不自动上传。
 
 ```sh
-# 示例：下一待发预览版
-python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.3
-# 目录：build/pub_release/0.1.0-dev.3/flutter_realtime_sdk/
+# 示例：dev.4 首次准备（已存在的版本目录不能覆盖）
+python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.4
+# 目录：build/pub_release/0.1.0-dev.4/flutter_realtime_sdk/
 ```
 
 ### README 中英文独立维护
@@ -87,17 +89,17 @@ python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.3
 发布目录同时包含 `README.md`、`README.zh-CN.md`，双向提供语言链接。
 发布脚本会把 `@VERSION@` 占位符替换为目标版本。
 
-如果 `dev.3` 已经组装、只需调整文档，**不要删除发布目录重新复制代码**，
+如果未发布的候选已经组装、只需调整文档，**不要删除发布目录重新复制代码**，
 可以执行仅更新 README 与文件校验清单的安全操作：
 
 ```sh
-python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.3 --refresh-readmes
-cd build/pub_release/0.1.0-dev.3/flutter_realtime_sdk
+python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.4 --refresh-readmes
+cd build/pub_release/0.1.0-dev.4/flutter_realtime_sdk
 flutter pub publish --dry-run
 ```
 
 发版前在 dry-run 的文件树中确认中文文件已被包含，并以完整独立宿主进行
-音视频验证。当前 `dev.3` **尚未上传 pub.dev**，不要在第三方 Demo
+音视频验证。当前 `dev.4` **尚未上传 pub.dev**，不要在第三方 Demo
 中把其 API 当作已发布版本的能力。
 
 ## 3. 正式单包发版验收门槛

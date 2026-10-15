@@ -2,14 +2,14 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-A provider-neutral Flutter SDK for **meetings, live streaming, chat, classroom interaction, shared content, and optional UI**. Applications own their layouts while the SDK owns sessions and operations.
+A provider-neutral Flutter SDK for **meetings, live streaming, chat, classroom interaction, shared content, and optional UI**. Use the same built-in pages shown in the Demo, compose UI components, or build a headless application.
 
 ## Release status
 
 | Distribution | Status | How to integrate |
 | --- | --- | --- |
 | [`flutter_realtime_sdk 0.1.0-dev.1`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1) | **Published** preview | One package, one public import |
-| `0.1.0-dev.3` | Locally staged; **not published** | Includes headless camera/background fix |
+| `0.1.0-dev.4` | Validated locally; **publication pending** | Unified Demo/SDK pages, legacy UI cleanup and headless camera/background fix |
 | Monorepo source packages | Development only | Facade plus selected Provider/UI modules |
 
 The hosted preview bundles 44 internal modules into **one pub.dev package**. This repository still has separate source modules, with different dependency instructions. Windows/Linux, some native vendor/device combinations, and third-party license verification remain release acceptance work.
@@ -46,10 +46,10 @@ Register providers explicitly. Use a **trusted backend** for short-lived credent
 
 ### Virtual-background update for Headless apps
 
-Locally prepared **`0.1.0-dev.3` (not yet published)** adds `room.setCameraEnabled(bool)` and exports `DefaultRealtimeVideoEffects` from the single-package import. It serializes processed-video capture with camera publishing and background changes. This example is **not supported by the published `dev.1`**:
+Locally prepared **`0.1.0-dev.4` (not yet published)** adds `room.setCameraEnabled(bool)` and exports `DefaultRealtimeVideoEffects` from the single-package import. It serializes processed-video capture with camera publishing and background changes. This example is **not supported by the published `dev.1`**:
 
 ~~~dart
-// Use this only after dev.3 is published/installed.
+// Use this only after dev.4 is published/installed.
 final realtime = Realtime(
   backendUrl: 'https://your-backend.example',
   providers: [createLivekitProvider()],
@@ -102,7 +102,7 @@ cd demo-server && npm install && npm start
 cd example && flutter pub get && flutter run -d macos
 ~~~
 
-The Demo composes SDK components for Meeting/Live/Chat/Pre-Join. To build an Apple Silicon **Demo** DMG from the repository root, run `./build_macos_arm64.command`. This produces an app installer, **not** a pub.dev SDK package.
+The Demo directly displays the SDK’s built-in Meeting/Live/Chat/Pre-Join pages. To build an Apple Silicon **Demo** DMG from the repository root, run `./build_macos_arm64.command`. This produces an app installer, **not** a pub.dev SDK package.
 
 ## 4. Capabilities and security
 
