@@ -16,7 +16,7 @@ platform. See the [capability matrix](https://github.com/lengsukq/flutter_multi_
 Requires Flutter 3.47 or later and Dart 3.12 or later. The combined native
 package requires Android API 28+, iOS 15+, and macOS 12+.
 
-After this preview is published, add:
+Add:
 
 ```yaml
 dependencies:
@@ -48,6 +48,21 @@ final room = connection.mediaRoom!;
 // Optional UI: RealtimeRoomView(room: room).
 // In the application's leave/logout flow: await connection.dispose();
 ```
+
+### Built-in UI in dev.4
+
+The Demo displays these SDK pages directly: `RealtimeRoomView` (selects the
+meeting/live page from the room), `RealtimeMeetingPage`, `RealtimeLivePage`,
+`RealtimeChatPage`, and `RealtimePreJoinPage`. Customize room presentation
+with `RealtimeRoomViewConfig`; pre-join uses `RealtimePreJoinEnter` and starts
+with the microphone and camera off. The host owns navigation and explicitly
+disposes its connection when leaving.
+
+This preview removes the older `MediaRoomView`, `MediaPreJoinPage`,
+`RealtimeChatView`, `RealtimeComposableRoomTemplate`,
+`RealtimeComposablePreJoinTemplate`, and `ChatDefaultPage` APIs.
+Replace `MediaRoomViewConfig` with `RealtimeRoomViewConfig` when upgrading.
+Reusable controls and Headless APIs remain available.
 
 ### Headless virtual backgrounds and camera publication
 

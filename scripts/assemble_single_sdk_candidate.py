@@ -167,7 +167,15 @@ def assemble(root: Path, destination: Path) -> dict:
         "  ),\n"
         "  featurePlugins: const [ClassroomPreset(), LivePreset()],\n"
         ");\n"
-        "Widget composeRoom(RealtimeRoom room) => RealtimeRoomView(room: room);\n"
+        "Widget composeRoom(RealtimeRoom room) => RealtimeRoomView(\n"
+        "  room: room, config: const RealtimeRoomViewConfig(),\n"
+        ");\n"
+        "Widget composeChat(RealtimeChatRoom room) => RealtimeChatPage(chatRoom: room);\n"
+        "Widget composePreJoin(Realtime sdk, RealtimePreJoinEnter enter) => RealtimePreJoinPage(\n"
+        "  roomLabel: 'room', displayName: 'Guest', onEnter: enter,\n"
+        "  runCheck: () => sdk.preJoin(role: MediaRole.participant),\n"
+        "  openPreview: (provider, role) => sdk.createLocalPreview(providerId: provider, role: role),\n"
+        ");\n"
     )
 
     external = hosted_dependencies(root, names)

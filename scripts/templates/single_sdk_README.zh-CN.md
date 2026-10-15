@@ -10,7 +10,7 @@
 
 需要 Flutter ≥ 3.47、Dart ≥ 3.12。原生最低版本：Android API 28、iOS 15、macOS 12。
 
-**该版本发布后**，在应用的 `pubspec.yaml` 中添加：
+在应用的 `pubspec.yaml` 中添加：
 
 ~~~yaml
 dependencies:
@@ -56,7 +56,20 @@ Media Provider 和 Chat Provider 可以独立注册和选择。
 供应商 App Certificate、签名密钥、云存储密钥只能放在可信服务端，
 不要写入 Flutter 客户端。
 
-## 三、Headless 模式、虚拟背景与摄像头
+## 三、dev.4 内置 UI 与升级
+
+Demo 直接展示 SDK 提供的 `RealtimeRoomView`（按房间选择会议/直播页面）、
+`RealtimeMeetingPage`、`RealtimeLivePage`、`RealtimeChatPage` 和
+`RealtimePreJoinPage`。房间页面通过 `RealtimeRoomViewConfig` 配置，
+预入会回调使用 `RealtimePreJoinEnter`，麦克风与摄像头默认关闭。
+宿主负责路由，在真正离开时显式销毁连接。
+
+此版本已移除旧的 `MediaRoomView`、`MediaPreJoinPage`、`RealtimeChatView`、
+`RealtimeComposableRoomTemplate`、`RealtimeComposablePreJoinTemplate` 和
+`ChatDefaultPage`；升级时将 `MediaRoomViewConfig` 替换为
+`RealtimeRoomViewConfig`。可组合控件与 Headless 接口继续保留。
+
+## 四、Headless 模式、虚拟背景与摄像头
 
 宿主应用可以只用 SDK 的数据、媒体与操作接口，自己绘制会议/直播页面。
 如果选择虚拟背景，先像上例一样配置 `videoEffectsFactory`。
@@ -83,7 +96,7 @@ await room.setCameraEnabled(false);
 `prepareVideoEffects(MediaLocalPreviewSettings(...))` 可用于入会后的预设，
 但普通开关摄像头应以 SDK 的统一方法为准。
 
-## 四、iOS 配置（发布单包）
+## 五、iOS 配置（发布单包）
 
 iOS 最低版本为 **15.0**，保留 Flutter 默认的 Swift Package Manager 支持。
 合并插件为 ARTC/Chime 和自有桥接使用 CocoaPods；部分第三方插件通过 SwiftPM 集成。
@@ -119,7 +132,7 @@ end
 宿主应用还必须提供摄像头、麦克风权限用途说明。屏幕共享等能力可能还需要
 各平台的独立权限、扩展或其他系统配置。
 
-## 五、发行范围和限制
+## 六、发行范围和限制
 
 - **一个 pub.dev 依赖不等于只安装一个供应商的原生 SDK：** 所有发布包声明的原生依赖仍会参与解析/构建。
 - Web 可使用常规 JavaScript 构建；当前完整依赖集合的 Wasm 兼容性尚未完成验证。
@@ -127,7 +140,7 @@ end
 - 单元测试与编译通过不能替代真实设备连通性、录制、云文件清理等测试。
 - 本项目自有代码使用 MIT 协议；第三方 SDK 仍遵守各自的授权及服务条款。
 
-## 六、相关文档
+## 七、相关文档
 
 [英文说明](README.md) ·
 [仓库中文首页](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/README.zh-CN.md) ·

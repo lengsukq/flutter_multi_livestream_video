@@ -16,8 +16,8 @@ class BilingualReadmeTest(unittest.TestCase):
             self.assertTrue(chinese.exists(), str(chinese))
             self.assertIn("(README.zh-CN.md)", english.read_text())
             self.assertIn("(README.md)", chinese.read_text())
-            self.assertIn("0.1.0-dev.1", english.read_text())
-            self.assertIn("0.1.0-dev.3", chinese.read_text())
+            self.assertIn("0.1.0-dev.4", english.read_text())
+            self.assertIn("0.1.0-dev.4", chinese.read_text())
 
     def test_repository_local_links_are_valid(self):
         for file in (
@@ -42,12 +42,12 @@ class BilingualReadmeTest(unittest.TestCase):
         self.assertIn("(README.md)", chinese.read_text())
         self.assertIn("@VERSION@", english.read_text())
         self.assertIn("@VERSION@", chinese.read_text())
-        staged = ROOT / "build/pub_release/0.1.0-dev.3/flutter_realtime_sdk"
+        staged = ROOT / "build/pub_release/0.1.0-dev.4/flutter_realtime_sdk"
         if staged.exists():
             self.assertTrue((staged / "README.zh-CN.md").exists())
             for lang in ("README.md", "README.zh-CN.md"):
                 content = (staged / lang).read_text()
-                self.assertIn("0.1.0-dev.3", content)
+                self.assertIn("0.1.0-dev.4", content)
                 self.assertNotIn("@VERSION@", content)
 
 

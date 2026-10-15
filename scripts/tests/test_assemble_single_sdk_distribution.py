@@ -21,9 +21,6 @@ class SingleSdkDistributionTest(unittest.TestCase):
 
     def test_one_hosted_dependency_surface(self):
         pubspec = (self.root / "pubspec.yaml").read_text()
-        # Additional public SDK UI components may increase the number of
-        # bundled libraries; the release must not silently drop old modules.
-        self.assertGreaterEqual(self.report["dartLibraries"], 612)
         self.assertIn("publish_to: none", pubspec)
         self.assertIn("repository: https://github.com/", pubspec)
         self.assertNotIn("    path:", pubspec)
@@ -33,6 +30,25 @@ class SingleSdkDistributionTest(unittest.TestCase):
         self.assertTrue((self.root / ".git").is_dir())
         self.assertTrue((self.root / ".pubignore").is_file())
         self.assertFalse(self.report["publishable"])
+
+    def test_distribution_exposes_current_pages_without_legacy_templates(self):
+        # Validate the supported surface; removing obsolete pages legitimately
+        # lowers the library count and must not require keeping dead modules.
+        bundled = self.root / "lib/src/_bundled/flutter_realtime_sdk_ui"
+        public_ui = (bundled / "flutter_realtime_sdk_ui.dart").read_text()
+        for module in ("realtime_room_view", "realtime_meeting_page", "realtime_live_page",
+                       "realtime_pre_join_page", "realtime_chat_page", "realtime_room_view_config"):
+            self.assertIn(f"export 'src/{module}.dart';", public_ui)
+            self.assertTrue((bundled / f"src/{module}.dart").is_file())
+        for removed in ("realtime_composable_template", "legacy_room_content_controls"):
+            self.assertFalse((bundled / f"src/{removed}.dart").exists())
+        media = self.root / "lib/src/_bundled/flutter_realtime_media_ui/src"
+        for removed in ("media_room_view", "media_pre_join_dialog", "realtime_chat_view",
+                        "composable_pre_join_template", "media_room_view_config"):
+            self.assertFalse((media / f"{removed}.dart").exists())
+        smoke = (self.root / "tool/single_import_smoke.dart").read_text()
+        for symbol in ("RealtimeRoomViewConfig", "RealtimePreJoinEnter", "RealtimePreJoinPage", "RealtimeChatPage"):
+            self.assertIn(symbol, smoke)
 
     def test_single_public_entry_supports_headless_video_effects(self):
         entry = (self.root / "lib/flutter_realtime_sdk.dart").read_text()

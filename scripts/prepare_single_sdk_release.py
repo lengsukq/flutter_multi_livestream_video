@@ -93,6 +93,15 @@ def prepare(version: str, root: Path = ROOT) -> Path:
             "- Resolve iOS IVS from pinned official archives without bundling vendor binaries.\n"
             "- Include an explicit Podfile integration helper for Agora RTC/Chat duplicate framework embeds.\n"
         )
+    elif version == "0.1.0-dev.4":
+        notes = (
+            "- Unify built-in Meeting, Live, Chat and Pre-Join pages with the Demo UI; the Demo now composes the SDK pages.\n"
+            "- Include reusable meeting stages, side panels, recording controls and recording results.\n"
+            "- BREAKING: remove MediaRoomView, MediaPreJoinPage, RealtimeChatView and legacy composable/default templates. Use RealtimeRoomView, RealtimePreJoinPage and RealtimeChatPage.\n"
+            "- BREAKING: replace MediaRoomViewConfig with RealtimeRoomViewConfig and use RealtimePreJoinEnter for the pre-join callback.\n"
+            "- Keep pre-join microphone/camera disabled by default and preserve preview cleanup during cancellation, retries and pending entry.\n"
+            "- Retain effects-aware RealtimeRoom.setCameraEnabled and the public DefaultRealtimeVideoEffects export for Headless apps.\n"
+        )
     else:
         notes = (
             "- Fix camera-off background selection followed by camera-on in external Headless apps.\n"
