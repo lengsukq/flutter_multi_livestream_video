@@ -1,9 +1,9 @@
 import 'dart:typed_data';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
-import 'media_background_image_preset.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
-class MediaRoomViewConfig {
-  const MediaRoomViewConfig({
+class RealtimeRoomViewConfig {
+  const RealtimeRoomViewConfig({
     this.showProvider = false,
     this.showChat = true,
     this.showRtcDataMessages = false,
@@ -21,8 +21,7 @@ class MediaRoomViewConfig {
   final Uint8List? backgroundImageBytes;
   final List<MediaBackgroundImagePreset> backgroundImagePresets;
 
-  /// Optional explicitly configured room mode.
-  /// When not provided, the room view deduces meeting vs live from the
-  /// participant role and attached interactions.
+  /// Fallback mode for direct sessions without authoritative backend metadata.
+  /// Connected backend mode takes precedence over this hint.
   final MediaRoomMode? roomMode;
 }

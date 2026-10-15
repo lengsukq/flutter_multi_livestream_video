@@ -23,6 +23,8 @@ import 'room_chat_components.dart';
 class RealtimeLiveDesktopStage extends StatelessWidget {
   const RealtimeLiveDesktopStage({
     super.key,
+    this.showChat = true,
+    this.showLiveInteractions = true,
     this.videoFit,
     this.onExit,
     this.exitAction,
@@ -34,6 +36,8 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
     this.liveDuration,
   });
 
+  final bool showChat;
+  final bool showLiveInteractions;
   final BoxFit? videoFit;
   final VoidCallback? onExit;
   final Widget? exitAction;
@@ -79,22 +83,26 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
                       Expanded(
                         child:
                             customChatPanel ??
-                            const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: Align(
-                                alignment: Alignment.bottomLeft,
-                                child: RealtimeLiveChatFeed(
-                                  maxMessages: 20,
-                                  onVideo: false,
-                                ),
-                              ),
-                            ),
+                            (showChat
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: Align(
+                                      alignment: Alignment.bottomLeft,
+                                      child: RealtimeLiveChatFeed(
+                                        maxMessages: 20,
+                                        onVideo: false,
+                                      ),
+                                    ),
+                                  )
+                                : const SizedBox.shrink()),
                       ),
 
                       const Divider(height: 1),
                       // Bottom Chat Input & Interaction Row
                       _LiveBottomBar(
                         controller: controller,
+                        showChat: showChat,
+                        showLiveInteractions: showLiveInteractions,
                         customGiftButton: customGiftPanel,
                       ),
                     ],
@@ -134,23 +142,27 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
                         // A. Video Canvas with Double-Tap to Like
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () => unawaited(
-                            controller.sendLiveLike().catchError(
-                              controller.reportActionError,
-                            ),
-                          ),
-                          onDoubleTap: () {
-                            unawaited(
-                              controller.sendLiveLike().catchError(
-                                controller.reportActionError,
-                              ),
-                            );
-                            unawaited(
-                              controller.sendLiveLike().catchError(
-                                controller.reportActionError,
-                              ),
-                            );
-                          },
+                          onTap: !showLiveInteractions
+                              ? null
+                              : () => unawaited(
+                                  controller.sendLiveLike().catchError(
+                                    controller.reportActionError,
+                                  ),
+                                ),
+                          onDoubleTap: !showLiveInteractions
+                              ? null
+                              : () {
+                                  unawaited(
+                                    controller.sendLiveLike().catchError(
+                                      controller.reportActionError,
+                                    ),
+                                  );
+                                  unawaited(
+                                    controller.sendLiveLike().catchError(
+                                      controller.reportActionError,
+                                    ),
+                                  );
+                                },
                           child: RealtimeLiveVideoStage(fit: videoFit),
                         ),
 
@@ -168,7 +180,8 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
                         ),
 
                         // B. Floating Hearts Animation Overlay
-                        if (controller.room.liveInteractions != null)
+                        if (showLiveInteractions &&
+                            controller.room.liveInteractions != null)
                           const Positioned(
                             right: 24,
                             bottom: 40,
@@ -181,7 +194,8 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
 
                         // All viewers and the host receive gift events even
                         // when their gift panel is closed.
-                        if (controller.room.liveInteractions != null)
+                        if (showLiveInteractions &&
+                            controller.room.liveInteractions != null)
                           const Positioned(
                             left: 16,
                             right: 150,
@@ -402,7 +416,14 @@ class _LiveDurationBadge extends StatelessWidget {
 }
 
 class _LiveBottomBar extends StatelessWidget {
-  const _LiveBottomBar({required this.controller, this.customGiftButton});
+  const _LiveBottomBar({
+    required this.controller,
+    this.customGiftButton,
+    required this.showChat,
+    required this.showLiveInteractions,
+  });
+  final bool showChat;
+  final bool showLiveInteractions;
   final RealtimeRoomUiController controller;
   final Widget? customGiftButton;
 
@@ -411,15 +432,16 @@ class _LiveBottomBar extends StatelessWidget {
     padding: const EdgeInsets.all(12),
     child: Row(
       children: [
-        if (controller.room.chat != null)
+        if (showChat && controller.room.chat != null)
           const Expanded(child: RealtimeChatComposer())
         else
           const Spacer(),
         if (customGiftButton != null)
           customGiftButton!
-        else if (controller.room.liveInteractions != null)
+        else if (showLiveInteractions &&
+            controller.room.liveInteractions != null)
           const RealtimeLiveGiftButton(),
-        if (controller.room.liveInteractions != null)
+        if (showLiveInteractions && controller.room.liveInteractions != null)
           const RealtimeLiveLikeButton(),
       ],
     ),

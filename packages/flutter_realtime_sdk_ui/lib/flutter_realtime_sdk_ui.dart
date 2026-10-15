@@ -6,7 +6,6 @@ export 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_pre
 export 'src/realtime_room_view.dart';
 export 'src/realtime_role_presentation.dart';
 export 'src/room_ui_controller.dart';
-export 'src/realtime_composable_template.dart';
 export 'src/room_media_components.dart';
 export 'src/room_control_components.dart';
 export 'src/meeting_dock.dart';
@@ -27,3 +26,18 @@ export 'package:flutter_realtime_shared_content_preset/flutter_realtime_shared_c
 export 'package:flutter_realtime_screen_annotation/flutter_realtime_screen_annotation.dart';
 export 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart'
     hide RealtimeRoomUiController, RealtimeRoomUiScope;
+
+export 'src/realtime_meeting_page.dart';
+export 'src/realtime_live_page.dart';
+export 'src/realtime_pre_join_page.dart';
+export 'src/realtime_chat_page.dart';
+export 'src/realtime_meeting_stage.dart';
+export 'src/realtime_meeting_side_panel.dart';
+export 'src/realtime_meeting_timer_badge.dart';
+export 'src/realtime_recording_badge.dart';
+export 'src/realtime_recording_button.dart';
+export 'src/realtime_recording_result_dialog.dart';
+export 'src/realtime_recording_layout_picker.dart';
+
+export 'src/realtime_room_view_config.dart';
+export 'src/realtime_pre_join_enter.dart';

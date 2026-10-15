@@ -6,6 +6,144 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 void main() {
+  testWidgets(
+    'standard page applies Pre-Join devices and enabled media before rendering controls',
+    (tester) async {
+      final media = _DeviceMediaSession();
+      final room = _room(media);
+      addTearDown(room.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RealtimeRoomView(
+            room: room,
+            config: const RealtimeRoomViewConfig(
+              initialMediaSettings: MediaLocalPreviewSettings(
+                microphoneEnabled: true,
+                cameraEnabled: true,
+                microphone: MediaDevice(
+                  id: 'mic-usb',
+                  label: 'USB microphone',
+                  kind: MediaDeviceKind.microphone,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(media.selected.single.id, 'mic-usb');
+      expect(media.muteCalls, 1);
+      expect(media.cameraCalls, 1);
+      expect(find.byType(RealtimeMeetingPage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'default room view renders the complete meeting UI without taking room ownership',
+    (tester) async {
+      final media = _FakeMediaSession();
+      final room = _room(media);
+      addTearDown(room.dispose);
+      for (final width in [390.0, 768.0, 1280.0]) {
+        await tester.binding.setSurfaceSize(Size(width, 850));
+        await tester.pumpWidget(
+          MaterialApp(home: RealtimeRoomView(room: room)),
+        );
+        await tester.pump();
+        expect(find.byType(RealtimeMeetingPage), findsOneWidget);
+        expect(find.byType(RealtimeMeetingTopBar), findsOneWidget);
+        expect(find.byType(RealtimeMeetingDock), findsOneWidget);
+        expect(find.byType(RealtimeMeetingStage), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(media.disposeCalls, 0);
+      await tester.binding.setSurfaceSize(null);
+    },
+  );
+
+  testWidgets(
+    'backend mode wins over the default page hint and hides optional live UI',
+    (tester) async {
+      final room = RealtimeRoom(
+        media: MediaRoomSession.direct(
+          roomCode: 'broadcast',
+          participantId: 'self',
+          session: _FakeMediaSession(role: MediaRole.viewer),
+          backendMetadata: const {'roomMode': 'broadcast'},
+        ),
+        renderer: const _FakeRenderer(),
+        disposeClients: () {},
+      );
+      addTearDown(room.dispose);
+      for (final width in [390.0, 1280.0]) {
+        await tester.binding.setSurfaceSize(Size(width, 850));
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RealtimeRoomView(
+              room: room,
+              config: const RealtimeRoomViewConfig(
+                roomMode: MediaRoomMode.meeting,
+                showChat: false,
+              ),
+              showLiveInteractions: false,
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.byType(RealtimeLivePage), findsOneWidget);
+        expect(find.byType(RealtimeMeetingPage), findsNothing);
+        expect(find.byType(RealtimeChatComposer), findsNothing);
+        expect(find.byType(RealtimeLiveChatFeed), findsNothing);
+        expect(find.byType(RealtimeLiveLikeButton), findsNothing);
+        expect(tester.takeException(), isNull);
+      }
+      await tester.binding.setSurfaceSize(null);
+    },
+  );
+
+  testWidgets(
+    'standard meeting page preserves custom participant rendering and extension overlays',
+    (tester) async {
+      final room = _room(_FakeMediaSession());
+      addTearDown(room.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RealtimeRoomView(
+            room: room,
+            header: const Text('Host header'),
+            participantBuilder: (_, member, _) =>
+                Text('Custom tile: ${member.id}'),
+            stageOverlayBuilder: (_) =>
+                const Align(child: Text('Host overlay')),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Host header'), findsOneWidget);
+      expect(find.text('Custom tile: self'), findsOneWidget);
+      expect(find.text('Host overlay'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'meeting duration survives replacement of its compact presentation',
+    (tester) async {
+      final started = DateTime.now().subtract(const Duration(minutes: 5));
+      await tester.pumpWidget(
+        MaterialApp(home: RealtimeMeetingTimerBadge(startedAt: started)),
+      );
+      expect(find.text('05:00'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(
+        MaterialApp(home: RealtimeMeetingTimerBadge(startedAt: started)),
+      );
+      expect(find.text('05:00'), findsOneWidget);
+    },
+  );
+
   testWidgets('background controls explain unavailable platform support', (
     tester,
   ) async {
@@ -532,26 +670,6 @@ void main() {
       isFalse,
       reason: 'Removing the UI must not dispose the chat session',
     );
-  });
-
-  testWidgets('default room template is built from public components', (
-    tester,
-  ) async {
-    final room = _room(_FakeMediaSession());
-    addTearDown(room.dispose);
-    for (final width in [390.0, 768.0, 1280.0]) {
-      await tester.binding.setSurfaceSize(Size(width, 850));
-      await tester.pumpWidget(
-        MaterialApp(home: RealtimeComposableRoomTemplate(room: room)),
-      );
-      await tester.pump();
-      expect(find.byType(RealtimeRoomUiScope), findsOneWidget);
-      expect(find.byType(RealtimeVideoGrid), findsOneWidget);
-      expect(find.byType(RealtimeMicrophoneButton), findsOneWidget);
-      expect(find.byType(RealtimeBackgroundEffectsButton), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    }
-    await tester.binding.setSurfaceSize(null);
   });
 
   testWidgets(

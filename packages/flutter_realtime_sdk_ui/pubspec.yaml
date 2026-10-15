@@ -1,5 +1,5 @@
 name: flutter_realtime_sdk_ui
-description: Optional room and system toolbar UI composition.
+description: Optional ready-to-use meeting, live, chat and pre-join pages plus composable UI.
 version: 0.1.0
 publish_to: none
 repository: https://github.com/lengsukq/flutter_multi_livestream_video
@@ -8,6 +8,7 @@ environment:
   sdk: ^3.12.0
   flutter: '>=3.47.0'
 dependencies:
+  url_launcher: ^6.3.2
   flutter_realtime_design_ui:
     path: ../flutter_realtime_design_ui
   flutter_realtime_room_ui:

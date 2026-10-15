@@ -56,6 +56,30 @@ class RealtimeStrings {
         RealtimeStrings(Localizations.localeOf(context));
   }
 
+  String get back => isZh ? '返回' : 'Back';
+  String get conversation => isZh ? '聊天消息' : 'Conversation';
+  String get preJoinTitle => isZh ? '入会前准备' : 'Ready to join';
+  String get cameraPreview => isZh ? '画面预览' : 'Video preview';
+  String get viewerPreviewHelp => isZh
+      ? '作为观众，无需开启摄像头和麦克风'
+      : 'As a viewer, no camera or microphone is needed';
+  String get previewDisabledHelp => isZh
+      ? '摄像头默认关闭，可在设备设置中开启预览'
+      : 'Camera is off by default. Enable it in audio & video settings';
+  String get cloudRecording => isZh ? '云录制' : 'Cloud recording';
+  String get stopCloudRecording => isZh ? '停止云录制' : 'Stop cloud recording';
+  String get viewRecordingResult => isZh ? '查看录制结果' : 'View recording result';
+  String get cloudRecordingUnsupported => isZh
+      ? '当前供应商未配置云录制执行器'
+      : 'Cloud recording requires a supported provider and configured backend';
+
+  String displayRealtimeError(Object error) => error is RealtimeException
+      ? [
+          error.message,
+          if (error.suggestedAction == 'retry') isZh ? '请重试。' : 'Please retry.',
+        ].join('\n')
+      : (isZh ? '操作失败，请重试。' : 'The action failed. Please retry.');
+
   String get chat => isZh ? '聊天' : 'Chat';
   String get standaloneChat => isZh ? '独立聊天' : 'Standalone Chat';
   String get independentProductChat =>

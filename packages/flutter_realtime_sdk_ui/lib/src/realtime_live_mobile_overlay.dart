@@ -25,6 +25,8 @@ import 'room_chat_components.dart';
 class RealtimeLiveMobileOverlay extends StatelessWidget {
   const RealtimeLiveMobileOverlay({
     super.key,
+    this.showChat = true,
+    this.showLiveInteractions = true,
     this.onExit,
     this.exitAction,
     this.onViewAudience,
@@ -50,6 +52,8 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
   final List<Widget>? extraBottomActions;
   final List<Widget> extraTopActions;
   final int maxChatMessages;
+  final bool showChat;
+  final bool showLiveInteractions;
   final BoxFit? videoFit;
   final VoidCallback? onToggleVideoFit;
   final VoidCallback? onToggleCleanScreen;
@@ -205,7 +209,8 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
             ),
 
             // 4. Floating Hearts Animation Overlay
-            if (controller.room.liveInteractions != null)
+            if (showLiveInteractions &&
+                controller.room.liveInteractions != null)
               const Positioned(
                 right: 16,
                 bottom: 80,
@@ -214,7 +219,8 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                 child: IgnorePointer(child: RealtimeLiveHeartsOverlay()),
               ),
 
-            if (controller.room.liveInteractions != null)
+            if (showLiveInteractions &&
+                controller.room.liveInteractions != null)
               const Positioned(
                 left: 12,
                 right: 12,
@@ -239,17 +245,20 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Floating Chat Feed
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: viewport.maxWidth * 0.72,
-                        maxHeight:
-                            (viewport.maxHeight -
-                                    MediaQuery.paddingOf(context).vertical -
-                                    260)
-                                .clamp(0, 180),
+                    if (showChat)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: viewport.maxWidth * 0.72,
+                          maxHeight:
+                              (viewport.maxHeight -
+                                      MediaQuery.paddingOf(context).vertical -
+                                      260)
+                                  .clamp(0, 180),
+                        ),
+                        child: RealtimeLiveChatFeed(
+                          maxMessages: maxChatMessages,
+                        ),
                       ),
-                      child: RealtimeLiveChatFeed(maxMessages: maxChatMessages),
-                    ),
                     const SizedBox(height: 10),
 
                     if (isHost) ...[
@@ -270,24 +279,30 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (onOpenGiftSheet != null) ...[
+                                if (showLiveInteractions &&
+                                    onOpenGiftSheet != null) ...[
                                   _CircleIconButton(
                                     icon: Icons.card_giftcard_rounded,
                                     color: RealtimeUiTokens.appleRose,
                                     onPressed: onOpenGiftSheet!,
                                   ),
                                   const SizedBox(width: 8),
-                                ] else if (controller.room.liveInteractions !=
-                                    null) ...[
+                                ] else if (showLiveInteractions &&
+                                    controller.room.liveInteractions !=
+                                        null) ...[
                                   const RealtimeLiveGiftButton(),
                                   const SizedBox(width: 8),
                                 ],
-                                if (controller.room.liveInteractions != null)
+                                if (showLiveInteractions &&
+                                    controller.room.liveInteractions != null)
                                   RealtimeLiveLikeButton(iconOnly: compactHud),
                                 ...?extraBottomActions,
                               ],
                             ),
                           );
+                          if (!showChat || controller.room.chat == null) {
+                            return actions;
+                          }
                           final chat = _MobileChatInputPill(
                             onTap: () =>
                                 _openChatInputDialog(context, controller),

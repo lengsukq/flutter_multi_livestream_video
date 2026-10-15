@@ -12,8 +12,11 @@ class RealtimeVideoGrid extends StatelessWidget {
     this.spacing = 8,
     this.padding = const EdgeInsets.all(8),
     this.onParticipantTap,
+    this.participantBuilder,
   });
 
+  final Widget Function(BuildContext, MediaParticipant, MediaTrackRenderer)?
+  participantBuilder;
   final List<MediaParticipant>? participants;
   final int? crossAxisCount;
   final double spacing;
@@ -59,6 +62,13 @@ class RealtimeVideoGrid extends StatelessWidget {
               itemCount: members.length,
               itemBuilder: (context, index) {
                 final member = members[index];
+                if (participantBuilder != null) {
+                  return participantBuilder!(
+                    context,
+                    member,
+                    controller.room.renderer,
+                  );
+                }
                 return RealtimeVideoTile(
                   key: ValueKey(member.id),
                   participant: member,

@@ -54,7 +54,13 @@ Widget? buildRoomSharedContentStage(
 
 /// Room content (participants, whiteboard or shared screen) without a Scaffold.
 class RealtimeSharedContentStage extends StatelessWidget {
-  const RealtimeSharedContentStage({super.key, required this.members});
+  const RealtimeSharedContentStage({
+    super.key,
+    required this.members,
+    this.withAnnotations = true,
+  });
+
+  final bool withAnnotations;
 
   final Widget members;
 
@@ -71,6 +77,7 @@ class RealtimeSharedContentStage extends StatelessWidget {
             room,
             room.media.session.snapshot,
             members: members,
+            withAnnotations: withAnnotations,
           ) ??
           members,
     );

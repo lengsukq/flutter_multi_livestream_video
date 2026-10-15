@@ -200,14 +200,15 @@ void main() {
     },
   );
 
-  testWidgets('default chat template is composed from public widgets', (
-    tester,
-  ) async {
+  testWidgets('standalone chat components share one scope', (tester) async {
     final session = _FakeChatSession();
     addTearDown(session.dispose);
     await tester.pumpWidget(
       MaterialApp(
-        home: ChatDefaultPage(session: session, roomCode: 'room-1'),
+        home: ChatUiScope(
+          session: session,
+          child: const Scaffold(body: ChatPanel()),
+        ),
       ),
     );
     expect(find.byType(ChatUiScope), findsOneWidget);

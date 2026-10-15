@@ -1,25 +1,51 @@
 # flutter_realtime_sdk_ui
 
-> **Development monorepo package, not published separately.** When using this
-> repository's lightweight `flutter_realtime_sdk` facade through local path
-> dependencies, import this optional UI package separately. In the **hosted
-> combined `flutter_realtime_sdk` preview**, these components are already
-> bundled into the one public package and do not need a second dependency.
-> Read [release preparation](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md)
-> before publishing. Import `package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart`,
-> not individual `src/` implementation files.
+Optional provider-neutral Flutter pages and independently composable widgets.
+The repository Demo displays these same SDK pages. This monorepo package is
+not published separately; the combined `flutter_realtime_sdk` preview bundles
+its public UI exports into the single SDK import.
 
-The SDK **owns the room session and actions**; the host app **owns every
-Scaffold, route, breakpoint, panel and overlay**. Components use one
-`RealtimeRoomUiController` through `RealtimeRoomUiScope` and never import
-a provider implementation.
+## Standard pages
 
-Add `flutter_realtime_sdk_ui` separately from the lightweight
-`flutter_realtime_sdk` and the chosen Provider bundle(s). RTC/IM roster,
-batch moderation, and Classroom/Live start/dispose belong to
-`RealtimeRoom.memberDirectory` and Runtime lifecycle; mounting UI does not
-start or stop business sessions. The repository Demo is for quick UI assembly,
-not an additional implementation of SDK operations.
+```dart
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
+
+MaterialApp(
+  theme: RealtimeUiTheme.light(),
+  supportedLocales: RealtimeStrings.supportedLocales,
+  localizationsDelegates: RealtimeStrings.localizationsDelegates,
+  home: RealtimeRoomView(
+    room: room,
+    config: RealtimeRoomViewConfig(initialMediaSettings: settings),
+    onLeave: navigateHome,
+  ),
+);
+```
+
+- `RealtimeRoomView` selects `RealtimeMeetingPage` or `RealtimeLivePage` using
+  authoritative backend mode. `config.roomMode` is only a fallback hint.
+- `RealtimeChatPage(chatRoom: chatRoom)` supplies the standalone chat page.
+- `RealtimePreJoinPage` owns its preview controller. Supply `runCheck`,
+  `openPreview`, `roomLabel`, `displayName` and `onEnter`; `RealtimePreJoinEnter`
+  runs after preview release. Failed connection attempts remain on the page.
+
+The SDK maintains one standard set of complete pages. Removed historical
+pages and compatibility templates have no aliases or deprecated exports.
+Apps own room creation, routes and connection disposal. Unmounting room or
+chat UI releases UI resources without disconnecting the underlying session.
+The explicit leave action leaves/closes the room before invoking navigation.
+
+## Customization
+
+`RealtimeRoomViewConfig` configures chat/provider visibility, RTC Data debug,
+leave confirmation, initial media settings, image presets and fallback mode.
+`RealtimeRoomView` also accepts `header`, `participantBuilder`,
+`loadImagePresets`, `onCustomReaction`, `stageOverlayBuilder`, and optional
+Classroom/Live/annotation visibility. Backend permissions remain authoritative.
+Images and custom transient events are application content; the Demo injects
+its locally bundled background pictures and wave event through these hooks.
+
+Use `RealtimeRoomUiScope` to arrange independent widgets in your own layout:
 
 ```dart
 RealtimeRoomUiScope(
@@ -27,201 +53,54 @@ RealtimeRoomUiScope(
   child: Scaffold(
     body: Column(
       children: [
-        Row(children: [
-          const RealtimeRoomInfo(),
-          const Spacer(),
-          RealtimeLeaveButton(onConfirm: confirmLeave, onLeft: navigateHome),
-        ]),
         const Expanded(child: RealtimeVideoGrid()),
-        const Row(children: [
-          RealtimeMicrophoneButton(),
-          RealtimeCameraButton(),
-          RealtimeScreenShareButton(),
+        Row(children: [
+          const RealtimeMicrophoneButton(),
+          const RealtimeCameraButton(),
+          RealtimeLeaveButton(onLeft: navigateHome),
         ]),
       ],
     ),
   ),
-)
-```
-
-The standalone building blocks currently include `RealtimeVideoTile`,
-`RealtimeVideoGrid`, `RealtimeScreenShareStage`, `RealtimeRoomInfo`,
-`RealtimeConnectionIndicator`, media action buttons, `RealtimeParticipantList`,
-`RealtimeChatMessageList`, `RealtimeChatComposer`, `RealtimeChatPanel`,
-`RealtimeClassroomButton`, `RealtimeSharedContentButton`, and
-`RealtimeSharedContentStage`. List and composer may live in different regions.
-Classroom widgets are independently positionable within `RealtimeRoomUiScope`:
-`RealtimeRaiseHandButton`, `RealtimeClassroomHandQueue`,
-`RealtimeClassroomRoster`, `RealtimeClassroomQuestions`,
-`RealtimeClassroomQuestionComposer`, `RealtimeClassroomFeedbackButton`,
-`RealtimeClassroomActivityList` (quizzes and polls),
-`RealtimeClassroomEngagement` and `RealtimeClassroomToolsButton`.
-All classroom operations use `RealtimeRoomUiController` and one shared
-ClassroomSession state subscription; the Demo chooses the toolbar, tab, drawer
-or overlay where each control appears. Permissions and authoritative classroom
-state remain in the SDK/control plane.
-Media actions also include `RealtimeSwitchCameraButton` and
-`RealtimeAudioOutputButton`. Camera selection alternates front/back from the
-controller's initial front-facing setting; a host app with a rear-facing
-initial camera can construct `RealtimeRoomUiController(room,
-initialCameraPosition: MediaCameraPosition.back)` and supply it to the scope.
-Audio output enumeration is separate from selection: devices remain visible,
-but read-only, if `canSelectAudioOutput` is false.
-
-### Virtual backgrounds in the default and composable layouts
-
-The same SDK-owned `showRealtimeBackgroundEffectsSheet(context)` drives
-`RealtimeBackgroundEffectsButton`, the generic
-`RealtimeRoomActionButton(action: RealtimeRoomUiAction.backgroundEffect)`,
-and the Demo's custom meeting/live toolbars. It applies changes through
-`RealtimeRoomUiController.setBackgroundEffect`, not through Demo-specific
-provider logic. To show replacement-image presets, pass a
-`loadImagePresets` callback or `imagePresets` to the reusable control.
-
-- Desktop meeting: background effects beside the camera; desktop live: next
-  to host controls.
-- Mobile meeting/live: background effects under **More** to avoid horizontal
-  overflow. Live also offers the same control in Host Tools.
-- Non-publishers/viewers: the action is absent. For a publishing role without
-  support, the entry explains that the current provider/device/platform or
-  the optional video-effects service is unavailable rather than disappearing.
-
-An application's runtime still needs an effects service to enable actual
-processing, e.g. `RealtimeRoomServices(videoEffectsFactory:
-DefaultRealtimeVideoEffects.new)` from `flutter_realtime_video_effects`.
-This is already wired in the Demo; apps constructing `Realtime` directly
-must opt in. Showing a control does **not** imply every provider/platform
-supports blur or image replacement.
-
-**External Headless integrations:** When changing the camera state, call
-`await room.setCameraEnabled(true/false)` instead of
-`room.media.session.setVideoEnabled`. This SDK API serializes camera
-publication with `room.setBackgroundEffect`, so turning the camera on after
-selecting a background while it was off cannot leave the processed source
-disabled. The single pub.dev package exports
-`DefaultRealtimeVideoEffects` directly from the public SDK import.
-
-Live uses `RealtimeLiveVideoStage` (only the broadcaster), `RealtimeLiveLikeButton`,
-`RealtimeLiveGiftButton`, `RealtimeLiveGiftBanner`, `RealtimeLiveChatFeed`,
-`RealtimeLiveHeartsOverlay` and `RealtimeLiveStatus`. Compose them in a
-host-owned `Stack` or toolbar rather than relying on a fixed overlay layout.
-
-The controller updates with session snapshots and chat messages. Multiple
-buttons share pending-operation state and cannot issue duplicate commands of
-the same kind. The UI scope disposes **only its subscriptions**; it does not
-disconnect the room. `RealtimeLeaveButton` explicitly closes/leaves the room;
-the host owns confirmation and navigation. For a classroom, prefer
-`RealtimeSharedContentButton` over direct screen-share toggles so the
-authoritative classroom content mode stays synchronized.
-
-`RealtimeRoomView` remains the **legacy full-page template**, while
-`RealtimeComposableRoomTemplate` is a small quick-start template implemented
-entirely with the public independent components. The Demo
-implements its own responsive page compositions in:
-
-- `example/lib/demo_composable_chat_page.dart` (standalone chat)
-- `example/lib/demo_composable_meeting_page.dart`
-- `example/lib/demo_composable_live_page.dart`
-- `example/lib/demo_composable_pre_join_page.dart`
-
-Pre-Join uses a separate `RealtimePreJoinController` exported by
-`flutter_realtime_media_ui` and provided to atomic controls via
-`RealtimePreJoinScope`. The app creates/disposes that controller, chooses its
-route and passes its entry callback to `RealtimePreJoinJoinButton`.
-Its provider-neutral controls include `RealtimePreJoinPreview`,
-`RealtimePreJoinCheckList`, `RealtimePreJoinPermissions`,
-`RealtimePreJoinMediaControls`, `RealtimePreJoinDevicePicker` and
-`RealtimePreJoinBackgroundSelector`. Preview releases **before** entry, and
-an entry failure stays on the same page with recoverable settings.
-
-### Choose the smallest dependency
-
-| App requirement | Import | Notes |
-| --- | --- | --- |
-| Chat-only UI | `package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart` | Depends on `flutter_realtime_chat_core` + Flutter only. No media, native RTC drivers, or room UI. |
-| Session orchestration without the default UI | `package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart` | Depends on runtime/core modules, but not the all-provider umbrella. |
-| Media, live, classroom + UI components | `package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart` | Rich aggregate that pulls in several UI modules. |
-| Lightweight facade with selected providers | `package:flutter_realtime_sdk/flutter_realtime_sdk.dart` **plus** the chosen `flutter_realtime_provider_*` | Facade exports Runtime only; it does **not** auto-register vendors or UI. |
-
-The **same** chat-specific state/controller and widgets work in both standalone
-chat and an attached meeting chat. The Room UI scope creates one
-`ChatUiController` and nests a `ChatUiScope` only when chat is available;
-chat list, search, composer, host governance and floating chat widgets share
-that source of truth. Unmounting either scope never disconnects the room.
-
-The legacy `RealtimeChatView` in `flutter_realtime_media_ui` now reuses
-the very same `ChatUiController` for its message/connection subscriptions,
-search, send and host moderation. Its original message bubbles, emoji drawer
-and glass-themed panels remain available. The old composer's UI and
-moderation presentation have been separated into
-`legacy_chat_actions.dart`, with no change to the public constructor.
-`flutter_realtime_media_ui` consequently depends on the small
-`flutter_realtime_chat_ui` package, **not** the other way around; an app using
-chat-only UI still does not depend on media UI or RTC drivers.
-
-The legacy `MediaRoomView` already owns its attached-chat snapshot/unread
-subscription in `RoomChatEventsController`; permission and content-stage
-invalidation subscriptions now live in `RoomAuxiliarySubscriptions`, which
-guards against stale events when inputs change. The provider session is
-never disposed by these presentation controllers.
-
-The app may use `RealtimeManagedParticipantList` for an RTC + IM **logical
-member directory**, or the lightweight `RealtimeParticipantList` for
-RTC-only snapshot presence. `RealtimeManagedParticipantList` uses the same
-exported `RoomMembersController` / `mergeRoomMembers` as the legacy
-`MediaRoomView` panel, and does not conflate unlinked RTC participant IDs
-with chat user IDs. It refreshes the directory when mounted and on explicit
-request; it does not poll the backend. Actions are gated by the active media
-and chat moderation capabilities. SDK operations, not the Demo, handle
-removal, mute, video shutdown and role change. Switching room or chat
-sources invalidates pending member loads rather than showing old-room users.
-`RoomMembersController.manageMedia` and `removeChatMember` perform the same
-permission/target/capability checks for the legacy page and independent
-room UI. `RealtimeBulkMuteButton` is an optional host-only button using the
-same `RoomMembersController.mute` batch operation as the legacy room,
-including failure-only retry, without requiring an app-defined room page.
-The legacy page's dialogs, loading state and navigation actions now reside
-in `room_members_actions.dart`; these are presentation concerns, not
-provider SDK transport implementations.
-Legacy media grid, focused-speaker selection, and contained screen-share
-composition now live in `legacy_room_media_stage.dart`. These are still
-optional presentation implementations, not vendor-specific RTC code; modern
-custom room layouts use the public `RealtimeVideoGrid` and
-`RealtimeScreenShareStage` instead.
-
-For chat alone, use the following independent package:
-
-```dart
-import 'package:flutter_realtime_chat_ui/flutter_realtime_chat_ui.dart';
-
-ChatUiScope(
-  session: session,
-  moderation: moderation,
-  child: Scaffold(
-    body: Column(children: const [
-      ChatSearchField(),
-      Expanded(child: ChatMessageList()),
-      ChatComposer(),
-    ]),
-  ),
 );
 ```
 
-The alternative `ChatDefaultPage` is an optional quick-start template built
-from these same public components. The Demo chooses its own layout.
+The scope shares pending actions, media/chat subscriptions and capability
+checks. Its controller owns UI resources only. An injected controller remains
+owned by its caller. `RealtimeManagedParticipantList` uses Runtime's logical
+RTC + IM member directory; `RealtimeParticipantList` is RTC-only presence.
 
-**Still pending:** the original large `MediaRoomView`/`RealtimeRoomView` and
-`RealtimeChatView` are kept as legacy templates until remaining behavior
-parity is proven; their internal UI subscriptions/state and advanced emoji
-affordances have not yet been fully removed. Further cleanup should **not**
-silently remove host management, chat reply/search, media effects, or Pre-Join
-race protection. Do not infer smaller APK/IPA/web bundles from source size
-without comparing actual release builds. Track the remaining work in the
-Coding Tools P0 UI Plan.
+## Optional capabilities
 
-The legacy `RealtimeRoomView` and composable `RealtimeSharedContentStage`
-now share the same provider-neutral contained screen/whiteboard stage renderer,
-and the legacy floating-content menu has been separated into
-`legacy_room_content_controls.dart` without changing its behavior. This is
-file-responsibility cleanup, **not** a removal of the optional legacy template
-or proof of reduced binary dependencies.
+Classroom, Live and shared content require explicit feature-plugin
+registration and trusted backend state. Runtime starts/disposes registered
+sessions. UI widgets never confer privileges or infer permissions from an RTC
+message. The standard pages reuse `RealtimeClassroomPanel`, shared-content
+stages, media actions and chat components; custom layouts can place these
+widgets independently.
+
+`RealtimeRecordingButton`, `RealtimeRecordingBadge`,
+`showRealtimeRecordingLayoutPicker` and `RealtimeRecordingResultDialog` use
+an injected cloud executor and backend-reported layouts. Meeting and Live
+share the same recording flow. Result polling ends on unmount; download is
+available only after authoritative completion.
+
+Background controls use `showRealtimeBackgroundEffectsSheet` and
+`RealtimeRoomUiController.setBackgroundEffect`. Real processing requires an
+explicit effects service, for example
+`RealtimeRoomServices(videoEffectsFactory: DefaultRealtimeVideoEffects.new)`.
+The Demo registers it. Unsupported publisher/provider/platform combinations
+explain unavailability; viewers do not receive camera background controls.
+Headless camera controls should call `room.setCameraEnabled` so publication
+stays coordinated with background processing.
+
+## Small component packages
+
+- `flutter_realtime_chat_ui`: Chat Core + Flutter widgets; no RTC or Media UI.
+- `flutter_realtime_media_ui`: media tiles, Pre-Join controls and presentation.
+- `flutter_realtime_room_ui`: room-bound media components and UI controller.
+- `flutter_realtime_sdk_ui`: complete pages and optional feature composition.
+
+Do not import another package's `src/` implementation. Widget tests and local
+previews are separate from real-provider, physical-device, remote-pixel and
+release-build acceptance. See [UI architecture and acceptance](../../doc/UI_COMPOSABILITY_ACCEPTANCE.zh-CN.md).

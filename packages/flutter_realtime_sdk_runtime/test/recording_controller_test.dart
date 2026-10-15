@@ -81,11 +81,25 @@ void main() {
     );
   });
 
+  test(
+    'recording availability follows an injected executor for any provider',
+    () async {
+      final controller = RoomRecordingController(
+        media: room,
+        providerId: 'custom-provider',
+        cloudRecordingSession: _FakeCloudSession(),
+      );
+      expect(controller.isConfigured, isTrue);
+      await controller.dispose();
+    },
+  );
+
   test('cloud recording requires a configured backend', () async {
     final controller = RoomRecordingController(
       media: room,
       providerId: 'agora',
     );
+    expect(controller.isConfigured, isFalse);
     await expectLater(
       controller.startRecording(),
       throwsA(

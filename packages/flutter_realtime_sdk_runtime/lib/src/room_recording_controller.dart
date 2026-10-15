@@ -54,6 +54,9 @@ class RoomRecordingController implements MediaRecordingController {
   @override
   Stream<Duration> get durations => _durationController.stream;
 
+  /// Whether this room has an injected cloud recording executor.
+  bool get isConfigured => cloudRecordingSession != null;
+
   RecordingOptions? get currentOptions => _currentOptions;
 
   @override

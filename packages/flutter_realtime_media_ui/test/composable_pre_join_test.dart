@@ -115,7 +115,7 @@ void main() {
     await tester.binding.setSurfaceSize(null);
   });
 
-  testWidgets('default Pre-Join template composes public pieces responsively', (
+  testWidgets('pre-join controls compose responsively inside a host layout', (
     tester,
   ) async {
     final controller = RealtimePreJoinController(
@@ -129,9 +129,17 @@ void main() {
       await tester.binding.setSurfaceSize(Size(width, 780));
       await tester.pumpWidget(
         MaterialApp(
-          home: RealtimeComposablePreJoinTemplate(
+          home: RealtimePreJoinScope(
             controller: controller,
-            onEnter: (_) async {},
+            child: Scaffold(
+              body: ListView(
+                children: [
+                  const RealtimePreJoinPreview(),
+                  const RealtimePreJoinCheckList(),
+                  RealtimePreJoinJoinButton(onEnter: (_) async {}),
+                ],
+              ),
+            ),
           ),
         ),
       );

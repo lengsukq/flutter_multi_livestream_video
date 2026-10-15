@@ -1,10 +1,6 @@
 library;
 
 export 'src/media_provider_label.dart';
-export 'src/media_pre_join_dialog.dart';
-export 'src/media_room_view.dart';
-export 'src/live_likes_controller.dart';
-export 'src/realtime_chat_view.dart';
 export 'src/realtime_strings.dart';
 export 'src/realtime_style.dart';
 export 'src/realtime_ui_style.dart';
@@ -13,19 +9,12 @@ export 'src/media_background_image_preset.dart';
 export 'src/background_effect_selector.dart';
 export 'src/composable_pre_join_controller.dart';
 export 'src/composable_pre_join_components.dart';
-export 'src/composable_pre_join_template.dart';
-export 'src/room_members_controller.dart'
-    show
-        RoomManagedMember,
-        RoomMemberLoadResult,
-        RoomMembersController,
-        RoomMediaMemberAction,
-        mergeRoomMembers;
 
 export 'src/realtime_pre_join_state.dart';
 
 export 'src/media_participant_builder.dart';
-export 'src/media_room_layout_mode.dart';
-export 'src/media_room_view_config.dart';
-export 'src/media_live_video_stage.dart';
-export 'src/media_meeting_video_stage.dart';
+
+export 'src/room_rtc_data_panel.dart';
+export 'src/initial_media_settings_controller.dart';
+
+export 'src/media_participant_tile.dart';

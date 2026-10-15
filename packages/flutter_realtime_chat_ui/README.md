@@ -28,8 +28,9 @@ log the user out.
 
 Public pieces include `ChatConnectionIndicator`, `ChatSearchField`,
 `ChatMessageList`, `ChatComposer`, `ChatPanel`, `ChatManagementButton`,
-`ChatMemberList` and `ChatRoomCodeCopy`. A quick-start `ChatDefaultPage`
-consumes the same public pieces, rather than creating another chat engine.
+`ChatMemberList` and `ChatRoomCodeCopy`. The complete standard page is
+`RealtimeChatPage` in the optional `flutter_realtime_sdk_ui` package; this
+component package contains no competing full-page template.
 
 Host member actions are gated by `ChatManagementCapabilities`. Transport,
 client vs backend execution, tokens, member authority and identity enforcement
