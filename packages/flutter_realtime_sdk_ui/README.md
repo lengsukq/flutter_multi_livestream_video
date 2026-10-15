@@ -1,7 +1,10 @@
 # flutter_realtime_sdk_ui
 
-> **Development monorepo package, not yet published to pub.dev.** This optional
-> UI package is **not** included in `flutter_realtime_sdk` automatically.
+> **Development monorepo package, not published separately.** When using this
+> repository's lightweight `flutter_realtime_sdk` facade through local path
+> dependencies, import this optional UI package separately. In the **hosted
+> combined `flutter_realtime_sdk` preview**, these components are already
+> bundled into the one public package and do not need a second dependency.
 > Read [release preparation](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md)
 > before publishing. Import `package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart`,
 > not individual `src/` implementation files.
@@ -64,6 +67,40 @@ initial camera can construct `RealtimeRoomUiController(room,
 initialCameraPosition: MediaCameraPosition.back)` and supply it to the scope.
 Audio output enumeration is separate from selection: devices remain visible,
 but read-only, if `canSelectAudioOutput` is false.
+
+### Virtual backgrounds in the default and composable layouts
+
+The same SDK-owned `showRealtimeBackgroundEffectsSheet(context)` drives
+`RealtimeBackgroundEffectsButton`, the generic
+`RealtimeRoomActionButton(action: RealtimeRoomUiAction.backgroundEffect)`,
+and the Demo's custom meeting/live toolbars. It applies changes through
+`RealtimeRoomUiController.setBackgroundEffect`, not through Demo-specific
+provider logic. To show replacement-image presets, pass a
+`loadImagePresets` callback or `imagePresets` to the reusable control.
+
+- Desktop meeting: background effects beside the camera; desktop live: next
+  to host controls.
+- Mobile meeting/live: background effects under **More** to avoid horizontal
+  overflow. Live also offers the same control in Host Tools.
+- Non-publishers/viewers: the action is absent. For a publishing role without
+  support, the entry explains that the current provider/device/platform or
+  the optional video-effects service is unavailable rather than disappearing.
+
+An application's runtime still needs an effects service to enable actual
+processing, e.g. `RealtimeRoomServices(videoEffectsFactory:
+DefaultRealtimeVideoEffects.new)` from `flutter_realtime_video_effects`.
+This is already wired in the Demo; apps constructing `Realtime` directly
+must opt in. Showing a control does **not** imply every provider/platform
+supports blur or image replacement.
+
+**External Headless integrations:** When changing the camera state, call
+`await room.setCameraEnabled(true/false)` instead of
+`room.media.session.setVideoEnabled`. This SDK API serializes camera
+publication with `room.setBackgroundEffect`, so turning the camera on after
+selecting a background while it was off cannot leave the processed source
+disabled. The single pub.dev package exports
+`DefaultRealtimeVideoEffects` directly from the public SDK import.
+
 Live uses `RealtimeLiveVideoStage` (only the broadcaster), `RealtimeLiveLikeButton`,
 `RealtimeLiveGiftButton`, `RealtimeLiveGiftBanner`, `RealtimeLiveChatFeed`,
 `RealtimeLiveHeartsOverlay` and `RealtimeLiveStatus`. Compose them in a

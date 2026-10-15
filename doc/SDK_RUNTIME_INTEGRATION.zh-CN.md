@@ -70,7 +70,8 @@ import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_pre
 final media = room.media.session;
 if (media is InteractiveMediaSession) {
   await media.setMuted(false);
-  await media.setVideoEnabled(true);
+  // 通过 SDK 入口操作摄像头，以便虚拟背景和采集源正确串行化。
+  await room.setCameraEnabled(true);
   if (media.capabilities.canScreenShare) {
     await media.setScreenShareEnabled(true);
   }
@@ -88,6 +89,43 @@ await room.classroom?.raiseHand();       // 当前房间具备课堂权限时
 ```
 
 `RealtimeRoom` 提供 `states`、`events`，底层 `MediaSession` 还提供 `snapshots`；聊天提供 `messageSnapshots`。**事件流为 broadcast，不保证新订阅者收到历史事件，订阅时同时读取当前 state/snapshot。** UI 的创建、重建与销毁不会断开媒体会话，退出请显式 `connection.dispose()`。
+
+### Headless 第三方 Demo：虚拟背景与摄像头开关
+
+在只使用 **一个 pub.dev 包** 的外部 App 中，构造 `Realtime` 时需要
+通过该包公开的 `DefaultRealtimeVideoEffects` 注册效果服务：
+
+```dart
+final realtime = Realtime(
+  backendUrl: 'https://your-backend.example',
+  providers: [createLivekitProvider()],
+  services: const RealtimeRoomServices(
+    videoEffectsFactory: DefaultRealtimeVideoEffects.new,
+  ),
+);
+```
+
+`RealtimeRoom` 的 `setCameraEnabled` 是 SDK 提供的统一摄像头控制入口。
+背景选择和摄像头发布进入相同操作队列；**不应在 Headless UI 中把
+`room.media.session.setVideoEnabled(true)` 当作背景摄像头的开关**，
+否则会绕过 SDK 对视频处理生命周期的串行保护。
+
+```dart
+// 先选背景，此时摄像头保持关闭，不发布原始画面。
+if (room.backgroundCapabilities.canBlur) {
+  await room.setBackgroundEffect(const MediaBackgroundEffect.blur());
+}
+await room.setCameraEnabled(true); // 先启用处理源，再进行 RTC 发布
+await room.setCameraEnabled(false); // 停止发布和处理采集
+await room.setBackgroundEffect(const MediaBackgroundEffect.none());
+```
+
+例如在外部按钮事件中，把裸 RTC 的 `setVideoEnabled` 替换为
+`room.setCameraEnabled`；切换背景仍调用 `room.setBackgroundEffect`。
+如需预设设备/背景，在加入房间后可先调用
+`room.prepareVideoEffects(MediaLocalPreviewSettings(...))`，然后开启摄像头。
+该 API 不修改其他厂商的业务消息、云录制或 Room 所属权；
+不支持背景处理的平台需做 capability 判断并处理异常。
 
 ## 4. RTC + IM 成员与权限
 

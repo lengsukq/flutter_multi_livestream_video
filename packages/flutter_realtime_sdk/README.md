@@ -1,5 +1,7 @@
 # flutter_realtime_sdk
 
+**English** · [简体中文](README.zh-CN.md)
+
 Provider-neutral Flutter SDK for meetings, live streams and standalone chat.
 **This is the ONLY publicly published SDK package name.**
 Its development facade is currently lightweight (runtime only); the generated
@@ -9,19 +11,22 @@ remain optional; all shipped vendor SDK dependencies may still enter the app.
 
 [Single-package release architecture and current blockers](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SINGLE_PACKAGE_RELEASE.zh-CN.md).
 
-The generated single-package preview `0.1.0-dev.1` is prepared separately from
-this development module. Its iOS IVS dependency installation and unsigned
-device-target Release build have passed; it includes an explicit Podfile helper
-for Agora RTC/Chat coexistence. The maintainer successfully uploaded it to
-[pub.dev](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1)
-on 2026-10-15; new-version availability may take up to 10 minutes.
+The hosted single-package preview `0.1.0-dev.1` was published on
+[pub.dev](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1).
+The latest `0.1.0-dev.3` release candidate is **prepared locally, not yet
+published**. It adds effects-aware `RealtimeRoom.setCameraEnabled` and
+improves the default virtual-background UI. Unlike the hosted package, this
+development module has `publish_to: none` and is not published independently.
 
 **First integration into your own app:** follow the
 [Chinese end-to-end quickstart](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/APP_INTEGRATION_QUICKSTART.zh-CN.md)
 before choosing individual features. The guide covers local path dependencies,
 backend/token setup, creator vs guest roles, Headless/UI, and platform checks.
 
-> **Status:** this directory is an internal development module with `publish_to: none` and local dependencies. The generated single-package preview `0.1.0-dev.1` has been uploaded to pub.dev; its API includes providers/UI/presets. Use the published package's README for hosted installation and iOS Podfile configuration.
+> **Status:** this directory is an internal development module with
+> `publish_to: none` and local dependencies. Use the **hosted package's
+> README** for single-package installation, native setup, and its exact
+> version-specific APIs.
 
 ## Requirements and installation
 
@@ -39,6 +44,11 @@ dependencies:
 ```
 
 These paths assume the host Flutter project and the SDK checkout are sibling folders. Replace them with the real relative paths in your workspace. For the published preview, use `flutter pub add flutter_realtime_sdk:0.1.0-dev.1` instead and follow the published package's README.
+
+**Language and distribution:** [English source README](README.md) ·
+[中文源码 README](README.zh-CN.md) ·
+[English hosted release template](../../scripts/templates/single_sdk_README.md) ·
+[中文单包发行模板](../../scripts/templates/single_sdk_README.zh-CN.md).
 
 ## Create, join and dispose
 

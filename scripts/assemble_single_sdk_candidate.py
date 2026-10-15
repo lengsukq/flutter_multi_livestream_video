@@ -143,6 +143,13 @@ def assemble(root: Path, destination: Path) -> dict:
     entry += "".join(
         f"export 'src/_bundled/{name}/{name}.dart';\n" for name in public
     )
+    # The single hosted package must expose the optional effects factory.
+    # Otherwise an external Headless app cannot opt in using the one public
+    # import, even though its native processed-video implementation is bundled.
+    entry += (
+        "export 'src/_bundled/flutter_realtime_video_effects/"
+        "flutter_realtime_video_effects.dart' show DefaultRealtimeVideoEffects;\n"
+    )
     (destination / "lib" / "flutter_realtime_sdk.dart").write_text(entry)
     # Compile this from the *one public import* to catch collisions and missing
     # exports that ordinary isolated library analysis does not detect.
@@ -155,6 +162,9 @@ def assemble(root: Path, destination: Path) -> dict:
         "  backendUrl: 'https://example.invalid',\n"
         "  providers: [createLivekitProvider(), createAgoraProvider(), "
         "createTrtcProvider(), createArtcProvider(), createAwsProvider()],\n"
+        "  services: const RealtimeRoomServices(\n"
+        "    videoEffectsFactory: DefaultRealtimeVideoEffects.new,\n"
+        "  ),\n"
         "  featurePlugins: const [ClassroomPreset(), LivePreset()],\n"
         ");\n"
         "Widget composeRoom(RealtimeRoom room) => RealtimeRoomView(room: room);\n"

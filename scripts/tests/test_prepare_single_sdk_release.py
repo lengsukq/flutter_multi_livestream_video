@@ -7,7 +7,7 @@ import unittest
 
 SCRIPTS = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
-from prepare_single_sdk_release import prepare
+from prepare_single_sdk_release import prepare, refresh_readmes
 
 
 class ReleasePreparationTest(unittest.TestCase):
@@ -38,20 +38,48 @@ class ReleasePreparationTest(unittest.TestCase):
             template = root / "scripts/templates/single_sdk_README.md"
             template.parent.mkdir(parents=True)
             template.write_text("Preview @VERSION@")
+            template_zh = root / "scripts/templates/single_sdk_README.zh-CN.md"
+            template_zh.write_text("预览版 @VERSION@\n[English](README.md)\n")
 
             release = prepare("0.1.0-dev.1", root)
             self.assertEqual((candidate / "pubspec.yaml").read_text(), files["pubspec.yaml"])
             self.assertNotIn("publish_to:", (release / "pubspec.yaml").read_text())
             self.assertIn("version: 0.1.0-dev.1", (release / "pubspec.yaml").read_text())
             self.assertEqual((release / "README.md").read_text(), "Preview 0.1.0-dev.1")
+            self.assertIn("预览版 0.1.0-dev.1", (release / "README.zh-CN.md").read_text())
             for excluded in ("ios/Frameworks", ".dart_tool", "tool", "pubspec.lock"):
                 self.assertFalse((release / excluded).exists(), excluded)
             inventory = json.loads((release.parent / "FILES.sha256.json").read_text())
             self.assertIn("ios/vendor_frameworks.json", inventory)
+            self.assertIn("README.md", inventory)
+            self.assertIn("README.zh-CN.md", inventory)
             self.assertNotIn(".git/config", inventory)
             self.assertFalse(any(name.startswith("ios/Frameworks/") for name in inventory))
             with self.assertRaises(FileExistsError):
                 prepare("0.1.0-dev.1", root)
+
+            # Updating staged documentation leaves Dart, native and package
+            # metadata byte-for-byte intact, even after dependency resolution.
+            (release / "pubspec.lock").write_text("transient")
+            (release / ".dart_tool").mkdir()
+            (release / ".dart_tool/package_config.json").write_text("{}")
+            original_pubspec = (release / "pubspec.yaml").read_bytes()
+            original_licenses = (release / "LICENSE").read_bytes()
+            template.write_text("Updated English @VERSION@\n[简体中文](README.zh-CN.md)\n")
+            template_zh.write_text("更新中文 @VERSION@\n[English](README.md)\n")
+            self.assertEqual(refresh_readmes("0.1.0-dev.1", root), release)
+            self.assertIn("Updated English 0.1.0-dev.1", (release / "README.md").read_text())
+            self.assertIn("更新中文 0.1.0-dev.1", (release / "README.zh-CN.md").read_text())
+            self.assertEqual((release / "pubspec.yaml").read_bytes(), original_pubspec)
+            self.assertEqual((release / "LICENSE").read_bytes(), original_licenses)
+            revised = json.loads((release.parent / "FILES.sha256.json").read_text())
+            self.assertNotIn("pubspec.lock", revised)
+            self.assertNotIn(".dart_tool/package_config.json", revised)
+            self.assertIn("README.zh-CN.md", revised)
+            self.assertEqual(
+                json.loads((release.parent / "PREPARATION.json").read_text())["fileCount"],
+                len(revised),
+            )
 
     def test_stable_release_requires_a_separate_acceptance_decision(self):
         with self.assertRaises(ValueError):

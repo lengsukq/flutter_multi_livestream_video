@@ -1,10 +1,12 @@
 # Flutter Realtime SDK
 
+**English** · [简体中文](README.zh-CN.md)
+
 One Flutter package for provider-neutral meetings, live streams, chat, optional
 UI, and classroom/live interaction presets. Media and product chat providers
 can be selected independently through explicit runtime registration.
 
-This is a **preview release**. Windows/Linux builds, physical-device vendor
+**Release: `@VERSION@` (preview).** Windows/Linux builds, physical-device vendor
 calls, long-running sessions, and cross-vendor coexistence are not yet fully
 verified. Platform registration does not imply every provider supports that
 platform. See the [capability matrix](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md).
@@ -29,6 +31,9 @@ import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 final realtime = Realtime(
   backendUrl: 'https://your-backend.example',
   providers: [createLivekitProvider()],
+  services: const RealtimeRoomServices(
+    videoEffectsFactory: DefaultRealtimeVideoEffects.new,
+  ),
   featurePlugins: const [ClassroomPreset(), LivePreset()],
 );
 
@@ -43,6 +48,31 @@ final room = connection.mediaRoom!;
 // Optional UI: RealtimeRoomView(room: room).
 // In the application's leave/logout flow: await connection.dispose();
 ```
+
+### Headless virtual backgrounds and camera publication
+
+If your app offers background effects, enable `videoEffectsFactory` as above.
+Use `room.setCameraEnabled` rather than calling
+`room.media.session.setVideoEnabled` directly. The SDK synchronizes camera
+publication with its processed-video source and serializes it with
+`setBackgroundEffect`, even if the camera was initially off.
+
+```dart
+// Camera is off; the selected effect remains prepared, but not capturing.
+await room.setBackgroundEffect(const MediaBackgroundEffect.blur());
+
+// Starts the already attached processed source before publishing the camera.
+await room.setCameraEnabled(true);
+
+// Change effects and close the camera in any sequence.
+await room.setBackgroundEffect(const MediaBackgroundEffect.none());
+await room.setCameraEnabled(false);
+```
+
+Only call the effect operations when `room.backgroundCapabilities` reports
+support. Blur/image replacement depends on the platform, provider, and host
+camera permissions. If effects initialization fails, handle the exception and
+do not silently publish unprocessed video as a fallback.
 
 Provide a backend implementing the provisioning/control contracts, or use
 `RealtimeSource.credentials(...)` with your own short-lived credential service.
@@ -100,4 +130,6 @@ can require additional host configuration.
 - Third-party components retain their own licenses and service terms; the
   package's MIT license covers the project's own code.
 
-[Source and documentation](https://github.com/lengsukq/flutter_multi_livestream_video)
+[Source and documentation](https://github.com/lengsukq/flutter_multi_livestream_video) ·
+[中文说明](README.zh-CN.md) ·
+[Full Chinese integration guide](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/APP_INTEGRATION_QUICKSTART.zh-CN.md)

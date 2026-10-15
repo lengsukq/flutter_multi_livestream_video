@@ -21,7 +21,9 @@ class SingleSdkDistributionTest(unittest.TestCase):
 
     def test_one_hosted_dependency_surface(self):
         pubspec = (self.root / "pubspec.yaml").read_text()
-        self.assertEqual(self.report["dartLibraries"], 612)
+        # Additional public SDK UI components may increase the number of
+        # bundled libraries; the release must not silently drop old modules.
+        self.assertGreaterEqual(self.report["dartLibraries"], 612)
         self.assertIn("publish_to: none", pubspec)
         self.assertIn("repository: https://github.com/", pubspec)
         self.assertNotIn("    path:", pubspec)
@@ -31,6 +33,14 @@ class SingleSdkDistributionTest(unittest.TestCase):
         self.assertTrue((self.root / ".git").is_dir())
         self.assertTrue((self.root / ".pubignore").is_file())
         self.assertFalse(self.report["publishable"])
+
+    def test_single_public_entry_supports_headless_video_effects(self):
+        entry = (self.root / "lib/flutter_realtime_sdk.dart").read_text()
+        self.assertIn("show DefaultRealtimeVideoEffects;", entry)
+        smoke = (self.root / "tool/single_import_smoke.dart").read_text()
+        self.assertIn("DefaultRealtimeVideoEffects.new", smoke)
+        room = (self.root / "lib/src/_bundled/flutter_realtime_sdk_runtime/src/realtime_room.dart").read_text()
+        self.assertIn("Future<void> setCameraEnabled(bool enabled)", room)
 
     def test_ios_resolves_official_binaries_without_nonexistent_pods(self):
         import json
