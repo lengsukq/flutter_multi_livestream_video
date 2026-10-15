@@ -53,6 +53,18 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
         widget.loadImagePresets?.call() ?? Future.value(widget.imagePresets);
   }
 
+  void _showActionError(RealtimeException error) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(RealtimeStrings.of(context).displayRealtimeError(error)),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _openBackgroundEffects(BuildContext context) {
     unawaited(
       showRealtimeBackgroundEffectsSheet(
@@ -303,6 +315,7 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
       }
       return RealtimeRoomUiScope(
         room: widget.room,
+        onActionError: _showActionError,
         child: Scaffold(
           backgroundColor: Colors.transparent,
           body: RealtimeAmbientBackground(

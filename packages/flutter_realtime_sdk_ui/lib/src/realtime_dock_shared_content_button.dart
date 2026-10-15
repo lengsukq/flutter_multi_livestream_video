@@ -40,6 +40,17 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
       );
     }
 
+    final controller = RealtimeRoomUiScope.of(context);
+    Future<void> changeMode(SharedContentMode mode) async {
+      try {
+        await shared.selectMode(mode);
+      } catch (error) {
+        // Unawaited Futures in a menu used to surface only in the browser
+        // console. Route the failure to the shared room UI error handler.
+        controller.reportActionError(error);
+      }
+    }
+
     return StreamBuilder<SharedContentStatus>(
       stream: shared.statuses,
       initialData: shared.status,
@@ -74,9 +85,7 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                         activeBadgeText: strings.activeSharing,
                         onTap: () {
                           Navigator.pop(sheetContext);
-                          unawaited(
-                            shared.selectMode(SharedContentMode.whiteboard),
-                          );
+                          unawaited(changeMode(SharedContentMode.whiteboard));
                         },
                       ),
                       const SizedBox(height: 10),
@@ -92,9 +101,7 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                         activeBadgeText: strings.activeSharing,
                         onTap: () {
                           Navigator.pop(sheetContext);
-                          unawaited(
-                            shared.selectMode(SharedContentMode.screen),
-                          );
+                          unawaited(changeMode(SharedContentMode.screen));
                         },
                       ),
                       if (isSharing) ...[
@@ -112,9 +119,7 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                             borderRadius: BorderRadius.circular(14),
                             onTap: () {
                               Navigator.pop(sheetContext);
-                              unawaited(
-                                shared.selectMode(SharedContentMode.members),
-                              );
+                              unawaited(changeMode(SharedContentMode.members));
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(

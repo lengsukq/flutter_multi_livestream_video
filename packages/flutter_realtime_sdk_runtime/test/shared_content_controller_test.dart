@@ -35,6 +35,7 @@ class _Repository implements ClassroomRepository {
   final WhiteboardState whiteboard;
   int revision = 0;
   bool failCommit = false, teacher = true, legacy = false;
+  bool revisionConflictOnce = false;
   SharedContentMode mode = SharedContentMode.whiteboard;
   final calls = <String>[];
   ClassroomState get value => ClassroomState(
@@ -66,6 +67,16 @@ class _Repository implements ClassroomRepository {
     if (failCommit) throw StateError('Commit failed');
     final payload = jsonDecode(data['payload']!) as Map<String, dynamic>;
     if (type == 'tool.content.mode') {
+      if (revisionConflictOnce) {
+        revisionConflictOnce = false;
+        revision++;
+        throw const RealtimeException(
+          code: RealtimeErrorCode.roomConflict,
+          message: 'Content revision changed; refresh and retry',
+          statusCode: 409,
+          details: {'backendCode': 'content-conflict'},
+        );
+      }
       mode = SharedContentMode.values.byName(payload['mode'] as String);
     }
     revision++;
@@ -166,6 +177,19 @@ void main() {
       await c.selectMode(SharedContentMode.whiteboard);
       expect(c.content!.mode, SharedContentMode.whiteboard);
       expect(media.calls, [false]);
+    },
+  );
+  test(
+    'whiteboard retries a content revision conflict after screen stop',
+    () async {
+      final (media, repo, _, c) = await fixture(screen: true);
+      repo.revisionConflictOnce = true;
+      await c.selectMode(SharedContentMode.whiteboard);
+      expect(repo.calls, ['tool.content.mode', 'tool.content.mode']);
+      expect(media.calls, [false]);
+      expect(repo.mode, SharedContentMode.whiteboard);
+      expect(c.content?.mode, SharedContentMode.whiteboard);
+      expect(c.status.error, isNull);
     },
   );
   test('cancelled or failed system selection preserves whiteboard', () async {

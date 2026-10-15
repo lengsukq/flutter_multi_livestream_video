@@ -249,6 +249,35 @@ class SharedContentController {
         'expectedRevision': revision,
         if (mode == SharedContentMode.screen) 'sourceKey': _source(),
       });
+
+  /// A screen stop / annotation cleanup can race classroom revision updates.
+  /// Refresh before committing and retry only an explicit revision conflict,
+  /// never authorization, network or unrelated backend failures.
+  Future<void> _commitFresh(SharedContentMode mode) async {
+    await classroom.refresh();
+    if (content == null || content!.canManage != true) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidState,
+        message: 'Shared content is no longer manageable.',
+        domain: 'sharedContent',
+      );
+    }
+    if (content!.mode == mode) return;
+    try {
+      await _commit(mode, content!.revision);
+    } on RealtimeException catch (error) {
+      if (error.statusCode != 409 ||
+          error.details is! Map ||
+          (error.details as Map)['backendCode'] != 'content-conflict') {
+        rethrow;
+      }
+      await classroom.refresh();
+      if (content == null || content!.canManage != true) rethrow;
+      if (content!.mode == mode) return;
+      await _commit(mode, content!.revision);
+    }
+  }
+
   Future<void> selectMode(SharedContentMode mode) {
     if (_busy || _openingSystem) {
       return Future.error(
@@ -291,7 +320,6 @@ class SharedContentController {
           message: 'Teacher permission required',
         );
       }
-      final revision = content!.revision;
       final interactive = media is InteractiveMediaSession
           ? media as InteractiveMediaSession
           : null;
@@ -315,11 +343,11 @@ class SharedContentController {
           _hadLocalCapture = false;
         }
         try {
-          await _commit(mode, revision);
+          await _commitFresh(mode);
         } catch (e) {
           throw RealtimeException(
             code: RealtimeErrorCode.invalidState,
-            message: 'Capture stopped; the content change can be retried.',
+            message: 'Content mode change failed after capture stopped: $e',
             cause: e,
             recoverable: true,
             suggestedAction: 'retry-content-change',
@@ -346,7 +374,7 @@ class SharedContentController {
         }
         _hadLocalCapture = true;
         try {
-          await _commit(mode, revision);
+          await _commitFresh(mode);
         } catch (commitError) {
           if (started) {
             try {

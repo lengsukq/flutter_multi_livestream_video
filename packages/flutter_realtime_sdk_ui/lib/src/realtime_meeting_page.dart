@@ -66,6 +66,18 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
     _videoEffectsReady = _prepare();
   }
 
+  void _showActionError(RealtimeException error) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(RealtimeStrings.of(context).displayRealtimeError(error)),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _prepare() async {
     final room = widget.room;
     final settings = widget.initialSettings;
@@ -207,6 +219,7 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
 
       return RealtimeRoomUiScope(
         room: widget.room,
+        onActionError: _showActionError,
         child: Scaffold(
           backgroundColor: RealtimeUiTokens.background,
           body: RealtimeAmbientBackground(
