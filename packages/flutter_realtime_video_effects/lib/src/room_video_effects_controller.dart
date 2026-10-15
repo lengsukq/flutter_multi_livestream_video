@@ -154,6 +154,14 @@ class RoomVideoEffectsController
       return;
     }
     final sink = active as ProcessedVideoSink;
+    // A room without a selected virtual background must publish through the
+    // provider's normal camera path. Eagerly attaching a canvas-processed
+    // source here makes the Pre-Join camera work but can prevent Web camera
+    // publication after joining, even though the user selected no effect.
+    // The source is created later, when blur or image replacement is chosen.
+    if (!settings.backgroundEffect.enabled && _processedVideoSource == null) {
+      return;
+    }
     if (!backgroundCapabilities.supports(settings.backgroundEffect)) {
       _unsupportedBackground();
     }

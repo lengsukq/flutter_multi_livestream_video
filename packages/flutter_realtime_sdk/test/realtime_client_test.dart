@@ -33,6 +33,34 @@ void main() {
 
   group('Processed video source lifecycle', () {
     test(
+      'plain Pre-Join camera settings do not attach a Web processed source',
+      () async {
+        for (final role in [MediaRole.participant, MediaRole.host]) {
+          final platform = _FakeEffectsPlatform();
+          final session = _FakeProcessedMediaSession(role: role);
+          final room = _effectsRoom(platform, session);
+          await room.prepareVideoEffects(
+            const MediaLocalPreviewSettings(cameraEnabled: true),
+          );
+          await room.setBackgroundEffect(const MediaBackgroundEffect.none());
+          await room.setCameraEnabled(true);
+          expect(platform.createCalls, 0, reason: '$role');
+          expect(session.attachedSources, isEmpty, reason: '$role');
+          expect(session.snapshot.localVideoEnabled, isTrue, reason: '$role');
+          await room.setCameraEnabled(false);
+          await room.setCameraEnabled(true);
+          expect(session.snapshot.localVideoEnabled, isTrue, reason: '$role');
+          expect(platform.createCalls, 0, reason: '$role');
+          // Effects remain available on demand in meetings and live rooms.
+          await room.setBackgroundEffect(const MediaBackgroundEffect.blur());
+          expect(platform.createCalls, 1, reason: '$role');
+          expect(session.attachedSources, hasLength(1), reason: '$role');
+          expect(session.snapshot.localVideoEnabled, isTrue, reason: '$role');
+          await room.dispose();
+        }
+      },
+    );
+    test(
       'protected initialization suspends publishing and failure keeps it off',
       () async {
         final gate = Completer<void>();
@@ -216,13 +244,15 @@ void main() {
       final session = _FakeProcessedMediaSession()..supportsSource = false;
       final room = _effectsRoom(platform, session);
       await room.prepareVideoEffects(const MediaLocalPreviewSettings());
-      expect(platform.disposedSources, ['effects-source-1']);
+      expect(platform.createCalls, 0);
       expect(session.attachedSources, isEmpty);
       await expectLater(
         room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
         throwsA(isA<RealtimeException>()),
       );
-      expect(platform.disposedSources, hasLength(2));
+      expect(platform.disposedSources, ['effects-source-1']);
+      await room.setCameraEnabled(true);
+      expect(session.snapshot.localVideoEnabled, isTrue);
       await room.dispose();
     });
 
@@ -234,7 +264,7 @@ void main() {
           ..attachError = MissingPluginException('No provider input');
         final room = _effectsRoom(platform, session);
         await room.prepareVideoEffects(const MediaLocalPreviewSettings());
-        expect(platform.disposedSources, ['effects-source-1']);
+        expect(platform.createCalls, 0);
         await expectLater(
           room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
           throwsA(
@@ -245,6 +275,7 @@ void main() {
             ),
           ),
         );
+        expect(platform.disposedSources, ['effects-source-1']);
         await room.dispose();
       },
     );
@@ -279,7 +310,8 @@ void main() {
       platform.createGate!.complete();
       await Future.wait([initial, update]);
       expect(platform.createCalls, 1);
-      expect(platform.effects, [const MediaBackgroundEffect.blur()]);
+      expect(platform.lastConfig?.effect, const MediaBackgroundEffect.blur());
+      expect(platform.effects, isEmpty);
       await room.dispose();
     });
 
@@ -290,7 +322,9 @@ void main() {
         final session = _FakeProcessedMediaSession();
         final room = _effectsRoom(platform, session);
         final initial = room.prepareVideoEffects(
-          const MediaLocalPreviewSettings(),
+          const MediaLocalPreviewSettings(
+            backgroundEffect: MediaBackgroundEffect.blur(),
+          ),
         );
         final expectedFailure = expectLater(
           initial,
@@ -320,7 +354,11 @@ void main() {
           ),
         );
         final room = _effectsRoom(platform, session);
-        await room.prepareVideoEffects(const MediaLocalPreviewSettings());
+        await room.prepareVideoEffects(
+          const MediaLocalPreviewSettings(
+            backgroundEffect: MediaBackgroundEffect.blur(),
+          ),
+        );
         await session.leave();
         await Future<void>.delayed(Duration.zero);
         expect(session.detachCalls, 1);
@@ -380,7 +418,11 @@ void main() {
       () async {
         final platform = _FakeEffectsPlatform();
         final room = _effectsRoom(platform, _FakeProcessedMediaSession());
-        await room.prepareVideoEffects(const MediaLocalPreviewSettings());
+        await room.prepareVideoEffects(
+          const MediaLocalPreviewSettings(
+            backgroundEffect: MediaBackgroundEffect.blur(),
+          ),
+        );
         final eventFuture = room.events.firstWhere(
           (event) => event is RealtimeBackendFailure,
         );
@@ -2216,18 +2258,20 @@ Future<void> _skipWebAssets({
 
 class _FakeProcessedMediaSession extends FakeMediaSession
     implements ProcessedVideoSink {
-  _FakeProcessedMediaSession({bool supportsBackground = true})
-    : super(
-        providerId: 'fake-effects-provider',
-        role: MediaRole.participant,
-        capabilities: MediaCapabilities(
-          canPublishAudio: true,
-          canPublishVideo: true,
-          canBlurBackground: supportsBackground,
-          canSwitchCamera: true,
-          canSubscribeVideo: true,
-        ),
-      );
+  _FakeProcessedMediaSession({
+    bool supportsBackground = true,
+    MediaRole role = MediaRole.participant,
+  }) : super(
+         providerId: 'fake-effects-provider',
+         role: role,
+         capabilities: MediaCapabilities(
+           canPublishAudio: true,
+           canPublishVideo: true,
+           canBlurBackground: supportsBackground,
+           canSwitchCamera: true,
+           canSubscribeVideo: true,
+         ),
+       );
 
   final List<ProcessedVideoSource> attachedSources = [];
   int detachCalls = 0;
