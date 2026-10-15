@@ -103,6 +103,51 @@ def copy_dart_tree(root: Path, destination: Path, names: list[str]) -> int:
     return count
 
 
+def copy_bundled_assets(root: Path, destination: Path, names: list[str]) -> tuple[list[str], int]:
+    """Copy vendor assets, declaring every populated directory explicitly.
+
+    Flutter's `flutter.assets` directory entries are NOT recursive. Listing
+    just `assets/bundled/flutter_realtime_video_effects/` excludes all its
+    web/models and web/wasm files from an external host's build.
+    """
+    entries: list[str] = []
+    asset_modules = 0
+    for name in names:
+        original = root / "packages" / name / "assets"
+        if not original.is_dir():
+            continue
+        target = destination / "assets" / "bundled" / name
+        shutil.copytree(original, target)
+        # Explicitly register the directories containing files (including the
+        # nested WASM/model folders) instead of trusting a non-recursive entry.
+        populated = sorted({
+            file.parent.relative_to(destination).as_posix() + "/"
+            for file in target.rglob("*") if file.is_file()
+        })
+        if populated:
+            asset_modules += 1
+            entries.extend(f"    - {path}" for path in populated)
+
+    # Dart source URLs were rewritten by copy_dart_tree, but asset JavaScript
+    # is copied byte-for-byte. Rewrite only the effects bridge's runtime asset
+    # prefix; never touch vendor minified assets or original source packages.
+    effects_js = (
+        destination / "assets/bundled/flutter_realtime_video_effects/"
+        "web/video-effects-bridge.js"
+    )
+    if effects_js.is_file():
+        old_prefix = "assets/packages/flutter_realtime_video_effects/assets/web/"
+        new_prefix = (
+            "assets/packages/flutter_realtime_sdk/assets/bundled/"
+            "flutter_realtime_video_effects/web/"
+        )
+        code = effects_js.read_text(encoding="utf-8")
+        if old_prefix not in code:
+            raise ValueError("Unexpected Web effects bridge runtime path; update the bundler")
+        effects_js.write_text(code.replace(old_prefix, new_prefix), encoding="utf-8")
+    return entries, asset_modules
+
+
 def assemble(root: Path, destination: Path) -> dict:
     names = json.loads((root / "scripts/sdk_packages.json").read_text())
     destination = destination.resolve()
@@ -114,14 +159,7 @@ def assemble(root: Path, destination: Path) -> dict:
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
     count = copy_dart_tree(root, destination, names)
-    assets = []
-    for name in names:
-        old = root / "packages" / name / "assets"
-        if not old.is_dir():
-            continue
-        new = destination / "assets" / "bundled" / name
-        shutil.copytree(old, new)
-        assets.append(f"    - assets/bundled/{name}/")
+    assets, asset_modules = copy_bundled_assets(root, destination, names)
     # Deliberately curate the single user-facing import surface. The internal
     # package names are not exported to the user, only their public libraries.
     public = [
@@ -227,7 +265,7 @@ def assemble(root: Path, destination: Path) -> dict:
     result = {
         "target": str(destination),
         "dartLibraries": count,
-        "assetModules": len(assets),
+        "assetModules": asset_modules,
         "publicExports": public,
         "nativePluginRegistrationComplete": False,
         "publishable": False,

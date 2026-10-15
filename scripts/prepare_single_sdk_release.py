@@ -102,6 +102,22 @@ def prepare(version: str, root: Path = ROOT) -> Path:
             "- Keep pre-join microphone/camera disabled by default and preserve preview cleanup during cancellation, retries and pending entry.\n"
             "- Retain effects-aware RealtimeRoom.setCameraEnabled and the public DefaultRealtimeVideoEffects export for Headless apps.\n"
         )
+    elif version == "0.1.0-dev.5":
+        notes = (
+            "- Keep participant cameras and avatars visible alongside screen sharing and whiteboards in meeting mode.\n"
+            "- Switch locally between a participant and shared content; shared previews remain live and read-only.\n"
+            "- Add Hide/Show thumbnails and Return to shared content actions; restore the previous camera layout when sharing ends.\n"
+            "- Expose RealtimeMeetingParticipantStrip and showFilmstrip controls for custom meeting layouts.\n"
+            "- Reserve the dock's actual height during presentations and adapt whiteboard tools to narrow windows and larger text.\n"
+            "- Retain the unified SDK pages introduced in dev.4, without restoring removed legacy UI APIs.\n"
+        )
+    elif version == "0.1.0-dev.6":
+        notes = (
+            "- Fix Flutter Web virtual backgrounds in the hosted one-package SDK: explicitly declare bundled JS, MediaPipe models, and nested WASM assets.\n"
+            "- Rewrite the copied video-effects JavaScript runtime's asset URL to the hosted flutter_realtime_sdk package namespace.\n"
+            "- Add release assembly and independent Flutter Web asset-manifest regression checks; host applications no longer need resource-copy workarounds.\n"
+            "- Retain the unified SDK Meeting/Live/Chat/Pre-Join pages and Headless camera/effects coordination.\n"
+        )
     else:
         notes = (
             "- Fix camera-off background selection followed by camera-on in external Headless apps.\n"

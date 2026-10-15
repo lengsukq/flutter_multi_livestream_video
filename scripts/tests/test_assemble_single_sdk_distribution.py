@@ -58,6 +58,59 @@ class SingleSdkDistributionTest(unittest.TestCase):
         room = (self.root / "lib/src/_bundled/flutter_realtime_sdk_runtime/src/realtime_room.dart").read_text()
         self.assertIn("Future<void> setCameraEnabled(bool enabled)", room)
 
+    def test_web_video_effects_nested_assets_and_runtime_urls(self):
+        """An external single-package Web build needs scripts AND nested models."""
+        prefix = "assets/bundled/flutter_realtime_video_effects/web/"
+        manifest = (self.root / "pubspec.yaml").read_text()
+        required = (
+            "vision.js",
+            "video-effects-bridge.js",
+            "models/selfie_segmenter_landscape.tflite",
+            "models/blaze_face_short_range.tflite",
+            "wasm/vision_wasm_internal.wasm",
+            "wasm/vision_wasm_nosimd_internal.wasm",
+            "wasm/vision_wasm_internal.js",
+            "wasm/vision_wasm_nosimd_internal.js",
+        )
+        for item in required:
+            file = self.root / prefix / item
+            self.assertTrue(file.is_file(), f"Missing Web asset: {file}")
+            # Flutter directory asset declarations are not recursive.
+            # Require the precise parent for every bundled asset.
+            self.assertIn(
+                f"    - {file.parent.relative_to(self.root).as_posix()}/",
+                manifest,
+            )
+        bridge = (self.root / prefix / "video-effects-bridge.js").read_text()
+        self.assertIn(
+            "assets/packages/flutter_realtime_sdk/assets/bundled/"
+            "flutter_realtime_video_effects/web/",
+            bridge,
+        )
+        self.assertNotIn(
+            "assets/packages/flutter_realtime_video_effects/assets/web/",
+            bridge,
+        )
+        loader = (
+            self.root
+            / "lib/src/_bundled/flutter_realtime_video_effects/src/"
+            "video_effects_assets_web.dart"
+        ).read_text()
+        self.assertIn(
+            "assets/packages/flutter_realtime_sdk/assets/bundled/"
+            "flutter_realtime_video_effects/web/",
+            loader,
+        )
+
+    def test_all_copied_assets_are_declared_in_the_generated_pubspec(self):
+        """Protect new provider asset subdirectories from silent omissions."""
+        pubspec = (self.root / "pubspec.yaml").read_text()
+        for file in (self.root / "assets/bundled").rglob("*"):
+            if not file.is_file():
+                continue
+            directory = file.parent.relative_to(self.root).as_posix()
+            self.assertIn(f"    - {directory}/", pubspec, str(file))
+
     def test_ios_resolves_official_binaries_without_nonexistent_pods(self):
         import json
         from assemble_single_sdk_ios import ivs_frameworks
