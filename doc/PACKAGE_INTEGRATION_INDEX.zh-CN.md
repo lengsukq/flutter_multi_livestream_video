@@ -1,13 +1,16 @@
-# Flutter Realtime SDK 44 包定位与接入索引
+# Flutter Realtime SDK 内部 44 模块职责与接入索引
 
-本仓库包含 **44 个自有 `packages/flutter_*` 包**，不是推荐在宿主应用里
-一次依赖 44 个包。**绝大多数应用只需主 Facade + 选定 Provider**；
+本文中列出的 44 个是**内部源码开发模块**，不是 44 个独立 pub.dev 产品。
+**对外已发布单包预览版 `flutter_realtime_sdk 0.1.0-dev.1`。**
+目前开发版仍需主 Facade + 选定 Provider 的本地 `path:` 依赖；
 是否引入 UI 和 Preset 由应用按需决定。内部 Core/Adapter 包的单独使用属于进阶场景。
 
-包名是当前 monorepo 源码包名，**尚未全部发布 pub.dev**。依赖全部使用本地
+包名是当前 monorepo 源码包名，**尚未作为独立产品发布 pub.dev**。开发版依赖使用本地
 `path:`，请参考 [独立应用的从零接入](APP_INTEGRATION_QUICKSTART.zh-CN.md)。
+单包的聚合与迁移边界见
+[单包发行方案](SINGLE_PACKAGE_RELEASE.zh-CN.md)。
 
-## 宿主直接选用的入口（建议）
+## 当前源码开发期的入口（不代表未来 44 个独立发布）
 
 | 包名 | 作用 | 何时依赖 |
 | --- | --- | --- |
@@ -76,14 +79,18 @@
 | `flutter_realtime_whiteboard_ui` | 独立白板 UI |
 | `flutter_realtime_shared_content_preset` | 共享内容/白板与课堂功能预装组合 |
 
-**发布边界：** 以上 44 个包中有些还缺各自的 README / CHANGELOG /
-repository 元数据；所有包当前受 `publish_to: none` 和 / 或本地
-`path:` 等发布阻断。本文覆盖**功能定位与组合关系**，不能代替每个包的
-pub.dev 元数据、许可证审计、完整 API 参考和真实设备验收。检查命令：
+**发布边界：** 以上 44 个均为内部开发模块，其中一些仍缺独立 README /
+CHANGELOG / repository 元数据。它们**不计划各自上架 pub.dev**。
+真正需要审计的是聚合后的一个 `flutter_realtime_sdk` 发布包。
+本文只覆盖**内部功能定位与组合关系**，不能代替单包的
+许可证审计、完整 API 参考和真实设备验收。内部元数据检查命令：
 
 ```sh
 python3 scripts/check_pub_release_readiness.py --report-only
 ```
+
+单包发行阻断请优先运行：
+`python3 scripts/audit_single_pub_package.py --strict`。
 
 继续阅读：[主 SDK 包说明](../packages/flutter_realtime_sdk/README.md)、
 [运行时 SDK API](SDK_RUNTIME_INTEGRATION.zh-CN.md)、

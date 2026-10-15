@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""Bundle the Web registrar and Linux/Windows annotation plugin into one SDK."""
+
+import json
+import shutil
+from pathlib import Path
+
+from audit_single_pub_package import ROOT
+
+OUT = ROOT / "build" / "single_sdk_candidate"
+ANNOTATION = ROOT / "packages" / "flutter_realtime_screen_annotation"
+
+
+def enable_platform(name: str, config: str) -> None:
+    pubspec = OUT / "pubspec.yaml"
+    source = pubspec.read_text()
+    marker = "  plugin:\n    platforms:\n"
+    if marker not in source:
+        raise ValueError("Assemble Android/macOS plugin metadata first")
+    if f"      {name}:\n" not in source:
+        source = source.replace(marker, marker + f"      {name}:\n" + config, 1)
+        pubspec.write_text(source)
+
+
+def copy_platform(platform: str) -> Path:
+    src = ANNOTATION / platform
+    out = OUT / platform
+    if out.exists():
+        shutil.rmtree(out)
+    shutil.copytree(src, out)
+    return out
+
+
+def windows() -> None:
+    dst = copy_platform("windows")
+    api = dst / "include" / "flutter_realtime_sdk"
+    api.mkdir(parents=True, exist_ok=True)
+    (api / "flutter_realtime_sdk_plugin_c_api.h").write_text("""#ifndef FLUTTER_REALTIME_SDK_PLUGIN_C_API_H_
+#define FLUTTER_REALTIME_SDK_PLUGIN_C_API_H_
+#include <flutter_plugin_registrar.h>
+#ifdef FLUTTER_PLUGIN_IMPL
+#define FLUTTER_SDK_EXPORT __declspec(dllexport)
+#else
+#define FLUTTER_SDK_EXPORT __declspec(dllimport)
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+FLUTTER_SDK_EXPORT void FlutterRealtimeSdkPluginCApiRegisterWithRegistrar(
+    FlutterDesktopPluginRegistrarRef registrar);
+#ifdef __cplusplus
+}
+#endif
+#endif
+""")
+    (dst / "sdk_plugin_c_api.cpp").write_text("""#include "include/flutter_realtime_sdk/flutter_realtime_sdk_plugin_c_api.h"
+#include "include/flutter_realtime_screen_annotation/flutter_realtime_screen_annotation_plugin_c_api.h"
+void FlutterRealtimeSdkPluginCApiRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar) {
+  FlutterRealtimeScreenAnnotationPluginCApiRegisterWithRegistrar(registrar);
+}
+""")
+    cmake = (dst / "CMakeLists.txt")
+    source = cmake.read_text().replace(
+        'set(PROJECT_NAME "flutter_realtime_screen_annotation")',
+        'set(PROJECT_NAME "flutter_realtime_sdk")'
+    ).replace(
+        'SHARED "screen_annotation_plugin.cpp"',
+        'SHARED "screen_annotation_plugin.cpp" "sdk_plugin_c_api.cpp"'
+    ).replace(
+        'set(flutter_realtime_screen_annotation_bundled_libraries',
+        'set(flutter_realtime_sdk_bundled_libraries'
+    )
+    cmake.write_text(source)
+    enable_platform("windows", "        pluginClass: FlutterRealtimeSdkPluginCApi\n")
+
+
+def linux() -> None:
+    dst = copy_platform("linux")
+    api = dst / "include" / "flutter_realtime_sdk"
+    api.mkdir(parents=True, exist_ok=True)
+    (api / "flutter_realtime_sdk_plugin.h").write_text("""#ifndef FLUTTER_REALTIME_SDK_PLUGIN_H_
+#define FLUTTER_REALTIME_SDK_PLUGIN_H_
+#include <flutter_linux/flutter_linux.h>
+G_BEGIN_DECLS
+__attribute__((visibility("default")))
+void flutter_realtime_sdk_plugin_register_with_registrar(FlPluginRegistrar* registrar);
+G_END_DECLS
+#endif
+""")
+    (dst / "sdk_plugin.cc").write_text("""#include "include/flutter_realtime_sdk/flutter_realtime_sdk_plugin.h"
+#include "include/flutter_realtime_screen_annotation/flutter_realtime_screen_annotation_plugin.h"
+void flutter_realtime_sdk_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
+  flutter_realtime_screen_annotation_plugin_register_with_registrar(registrar);
+}
+""")
+    cmake = dst / "CMakeLists.txt"
+    source = cmake.read_text().replace(
+        'set(PROJECT_NAME "flutter_realtime_screen_annotation")',
+        'set(PROJECT_NAME "flutter_realtime_sdk")'
+    ).replace(
+        'SHARED "screen_annotation_plugin.cc"',
+        'SHARED "screen_annotation_plugin.cc" "sdk_plugin.cc"'
+    ).replace(
+        'set(flutter_realtime_screen_annotation_bundled_libraries',
+        'set(flutter_realtime_sdk_bundled_libraries'
+    )
+    cmake.write_text(source)
+    enable_platform("linux", "        pluginClass: FlutterRealtimeSdkPlugin\n")
+
+
+def web() -> None:
+    source_file = OUT / "lib" / "src" / "_bundled" / "flutter_realtime_video_effects" / "flutter_realtime_video_effects_web.dart"
+    if not source_file.exists():
+        raise ValueError("Missing rewritten Web registration library")
+    enable_platform(
+        "web",
+        "        pluginClass: FlutterRealtimeVideoEffectsWeb\n"
+        "        fileName: src/_bundled/flutter_realtime_video_effects/flutter_realtime_video_effects_web.dart\n",
+    )
+
+
+def run() -> dict:
+    if not (OUT / "pubspec.yaml").exists():
+        raise ValueError("Run the Dart assembler first")
+    windows()
+    linux()
+    web()
+    return {"platforms": ["windows", "linux", "web"],
+            "registrations": 3, "publishable": False}
+
+
+if __name__ == "__main__":
+    print(json.dumps(run(), indent=2))

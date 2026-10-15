@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Read-only pub.dev documentation/metadata preflight for owned SDK packages.
+"""Read-only metadata linter for the 44 *internal development* SDK modules.
 
+This is NOT the single published flutter_realtime_sdk release gate. Use
+audit_single_pub_package.py, a real bundled plugin build, then pub dry-run.
 No PyYAML, network access, credential access, or modification of pubspec files.
-This is a *blocking preflight*, not a substitute for pub publish --dry-run.
 """
 
 import argparse
@@ -73,7 +74,10 @@ def main() -> int:
             failed += 1
         print(f"{'BLOCKED' if issues else 'READY'} {label}: "
               f"{', '.join(issues) if issues else 'metadata files present'}")
-    print(f"Checked {len(names)} owned packages; {failed} blocked.")
+    print(
+        f"Checked {len(names)} internal modules; {failed} cannot be published "
+        "independently (independent publication is NOT the product target)."
+    )
     print("Reminder: license ownership, binary redistribution, real device E2E "
           "and dart pub publish --dry-run require separate manual checks.")
     return 0 if args.report_only or failed == 0 else 1

@@ -2,16 +2,40 @@
 
 Provider-neutral Flutter SDK for meetings, live media, product chat, classroom tools and shared content. The Demo uses the same public APIs as a host application.
 
-> **发布状态 / Publication status (2026-10-14):** This monorepo is **not yet published on pub.dev**. Every first-party package currently uses `publish_to: none`; local `path:` dependencies need a coordinated migration to hosted, version-constrained dependencies before publication. `flutter_realtime_sdk` is a **facade**, not a bundle of all vendors. See the [pub.dev release readiness guide](doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md). Do not run `pub publish` until the release gates pass.
+> **发布状态 / Publication status (2026-10-15):** Preview **[`flutter_realtime_sdk 0.1.0-dev.1`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1) published successfully**; its public version-metadata endpoint returns HTTP 200. The single-package distribution combines 44 internal modules under one public package. Independent-host unsigned iOS Release compilation, analysis and pub dry-run passed. Windows/Linux and real-device vendor acceptance remain unverified. The development facade remains separate from the generated distribution. See [single-package release plan](doc/SINGLE_PACKAGE_RELEASE.zh-CN.md) and [pub.dev release guide](doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md).
 
 **简体中文** · [快速接入](#快速接入开发阶段) · [Package 划分](#entry-points) · [接入指南](doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) · [供应商与平台能力](doc/SDK_CAPABILITY_MATRIX.zh-CN.md) · [云录制](doc/CLOUD_RECORDING.md) · [发布准备](doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md)
 
 **从零在第三方 Flutter App 接入：**[完整接入清单（安装依赖 → 配置后端 → 创建/加入 → UI/权限 → 验收）](doc/APP_INTEGRATION_QUICKSTART.zh-CN.md)。
-**所有自有 SDK 包职责与选型：**[44 包依赖/接入索引](doc/PACKAGE_INTEGRATION_INDEX.zh-CN.md)。
+**发行目标：**[一个公开包、44 个内部模块的合并方案](doc/SINGLE_PACKAGE_RELEASE.zh-CN.md)。
+**内部模块职责：**[44 个模块的依赖与功能索引](doc/PACKAGE_INTEGRATION_INDEX.zh-CN.md)。
+
+### pub.dev 单包预览版接入
+
+已发布预览版**只需要一个 SDK 包和一个 SDK import**：
+
+```yaml
+dependencies:
+  flutter_realtime_sdk: ^0.1.0-dev.1
+```
+
+```dart
+import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+
+final realtime = Realtime(
+  backendUrl: 'https://your-backend.example',
+  providers: [createLivekitProvider()],
+);
+// 可以只用 Headless SDK，也可以使用同一包中的可组合 UI。
+```
+
+供应商在运行时仍需显式注册以免误选，但**不再要求使用者添加另一个
+`flutter_realtime_provider_*` 依赖**。单包的缺点是不同厂商原生依赖可能
+全部被解析、安装，不能仅凭未注册 Provider 就承诺减小安装包体积。
 
 ## 快速接入（开发阶段）
 
-**要求：** Flutter ≥ 3.47、Dart ≥ 3.12；运行参考后端需 Node.js ≥ 22.18。开发仓库并非已发布的 pub 包。推荐先克隆仓库，在宿主应用里用相对路径连接所需包：
+**源码开发要求：** Flutter ≥ 3.47、Dart ≥ 3.12；运行参考后端需 Node.js ≥ 22.18。修改内部模块时，克隆仓库并以相对路径引入 facade + 选定 Provider；使用已发布预览版请按上一节安装：
 
 ```yaml
 # Host app pubspec.yaml; assume the SDK checkout sits beside your app.
@@ -62,11 +86,11 @@ RealtimeRoomView(room: connection.mediaRoom!);
 
 > **平台能力不等于真实设备验收：**会议/直播、IM、共享屏幕、录制、虚拟背景依赖选定 Provider、平台和角色。部分 Windows、iOS/Android 屏幕共享和云录制流程仍需实机联调。看 [能力矩阵](doc/SDK_CAPABILITY_MATRIX.zh-CN.md) 与 [验收记录](doc/ACCEPTANCE.md)，不要把示例的 UI 按钮视为已实现全部厂商能力。
 
-## Entry points
+## Internal entry points (development modules, not separate public releases)
 
 | Package | Use |
 | --- | --- |
-| `flutter_realtime_sdk` | Lightweight public facade; production dependency is only Runtime. No UI or vendor is registered implicitly |
+| `flutter_realtime_sdk` | Internal lightweight facade (runtime only); the generated public package also includes provider factories, optional UI and presets |
 | `flutter_realtime_sdk_runtime` | Provider-neutral `Realtime`, `RealtimeRoom`, room member/mutation and lifecycle contracts |
 | `flutter_realtime_interaction_core` | Business-neutral typed events, revision snapshots, authoritative commands, and transport contracts |
 | `flutter_realtime_classroom_preset` | Optional classroom business feature, shared content, whiteboard and annotation adapters (no UI required) |

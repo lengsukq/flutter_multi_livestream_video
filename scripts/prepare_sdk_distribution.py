@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Prepare reproducible Git-host manifests and verify package assets locally."""
+"""Prepare LEGACY development-only multi-module Git-host manifests.
+
+This is not the one-package pub.dev release assembler. New distributions must
+follow scripts/assemble_single_sdk_candidate.py and the native plugin merge.
+"""
 import argparse
 import hashlib
 import json
@@ -36,7 +40,12 @@ def package_record(name: str) -> dict:
 
 
 def git_dependencies(names: list[str], git_ref: str) -> str:
-    lines = ['# Replace every ref with the same reviewed, published immutable commit.', 'dependencies:', '  flutter:', '    sdk: flutter']
+    lines = [
+        '# DEVELOPMENT/LEGACY MULTI-MODULE MANIFEST, NOT A pub.dev RELEASE.',
+        '# Final public SDK target is ONE flutter_realtime_sdk package.',
+        '# Replace every ref with the same reviewed immutable commit.',
+        'dependencies:', '  flutter:', '    sdk: flutter',
+    ]
     for name in names:
         lines += [f'  {name}:', '    git:', f'      url: {REPOSITORY}', f'      ref: {git_ref}', f'      path: packages/{name}']
     if 'flutter_realtime_provider_livekit' in names:

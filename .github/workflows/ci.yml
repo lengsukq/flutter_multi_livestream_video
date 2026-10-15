@@ -25,6 +25,31 @@ jobs:
       - id: packages
         run: echo "packages=$(python3 -c 'import json; print(json.dumps(json.load(open("scripts/sdk_packages.json"))))')" >> "$GITHUB_OUTPUT"
 
+  single-package-distribution:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_aws_chime
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: flutter_aws_chime
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: Check single SDK assembly and plugin registrars
+        run: python3 -m unittest scripts.tests.test_audit_single_pub_package scripts.tests.test_assemble_single_sdk_distribution scripts.tests.test_single_sdk_ios_frameworks scripts.tests.test_prepare_single_sdk_release
+      - name: Regenerate isolated six-platform distribution
+        run: python3 scripts/assemble_single_sdk_distribution.py
+      - name: Validate generated standalone SDK and pub archive (do not publish)
+        working-directory: flutter_aws_chime/build/single_sdk_candidate
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter pub publish --dry-run
+
   quality-and-android:
     runs-on: ubuntu-latest
     defaults:

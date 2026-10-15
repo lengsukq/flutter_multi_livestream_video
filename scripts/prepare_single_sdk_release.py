@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""Stage an unpublished preview package without vendor binaries or local state.
+
+Does not resolve dependencies, download, commit, push, or publish. Run the
+normal pub dry-run in the staged directory before deciding to publish.
+"""
+import argparse
+import hashlib
+import json
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def prepare(version: str, root: Path = ROOT) -> Path:
+    # Stable releases need a separate acceptance decision. This tool prepares
+    # only an explicitly versioned preview, retaining pending evidence as such.
+    if not re.fullmatch(r"0\.1\.0-dev\.[1-9][0-9]*", version):
+        raise ValueError("Expected an explicit preview version: 0.1.0-dev.N")
+    source = root / "build/single_sdk_candidate"
+    destination = root / "build/pub_release" / version / "flutter_realtime_sdk"
+    if destination.exists():
+        raise FileExistsError(f"Release already staged; preserve it or choose a new version: {destination}")
+    for required in ("pubspec.yaml", "ios/vendor_frameworks.json", "ios/podfile.rb",
+                     "ios/vendor_frameworks.rb", "LICENSE"):
+        if not (source / required).is_file():
+            raise FileNotFoundError(source / required)
+
+    def ignore(folder, names):
+        relative = Path(folder).relative_to(source)
+        if relative == Path("."):
+            return set(names) & {".git", ".dart_tool", ".flutter-plugins", "pubspec.lock",
+                                  ".flutter-plugins-dependencies", "tool", "ASSEMBLY_REPORT.json"}
+        if relative == Path("ios"):
+            return set(names) & {"Frameworks"}
+        return set()
+
+    shutil.copytree(source, destination, ignore=ignore)
+    pubspec = destination / "pubspec.yaml"
+    content = re.sub(r"(?m)^version:.*$", f"version: {version}", pubspec.read_text())
+    content = re.sub(r"(?m)^publish_to:.*\n", "", content)
+    content = content.replace("Prototype of a single public Flutter Realtime SDK artifact.",
+                              "Provider-neutral realtime media, chat, optional UI and interaction presets in one Flutter plugin.")
+    pubspec.write_text(content)
+    for platform in ("ios", "macos"):
+        spec = destination / platform / "flutter_realtime_sdk.podspec"
+        spec.write_text(re.sub(r"s\.version = '[^']+'", f"s.version = '{version}'", spec.read_text()))
+    (destination / "README.md").write_text(
+        (root / "scripts/templates/single_sdk_README.md").read_text().replace("@VERSION@", version)
+    )
+    (destination / "CHANGELOG.md").write_text(
+        f"## {version}\n\n"
+        "- First single-package preview combining runtime, providers, optional UI and presets.\n"
+        "- Resolve iOS IVS from pinned official archives without bundling vendor binaries.\n"
+        "- Include an explicit Podfile integration helper for Agora RTC/Chat duplicate framework embeds.\n"
+        "- iOS Simulator, Windows/Linux and real-device vendor acceptance remain pending/unsupported as documented.\n"
+    )
+    # Parent build/ is ignored by the source checkout. Make Pub's package file
+    # inventory independent of that checkout, without creating a source commit.
+    subprocess.run(["git", "init", "--quiet"], cwd=destination, check=True)
+    files = {str(path.relative_to(destination)): hashlib.sha256(path.read_bytes()).hexdigest()
+             for path in sorted(destination.rglob("*"))
+             if path.is_file() and ".git" not in path.relative_to(destination).parts}
+    (destination.parent / "FILES.sha256.json").write_text(json.dumps(files, indent=2) + "\n")
+    (destination.parent / "PREPARATION.json").write_text(json.dumps({
+        "package": "flutter_realtime_sdk", "version": version,
+        "published": False, "fileCount": len(files),
+        "iosVendorFrameworksIncluded": False,
+        "validation": "Run analyze, independent-host iOS build, and pub publish --dry-run; retain their actual results.",
+        "pending": ["physical-device vendor E2E", "Windows/Linux builds", "redistribution/license review"],
+    }, indent=2) + "\n")
+    return destination
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--version", required=True)
+    args = parser.parse_args()
+    print(prepare(args.version))

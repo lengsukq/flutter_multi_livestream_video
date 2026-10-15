@@ -1,11 +1,18 @@
-# 第三方 Flutter App 接入 Flutter Realtime SDK（开发版）
+# 第三方 Flutter App 接入 Flutter Realtime SDK（源码开发版）
 
 本文面向**不使用仓库 Demo 的宿主应用**，目标是从零完成一次真实的创建/加入/退出。
-本仓库当前尚未发布 pub.dev；只演示可执行的本地源码接入，
-不是 `flutter pub add flutter_realtime_sdk` 的已上架版本。
+**单包预览版 `0.1.0-dev.1` 已发布到 pub.dev。** 普通宿主在 App 目录执行
+`flutter pub add flutter_realtime_sdk:0.1.0-dev.1`，并参考
+[已发布包 README](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1)
+配置 iOS Podfile、权限与后端。
+
+**本文后续演示源码开发接入**，适用于需要修改内部模块的宿主。
+facade + Provider 的多个本地 `path:` 属于仓库开发结构；公开分发只需要
+一个 `flutter_realtime_sdk` 包和一个 SDK import。详见
+[单包发行工程方案](SINGLE_PACKAGE_RELEASE.zh-CN.md)。
 Flutter、Dart、Java 和各平台最低版本详见 [能力矩阵](SDK_CAPABILITY_MATRIX.zh-CN.md)。
 
-## 1. 选择依赖：不默认加载所有供应商
+## 1. 源码开发版选择依赖
 
 假设 `my_app/` 与 `flutter_multi_livestream_video/` 在同一父目录，
 宿主 `pubspec.yaml` 使用：
@@ -27,10 +34,15 @@ dependencies:
 需要独立 Agora / Tencent / IVS Chat 的应用另注册对应 Chat Provider bundle；
 它们和音视频 Provider **不是同一依赖或同一会话角色**。
 
-**只做功能不用 SDK 页面**：保持以上依赖即可；宿主自行管理路由与 Widget。
+**当前开发版**：只做功能不用 SDK 页面，保持以上依赖即可；宿主自行管理路由与 Widget。
 **复用会议/直播/聊天组件**：再添加可选 `flutter_realtime_sdk_ui`。
 **只复用视觉设计**：再添加独立 `flutter_realtime_design_ui`，不启动媒体会话。
 仅需独立聊天室 UI 也可单独使用 `flutter_realtime_chat_ui`。
+
+**已发布单包预览版**：只需 `flutter_realtime_sdk: ^0.1.0-dev.1`，
+通过 `package:flutter_realtime_sdk/flutter_realtime_sdk.dart` 一个入口获取
+Provider 工厂、Room 和可组合 UI；仍需在 `Realtime(providers: ...)`
+中指定启用的供应商。**不保证**未选用厂商的原生依赖会被自动移除。
 
 ## 2. 配置可信后端并选定 Provider
 

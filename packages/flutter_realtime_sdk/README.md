@@ -1,19 +1,34 @@
 # flutter_realtime_sdk
 
-Lightweight, provider-neutral Flutter facade for meetings, live streams and standalone chat. **Providers and UI are opt-in**: depending on this package does not install Agora, LiveKit, AWS, Tencent, Alibaba or any room widgets automatically.
+Provider-neutral Flutter SDK for meetings, live streams and standalone chat.
+**This is the ONLY publicly published SDK package name.**
+Its development facade is currently lightweight (runtime only); the generated
+distribution includes provider factories, optional UI and presets behind
+this **same public import**. Only runtime registration and widget composition
+remain optional; all shipped vendor SDK dependencies may still enter the app.
+
+[Single-package release architecture and current blockers](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SINGLE_PACKAGE_RELEASE.zh-CN.md).
+
+The generated single-package preview `0.1.0-dev.1` is prepared separately from
+this development module. Its iOS IVS dependency installation and unsigned
+device-target Release build have passed; it includes an explicit Podfile helper
+for Agora RTC/Chat coexistence. The maintainer successfully uploaded it to
+[pub.dev](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1)
+on 2026-10-15; new-version availability may take up to 10 minutes.
 
 **First integration into your own app:** follow the
 [Chinese end-to-end quickstart](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/APP_INTEGRATION_QUICKSTART.zh-CN.md)
 before choosing individual features. The guide covers local path dependencies,
 backend/token setup, creator vs guest roles, Headless/UI, and platform checks.
 
-> **Status:** development monorepo package, **not published on pub.dev yet**. `publish_to: none` and local dependencies are intentional until the [release checklist](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md) is completed.
+> **Status:** this directory is an internal development module with `publish_to: none` and local dependencies. The generated single-package preview `0.1.0-dev.1` has been uploaded to pub.dev; its API includes providers/UI/presets. Use the published package's README for hosted installation and iOS Podfile configuration.
 
 ## Requirements and installation
 
 - Flutter ≥ **3.47**, Dart ≥ **3.12**; supported platforms depend on your chosen Provider and host configuration.
 - Add this facade and **only** the Provider bundles you intend to use to the host `pubspec.yaml`.
-- Before pub.dev publication, reference packages in a local monorepo checkout:
+- **Currently in this source checkout only**, reference facade and selected
+  providers as separate path dependencies. This is **not the final pub.dev UX**:
 
 ```yaml
 dependencies:
@@ -23,7 +38,7 @@ dependencies:
     path: ../flutter_multi_livestream_video/packages/flutter_realtime_provider_livekit
 ```
 
-These paths assume the host Flutter project and the SDK checkout are sibling folders. Replace them with the real relative paths in your workspace. A hosted `flutter pub add` example will be provided **only after the package exists on pub.dev**.
+These paths assume the host Flutter project and the SDK checkout are sibling folders. Replace them with the real relative paths in your workspace. For the published preview, use `flutter pub add flutter_realtime_sdk:0.1.0-dev.1` instead and follow the published package's README.
 
 ## Create, join and dispose
 
@@ -74,7 +89,12 @@ final realtime = Realtime(
 
 These presets require a trusted authoritative backend (or explicitly provided repositories). Classroom hands, Q&A and Live gift/like events are *not* automatically enabled by importing the facade. Gifts are a demonstration of non-payment interactions.
 
-For optional ready-to-use widgets, **separately** add `flutter_realtime_sdk_ui` and compose `RealtimeRoomView(room: connection.mediaRoom!)`. To build all UI yourself, do **not** add `flutter_realtime_sdk_ui`.
+In the **development monorepo**, optional ready-to-use widgets still require
+`flutter_realtime_sdk_ui` as a separate path dependency. In the **published
+single-package preview**, `RealtimeRoomView(room: connection.mediaRoom!)`
+comes from this one public SDK import; a Headless app simply does not mount
+those widgets. Because the package may contain their dependencies, UI is
+runtime-optional, not necessarily dependency-tree optional.
 
 ## Provider registration
 
