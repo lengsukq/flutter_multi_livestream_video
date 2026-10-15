@@ -56,7 +56,7 @@ Media Provider 和 Chat Provider 可以独立注册和选择。
 供应商 App Certificate、签名密钥、云存储密钥只能放在可信服务端，
 不要写入 Flutter 客户端。
 
-## 三、dev.4 内置 UI 与升级
+## 三、内置 UI 与升级
 
 Demo 直接展示 SDK 提供的 `RealtimeRoomView`（按房间选择会议/直播页面）、
 `RealtimeMeetingPage`、`RealtimeLivePage`、`RealtimeChatPage` 和
@@ -68,6 +68,12 @@ Demo 直接展示 SDK 提供的 `RealtimeRoomView`（按房间选择会议/直�
 `RealtimeComposableRoomTemplate`、`RealtimeComposablePreJoinTemplate` 和
 `ChatDefaultPage`；升级时将 `MediaRoomViewConfig` 替换为
 `RealtimeRoomViewConfig`。可组合控件与 Headless 接口继续保留。
+
+会议共享屏幕或白板时，底部保留自己和其他人的缩略图。点击人物可放大其画面，
+共享内容变成实时只读预览；点击预览或“返回共享内容”可切回。
+“隐藏缩略图 / 显示缩略图”仅影响当前房间的本地布局，不启停采集，也不改变
+其他参会者的视图。自行组合页面时可使用 `RealtimeMeetingParticipantStrip`
+及 `RealtimeMeetingStage.showFilmstrip`。
 
 ## 四、Headless 模式、虚拟背景与摄像头
 

@@ -49,7 +49,7 @@ final room = connection.mediaRoom!;
 // In the application's leave/logout flow: await connection.dispose();
 ```
 
-### Built-in UI in dev.4
+### Built-in UI
 
 The Demo displays these SDK pages directly: `RealtimeRoomView` (selects the
 meeting/live page from the room), `RealtimeMeetingPage`, `RealtimeLivePage`,
@@ -63,6 +63,14 @@ This preview removes the older `MediaRoomView`, `MediaPreJoinPage`,
 `RealtimeComposablePreJoinTemplate`, and `ChatDefaultPage` APIs.
 Replace `MediaRoomViewConfig` with `RealtimeRoomViewConfig` when upgrading.
 Reusable controls and Headless APIs remain available.
+
+Meeting presentations keep participant thumbnails below the shared screen or
+whiteboard. Select a person to focus their camera and show a live, read-only
+content preview; select that preview or **Return to shared content** to switch
+back. **Hide thumbnails / Show thumbnails** affects only your current room's
+local layout. It never starts/stops capture or changes another participant's
+view. Standalone layouts can use `RealtimeMeetingParticipantStrip` and
+`RealtimeMeetingStage.showFilmstrip`.
 
 ### Headless virtual backgrounds and camera publication
 

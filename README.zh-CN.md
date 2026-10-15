@@ -8,8 +8,8 @@
 
 | 版本/形态 | 状态 | 如何接入 |
 | --- | --- | --- |
-| [`flutter_realtime_sdk 0.1.0-dev.1`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1) | **已发布预览版** | 一个 pub.dev 包，一个公开 import |
-| `0.1.0-dev.4` | **本地发布校验通过，等待上传** | Demo/SDK 页面统一、旧 UI 清理与 Headless 摄像头修复 |
+| [`flutter_realtime_sdk 0.1.0-dev.4`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.4) | **已发布预览版** | 一个 pub.dev 包，一个公开 import |
+| `0.1.0-dev.5` | **本地准备，交由维护者发布** | 共享屏幕/白板时保留参会者缩略图，支持主画面切换和隐藏恢复 |
 | 源码仓库 | 开发用 | Facade + 选定的 Provider/UI 内部包 |
 
 **不要混淆两种使用方式：** pub.dev 发布物把 44 个内部模块组装为**一个公开 SDK 包**；本仓库开发时仍然是多模块源码，依赖配置不同。支持列表不代表每个供应商和设备都完成实机验收，Windows/Linux、部分平台组合和第三方许可审查仍有待完成。
@@ -20,7 +20,7 @@
 
 ~~~yaml
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.1
+  flutter_realtime_sdk: ^0.1.0-dev.4
 ~~~
 
 已发布的单包 SDK **只需要一个 Dart import**：
@@ -48,12 +48,12 @@ final room = connection.mediaRoom!;
 
 UI 可以选择 `RealtimeRoomView`、组合式按钮/网格，或全部自己实现。课堂预设 `ClassroomPreset` 和直播预设 `LivePreset` 需要显式注册，并依赖后端权限控制；示例礼物不包含支付。
 
-### 新版 Headless 摄像头及虚拟背景（尚未发布）
+### Headless 摄像头及虚拟背景
 
-本地 **`0.1.0-dev.4`** 预览候选版新增 `room.setCameraEnabled(bool)`，并且从**同一个公开 import** 导出 `DefaultRealtimeVideoEffects`。它保证背景处理源的采集与摄像头发布进入统一操作队列；**该 API 不适用于已经发布的 dev.1**。
+已发布的 **`0.1.0-dev.4`** 提供 `room.setCameraEnabled(bool)`，并且从**同一个公开 import** 导出 `DefaultRealtimeVideoEffects`。它保证背景处理源的采集与摄像头发布进入统一操作队列。
 
 ~~~dart
-// 等 dev.4 正式发布且升级依赖后使用：
+// dev.4 已提供此接口；dev.5 继续保留：
 final realtime = Realtime(
   backendUrl: 'https://your-backend.example',
   providers: [createLivekitProvider()],

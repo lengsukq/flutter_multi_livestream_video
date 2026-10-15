@@ -11,11 +11,12 @@ remain optional; all shipped vendor SDK dependencies may still enter the app.
 
 [Single-package release architecture and current blockers](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SINGLE_PACKAGE_RELEASE.zh-CN.md).
 
-The hosted single-package preview `0.1.0-dev.1` was published on
-[pub.dev](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1).
-The latest `0.1.0-dev.4` release candidate has **passed local publication
-validation; upload is pending**. It unifies the Demo and SDK pages, removes
-legacy UI templates, and includes effects-aware `RealtimeRoom.setCameraEnabled`.
+The hosted single-package preview `0.1.0-dev.4` was published on
+[pub.dev](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.4).
+The `0.1.0-dev.5` candidate is **prepared locally for maintainer publication**.
+It keeps participant thumbnails visible during screen/whiteboard sharing and
+adds local focus and Hide/Show controls. The published dev.4 already unifies
+Demo/SDK pages and includes effects-aware `RealtimeRoom.setCameraEnabled`.
 Unlike the hosted package, this
 development module has `publish_to: none` and is not published independently.
 
@@ -44,7 +45,7 @@ dependencies:
     path: ../flutter_multi_livestream_video/packages/flutter_realtime_provider_livekit
 ```
 
-These paths assume the host Flutter project and the SDK checkout are sibling folders. Replace them with the real relative paths in your workspace. For the published preview, use `flutter pub add flutter_realtime_sdk:0.1.0-dev.1` instead and follow the published package's README.
+These paths assume the host Flutter project and the SDK checkout are sibling folders. Replace them with the real relative paths in your workspace. For the published preview, use `flutter pub add flutter_realtime_sdk:0.1.0-dev.4` instead and follow the published package's README.
 
 **Language and distribution:** [English source README](README.md) ·
 [中文源码 README](README.zh-CN.md) ·

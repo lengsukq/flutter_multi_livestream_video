@@ -35,6 +35,19 @@ Apps own room creation, routes and connection disposal. Unmounting room or
 chat UI releases UI resources without disconnecting the underlying session.
 The explicit leave action leaves/closes the room before invoking navigation.
 
+## Meeting presentations
+
+Screen sharing and whiteboards keep a participant strip below the shared
+content, including the local camera or avatar. Select a participant to focus
+their camera; the shared content becomes a live, read-only thumbnail. Select
+it or use **Return to shared content** to restore the presentation.
+
+**Hide thumbnails / Show thumbnails** affects only this room's local layout.
+It preserves the focused content and never starts/stops capture or changes
+another participant's view. New presentations start focused on shared content;
+ending a presentation restores the previous camera layout. Standalone hosts
+can control `RealtimeMeetingStage.showFilmstrip` themselves.
+
 ## Customization
 
 `RealtimeRoomViewConfig` configures chat/provider visibility, RTC Data debug,

@@ -8,8 +8,8 @@ A provider-neutral Flutter SDK for **meetings, live streaming, chat, classroom i
 
 | Distribution | Status | How to integrate |
 | --- | --- | --- |
-| [`flutter_realtime_sdk 0.1.0-dev.1`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1) | **Published** preview | One package, one public import |
-| `0.1.0-dev.4` | Validated locally; **publication pending** | Unified Demo/SDK pages, legacy UI cleanup and headless camera/background fix |
+| [`flutter_realtime_sdk 0.1.0-dev.4`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.4) | **Published** preview | One package, one public import |
+| `0.1.0-dev.5` | Prepared locally; **maintainer publication pending** | Participant thumbnails during screen/whiteboard sharing, local focus and Hide/Show controls |
 | Monorepo source packages | Development only | Facade plus selected Provider/UI modules |
 
 The hosted preview bundles 44 internal modules into **one pub.dev package**. This repository still has separate source modules, with different dependency instructions. Windows/Linux, some native vendor/device combinations, and third-party license verification remain release acceptance work.
@@ -20,7 +20,7 @@ Requires Flutter ≥ 3.47 and Dart ≥ 3.12. The combined native package require
 
 ~~~yaml
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.1
+  flutter_realtime_sdk: ^0.1.0-dev.4
 ~~~
 
 ~~~dart
@@ -46,10 +46,10 @@ Register providers explicitly. Use a **trusted backend** for short-lived credent
 
 ### Virtual-background update for Headless apps
 
-Locally prepared **`0.1.0-dev.4` (not yet published)** adds `room.setCameraEnabled(bool)` and exports `DefaultRealtimeVideoEffects` from the single-package import. It serializes processed-video capture with camera publishing and background changes. This example is **not supported by the published `dev.1`**:
+Published **`0.1.0-dev.4`** provides `room.setCameraEnabled(bool)` and exports `DefaultRealtimeVideoEffects` from the single-package import. It serializes processed-video capture with camera publishing and background changes.:
 
 ~~~dart
-// Use this only after dev.4 is published/installed.
+// Available in the published dev.4 preview and the dev.5 candidate.
 final realtime = Realtime(
   backendUrl: 'https://your-backend.example',
   providers: [createLivekitProvider()],

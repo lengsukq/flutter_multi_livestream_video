@@ -9,8 +9,8 @@
 
 ## 版本说明
 
-- [`0.1.0-dev.1`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.1)：**已发布的单包预览版**。
-- `0.1.0-dev.4`：**本地发布校验通过，等待上传**；统一 Demo/SDK 页面，移除旧 UI 模板，包含 Headless 摄像头协调修复。
+- [`0.1.0-dev.4`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.4)：**已发布的单包预览版**。
+- `0.1.0-dev.5`：**本地准备，交由维护者发布**；共享屏幕/白板时保留参会者缩略图，支持主画面切换及隐藏恢复。
 - 本目录：源码开发使用的 Facade，版本与发布单包不应混为一谈。
 
 ## 一、何时使用此目录？
@@ -34,7 +34,7 @@ dependencies:
 
 ~~~yaml
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.1
+  flutter_realtime_sdk: ^0.1.0-dev.4
 ~~~
 
 发布版仅需 `import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';`。
@@ -84,7 +84,7 @@ final room = connection.mediaRoom!;
 `room.setBackgroundEffect(...)` 串行化，避免关摄像头选背景后，直接调用
 底层 `media.session.setVideoEnabled(true)` 导致摄像头源状态不一致。
 源码开发时如需实际背景处理，还需配置视频特效 Factory；
-pub.dev 单包在 `0.1.0-dev.4` 发布后可直接从公共 import 获取
+已发布的 pub.dev 单包 `0.1.0-dev.4` 已可直接从公共 import 获取
 `DefaultRealtimeVideoEffects`。请始终检查能力支持，并处理初始化异常。
 
 详见 [SDK / Headless 接入](../../doc/SDK_RUNTIME_INTEGRATION.zh-CN.md)。
