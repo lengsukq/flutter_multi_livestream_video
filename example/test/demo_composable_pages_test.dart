@@ -3,7 +3,6 @@ import 'dart:async';
 import 'support/design_capture.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_example/demo_composable_live_page.dart';
-import 'package:flutter_realtime_media_example/demo_composable_pre_join_page.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(initializeDesignCapture);
-  testWidgets('Live viewer Demo owns responsive stage and actions', (
+  testWidgets('Live viewer Demo displays SDK responsive stage and actions', (
     tester,
   ) async {
     final media = _LiveMediaSession();
@@ -105,6 +104,7 @@ void main() {
       );
       addTearDown(room.dispose);
       addTearDown(tester.view.resetViewPadding);
+      addTearDown(tester.view.resetPadding);
       addTearDown(tester.view.resetViewInsets);
       addTearDown(() => tester.binding.setSurfaceSize(null));
       for (final size in [
@@ -163,7 +163,13 @@ void main() {
         }
       }
       await tester.binding.setSurfaceSize(const Size(390, 844));
-      tester.view.viewPadding = const FakeViewPadding(top: 44, bottom: 34);
+      // FlutterView padding is physical; model a 44/34 logical-pixel safe area.
+      tester.view.viewPadding = FakeViewPadding(
+        top: 44 * tester.view.devicePixelRatio,
+        bottom: 34 * tester.view.devicePixelRatio,
+      );
+      // FakeFlutterView exposes padding separately from viewPadding.
+      tester.view.padding = tester.view.viewPadding;
       await tester.pump();
       final cameraRect = tester.getRect(find.byTooltip('Turn on camera'));
       expect(cameraRect.bottom, lessThan(844 - 34));
@@ -295,78 +301,87 @@ void main() {
     await tester.runAsync(room.dispose);
   });
 
-  testWidgets('Pre-Join Demo composes preview, checks and join at any width', (
-    tester,
-  ) async {
-    for (final width in [320.0, 390.0, 600.0, 768.0, 1024.0, 1280.0, 1440.0]) {
-      await tester.binding.setSurfaceSize(Size(width, 850));
-      await tester.pumpWidget(
-        designCaptureApp(
-          MaterialApp(
-            debugShowCheckedModeBanner: false,
-            theme: designTestTheme(),
-            builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: TextScaler.linear(width == 320 ? 2 : 1)),
-              child: child!,
-            ),
-            home: DemoComposablePreJoinPage(
-              roomLabel: 'room-123',
-              displayName: 'Example',
-              runCheck: () async => const MediaPreJoinResult(
-                role: MediaRole.viewer,
-                providerId: 'fake',
-                checks: [
-                  MediaPreJoinCheck(
-                    type: MediaPreJoinCheckType.backend,
-                    status: MediaPreJoinStatus.passed,
-                    severity: MediaPreJoinSeverity.blocking,
-                    message: 'Ready',
-                  ),
-                ],
+  testWidgets(
+    'Pre-Join Demo displays SDK preview, checks and join at any width',
+    (tester) async {
+      for (final width in [
+        320.0,
+        390.0,
+        600.0,
+        768.0,
+        1024.0,
+        1280.0,
+        1440.0,
+      ]) {
+        await tester.binding.setSurfaceSize(Size(width, 850));
+        await tester.pumpWidget(
+          designCaptureApp(
+            MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: designTestTheme(),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(width == 320 ? 2 : 1)),
+                child: child!,
               ),
-              openPreview: (_, _) async => null,
-              onEnter: (_, _) async {},
-              permissionRequester: const _Permissions(),
+              home: RealtimePreJoinPage(
+                roomLabel: 'room-123',
+                displayName: 'Example',
+                runCheck: () async => const MediaPreJoinResult(
+                  role: MediaRole.viewer,
+                  providerId: 'fake',
+                  checks: [
+                    MediaPreJoinCheck(
+                      type: MediaPreJoinCheckType.backend,
+                      status: MediaPreJoinStatus.passed,
+                      severity: MediaPreJoinSeverity.blocking,
+                      message: 'Ready',
+                    ),
+                  ],
+                ),
+                openPreview: (_, _) async => null,
+                onEnter: (_, _) async {},
+                permissionRequester: const _Permissions(),
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.text('As a viewer, no camera or microphone is needed'),
-        findsOneWidget,
-      );
-      expect(find.byType(RealtimePreJoinPreview), findsNothing);
-      expect(find.byType(RealtimePreJoinJoinButton), findsOneWidget);
-      expect(find.text('All systems ready'), findsOneWidget);
-      expect(find.byType(RealtimePreJoinReadinessCard), findsOneWidget);
-      // The page survives surface-size changes; its expansion state may
-      // persist between viewport iterations.
-      if (find.byType(RealtimePreJoinCheckList).evaluate().isEmpty) {
-        // At 200% text the sticky join action occupies more vertical space.
-        // Place the readiness trigger well inside its own scroll viewport.
-        await Scrollable.ensureVisible(
-          tester.element(find.text('All systems ready')),
-          alignment: 0.2,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.text('All systems ready'));
-        await tester.pumpAndSettle();
+        expect(
+          find.text('As a viewer, no camera or microphone is needed'),
+          findsOneWidget,
+        );
+        expect(find.byType(RealtimePreJoinPreview), findsNothing);
+        expect(find.byType(RealtimePreJoinJoinButton), findsOneWidget);
+        expect(find.text('All systems ready'), findsOneWidget);
+        expect(find.byType(RealtimePreJoinReadinessCard), findsOneWidget);
+        // The page survives surface-size changes; its expansion state may
+        // persist between viewport iterations.
+        if (find.byType(RealtimePreJoinCheckList).evaluate().isEmpty) {
+          // At 200% text the sticky join action occupies more vertical space.
+          // Place the readiness trigger well inside its own scroll viewport.
+          await Scrollable.ensureVisible(
+            tester.element(find.text('All systems ready')),
+            alignment: 0.2,
+            alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('All systems ready'));
+          await tester.pumpAndSettle();
+        }
+        expect(
+          find.byType(RealtimePreJoinCheckList, skipOffstage: false),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        if ([390.0, 1440.0].contains(width)) {
+          await captureDesign(tester, 'prejoin-${width.toInt()}');
+        }
       }
-      expect(
-        find.byType(RealtimePreJoinCheckList, skipOffstage: false),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-      if ([390.0, 1440.0].contains(width)) {
-        await captureDesign(tester, 'prejoin-${width.toInt()}');
-      }
-    }
-    await tester.binding.setSurfaceSize(null);
-  });
+      await tester.binding.setSurfaceSize(null);
+    },
+  );
 }
 
 class _Renderer extends MediaTrackRenderer {
@@ -412,6 +427,11 @@ class _LiveMediaSession extends Fake implements InteractiveMediaSession {
   Future<void> leave() async {}
   @override
   Future<void> dispose() => _updates.close();
+  @override
+  Future<void> setMuted(bool muted) async {
+    if (_snapshot.localMuted != muted) await toggleMute();
+  }
+
   @override
   Future<void> toggleMute() async {
     microphoneCalls++;

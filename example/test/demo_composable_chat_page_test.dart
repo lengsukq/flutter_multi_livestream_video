@@ -1,6 +1,5 @@
 import 'support/design_capture.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_realtime_media_example/demo_composable_chat_page.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,10 +30,7 @@ void main() {
           MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: designTestTheme(),
-            home: DemoComposableChatPage(
-              chatRoom: chatRoom,
-              title: 'Product chat',
-            ),
+            home: RealtimeChatPage(chatRoom: chatRoom, title: 'Product chat'),
           ),
         ),
       );
@@ -70,7 +66,7 @@ void main() {
       );
       addTearDown(chatRoom.dispose);
       await tester.pumpWidget(
-        MaterialApp(home: DemoComposableChatPage(chatRoom: chatRoom)),
+        MaterialApp(home: RealtimeChatPage(chatRoom: chatRoom)),
       );
       await tester.pump();
       expect(

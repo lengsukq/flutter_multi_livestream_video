@@ -1,5 +1,4 @@
 import 'support/design_capture.dart';
-import 'package:flutter_realtime_media_example/demo_meeting_side_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_example/demo_composable_meeting_page.dart';
 import 'package:flutter_realtime_media_example/demo_meeting_room_page.dart';
@@ -50,7 +49,7 @@ void main() {
       await plain.dispose();
     },
   );
-  testWidgets('Demo owns meeting layout at phone, tablet and desktop sizes', (
+  testWidgets('Demo displays SDK meeting UI at phone, tablet and desktop sizes', (
     tester,
   ) async {
     final session = _FakeMeetingSession();
@@ -133,7 +132,7 @@ void main() {
           reason: 'Compact header stays balanced at $width with large text',
         );
         expect(
-          tester.getTopLeft(find.byType(DemoMeetingTimerBadge)).dx,
+          tester.getTopLeft(find.byType(RealtimeMeetingTimerBadge)).dx,
           lessThan(width / 2),
         );
       }
@@ -339,7 +338,7 @@ void main() {
         await tester.tap(participantAction);
         await tester.pump(const Duration(milliseconds: 300));
 
-        final sidebar = find.byType(DemoMeetingSidePanel);
+        final sidebar = find.byType(RealtimeMeetingSidePanel);
         final topBar = find.byType(RealtimeMeetingTopBar);
         expect(sidebar, findsOneWidget);
         final sidebarRect = tester.getRect(sidebar);
@@ -358,7 +357,7 @@ void main() {
         expect(tester.getRect(close).top, lessThan(100));
         await tester.tap(close);
         await tester.pump();
-        expect(find.byType(DemoMeetingSidePanel), findsNothing);
+        expect(find.byType(RealtimeMeetingSidePanel), findsNothing);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
       }
@@ -384,7 +383,7 @@ class _FakeMeetingSession extends Fake implements InteractiveMediaSession {
          capabilities: const MediaCapabilities.meeting(),
          participants: participants,
        );
-  final MediaSnapshot _snapshot;
+  MediaSnapshot _snapshot;
   @override
   String get providerId => 'fake';
   @override
@@ -401,6 +400,16 @@ class _FakeMeetingSession extends Fake implements InteractiveMediaSession {
   Stream<MediaSnapshot> get snapshots => const Stream.empty();
   @override
   Stream<MediaEvent> get events => const Stream.empty();
+  @override
+  Future<void> setMuted(bool muted) async {
+    _snapshot = _snapshot.copyWith(localMuted: muted);
+  }
+
+  @override
+  Future<void> setVideoEnabled(bool enabled) async {
+    _snapshot = _snapshot.copyWith(localVideoEnabled: enabled);
+  }
+
   @override
   Future<void> leave() async {}
   @override

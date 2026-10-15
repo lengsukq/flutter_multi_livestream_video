@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
+import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'demo_composable_meeting_page.dart';
 import 'demo_composable_live_page.dart';
 
@@ -21,13 +22,7 @@ class MeetingRoomPage extends StatelessWidget {
   final MediaRoomMode? roomMode;
 
   static bool isLiveSession(RealtimeRoom room) {
-    // Route by *connected* backend mode / token role, never the mode a guest
-    // selected before joining. A stale broadcast hint must not turn an
-    // ordinary Meeting participant into a Live presenter.
-    final backendMode = room.media.backendMetadata['roomMode'];
-    return backendMode == MediaRoomMode.broadcast.wireName ||
-        (backendMode != MediaRoomMode.meeting.wireName &&
-            room.media.role != MediaRole.participant);
+    return RealtimeRoomView.isLiveSession(room);
   }
 
   @override

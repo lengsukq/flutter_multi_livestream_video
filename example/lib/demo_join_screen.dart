@@ -11,7 +11,6 @@ import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 
 import 'demo_background.dart';
-import 'demo_composable_pre_join_page.dart';
 import 'demo_backend_diagnostics.dart';
 import 'demo_available_rooms.dart';
 import 'demo_room_directory.dart';
@@ -278,7 +277,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     required String displayName,
     String? avatarUrl,
     required String roomLabel,
-    required MediaPreJoinEnter onEnter,
+    required RealtimePreJoinEnter onEnter,
     String? providerId,
     String? roomCode,
   }) async {
@@ -290,7 +289,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       if (!mounted) return;
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (_) => DemoComposablePreJoinPage(
+          builder: (_) => RealtimePreJoinPage(
             permissionRequester:
                 widget.permissionRequester ??
                 const DefaultMediaPermissionProbe(),

@@ -25,7 +25,7 @@ Future<void> openAdvancedRealtimeRoom({
       MaterialPageRoute(
         builder: (_) => RealtimeRoomView(
           room: room,
-          config: const MediaRoomViewConfig(showChat: true),
+          config: const RealtimeRoomViewConfig(showChat: true),
         ),
       ),
     );
