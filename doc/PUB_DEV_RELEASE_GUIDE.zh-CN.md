@@ -1,5 +1,18 @@
 # Flutter Realtime SDK — pub.dev 单包发布清单
 
+> **dev.7 发布候选（尚未上传 pub.dev）：**
+> `0.1.0-dev.7` 修复 Web Demo 的 Pre-Join 正常但进入会议/直播后
+> 普通摄像头无法启动的问题：无虚拟背景时不再提前绑定处理视频源，
+> 模糊/换图仍按需启用；白板切换前刷新课堂版本，只对明确的 409 版本冲突
+> 重试一次；会议/直播会显示摄像头和共享内容操作错误。
+> 此版本保留 dev.6 的 Web 模型/WASM 资源修复。
+>
+> 在本仓库根目录手动发布：`bash scripts/publish_single_sdk_dev7.command`。
+> 脚本会确认发布目录版本、执行 Web 资产校验、静态分析和
+> pub.dev dry-run，只有明确输入 `PUBLISH 0.1.0-dev.7`
+> 才开始实际上传。已通过的单元测试和 Web 构建不等于真实浏览器
+> 的供应商音视频/白板全量验收。
+
 > **2026-10-15 dev.6 Web 虚拟背景修复（本地待发布）：**
 > 新版 `0.1.0-dev.6` 已生成至
 > `build/pub_release/0.1.0-dev.6/flutter_realtime_sdk/`，**尚未上传**。

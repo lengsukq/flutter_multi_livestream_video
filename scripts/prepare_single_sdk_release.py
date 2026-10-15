@@ -118,6 +118,14 @@ def prepare(version: str, root: Path = ROOT) -> Path:
             "- Add release assembly and independent Flutter Web asset-manifest regression checks; host applications no longer need resource-copy workarounds.\n"
             "- Retain the unified SDK Meeting/Live/Chat/Pre-Join pages and Headless camera/effects coordination.\n"
         )
+    elif version == "0.1.0-dev.7":
+        notes = (
+            "- Fix Web camera publication after Pre-Join in Meeting and Live: keep native RTC camera capture when no virtual background is selected.\n"
+            "- Create and attach the processed video source only when blur or image replacement is selected; preserve on-demand effects and camera toggle behavior.\n"
+            "- Fix shared-content whiteboard mode transitions racing classroom revisions; refresh before commit and retry explicit revision conflicts once.\n"
+            "- Show camera and shared-content action errors in SDK Meeting/Live pages instead of failing silently.\n"
+            "- Add meeting/live camera and shared-content regression tests; retain the dev.6 Web asset packaging fixes.\n"
+        )
     else:
         notes = (
             "- Fix camera-off background selection followed by camera-on in external Headless apps.\n"
