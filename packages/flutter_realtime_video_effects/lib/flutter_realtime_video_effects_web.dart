@@ -47,7 +47,19 @@ class FlutterRealtimeVideoEffectsWeb
         'Web runtime before creating a processed source.',
       );
     }
-    return _globalThis['RealtimeVideoEffectsBridge'] as JSObject;
+    final bridge = _globalThis['RealtimeVideoEffectsBridge'] as JSObject;
+    final version = bridge.getProperty<JSAny?>('bridgeVersion'.toJS)?.dartify();
+    if (version != 1) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.webSdkUnavailable,
+        message: 'webBridge.versionMismatch',
+        domain: 'videoEffects',
+        operation: 'handshake',
+        details: {'expectedVersion': 1, 'actualVersion': version},
+        suggestedAction: 'reload-web-runtime',
+      );
+    }
+    return bridge;
   }
 
   @override

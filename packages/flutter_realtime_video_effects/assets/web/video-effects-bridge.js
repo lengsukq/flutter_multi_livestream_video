@@ -30,12 +30,10 @@
 
 (function installRealtimeVideoEffectsBridge(global) {
   'use strict';
-(function installRealtimeVideoEffectsBridge(global) {
-  'use strict';
 
   const assetUrl = (relativePath) =>
     new URL(
-      `assets/packages/flutter_realtime_sdk/assets/bundled/flutter_realtime_video_effects/web/${relativePath}`,
+      `assets/packages/flutter_realtime_video_effects/assets/web/${relativePath}`,
       document.baseURI,
     ).toString();
 
@@ -594,6 +592,7 @@
   }
 
   global.RealtimeVideoEffectsBridge = {
+    bridgeVersion: 1,
     async createSource(sourceId, serializedArgs) {
       const id = String(sourceId || '');
       if (!id) throw new Error('Processed video sourceId is required.');

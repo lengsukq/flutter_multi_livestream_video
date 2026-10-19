@@ -562,6 +562,7 @@
   }
 
   global.RealtimeVideoEffectsBridge = {
+    bridgeVersion: 1,
     async createSource(sourceId, serializedArgs) {
       const id = String(sourceId || '');
       if (!id) throw new Error('Processed video sourceId is required.');
