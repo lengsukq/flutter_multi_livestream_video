@@ -36,8 +36,10 @@ void main() {
           .setMockMethodCallHandler(channel, (call) async {
             final args = call.arguments as Map<Object?, Object?>;
             calls.add('${call.method}:${args['sourceId']}');
-            if (call.method == 'attachProvider' && args['sourceId'] == 'first')
+            if (call.method == 'attachProvider' &&
+                args['sourceId'] == 'first') {
               await gate.future;
+            }
             return null;
           });
       final sink = NativeProcessedVideoSink(providerId: 'test');
@@ -63,11 +65,12 @@ void main() {
     var fail = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-          if (call.method == 'detachProvider' && fail)
+          if (call.method == 'detachProvider' && fail) {
             throw PlatformException(
               code: 'temporary',
               message: 'private-native-payload',
             );
+          }
           return null;
         });
     final sink = NativeProcessedVideoSink(providerId: 'test');

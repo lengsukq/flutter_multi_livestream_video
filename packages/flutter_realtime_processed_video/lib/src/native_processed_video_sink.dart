@@ -59,11 +59,12 @@ class NativeProcessedVideoSink {
   }
 
   void _ensureOpen() {
-    if (_closed)
+    if (_closed) {
       throw const RealtimeException(
         code: RealtimeErrorCode.invalidState,
         message: 'processedVideo.sink.closed',
       );
+    }
   }
 
   Future<void> attach(
@@ -73,12 +74,13 @@ class NativeProcessedVideoSink {
     _ensureOpen();
     final snapshot = Map<String, Object?>.unmodifiable(arguments);
     return _enqueue(() async {
-      if (!supports(value))
+      if (!supports(value)) {
         throw RealtimeException(
           code: RealtimeErrorCode.unsupportedFeature,
           providerId: providerId,
           message: 'processedVideo.sink.source',
         );
+      }
       await _detach();
       _source = value;
       try {
@@ -113,8 +115,9 @@ class NativeProcessedVideoSink {
     _ensureOpen();
     return _enqueue(() async {
       final source = _source;
-      if (source != null)
+      if (source != null) {
         await ProcessedVideoBridge().setEnabled(source, enabled);
+      }
     });
   }
 
@@ -122,8 +125,9 @@ class NativeProcessedVideoSink {
     _ensureOpen();
     return _enqueue(() async {
       final source = _source;
-      if (source != null)
+      if (source != null) {
         await ProcessedVideoBridge().selectCamera(source, deviceId);
+      }
     });
   }
 
