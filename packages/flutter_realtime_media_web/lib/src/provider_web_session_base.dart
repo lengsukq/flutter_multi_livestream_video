@@ -37,6 +37,7 @@ abstract class ProviderWebSessionBase
   ProcessedVideoSource? _processedVideoSource;
   bool _disposed = false;
   Future<void>? _joinFuture;
+  RealtimeException? _joiningFailure;
   Future<void>? _leaveFuture;
   Future<void>? _disposeFuture;
 
@@ -186,6 +187,7 @@ abstract class ProviderWebSessionBase
         providerId: providerId,
       );
     }
+    _joiningFailure = null;
     _setState(MediaSessionState.joining);
     try {
       ProviderWebBridge.registerHandler(sessionId, _onBridgeEvent);
@@ -196,14 +198,25 @@ abstract class ProviderWebSessionBase
       );
       _setState(MediaSessionState.connecting);
       await ProviderWebBridge.join(providerId, sessionId);
+      _ensureNotDisposed();
+      final failure = _joiningFailure;
+      if (failure != null) throw failure;
       if (state == MediaSessionState.connecting) {
         _setState(MediaSessionState.connected);
       }
       _updateSnapshot(_snapshot.copyWith(clearLastError: true));
     } catch (error) {
       final mapped = _mapError('Unable to join the $providerId room.', error);
-      _setState(MediaSessionState.failed, error: mapped);
-      _emit(MediaFailureEvent(mapped));
+      if (!_disposed) {
+        _setState(MediaSessionState.failed, error: mapped);
+        _emit(MediaFailureEvent(mapped));
+      }
+      final cleanup = Cleanup();
+      await cleanup.run(
+        'bridge.join.rollback',
+        () => ProviderWebBridge.dispose(providerId, sessionId),
+      );
+      cleanup.finish(domain: 'media.web', cause: mapped);
       throw mapped;
     }
   }
@@ -438,11 +451,17 @@ abstract class ProviderWebSessionBase
         final supplied = event['error'];
         final error = supplied is RealtimeException
             ? supplied.withProvider(providerId)
-            : RealtimeException(
-                code: RealtimeErrorCode.providerError,
-                message: 'web.bridge.event',
-                providerId: providerId,
+            : ProviderWebBridge.mapFailure(
+                providerId,
+                'web.bridge.event',
+                event['message']?.toString() ?? 'provider error',
+                operation: 'event',
               );
+        if (_joinFuture != null ||
+            state == MediaSessionState.joining ||
+            state == MediaSessionState.connecting) {
+          _joiningFailure = error;
+        }
         _setState(MediaSessionState.failed, error: error);
         _emit(MediaFailureEvent(error));
         break;

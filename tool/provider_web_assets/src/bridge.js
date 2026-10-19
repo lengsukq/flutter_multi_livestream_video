@@ -64,6 +64,7 @@ import { createChimeSession } from './media/chime-session.js';
   }
 
   function emit(session, event) {
+    if (session.disposed) return;
     const callback = global.__flutterMediaProviderOnEvent;
     if (typeof callback === 'function') {
       callback(session.id, JSON.stringify(event));
@@ -177,6 +178,8 @@ import { createChimeSession } from './media/chime-session.js';
       localMuted: true,
       localVideoEnabled: false,
       joined: false,
+      joining: false,
+      disposed: false,
       participants: new Map(),
       tracks: new Map(),
       attachments: new Map(),
@@ -196,18 +199,26 @@ import { createChimeSession } from './media/chime-session.js';
   }
 
   async function join(session) {
+    session.joining = true;
+    session.joinAttempted = true;
     emitState(session, 'connecting');
     try {
       await session.driver.join();
+      if (session.disposed) {
+        await session.driver.leave();
+        throw new Error('media.join.cancelled');
+      }
     } catch (error) {
       // A Chime signaling attempt may have started even if we never received
       // audioVideoDidStart. Tear it down instead of leaking a background SDK
       // connection when the caller retries after a timeout or stop event.
       if (session.providerId === 'chime') {
-        try { await session.driver.leave(); }
+        try { await session.driver.leave(); session.joinAttempted = false; }
         catch (_) { /* Keep the original signaling failure. */ }
       }
       throw error;
+    } finally {
+      session.joining = false;
     }
     session.joined = true;
     emitState(session, 'connected');
@@ -231,13 +242,23 @@ import { createChimeSession } from './media/chime-session.js';
   }
 
   async function dispose(session) {
+    if (session.disposeFuture) return session.disposeFuture;
+    session.disposed = true;
+    stopStats(session);
+    // Invalidate the registry synchronously, even if vendor teardown stalls.
+    if (sessions.get(session.id) === session) sessions.delete(session.id);
+    const partialJoin = session.joinAttempted && !session.joined;
+    session.disposeFuture = (async () => {
     try {
-      await leave(session);
+      if (partialJoin) await session.driver.leave();
+      else await leave(session);
     } finally {
       stopStats(session);
       if (session.driver.dispose) await session.driver.dispose();
-      sessions.delete(session.id);
+      if (sessions.get(session.id) === session) sessions.delete(session.id);
     }
+    })();
+    return session.disposeFuture;
   }
 
   function startStats(session) {
@@ -357,6 +378,8 @@ import { createChimeSession } from './media/chime-session.js';
   }
 
   const bridge = {
+    // Version of the Dart/JS contract, independent of the pub release number.
+    bridgeVersion: 1,
     async createLocalPreview(providerId, previewId, serializedArgs) {
       const args = parsePayload(serializedArgs || '{}') || {};
       if (sessions.has(previewId)) {

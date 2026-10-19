@@ -43,7 +43,7 @@ void main() {
       final elements = <web.HTMLDivElement>[];
       final tracks = <String>[];
       final detached = <String>[];
-      final bridge = JSObject();
+      final bridge = JSObject()..setProperty('bridgeVersion'.toJS, 1.toJS);
       bridge.setProperty(
         'attachVideoElement'.toJS,
         ((

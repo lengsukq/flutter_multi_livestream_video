@@ -1134,3 +1134,35 @@ test('Agora renders into a detached element without looking it up by id', async 
   assert.equal(h.calls.find(call=>Array.isArray(call)&&call[0]==='video.play')?.[1],element);
   await h.bridge.dispose('agora','detached-render');
 });
+
+test('disposing a pending Agora join invalidates late connection and permits a new session with the same id', async () => {
+  const h=await createAgoraHarness();
+  assert.equal(h.bridge.bridgeVersion,1);
+  const client=h.context.AgoraRTC.createClient();
+  let finish;
+  client.join=()=>new Promise(resolve=>{finish=resolve;});
+  await h.bridge.create('agora','pending',agoraPayload);
+  const joining=h.bridge.join('agora','pending');
+  const failure=assert.rejects(joining,/cancelled/);
+  await h.bridge.dispose('agora','pending');
+  assert.ok(h.calls.includes('client.leave'));
+  client.join=async()=>{};
+  await h.bridge.create('agora','pending',agoraPayload);
+  await h.bridge.join('agora','pending');
+  finish();await failure;
+  assert.equal(h.events.filter(({event})=>event.type==='state'&&event.state==='connected').length,1);
+  await h.bridge.command('agora','pending','setMuted',{muted:true});
+  await h.bridge.dispose('agora','pending');
+});
+
+test('legacy string attachment remains compatible with the element-based bridge', async () => {
+  const h=await createAgoraHarness();
+  await h.bridge.create('agora','legacy',agoraPayload);
+  await h.bridge.join('agora','legacy');
+  await h.bridge.command('agora','legacy','setVideoEnabled',{enabled:true});
+  const element={id:'legacy-view',replaceChildren(){}};
+  h.context.document.getElementById=id=>id===element.id?element:null;
+  await h.bridge.attachVideo('agora','legacy',`agora:video:${agoraPayload.participantId}`,element.id);
+  assert.equal(h.calls.find(call=>Array.isArray(call)&&call[0]==='video.play')?.[1],element);
+  await h.bridge.dispose('agora','legacy');
+});

@@ -34,6 +34,53 @@ void main() {
     );
   });
   group('Realtime facade', () {
+    test(
+      'open propagates a recoverable media join failure and its cause to the host',
+      () async {
+        final cause = StateError('synthetic transport error');
+        final factory = FakeMediaSessionFactory(
+          providerId: 'meeting-sdk',
+          joinError: RealtimeException(
+            code: RealtimeErrorCode.network,
+            message: 'media.web.join',
+            cause: cause,
+          ),
+        );
+        final realtime = Realtime.standard(
+          platformResolver: () => RealtimeRuntimePlatform.android,
+          drivers: _awsLikeDrivers(
+            factory,
+            FakeMediaSessionFactory(providerId: 'live-sdk'),
+          ),
+        );
+        await expectLater(
+          realtime.open(
+            RealtimeRequest.join(
+              type: RealtimeExperience.meeting,
+              user: const RealtimeUser(id: 'self', name: 'Self'),
+              roomCode: 'one',
+              source: RealtimeSource.credentials(
+                media: RealtimeCredentials(
+                  providerId: 'aws',
+                  payload: <String, dynamic>{},
+                ),
+              ),
+            ),
+          ),
+          throwsA(
+            isA<RealtimeException>()
+                .having((e) => e.code, 'code', RealtimeErrorCode.network)
+                .having((e) => e.cause, 'cause', same(cause))
+                .having((e) => e.recoverable, 'recoverable', isTrue),
+          ),
+        );
+        expect(
+          factory.createdSessions.single.disposeCount,
+          greaterThanOrEqualTo(1),
+        );
+      },
+    );
+
     test('media bundles leave video effects unregistered', () {
       final realtime = Realtime(providers: [createLivekitProvider()]);
       expect(realtime.sdk.services.videoEffectsFactory, isNull);

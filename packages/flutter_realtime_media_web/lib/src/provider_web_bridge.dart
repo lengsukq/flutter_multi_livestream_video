@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
@@ -40,7 +41,7 @@ class ProviderWebBridge {
           )
           .toDart;
     } catch (error) {
-      throw _mapError(
+      throw mapFailure(
         providerId,
         'Unable to initialize the SDK local video preview.',
         error,
@@ -93,7 +94,19 @@ class ProviderWebBridge {
         details: {'reason': 'web-sdk-unavailable'},
       );
     }
-    return _globalThis['MediaProviderBridge'] as JSObject;
+    final bridge = _globalThis['MediaProviderBridge'] as JSObject;
+    final version = bridge.getProperty<JSAny?>('bridgeVersion'.toJS)?.dartify();
+    if (version != 1) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.webSdkUnavailable,
+        message: 'webBridge.versionMismatch',
+        domain: 'media.web',
+        operation: 'handshake',
+        details: {'expectedVersion': 1, 'actualVersion': version},
+        suggestedAction: 'reload-web-runtime',
+      );
+    }
+    return bridge;
   }
 
   static Future<void> create({
@@ -112,7 +125,7 @@ class ProviderWebBridge {
           )
           .toDart;
     } catch (error) {
-      throw _mapError(
+      throw mapFailure(
         providerId,
         'Unable to initialize the browser SDK.',
         error,
@@ -122,7 +135,11 @@ class ProviderWebBridge {
 
   // Joining is a lifecycle operation. It cannot use bridge.command(), which
   // correctly rejects ordinary media commands before session.joined is true.
-  static Future<void> join(String providerId, String sessionId) async {
+  static Future<void> join(
+    String providerId,
+    String sessionId, {
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
     try {
       await _bridge
           .callMethod<JSPromise<JSAny?>>(
@@ -130,9 +147,16 @@ class ProviderWebBridge {
             providerId.toJS,
             sessionId.toJS,
           )
-          .toDart;
-    } catch (error) {
-      throw _mapError(providerId, 'Browser media join failed.', error);
+          .toDart
+          .timeout(timeout);
+    } catch (error, stack) {
+      throw mapFailure(
+        providerId,
+        'media.web.join',
+        error,
+        operation: 'join',
+        stackTrace: stack,
+      );
     }
   }
 
@@ -153,7 +177,7 @@ class ProviderWebBridge {
           )
           .toDart;
     } catch (error) {
-      throw _mapError(providerId, 'Browser media leave failed.', error);
+      throw mapFailure(providerId, 'Browser media leave failed.', error);
     }
   }
 
@@ -166,8 +190,6 @@ class ProviderWebBridge {
             sessionId.toJS,
           )
           .toDart;
-    } catch (_) {
-      // Dispose is best-effort after leave and remains safe on partial joins.
     } finally {
       unregisterHandler(sessionId);
     }
@@ -258,7 +280,7 @@ class ProviderWebBridge {
           .toDart;
       return response.toDart;
     } catch (error) {
-      throw _mapError(
+      throw mapFailure(
         providerId,
         'Browser media operation "$command" failed.',
         error,
@@ -266,22 +288,40 @@ class ProviderWebBridge {
     }
   }
 
-  static RealtimeException _mapError(
+  static RealtimeException mapFailure(
     String providerId,
     String fallback,
-    Object error,
-  ) {
+    Object error, {
+    String? operation,
+    StackTrace? stackTrace,
+  }) {
     if (error is RealtimeException) return error.withProvider(providerId);
     final message = error.toString();
     final lower = message.toLowerCase();
-    final code = lower.contains('permission') || lower.contains('notallowed')
+    final code =
+        error is TimeoutException ||
+            lower.contains('timeout') ||
+            lower.contains('timed out')
+        ? RealtimeErrorCode.timeout
+        : lower.contains('network') ||
+              lower.contains('gateway_server') ||
+              lower.contains('failed to fetch') ||
+              lower.contains('connection_closed')
+        ? RealtimeErrorCode.network
+        : lower.contains('permission') || lower.contains('notallowed')
         ? RealtimeErrorCode.permissionDenied
         : RealtimeErrorCode.providerError;
-    return RealtimeException(
-      code: code,
-      message: fallback,
-      details: error,
-      providerId: providerId,
+    return normalizeRealtimeException(
+      RealtimeException(
+        code: code,
+        message: fallback,
+        details: error,
+        cause: error,
+        domain: 'media.web',
+        operation: operation,
+        stackTrace: stackTrace,
+        providerId: providerId,
+      ),
     );
   }
 }
