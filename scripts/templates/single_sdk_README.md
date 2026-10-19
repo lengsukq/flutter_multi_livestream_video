@@ -97,6 +97,16 @@ support. Blur/image replacement depends on the platform, provider, and host
 camera permissions. If effects initialization fails, handle the exception and
 do not silently publish unprocessed video as a fallback.
 
+Effect selection waits for the first usable processed frame on Web. Handle
+`RealtimeException` from camera/effect operations. Processing can also fail
+later (for example, after losing the GPU context): subscribe to `room.events`
+for `RealtimeBackendFailure` and inspect `event.error`. The SDK stops failed
+publication; an explicit successful effect reset is required before retrying
+the camera. `room.diagnostics` retains recent failures even without a listener.
+Use `code`, `domain`, `operation`, and `suggestedAction` for application behavior;
+retain `cause`, `details`, and `stackTrace` in private diagnostic logs. The public
+message intentionally excludes raw provider payloads and credentials.
+
 Provide a backend implementing the provisioning/control contracts, or use
 `RealtimeSource.credentials(...)` with your own short-lived credential service.
 The repository's Demo Server is a reference implementation. Never include

@@ -126,6 +126,16 @@ def prepare(version: str, root: Path = ROOT) -> Path:
             "- Show camera and shared-content action errors in SDK Meeting/Live pages instead of failing silently.\n"
             "- Add meeting/live camera and shared-content regression tests; retain the dev.6 Web asset packaging fixes.\n"
         )
+    elif version == "0.1.0-dev.8":
+        notes = (
+            "- Bind Web video directly to Flutter's newly created DOM element; preserve that element when replacing tracks and surface binding failures.\n"
+            "- Fix LiveKit Web processed-video controls using the browser source registry instead of an unavailable native MethodChannel.\n"
+            "- Remove the previous LiveKit camera publication before replacement, enable the independently owned processed clone, and retain one publication across camera toggles.\n"
+            "- Use Agora's native Web camera when no effect is selected; recreate released camera tracks and synchronize processed clone enablement.\n"
+            "- Wait for usable video dimensions and the first processed frame; reject initialization/inference failures instead of reporting successful effect changes.\n"
+            "- Retain runtime processing failures, reject camera re-enable until effects are reset, and stop failed room publication with typed diagnostics.\n"
+            "- Add browser and source-level regressions; real-provider multi-device acceptance remains separate.\n"
+        )
     else:
         notes = (
             "- Fix camera-off background selection followed by camera-on in external Headless apps.\n"

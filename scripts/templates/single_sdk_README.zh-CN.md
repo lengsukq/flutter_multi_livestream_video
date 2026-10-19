@@ -102,6 +102,15 @@ await room.setCameraEnabled(false);
 `prepareVideoEffects(MediaLocalPreviewSettings(...))` 可用于入会后的预设，
 但普通开关摄像头应以 SDK 的统一方法为准。
 
+Web 切换效果会等待首个可用的处理帧；摄像头/背景操作失败时会抛出
+`RealtimeException`。运行中也可能发生处理故障（例如 GPU 上下文丢失），
+请订阅 `room.events` 中的 `RealtimeBackendFailure` 并读取 `event.error`。
+SDK 会停止故障发布；显式重设效果成功后才能重新开启摄像头。
+即使没有订阅事件，最近的错误也会保留在 `room.diagnostics`。
+业务提示与恢复逻辑使用 `code`、`domain`、`operation`、`suggestedAction`；
+私有诊断日志可记录 `cause`、`details`、`stackTrace`。
+公开 message 刻意不拼接厂商原始载荷与凭证。
+
 ## 五、iOS 配置（发布单包）
 
 iOS 最低版本为 **15.0**，保留 Flutter 默认的 Swift Package Manager 支持。
