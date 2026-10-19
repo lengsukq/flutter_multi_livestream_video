@@ -18,10 +18,34 @@ class RoomVideoEffectsController
         onFailure(
           RealtimeException(
             code: RealtimeErrorCode.providerError,
-            message: failure.message,
+            message: 'videoEffects.processFrame failed.',
             providerId: providerId,
             domain: 'videoEffects',
+            operation: 'processFrame',
+            cause: failure.message,
+            suggestedAction: 'reset-background-effect',
           ),
+        );
+        unawaited(
+          _serializeVideoOperation(() async {
+            final active = media.session;
+            if (active is InteractiveMediaSession &&
+                active.snapshot.localVideoEnabled) {
+              await active.setVideoEnabled(false);
+            }
+          }).catchError((Object error, StackTrace stack) {
+            if (!_disposed) {
+              onFailure(
+                normalizeRealtimeException(
+                  error,
+                  domain: 'videoEffects',
+                  operation: 'stopPublication',
+                  providerId: providerId,
+                  stackTrace: stack,
+                ),
+              );
+            }
+          }),
         );
       }
     });
@@ -290,6 +314,17 @@ class RoomVideoEffectsController
           providerId: providerId,
           message: error.message ?? 'Video processing failed.',
           details: error,
+        );
+      } catch (error, stack) {
+        Error.throwWithStackTrace(
+          normalizeRealtimeException(
+            error,
+            domain: 'videoEffects',
+            operation: 'update',
+            providerId: providerId,
+            stackTrace: stack,
+          ),
+          stack,
         );
       }
     });

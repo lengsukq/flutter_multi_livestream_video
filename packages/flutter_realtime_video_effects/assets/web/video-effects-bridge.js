@@ -30,10 +30,12 @@
 
 (function installRealtimeVideoEffectsBridge(global) {
   'use strict';
+(function installRealtimeVideoEffectsBridge(global) {
+  'use strict';
 
   const assetUrl = (relativePath) =>
     new URL(
-      `assets/packages/flutter_realtime_video_effects/assets/web/${relativePath}`,
+      `assets/packages/flutter_realtime_sdk/assets/bundled/flutter_realtime_video_effects/web/${relativePath}`,
       document.baseURI,
     ).toString();
 
@@ -140,6 +142,8 @@
     let faceDetector = null;
     let faceBoxes = [];
     let outputSuspended = false;
+    let lastFailure = null;
+    let cancelReadyWait = null;
     let latestMask = null;
     let stopped = false;
     let frameHandle = null;
@@ -246,6 +250,7 @@
     }
 
     function failClosed(error) {
+      lastFailure = error;
       outputSuspended = true;
       latestMask = null;
       // Cloned supplier tracks share the canvas, but their enabled flags are
@@ -254,6 +259,36 @@
       if (sourceTrack) sourceTrack.enabled = false;
       if (outputTrack) outputTrack.enabled = false;
       onError(error);
+    }
+
+    function videoIsReady() {
+      return video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0;
+    }
+
+    async function renderReadyFrame() {
+      if (!enabled || stopped || outputSuspended) return;
+      if (!videoIsReady()) {
+        await new Promise((resolve, reject) => {
+          const finish = (error) => {
+            global.clearTimeout(timeout);
+            video.removeEventListener('loadeddata', check);
+            video.removeEventListener('resize', check);
+            cancelReadyWait = null;
+            if (error) reject(error); else resolve();
+          };
+          const check = () => { if (videoIsReady()) finish(); };
+          const timeout = global.setTimeout(
+            () => finish(new Error('videoEffects.cameraFrame.timeout')),
+            10000,
+          );
+          cancelReadyWait = () => finish(new Error('videoEffects.source.disposed'));
+          video.addEventListener('loadeddata', check);
+          video.addEventListener('resize', check);
+          check();
+        });
+      }
+      await updateSegmentation(global.performance.now());
+      drawFrame();
     }
 
     function updateMask(mask) {
@@ -314,7 +349,7 @@
     }
 
     async function updateSegmentation(now) {
-      if (currentEffect.type === 'none' || !enabled || outputSuspended || video.readyState < 2) return;
+      if (currentEffect.type === 'none' || !enabled || outputSuspended || !videoIsReady()) return;
       const revision = effectRevision;
       await ensureSegmenter();
       if (stopped || !enabled || outputSuspended || revision !== effectRevision || currentEffect.type === 'none') return;
@@ -337,7 +372,7 @@
     function drawFrame() {
       const outputWidth = outputCanvas.width;
       const outputHeight = outputCanvas.height;
-      if (!enabled || stopped || outputSuspended || !outputWidth || !outputHeight || video.readyState < 2) return;
+      if (!enabled || stopped || outputSuspended || !outputWidth || !outputHeight || !videoIsReady()) return;
 
       outputContext.save();
       outputContext.clearRect(0, 0, outputWidth, outputHeight);
@@ -397,7 +432,7 @@
     }
 
     function acceptFrame(now, frame) {
-      if (!enabled || outputSuspended || video.readyState < 2) return false;
+      if (!enabled || outputSuspended || !videoIsReady()) return false;
       // requestAnimationFrame follows display refresh, which may be much faster
       // than the camera. Do not redraw or infer the same decoded frame twice.
       if (Number.isFinite(frame) && frame === lastVideoFrame) return false;
@@ -459,8 +494,12 @@
         currentEffect = { type, blurStrength: nextEffect?.blurStrength || 'medium' };
         previous?.close?.();
         outputSuspended = false;
+        lastFailure = null;
         if (sourceTrack) sourceTrack.enabled = enabled;
         if (outputTrack) outputTrack.enabled = enabled;
+        // Do not report success until the selected effect can render. This
+        // also propagates first-inference errors to the caller's Future.
+        if (sourceTrack) await renderReadyFrame();
       } catch (error) {
         nextImage?.close?.();
         if (!stopped && revision === effectRevision) failClosed(error);
@@ -472,6 +511,7 @@
       // Initialize effects before opening the camera or scheduling any output.
       await setEffect(effect);
       await openCamera(deviceId);
+      await renderReadyFrame();
       scheduleFrame();
     } catch (error) {
       stopped = true;
@@ -499,15 +539,23 @@
       async setCameraDevice(nextDeviceId) {
         await openCamera(nextDeviceId);
       },
-      setEnabled(value) {
+      async setEnabled(value) {
+        if (value && lastFailure) throw lastFailure;
         enabled = Boolean(value);
         if (!enabled) blankOutput();
         if (sourceTrack) sourceTrack.enabled = enabled && !outputSuspended;
         if (outputTrack) outputTrack.enabled = enabled && !outputSuspended;
+        try {
+          if (enabled) await renderReadyFrame();
+        } catch (error) {
+          failClosed(error);
+          throw error;
+        }
       },
       stop() {
         if (stopped) return;
         stopped = true;
+        cancelReadyWait?.();
         effectRevision++;
         backgroundImage?.close?.();
         if (
@@ -581,7 +629,7 @@
     },
 
     async setEnabled(sourceId, enabled) {
-      requireSource(sourceId).setEnabled(Boolean(enabled));
+      await requireSource(sourceId).setEnabled(Boolean(enabled));
     },
 
     async selectCamera(sourceId, deviceId) {

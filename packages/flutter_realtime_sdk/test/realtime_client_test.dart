@@ -71,7 +71,16 @@ void main() {
         final operation = room.setBackgroundEffect(
           const MediaBackgroundEffect.blur(),
         );
-        final failure = expectLater(operation, throwsStateError);
+        final failure = expectLater(
+          operation,
+          throwsA(
+            isA<RealtimeException>().having(
+              (e) => e.cause,
+              'cause',
+              isA<StateError>(),
+            ),
+          ),
+        );
         await Future<void>.delayed(Duration.zero);
         expect(session.snapshot.localVideoEnabled, isFalse);
         gate.completeError(StateError('effects runtime unavailable'));
@@ -287,7 +296,13 @@ void main() {
       final room = _effectsRoom(platform, session);
       await expectLater(
         room.setBackgroundEffect(const MediaBackgroundEffect.blur()),
-        throwsStateError,
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.cause,
+            'cause',
+            isA<StateError>(),
+          ),
+        ),
       );
       expect(platform.disposedSources, ['effects-source-1']);
       session.attachError = null;
@@ -417,12 +432,15 @@ void main() {
       'asynchronous processed-source failures reach room event listeners',
       () async {
         final platform = _FakeEffectsPlatform();
-        final room = _effectsRoom(platform, _FakeProcessedMediaSession());
+        final session = _FakeProcessedMediaSession();
+        final room = _effectsRoom(platform, session);
         await room.prepareVideoEffects(
           const MediaLocalPreviewSettings(
+            cameraEnabled: true,
             backgroundEffect: MediaBackgroundEffect.blur(),
           ),
         );
+        await room.setCameraEnabled(true);
         final eventFuture = room.events.firstWhere(
           (event) => event is RealtimeBackendFailure,
         );
@@ -437,7 +455,11 @@ void main() {
         final event = await eventFuture as RealtimeBackendFailure;
         expect(event.error.code, RealtimeErrorCode.providerError);
         expect(event.error.providerId, 'fake-effects-provider');
-        expect(event.error.message, 'frame processing failed');
+        expect(event.error.message, 'videoEffects.processFrame failed.');
+        expect(event.error.cause, 'frame processing failed');
+        expect(room.diagnostics.last.operation, 'processFrame');
+        await Future<void>.delayed(Duration.zero);
+        expect(session.snapshot.localVideoEnabled, isFalse);
         await room.dispose();
         await platform.close();
       },
@@ -2260,10 +2282,9 @@ class _FakeProcessedMediaSession extends FakeMediaSession
     implements ProcessedVideoSink {
   _FakeProcessedMediaSession({
     bool supportsBackground = true,
-    MediaRole role = MediaRole.participant,
+    super.role = MediaRole.participant,
   }) : super(
          providerId: 'fake-effects-provider',
-         role: role,
          capabilities: MediaCapabilities(
            canPublishAudio: true,
            canPublishVideo: true,

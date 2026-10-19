@@ -5,16 +5,20 @@ import vm from 'node:vm';
 
 const neutralRuntime = await readFile(new URL('../../flutter_realtime_processed_video/web/processed-video-bridge.js', import.meta.url), 'utf8');
 const runtime = await readFile(new URL('../web/video-effects-bridge.js', import.meta.url), 'utf8');
-function harness({model, mask = null, faces = [], imageSize = [1920,1080]} = {}) {
+function harness({videoSize = [640, 360], model, mask = null, faces = [], imageSize = [1920,1080]} = {}) {
   const calls = [], cameras = [], videos = [], images = [], mattes = [];
   let sequence = 0, frameTime = 0;
   const output = {id:'processed', enabled:true, stop(){calls.push('output.stop');}, requestFrame(){}};
   function makeVideo() {
-    const video = {style:{}, readyState:2, videoWidth:640, videoHeight:360, srcObject:null, async play(){}, pause(){},
+    const listeners = new Map();
+    const video = {style:{}, readyState:2, videoWidth:videoSize[0], videoHeight:videoSize[1],
+      addEventListener(name, callback){listeners.set(name, callback);},
+      removeEventListener(name){listeners.delete(name);},
+      dispatch(name){listeners.get(name)?.();}, srcObject:null, async play(){}, pause(){},
       requestVideoFrameCallback(cb){this.callback=(now = (frameTime += 50), metadata = {mediaTime:now/1000})=>cb(now,metadata);return 1;}, cancelVideoFrameCallback(){this.callback=null;}};
     videos.push(video); return video;
   }
-  const context = vm.createContext({console, URL, Blob, performance:{now:()=>100},
+  const context = vm.createContext({console, URL, Blob, setTimeout, clearTimeout, performance:{now:()=>100},
     MediaStream:class {constructor(tracks){this.tracks=tracks;}},
     ImageData:class {constructor(data,width,height){Object.assign(this,{data,width,height});}},
     navigator:{mediaDevices:{async getUserMedia(constraints){
@@ -124,6 +128,7 @@ test('face protection preserves cheek pixels missed by person segmentation',asyn
 
 test('24 fps pacing preserves its deadline with a 30 fps camera', async () => {
   const h=harness(); await h.bridge.createSource('one',{frameRate:24});
+  h.calls.length=0; // Measure pacing after the initial readiness frame.
   for(let index=0;index<30;index++) await h.videos[0].callback(index*1000/30,{mediaTime:index/30});
   assert.equal(h.calls.filter(call=>call==='raw.draw').length,24);
   assert.equal(h.calls.includes('model.create'),false,'none never initializes segmentation');
@@ -132,6 +137,7 @@ test('24 fps pacing preserves its deadline with a 30 fps camera', async () => {
 
 test('camera callbacks do not render the same decoded frame twice', async () => {
   const h=harness(); await h.bridge.createSource('one',{frameRate:30});
+  h.calls.length=0; // The source is already primed before callbacks begin.
   await h.videos[0].callback(0,{mediaTime:0});
   await h.videos[0].callback(40,{mediaTime:0});
   await h.videos[0].callback(80,{mediaTime:1/30});
@@ -142,8 +148,53 @@ test('camera callbacks do not render the same decoded frame twice', async () => 
 test('steady mask dimensions reuse the same matte allocation', async () => {
   const mask={width:4,height:4,getAsFloat32Array:()=>new Float32Array(16).fill(1)};
   const h=harness({mask}); await h.bridge.createSource('one',{effect:{type:'blur'}});
+  h.mattes.length=0;
   await h.videos[0].callback(100,{mediaTime:0.1});
   await h.videos[0].callback(150,{mediaTime:0.15});
   assert.equal(h.mattes.length,2); assert.strictEqual(h.mattes[0],h.mattes[1]);
+  h.bridge.disposeSource('one');
+});
+
+
+test('creation waits for decoded video dimensions before handing a track to a publisher', async () => {
+  const h=harness({videoSize:[0,0]});
+  let ready=false;
+  const creating=h.bridge.createSource('one',{}).then(()=>{ready=true;});
+  await new Promise(r=>setImmediate(r));
+  assert.equal(ready,false);
+  assert.equal(h.calls.includes('raw.draw'),false);
+  h.videos[0].videoWidth=640; h.videos[0].videoHeight=360;
+  h.videos[0].dispatch('loadeddata');
+  await creating;
+  assert.equal(h.calls.includes('raw.draw'),true);
+  h.bridge.disposeSource('one');
+});
+
+test('first inference failure rejects creation and releases the camera', async () => {
+  const h=harness({model:()=>({segmentForVideo(){throw new Error('inference failed');},close(){}})});
+  await assert.rejects(h.bridge.createSource('one',{effect:{type:'blur'}}),/inference failed/);
+  assert.ok(h.calls.includes('camera-1.stop'));
+  assert.ok(h.calls.includes('output.stop'));
+});
+
+test('runtime failure rejects camera re-enable until an explicit effect reset succeeds', async () => {
+  let broken=false;
+  const h=harness({model:()=>({segmentForVideo(){if(broken)throw new Error('GPU lost');return {};},close(){}})});
+  await h.bridge.createSource('one',{effect:{type:'blur'}});
+  broken=true;
+  await h.videos[0].callback();
+  assert.equal(h.output.enabled,false);
+  await assert.rejects(h.bridge.setEnabled('one',true),/GPU lost/);
+  await h.bridge.setEffect('one',{type:'none'});
+  await h.bridge.setEnabled('one',true);
+  assert.equal(h.output.enabled,true);
+  h.bridge.disposeSource('one');
+});
+
+test('switching effects rejects when the first protected frame cannot be processed', async () => {
+  const h=harness({model:()=>({segmentForVideo(){throw new Error('first frame failed');},close(){}})});
+  await h.bridge.createSource('one',{});
+  await assert.rejects(h.bridge.setEffect('one',{type:'blur'}),/first frame failed/);
+  assert.equal(h.output.enabled,false);
   h.bridge.disposeSource('one');
 });
