@@ -50,6 +50,7 @@ class RealtimeMeetingPage extends StatefulWidget {
 
 class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
   late Future<void> _videoEffectsReady;
+  int _preparationRevision = 0;
   RealtimeMeetingPanel _panel = RealtimeMeetingPanel.closed;
   int _classroomTab = 0;
   int _classroomPanelVisit = 0;
@@ -79,14 +80,20 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
   }
 
   Future<void> _prepare() async {
+    final revision = ++_preparationRevision;
     final room = widget.room;
     final settings = widget.initialSettings;
     bool isCurrent() =>
         mounted &&
+        revision == _preparationRevision &&
         identical(widget.room, room) &&
         identical(widget.initialSettings, settings);
-    await prepareRoomPage(room, settings, isCurrent: isCurrent);
-    if (isCurrent()) await room.sharedContent?.start();
+    await prepareRoomPageWithDeadline(
+      room,
+      settings,
+      isCurrent: isCurrent,
+      startSharedContent: true,
+    );
   }
 
   @override

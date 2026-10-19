@@ -21,6 +21,15 @@ class RealtimeRoomUiController extends ChangeNotifier {
       _snapshot = snapshot;
       notifyListeners();
     });
+    _failureSubscription = room.events.listen((event) {
+      if (_disposed) return;
+      final failure = switch (event) {
+        RealtimeBackendFailure(:final error) => error,
+        RealtimeMediaEvent(event: MediaFailureEvent(:final error)) => error,
+        _ => null,
+      };
+      if (failure != null) reportActionError(failure);
+    });
     final chat = room.chat;
     if (chat != null) {
       _chatUi = ChatUiController(chat, moderation: room.chatModeration);
@@ -89,6 +98,7 @@ class RealtimeRoomUiController extends ChangeNotifier {
   ChatUiController? _chatUi;
   final Set<RealtimeRoomUiAction> _pending = {};
   StreamSubscription<MediaSnapshot>? _mediaSubscription;
+  StreamSubscription<RealtimeEvent>? _failureSubscription;
   MediaCameraPosition _cameraPosition;
   RealtimeException? _error;
   bool _disposed = false;
@@ -377,7 +387,10 @@ class RealtimeRoomUiController extends ChangeNotifier {
       _chatUi?.removeListener(_onChatChanged);
       _chatUi?.dispose();
     });
-    await Future.wait([mediaRelease, chatRelease]);
+    final failureRelease = cleanup.run('room.ui.failures', () async {
+      await _failureSubscription?.cancel();
+    });
+    await Future.wait([mediaRelease, chatRelease, failureRelease]);
     cleanup.finish(domain: 'room.ui');
   }
 

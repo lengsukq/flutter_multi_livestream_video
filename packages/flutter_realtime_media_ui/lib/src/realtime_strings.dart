@@ -73,12 +73,30 @@ class RealtimeStrings {
       ? '当前供应商未配置云录制执行器'
       : 'Cloud recording requires a supported provider and configured backend';
 
-  String displayRealtimeError(Object error) => error is RealtimeException
-      ? [
-          error.message,
-          if (error.suggestedAction == 'retry') isZh ? '请重试。' : 'Please retry.',
-        ].join('\n')
-      : (isZh ? '操作失败，请重试。' : 'The action failed. Please retry.');
+  String displayRealtimeError(Object error) {
+    if (error is! RealtimeException) {
+      return isZh ? '操作失败，请重试。' : 'The action failed. Please retry.';
+    }
+    if (error.suggestedAction == 'reload-web-runtime') {
+      return isZh
+          ? '网页资源版本不一致。请完整重启应用或刷新页面后重试。'
+          : 'Web resources are incompatible. Restart the app or reload the page and retry.';
+    }
+    return switch (error.code) {
+      RealtimeErrorCode.network =>
+        isZh
+            ? '无法连接音视频服务。请检查网络或代理设置后重试。'
+            : 'Cannot connect to the media service. Check your network or proxy settings and retry.',
+      RealtimeErrorCode.timeout =>
+        isZh
+            ? '连接或准备房间超时。请检查网络后重试。'
+            : 'Connecting or preparing the room timed out. Check your network and retry.',
+      _ => [
+        error.message,
+        if (error.suggestedAction == 'retry') isZh ? '请重试。' : 'Please retry.',
+      ].join('\n'),
+    };
+  }
 
   String get chat => isZh ? '聊天' : 'Chat';
   String get standaloneChat => isZh ? '独立聊天' : 'Standalone Chat';

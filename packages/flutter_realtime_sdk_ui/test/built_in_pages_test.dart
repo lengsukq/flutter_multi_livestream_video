@@ -53,7 +53,7 @@ void main() {
       tester.element(find.byType(RealtimePreJoinJoinButton)),
     );
     expect(controller.joinError?.code, RealtimeErrorCode.network);
-    expect(find.textContaining(controller.joinError!.message), findsOneWidget);
+    expect(find.textContaining('Check your network or proxy'), findsOneWidget);
     await tester.tap(find.byType(RealtimePreJoinJoinButton));
     await tester.pumpAndSettle();
     expect(entries, 2);

@@ -40,6 +40,7 @@ enum _LiveSidePanel { none, chat, members }
 
 class _RealtimeLivePageState extends State<RealtimeLivePage> {
   late Future<void> _preparing;
+  int _preparationRevision = 0;
   late Future<List<MediaBackgroundImagePreset>> _presets;
   _LiveSidePanel _sidePanel = _LiveSidePanel.none;
   bool _cleanScreen = false;
@@ -87,13 +88,15 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
   }
 
   Future<void> _prepare() async {
+    final revision = ++_preparationRevision;
     final room = widget.room;
     final settings = widget.initialSettings;
     bool isCurrent() =>
         mounted &&
+        revision == _preparationRevision &&
         identical(widget.room, room) &&
         identical(widget.initialSettings, settings);
-    await prepareRoomPage(room, settings, isCurrent: isCurrent);
+    await prepareRoomPageWithDeadline(room, settings, isCurrent: isCurrent);
   }
 
   void _toggle(_LiveSidePanel panel, {required bool isWide}) {
@@ -305,7 +308,9 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
                   ).displayRealtimeError(snapshot.error!),
                 ),
                 TextButton(
-                  onPressed: () => setState(() => _preparing = _prepare()),
+                  onPressed: () => setState(() {
+                    _preparing = _prepare();
+                  }),
                   child: Text(RealtimeStrings.of(context).runAgain),
                 ),
               ],

@@ -85,6 +85,50 @@ void main() {
     await tester.runAsync(controller.close);
     await tester.runAsync(room.dispose);
   });
+  test(
+    'runtime and media failures reach the host once and stop after UI disposal',
+    () async {
+      final media = _FakeMediaSession(role: MediaRole.participant);
+      final room = RealtimeRoom(
+        media: MediaRoomSession.direct(
+          roomCode: 'one',
+          participantId: 'self',
+          session: media,
+        ),
+        renderer: const _FakeRenderer(),
+        disposeClients: () {},
+      );
+      final failures = <RealtimeException>[];
+      final controller = RealtimeRoomUiController(
+        room,
+        onActionError: failures.add,
+      );
+      const network = RealtimeException(
+        code: RealtimeErrorCode.network,
+        message: 'media.web.join',
+        cause: 'test-private-cause',
+      );
+      const timeout = RealtimeException(
+        code: RealtimeErrorCode.timeout,
+        message: 'videoEffects.processFrame',
+      );
+      media._events.add(const MediaFailureEvent(network));
+      room.reportLifecycleFailure(timeout);
+      await pumpEventQueue();
+      expect(failures.map((e) => e.code), [
+        RealtimeErrorCode.timeout,
+        RealtimeErrorCode.network,
+      ]);
+      expect(failures.last.cause, 'test-private-cause');
+      expect(controller.error?.code, RealtimeErrorCode.network);
+      await controller.close();
+      room.reportLifecycleFailure(timeout);
+      await pumpEventQueue();
+      expect(failures, hasLength(2));
+      expect(media.disposeCalls, 0);
+      await room.dispose();
+    },
+  );
 }
 
 class _FakeRenderer extends MediaTrackRenderer {

@@ -227,6 +227,7 @@ class SharedContentController {
 
   Future<void> start() async {
     try {
+      _error = null;
       await classroom.start();
       if (supported) await whiteboard.start();
       _emit();
