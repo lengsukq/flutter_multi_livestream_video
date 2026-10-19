@@ -31,7 +31,12 @@ class _LiveKitPublishing {
       _unsupported('processed video input');
     }
     await detachProcessedVideoSource();
-    await _session._requireLocalParticipant().setCameraEnabled(false);
+    final local = _session._requireLocalParticipant();
+    // Muting retains the original camera publication in LiveKit. Remove it
+    // before publishing its replacement so source lookup cannot select the
+    // old muted camera and the server does not receive two camera sources.
+    final camera = local.getTrackPublicationBySource(lk.TrackSource.camera);
+    if (camera != null) await local.removePublishedTrack(camera.sid);
     try {
       _processedTrack = await createProcessedLiveKitTrack(source);
       _processedSource = source;
@@ -112,28 +117,35 @@ class _LiveKitPublishing {
   Future<void> setVideoEnabled(bool enabled) async {
     _session._ensureActive();
     if (!capabilities.canPublishVideo) _unsupported('camera publishing');
+    var stage = 'setVideoEnabled';
     try {
       final processed = _processedTrack;
       if (processed == null) {
         await _session._requireLocalParticipant().setCameraEnabled(enabled);
       } else if (enabled) {
+        stage = 'enableProcessedSource';
         await ProcessedVideoBridge().setEnabled(_processedSource!, true);
+        // A browser clone inherits enabled=false when attached while muted.
+        // Enabling the source does not enable that independently owned clone.
+        processed.mediaStreamTrack.enabled = true;
+        await processed.unmute(stopOnMute: false);
         if (!_processedPublished) {
+          stage = 'publishProcessedVideo';
           await _session._requireLocalParticipant().publishVideoTrack(
             processed,
           );
           _processedPublished = true;
-        } else {
-          await processed.unmute(stopOnMute: false);
         }
       } else {
+        stage = 'muteProcessedVideo';
         await processed.mute(stopOnMute: false);
+        stage = 'disableProcessedSource';
         await ProcessedVideoBridge().setEnabled(_processedSource!, false);
       }
       _session._mapper._refreshSnapshot();
       _session._emit(MediaLocalMediaChanged(videoEnabled: enabled));
     } catch (error, stack) {
-      throw _session._mapError(error, 'setVideoEnabled', stackTrace: stack);
+      throw _session._mapError(error, stage, stackTrace: stack);
     }
   }
 

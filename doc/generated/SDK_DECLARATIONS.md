@@ -129,7 +129,7 @@ These fingerprints make CI reject stale declarations, including changes to the e
 - `packages/flutter_realtime_media_livekit/lib/src/livekit_host_session.dart`: `6b436595fb4d0d14`
 - `packages/flutter_realtime_media_livekit/lib/src/livekit_interactive_session.dart`: `a1301ba926951903`
 - `packages/flutter_realtime_media_livekit/lib/src/livekit_media_session.dart`: `0dfa561aa0c4c308`
-- `packages/flutter_realtime_media_livekit/lib/src/livekit_publishing.dart`: `7954404c347e91d7`
+- `packages/flutter_realtime_media_livekit/lib/src/livekit_publishing.dart`: `97228b99d2858782`
 - `packages/flutter_realtime_media_livekit/lib/src/livekit_screen_share.dart`: `47f5a9ab1d9cca0c`
 - `packages/flutter_realtime_media_livekit/lib/src/livekit_session_factory.dart`: `17bea6a36df94f9d`
 - `packages/flutter_realtime_media_livekit/lib/src/livekit_snapshot_mapper.dart`: `1382e25e2966db69`
