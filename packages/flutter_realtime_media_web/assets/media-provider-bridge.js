@@ -85,6 +85,12 @@
         }
         return localTracks.video;
       }
+      if (backgroundEffect.type === "none" && !localTracks.pipeline) {
+        localTracks.video ?? (localTracks.video = await AgoraRTC.createCameraVideoTrack(
+          selectedCameraId ? { cameraId: selectedCameraId } : {}
+        ));
+        return localTracks.video;
+      }
       if (!localTracks.pipeline) {
         localTracks.pipeline = await createSdkProcessedVideo({
           effect: backgroundEffect,
@@ -103,7 +109,12 @@
     const publishCameraIfNeeded = async () => {
       if (localTracks.screen || localTracks.videoPublished || !session.localVideoEnabled) return;
       const videoTrack = await ensureVideoTrack();
-      localTracks.pipeline?.setEnabled(true);
+      if (processedSourceId) {
+        await global.RealtimeProcessedVideoBridge.setEnabled(processedSourceId, true);
+        providerInputTrack.enabled = true;
+      } else {
+        await localTracks.pipeline?.setEnabled(true);
+      }
       await client.publish(videoTrack);
       localTracks.videoPublished = true;
       addVideoTrack(session, {
@@ -118,7 +129,14 @@
         await client.unpublish(localTracks.video);
       }
       localTracks.videoPublished = false;
-      if (!processedSourceId) localTracks.pipeline?.setEnabled(false);
+      if (providerInputTrack) providerInputTrack.enabled = false;
+      if (!processedSourceId) {
+        await localTracks.pipeline?.setEnabled(false);
+        if (!localTracks.pipeline) {
+          localTracks.video?.close?.();
+          localTracks.video = null;
+        }
+      }
       removeVideoTrack(session, localTracks.videoTrackId);
     };
     const updateRemote = async (user, mediaType) => {
@@ -140,7 +158,7 @@
           native: remote
         });
         const attachment = getTrackAttachment(session, trackId);
-        if (attachment) user.videoTrack.play(attachment.elementId, { fit: "contain" });
+        if (attachment) user.videoTrack.play(attachment.container, { fit: "contain" });
       }
       participant.isMuted = !user.audioTrack;
       publishSnapshot(session);
@@ -266,9 +284,19 @@
         }
         if (name === "setVideoEnabled") {
           const enabled = Boolean(args.enabled);
+          const previous = session.localVideoEnabled;
           session.localVideoEnabled = enabled;
-          if (enabled) await publishCameraIfNeeded();
-          else await unpublishCameraIfNeeded();
+          try {
+            if (enabled) await publishCameraIfNeeded();
+            else await unpublishCameraIfNeeded();
+          } catch (error) {
+            session.localVideoEnabled = previous;
+            if (enabled && !processedSourceId && !localTracks.pipeline) {
+              localTracks.video?.close?.();
+              localTracks.video = null;
+            }
+            throw error;
+          }
           return;
         }
         if (name === "setBackgroundEffect") {
@@ -286,6 +314,9 @@
           };
           if (localTracks.pipeline) {
             await localTracks.pipeline.setEffect(backgroundEffect);
+          } else if (type !== "none" && localTracks.video) {
+            await unpublishCameraIfNeeded();
+            await publishCameraIfNeeded();
           }
           return;
         }
@@ -327,6 +358,8 @@
             selectedCameraId = selected.id;
             if (localTracks.pipeline) {
               await localTracks.pipeline.setCameraDevice(selected.id);
+            } else if (localTracks.video) {
+              await localTracks.video.setDevice(selected.id);
             }
           }
           if (selected.kind === "audioOutput") {
@@ -344,6 +377,8 @@
             selectedCameraId = next.deviceId;
             if (localTracks.pipeline) {
               await localTracks.pipeline.setCameraDevice(next.deviceId);
+            } else if (localTracks.video) {
+              await localTracks.video.setDevice(next.deviceId);
             }
           }
           return;
@@ -353,7 +388,7 @@
       },
       async attachVideo(track, container) {
         const native = track.native?.track || remoteUsers.get(track.id)?.track;
-        if (native?.play) native.play(container.id, { fit: "contain" });
+        if (native?.play) native.play(container, { fit: "contain" });
       },
       detachVideo(track, container) {
         const native = track.native?.track || remoteUsers.get(track.id)?.track;
@@ -1630,11 +1665,14 @@
         return typeof result === "string" ? result : JSON.stringify(result || {});
       },
       async attachVideo(providerId, sessionId, trackId, elementId) {
+        const container = document.getElementById(elementId);
+        if (container) await this.attachVideoElement(providerId, sessionId, trackId, container);
+      },
+      async attachVideoElement(providerId, sessionId, trackId, container) {
         const session = requireSession(providerId, sessionId);
         const track = session.tracks.get(String(trackId));
-        const container = document.getElementById(elementId);
         if (!track || !container) return;
-        session.attachments.set(track.id, { elementId, container });
+        session.attachments.set(track.id, { elementId: container.id, container });
         await session.driver.attachVideo(track, container);
       },
       detachVideo(providerId, sessionId, trackId, elementId) {

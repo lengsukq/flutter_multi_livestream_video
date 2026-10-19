@@ -38,6 +38,7 @@ class _ProviderWebVideoViewState extends State<_ProviderWebVideoView> {
   static int _nextElementId = 0;
 
   late String _elementId;
+  web.HTMLDivElement? _element;
 
   @override
   void initState() {
@@ -51,8 +52,7 @@ class _ProviderWebVideoViewState extends State<_ProviderWebVideoView> {
     if (oldWidget.track.sessionId != widget.track.sessionId ||
         oldWidget.track.id != widget.track.id) {
       _detach(oldWidget.track, _elementId);
-      _elementId = 'provider-video-${_nextElementId++}';
-      _attach(widget.track, _elementId);
+      if (_element != null) _attach(widget.track, _elementId);
     }
   }
 
@@ -63,7 +63,8 @@ class _ProviderWebVideoViewState extends State<_ProviderWebVideoView> {
         sessionId: track.sessionId,
         trackId: track.id,
         elementId: elementId,
-      ).catchError((_) {}),
+        element: _element,
+      ),
     );
   }
 
@@ -79,6 +80,7 @@ class _ProviderWebVideoViewState extends State<_ProviderWebVideoView> {
   @override
   void dispose() {
     _detach(widget.track, _elementId);
+    _element = null;
     super.dispose();
   }
 
@@ -87,6 +89,7 @@ class _ProviderWebVideoViewState extends State<_ProviderWebVideoView> {
     tagName: 'div',
     onElementCreated: (element) {
       final container = element as web.HTMLDivElement;
+      _element = container;
       container.id = _elementId;
       container.style
         ..width = '100%'

@@ -493,11 +493,15 @@ import { createChimeSession } from './media/chime-session.js';
     },
 
     async attachVideo(providerId, sessionId, trackId, elementId) {
+      const container = document.getElementById(elementId);
+      if (container) await this.attachVideoElement(providerId, sessionId, trackId, container);
+    },
+
+    async attachVideoElement(providerId, sessionId, trackId, container) {
       const session = requireSession(providerId, sessionId);
       const track = session.tracks.get(String(trackId));
-      const container = document.getElementById(elementId);
       if (!track || !container) return;
-      session.attachments.set(track.id, { elementId, container });
+      session.attachments.set(track.id, { elementId: container.id, container });
       await session.driver.attachVideo(track, container);
     },
 

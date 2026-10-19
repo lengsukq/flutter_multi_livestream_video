@@ -561,7 +561,7 @@ async function createAgoraHarness() {
       kind,
       id,
       enabled: true,
-      clone() { const copy = mediaTrack(kind, id); copy.origin = this.origin || this; copy.isClone = true; return copy; },
+      clone() { const copy = mediaTrack(kind, id); copy.origin = this.origin || this; copy.isClone = true; copy.enabled = this.enabled; return copy; },
       stop() {
         calls.push(`stop:${id}${this.isClone ? ':clone' : ''}`);
       },
@@ -664,7 +664,7 @@ async function createAgoraHarness() {
   };
   const customVideoTrack = {
     id: 'agora-custom-video',
-    play() {},
+    play(element) {calls.push(['video.play', element]);},
     stop() {},
     close() {
       calls.push('custom-video.close');
@@ -724,6 +724,10 @@ async function createAgoraHarness() {
     AgoraRTC: {
       createClient() {
         return client;
+      },
+      async createCameraVideoTrack(options) {
+        calls.push(`createCameraVideoTrack:${JSON.stringify(options)}`);
+        return {...customVideoTrack, async setDevice(id){calls.push(`camera.setDevice:${id}`);}};
       },
       async createMicrophoneAudioTrack() {
         calls.push('createMicrophoneAudioTrack');
@@ -826,7 +830,7 @@ test('Agora Web defers camera publication until SDK effects are configured', asy
   await bridge.dispose('agora', 'agora-1');
 });
 
-test('Agora Web camera selection stays inside the SDK processor pipeline', async () => {
+test('Agora Web without effects selects the native camera without a canvas pipeline', async () => {
   const { bridge, calls } = await createAgoraHarness();
 
   await bridge.create('agora', 'agora-2', JSON.stringify(agoraPayload));
@@ -846,17 +850,10 @@ test('Agora Web camera selection stays inside the SDK processor pipeline', async
     }),
   );
 
-  assert.ok(
-    calls.some(
-      (call) =>
-        call.startsWith('getUserMedia:') &&
-        call.includes('"deviceId":{"exact":"cam-2"}'),
-    ),
-  );
-  assert.equal(
-    calls.filter((call) => call.startsWith('createCustomVideoTrack:')).length,
-    1,
-  );
+  assert.ok(calls.includes('camera.setDevice:cam-2'));
+  assert.ok(calls.some(call=>call.startsWith('createCameraVideoTrack:')));
+  assert.equal(calls.some(call=>call.startsWith('createCustomVideoTrack:')), false);
+  assert.equal(calls.some(call=>call.startsWith('vision.fileset:')), false);
 
   await bridge.dispose('agora', 'agora-2');
 });
@@ -1079,4 +1076,61 @@ test('all five Web suppliers consume clones of one processed source and camera s
   assert.equal(captures.filter(c=>c.video).length,6);
   assert.equal(h.calls.includes('stop:sdk-processed-video'),false,'disposing suppliers must preserve the source');
   h.effectsBridge.disposeSource('shared-output');assert.ok(h.calls.includes('stop:sdk-processed-video'));
+});
+
+
+test('Agora enables an independently disabled clone when publishing and republishing', async () => {
+  const h=await createAgoraHarness();
+  h.context.supplierInputs=[];
+  await h.effectsBridge.createSource('disabled-source',{effect:{type:'blur'}});
+  await h.effectsBridge.setEnabled('disabled-source',false);
+  await h.bridge.create('agora','clone',agoraPayload);
+  await h.bridge.join('agora','clone');
+  await h.bridge.command('agora','clone','attachProcessedVideoSource',{sourceId:'disabled-source'});
+  await h.bridge.command('agora','clone','setVideoEnabled',{enabled:true});
+  const input=h.context.supplierInputs[0].track;
+  assert.equal(input.enabled,true);
+  await h.bridge.command('agora','clone','setVideoEnabled',{enabled:false});
+  assert.equal(input.enabled,false);
+  await h.bridge.command('agora','clone','setVideoEnabled',{enabled:true});
+  assert.equal(input.enabled,true);
+  await h.bridge.dispose('agora','clone');
+  h.effectsBridge.disposeSource('disabled-source');
+});
+
+test('Agora camera toggles recreate a closed native track without loading effects', async () => {
+  const h=await createAgoraHarness();
+  await h.bridge.create('agora','camera-toggle',agoraPayload);
+  await h.bridge.join('agora','camera-toggle');
+  for(const enabled of [true,false,true]) await h.bridge.command('agora','camera-toggle','setVideoEnabled',{enabled});
+  assert.equal(h.calls.filter(call=>call.startsWith('createCameraVideoTrack:')).length,2);
+  assert.equal(h.calls.some(call=>call.startsWith('vision.fileset:')),false);
+  await h.bridge.dispose('agora','camera-toggle');
+});
+
+test('Agora releases the native camera after failed publication and permits retry', async () => {
+  const h=await createAgoraHarness();
+  await h.bridge.create('agora','camera-failure',agoraPayload);
+  await h.bridge.join('agora','camera-failure');
+  const client=h.context.AgoraRTC.createClient();
+  const publish=client.publish;
+  client.publish=async()=>{throw new Error('publish rejected');};
+  await assert.rejects(h.bridge.command('agora','camera-failure','setVideoEnabled',{enabled:true}),/publish rejected/);
+  assert.ok(h.calls.includes('custom-video.close'));
+  client.publish=publish;
+  await h.bridge.command('agora','camera-failure','setVideoEnabled',{enabled:true});
+  assert.equal(h.calls.filter(call=>call.startsWith('createCameraVideoTrack:')).length,2);
+  await h.bridge.dispose('agora','camera-failure');
+});
+
+
+test('Agora renders into a detached element without looking it up by id', async () => {
+  const h=await createAgoraHarness();
+  await h.bridge.create('agora','detached-render',agoraPayload);
+  await h.bridge.join('agora','detached-render');
+  await h.bridge.command('agora','detached-render','setVideoEnabled',{enabled:true});
+  const element={id:'detached',replaceChildren(){}};
+  await h.bridge.attachVideoElement('agora','detached-render',`agora:video:${agoraPayload.participantId}`,element);
+  assert.equal(h.calls.find(call=>Array.isArray(call)&&call[0]==='video.play')?.[1],element);
+  await h.bridge.dispose('agora','detached-render');
 });

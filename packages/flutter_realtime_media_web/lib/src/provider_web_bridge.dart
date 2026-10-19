@@ -197,16 +197,30 @@ class ProviderWebBridge {
     required String sessionId,
     required String trackId,
     required String elementId,
+    JSObject? element,
   }) async {
-    await _bridge
-        .callMethod<JSPromise<JSAny?>>(
-          'attachVideo'.toJS,
-          providerId.toJS,
-          sessionId.toJS,
-          trackId.toJS,
-          elementId.toJS,
-        )
-        .toDart;
+    try {
+      await _bridge
+          .callMethod<JSPromise<JSAny?>>(
+            (element == null ? 'attachVideo' : 'attachVideoElement').toJS,
+            providerId.toJS,
+            sessionId.toJS,
+            trackId.toJS,
+            element ?? elementId.toJS,
+          )
+          .toDart;
+    } catch (error, stack) {
+      Error.throwWithStackTrace(
+        normalizeRealtimeException(
+          error,
+          domain: 'media',
+          operation: 'attachVideo',
+          providerId: providerId,
+          stackTrace: stack,
+        ),
+        stack,
+      );
+    }
   }
 
   static void detachVideo({
