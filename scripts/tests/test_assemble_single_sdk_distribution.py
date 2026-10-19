@@ -11,6 +11,7 @@ SCRIPTS = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS))
 
 from assemble_single_sdk_distribution import build
+from verify_single_sdk_web_assets import verify
 
 
 class SingleSdkDistributionTest(unittest.TestCase):
@@ -18,6 +19,9 @@ class SingleSdkDistributionTest(unittest.TestCase):
     def setUpClass(cls):
         cls.report = build()
         cls.root = pathlib.Path(cls.report["target"])
+
+    def test_bundled_runtime_scripts_are_valid_javascript(self):
+        verify(self.root)
 
     def test_one_hosted_dependency_surface(self):
         pubspec = (self.root / "pubspec.yaml").read_text()

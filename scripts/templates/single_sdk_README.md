@@ -107,6 +107,21 @@ Use `code`, `domain`, `operation`, and `suggestedAction` for application behavio
 retain `cause`, `details`, and `stackTrace` in private diagnostic logs. The public
 message intentionally excludes raw provider payloads and credentials.
 
+Before a room is returned, `await realtime.open(request)` throws failures to
+the host application; room widgets have not mounted yet. Retain the exception
+in application state, display `RealtimeStrings.of(context).displayRealtimeError(error)`
+inline, and let the user repeat the original request. A transient SnackBar alone
+can be missed. After entry, the built-in pages also present asynchronous room
+and media failures through their existing error callback.
+
+Built-in Meeting/Live preparation has a 15-second limit per media/shared-content
+stage; the browser media join has a 20-second deadline followed by bounded
+cleanup. The network still needs to reach the selected provider's endpoints.
+Media and effects bridges expose independent protocol versions. Incompatible
+assets fail early with `webBridge.versionMismatch` and the
+`reload-web-runtime` action. Fully restart/rebuild the host after an SDK upgrade;
+old compiled Dart cannot acquire a new runtime check through hot reload.
+
 Provide a backend implementing the provisioning/control contracts, or use
 `RealtimeSource.credentials(...)` with your own short-lived credential service.
 The repository's Demo Server is a reference implementation. Never include

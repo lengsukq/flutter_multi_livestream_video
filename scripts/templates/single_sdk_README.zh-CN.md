@@ -111,6 +111,18 @@ SDK 会停止故障发布；显式重设效果成功后才能重新开启摄像�
 私有诊断日志可记录 `cause`、`details`、`stackTrace`。
 公开 message 刻意不拼接厂商原始载荷与凭证。
 
+房间返回前，`await realtime.open(request)` 会把失败抛给宿主，此时房间组件尚未挂载。
+请将异常保留在应用状态中，使用
+`RealtimeStrings.of(context).displayRealtimeError(error)` 显示持续可见的提示，
+并让用户重新发起原请求。只依赖短暂 SnackBar 容易错过错误。
+入会后，成品页面也会通过已有错误回调展示异步房间/媒体故障。
+
+成品会议/直播页的媒体与共享内容准备阶段各有 15 秒等待上限；Web 媒体入会有
+20 秒截止时间，随后执行有上限的清理。网络仍须能访问所选供应商的服务端点。
+媒体桥与效果桥分别声明协议版本；不兼容资源会提前返回
+`webBridge.versionMismatch`，建议动作是 `reload-web-runtime`。
+升级 SDK 后请完整重启/重建宿主；热重载无法给旧的已编译 Dart 补上新的检查逻辑。
+
 ## 五、iOS 配置（发布单包）
 
 iOS 最低版本为 **15.0**，保留 Flutter 默认的 Swift Package Manager 支持。

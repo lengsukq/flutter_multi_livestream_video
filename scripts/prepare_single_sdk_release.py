@@ -136,6 +136,16 @@ def prepare(version: str, root: Path = ROOT) -> Path:
             "- Retain runtime processing failures, reject camera re-enable until effects are reset, and stop failed room publication with typed diagnostics.\n"
             "- Add browser and source-level regressions; real-provider multi-device acceptance remains separate.\n"
         )
+    elif version == "0.1.0-dev.9":
+        notes = (
+            "- Classify Web join network/timeout failures, preserve diagnostic causes, and release failed or pending sessions before retry.\n"
+            "- Prevent a late vendor connection or a resolved join promise from overriding an earlier failure.\n"
+            "- Bound built-in Meeting/Live media and shared-content preparation; show actionable timeout errors and retain retry behavior without late setting changes.\n"
+            "- Fix the Live page retry callback returning a Future from setState.\n"
+            "- Forward runtime/media failures through room UI error presentation and localize network, timeout and incompatible-resource guidance.\n"
+            "- Validate media/effects Web bridge protocol versions before use while retaining legacy string video attachment compatibility.\n"
+            "- Add fault-injection, lifecycle, UI retry and browser regressions; actual provider/network acceptance remains separate.\n"
+        )
     else:
         notes = (
             "- Fix camera-off background selection followed by camera-on in external Headless apps.\n"

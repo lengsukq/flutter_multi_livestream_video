@@ -7,6 +7,7 @@ No network, credentials, source mutations or publishing.
 import argparse
 import base64
 import json
+import subprocess
 from pathlib import Path
 
 EFFECTS_PREFIX = "assets/bundled/flutter_realtime_video_effects/web/"
@@ -50,6 +51,16 @@ def verify(package: Path, web_build: Path | None = None) -> None:
     ).read_text()
     if expected_prefix not in dart_loader:
         raise AssertionError("Dart loader and bundled JS must use the same hosted asset prefix.")
+    for relative in (
+        EFFECTS_PREFIX + "video-effects-bridge.js",
+        "assets/bundled/flutter_realtime_media_web/media-provider-bridge.js",
+    ):
+        checked = subprocess.run(
+            ["node", "--check", str(package / relative)],
+            capture_output=True, text=True,
+        )
+        if checked.returncode:
+            raise AssertionError(f"Invalid bundled JavaScript: {relative}\n{checked.stderr}")
 
     if web_build is not None:
         web_build = web_build.resolve()
