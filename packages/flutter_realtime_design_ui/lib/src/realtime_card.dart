@@ -34,7 +34,7 @@ class RealtimeCard extends StatelessWidget {
         color: color ?? style.surface,
         borderRadius: BorderRadius.circular(effectiveRadius),
         border: Border.all(color: borderColor ?? style.border, width: 0.5),
-        boxShadow: shadow ?? style.cardShadow,
+        boxShadow: shadow ?? const [],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(effectiveRadius),

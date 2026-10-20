@@ -1,5 +1,10 @@
 part of '../flutter_realtime_design_ui.dart';
 
+/// Runtime palette for the bundled cool-gray appearance.
+///
+/// Hosts can override individual colors through [copyWith] and install the
+/// result in [RealtimeUiThemeExtension]. Components read this object instead of
+/// static tokens whenever a host theme is possible.
 class RealtimeStyle {
   const RealtimeStyle({
     required this.isDark,
@@ -25,6 +30,18 @@ class RealtimeStyle {
     required this.dangerSubtle,
     required this.cardShadow,
     required this.glassGradient,
+    this.accent = RealtimeUiTokens.accent,
+    this.onAccent = RealtimeUiTokens.onAccent,
+    this.accentSoft = RealtimeUiTokens.accentSoft,
+    this.speak = RealtimeUiTokens.speak,
+    this.live = RealtimeUiTokens.live,
+    this.speakStrong = RealtimeUiTokens.speakStrong,
+    this.board = RealtimeUiTokens.board,
+    this.boardGrid = RealtimeUiTokens.boardGrid,
+    this.boardInk = RealtimeUiTokens.boardInk,
+    this.tile = RealtimeUiTokens.tile,
+    this.tileStrong = RealtimeUiTokens.tileStrong,
+    this.successBorder = RealtimeUiTokens.successBorder,
   });
 
   final bool isDark;
@@ -52,36 +69,56 @@ class RealtimeStyle {
   final List<BoxShadow> cardShadow;
   final LinearGradient glassGradient;
 
+  /// Amber action color: primary buttons, selected tools, badges.
+  final Color accent;
+  final Color onAccent;
+
+  /// Translucent amber used for pinned notes and highlight blocks.
+  final Color accentSoft;
+
+  /// Speaking and "healthy" state (connection, live indicator).
+  final Color speak;
+
+  /// Teal ink and solid controls that meet 4.5:1 against white.
+  final Color speakStrong;
+  final Color live;
+  final Color board;
+  final Color boardGrid;
+  final Color boardInk;
+  final Color tile;
+  final Color tileStrong;
+  final Color successBorder;
+
   static const RealtimeStyle light = RealtimeStyle(
     isDark: false,
-    background: Color(0xFFF5F5F7),
-    surface: Color(0xFFFFFFFF),
-    surfaceSubtle: Color(0xFFF2F2F5),
-    surfaceGlass: Color(0xB8FFFFFF),
-    border: Color(0xFFE5E5EA),
-    borderSubtle: Color(0xFFF5F5F7),
-    borderStrong: Color(0xFFC7C7CC),
-    text: Color(0xFF1D1D1F),
-    textSecondary: Color(0xFF48484A),
-    textMuted: Color(0xFF636366),
-    primary: Color(0xFF187A3D),
-    primaryAccent: Color(0xFF187A3D),
-    primarySubtle: Color(0xFFEAF6EE),
-    primaryBorder: Color(0xFFBFDFC8),
-    success: Color(0xFF187A3D), // Apple System Green
-    successSubtle: Color(0xFFEAF9EE),
-    warning: Color(0xFFFF9500), // Apple System Orange
-    warningSubtle: Color(0xFFFFF1E9),
-    danger: Color(0xFFC52D42),
-    dangerSubtle: Color(0xFFFEECEC),
+    background: RealtimeUiTokens.background,
+    surface: RealtimeUiTokens.surface,
+    surfaceSubtle: RealtimeUiTokens.surfaceSubtle,
+    surfaceGlass: RealtimeUiTokens.borderGlass,
+    border: RealtimeUiTokens.border,
+    borderSubtle: RealtimeUiTokens.surfaceSubtle,
+    borderStrong: RealtimeUiTokens.borderStrong,
+    text: RealtimeUiTokens.text,
+    textSecondary: RealtimeUiTokens.textSecondary,
+    textMuted: RealtimeUiTokens.textMuted,
+    primary: RealtimeUiTokens.accent,
+    primaryAccent: RealtimeUiTokens.accent,
+    primarySubtle: RealtimeUiTokens.primarySubtle,
+    primaryBorder: RealtimeUiTokens.primaryBorder,
+    success: RealtimeUiTokens.success,
+    successSubtle: RealtimeUiTokens.successSubtle,
+    warning: RealtimeUiTokens.warning,
+    warningSubtle: RealtimeUiTokens.warningSubtle,
+    danger: RealtimeUiTokens.live,
+    dangerSubtle: RealtimeUiTokens.dangerSubtle,
     cardShadow: [
-      BoxShadow(color: Color(0x081D1D1F), blurRadius: 28, offset: Offset(0, 8)),
-      BoxShadow(color: Color(0x041D1D1F), blurRadius: 12, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x10101828), blurRadius: 24, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x0A101828), blurRadius: 2, offset: Offset(0, 1)),
     ],
     glassGradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [Color(0xD6FFFFFF), Color(0xB8FFFFFF)],
+      colors: [Color(0xFAFFFFFF), Color(0xF0FFFFFF)],
     ),
   );
 
@@ -109,6 +146,18 @@ class RealtimeStyle {
     Color? dangerSubtle,
     List<BoxShadow>? cardShadow,
     LinearGradient? glassGradient,
+    Color? accent,
+    Color? onAccent,
+    Color? accentSoft,
+    Color? speak,
+    Color? speakStrong,
+    Color? live,
+    Color? board,
+    Color? boardGrid,
+    Color? boardInk,
+    Color? tile,
+    Color? tileStrong,
+    Color? successBorder,
   }) => RealtimeStyle(
     isDark: isDark ?? this.isDark,
     background: background ?? this.background,
@@ -133,9 +182,21 @@ class RealtimeStyle {
     dangerSubtle: dangerSubtle ?? this.dangerSubtle,
     cardShadow: cardShadow ?? this.cardShadow,
     glassGradient: glassGradient ?? this.glassGradient,
+    accent: accent ?? this.accent,
+    onAccent: onAccent ?? this.onAccent,
+    accentSoft: accentSoft ?? this.accentSoft,
+    speak: speak ?? this.speak,
+    speakStrong: speakStrong ?? this.speakStrong,
+    live: live ?? this.live,
+    board: board ?? this.board,
+    boardGrid: boardGrid ?? this.boardGrid,
+    boardInk: boardInk ?? this.boardInk,
+    tile: tile ?? this.tile,
+    tileStrong: tileStrong ?? this.tileStrong,
+    successBorder: successBorder ?? this.successBorder,
   );
 
-  /// Compatibility alias; the bundled design has one appearance.
+  /// Compatibility alias; the bundled design has one light appearance.
   @Deprecated('Use RealtimeStyle.light or a RealtimeUiThemeExtension override.')
   static const RealtimeStyle dark = light;
 

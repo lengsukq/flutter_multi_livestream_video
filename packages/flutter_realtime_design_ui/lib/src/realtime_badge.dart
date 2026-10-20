@@ -6,7 +6,7 @@ class RealtimeBadge extends StatelessWidget {
     required this.text,
     this.color,
     this.backgroundColor,
-    this.fontSize = 13,
+    this.fontSize = 11,
     this.padding = const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
   });
 
@@ -19,8 +19,8 @@ class RealtimeBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = RealtimeStyle.of(context);
-    final fg = color ?? style.primary;
-    final bg = backgroundColor ?? style.primarySubtle;
+    final fg = color ?? style.onAccent;
+    final bg = backgroundColor ?? style.accent;
     return Container(
       padding: padding,
       decoration: BoxDecoration(
@@ -32,8 +32,9 @@ class RealtimeBadge extends StatelessWidget {
         style: TextStyle(
           color: fg,
           fontSize: fontSize,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.2,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+          height: 1.2,
         ),
       ),
     );

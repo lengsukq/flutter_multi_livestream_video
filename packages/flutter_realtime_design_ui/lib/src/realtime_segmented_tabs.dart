@@ -94,21 +94,17 @@ class RealtimeSegmentedTabs<T> extends StatelessWidget {
                       width: tabWidth,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: style.surface,
+                          color: style.accent,
                           borderRadius: BorderRadius.circular(thumbRadius),
                           border: Border.all(
-                            color: style.isDark
-                                ? style.border
-                                : const Color(0x14000000),
-                            width: 0.6,
+                            color: style.primaryBorder,
+                            width: 1,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(
-                                alpha: style.isDark ? 0.35 : 0.08,
-                              ),
-                              blurRadius: 4,
-                              offset: const Offset(0, 1.5),
+                              color: style.accent.withValues(alpha: 0.30),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
@@ -136,7 +132,7 @@ class RealtimeSegmentedTabs<T> extends StatelessWidget {
                                     tab.icon,
                                     size: 16,
                                     color: active
-                                        ? style.text
+                                        ? style.onAccent
                                         : style.textMuted,
                                   ),
                                   const SizedBox(width: 6),
@@ -152,7 +148,7 @@ class RealtimeSegmentedTabs<T> extends StatelessWidget {
                                           ? FontWeight.w700
                                           : FontWeight.w500,
                                       color: active
-                                          ? style.text
+                                          ? style.onAccent
                                           : style.textMuted,
                                     ),
                                   ),
@@ -162,12 +158,11 @@ class RealtimeSegmentedTabs<T> extends StatelessWidget {
                                   RealtimeBadge(
                                     text: '${tab.badge}',
                                     color: active
-                                        ? Colors.white
-                                        : style.textMuted,
+                                        ? style.onAccent
+                                        : style.textSecondary,
                                     backgroundColor: active
-                                        ? style.primary
-                                        : style.borderStrong,
-                                    fontSize: 13,
+                                        ? Colors.white.withValues(alpha: .55)
+                                        : style.border,
                                   ),
                                 ],
                               ],

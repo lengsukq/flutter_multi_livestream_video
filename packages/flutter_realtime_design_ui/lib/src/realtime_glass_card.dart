@@ -63,11 +63,7 @@ class RealtimeGlassCard extends StatelessWidget {
                       ),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(
-                      icon,
-                      size: 19,
-                      color: iconColor ?? style.primary,
-                    ),
+                    child: Icon(icon, size: 19, color: iconColor ?? style.text),
                   ),
                   const SizedBox(width: 12),
                 ],

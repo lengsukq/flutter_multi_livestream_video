@@ -9,6 +9,7 @@ class RealtimeMeetingTileData {
     this.isMuted = true,
     this.isSpeaking = false,
     this.avatarUrl,
+    this.handRaised = false,
   });
 
   final String id;
@@ -17,4 +18,5 @@ class RealtimeMeetingTileData {
   final bool isMuted;
   final bool isSpeaking;
   final String? avatarUrl;
+  final bool handRaised;
 }

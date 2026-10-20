@@ -19,8 +19,8 @@ class RealtimeEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = RealtimeStyle.of(context).isDark;
-    final primary = iconColor ?? RealtimeUiTokens.iosBlue;
+    final style = RealtimeStyle.of(context);
+    final primary = iconColor ?? style.textSecondary;
 
     return Center(
       child: SingleChildScrollView(
@@ -30,13 +30,14 @@ class RealtimeEmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 58,
-              height: 58,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: primary.withValues(alpha: isDark ? 0.20 : 0.10),
-                borderRadius: BorderRadius.circular(18),
+                color: style.surfaceSubtle,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: style.border),
               ),
-              child: Icon(icon, size: 28, color: primary),
+              child: Icon(icon, size: 26, color: primary),
             ),
             const SizedBox(height: 14),
             Text(
@@ -50,13 +51,12 @@ class RealtimeEmptyState extends StatelessWidget {
             if (subtitle != null) ...[
               const SizedBox(height: 6),
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 280),
+                constraints: const BoxConstraints(maxWidth: 300),
                 child: Text(
                   subtitle!,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: RealtimeUiTokens.textMuted,
-                    fontSize: 13,
+                    color: style.textMuted,
                   ),
                 ),
               ),

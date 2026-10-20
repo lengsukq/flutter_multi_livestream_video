@@ -1,21 +1,23 @@
 part of '../flutter_realtime_design_ui.dart';
 
-/// Host overrides for the bundled pearl-light appearance.
+/// Host overrides for the bundled cool-gray appearance.
 ///
-/// Disable glass when a platform cannot report Reduce Transparency. These
-/// settings affect only the optional UI, never a media or room session.
+/// Surfaces are opaque by default. Hosts can explicitly enable glass when
+/// appropriate. These settings affect only UI, never a media or room session.
 class RealtimeUiThemeExtension
     extends ThemeExtension<RealtimeUiThemeExtension> {
   const RealtimeUiThemeExtension({
     this.palette = RealtimeStyle.light,
-    this.cardRadius = 28,
-    this.controlRadius = 20,
-    this.stageRadius = 32,
-    this.sheetRadius = 36,
-    this.blur = 24,
-    this.glassOpacity = 0.78,
-    this.glassEnabled = true,
+    this.cardRadius = 22,
+    this.controlRadius = 12,
+    this.stageRadius = 18,
+    this.sheetRadius = 24,
+    this.blur = 16,
+    this.glassOpacity = 0.94,
+    this.glassEnabled = false,
     this.motionEnabled = true,
+    this.bodyFontFamily,
+    this.displayFontFamily,
   });
 
   final RealtimeStyle palette;
@@ -27,6 +29,11 @@ class RealtimeUiThemeExtension
   final double glassOpacity;
   final bool glassEnabled;
   final bool motionEnabled;
+
+  /// Bundled families. `null` keeps the package default; set an empty string to
+  /// fall back to the host's platform font.
+  final String? bodyFontFamily;
+  final String? displayFontFamily;
 
   static RealtimeUiThemeExtension of(BuildContext context) =>
       Theme.of(context).extension<RealtimeUiThemeExtension>() ??
@@ -48,6 +55,8 @@ class RealtimeUiThemeExtension
     double? glassOpacity,
     bool? glassEnabled,
     bool? motionEnabled,
+    String? bodyFontFamily,
+    String? displayFontFamily,
   }) => RealtimeUiThemeExtension(
     palette: palette ?? this.palette,
     cardRadius: cardRadius ?? this.cardRadius,
@@ -58,6 +67,8 @@ class RealtimeUiThemeExtension
     glassOpacity: glassOpacity ?? this.glassOpacity,
     glassEnabled: glassEnabled ?? this.glassEnabled,
     motionEnabled: motionEnabled ?? this.motionEnabled,
+    bodyFontFamily: bodyFontFamily ?? this.bodyFontFamily,
+    displayFontFamily: displayFontFamily ?? this.displayFontFamily,
   );
 
   @override
@@ -73,6 +84,8 @@ class RealtimeUiThemeExtension
       glassOpacity: lerpDouble(glassOpacity, other.glassOpacity, t),
       glassEnabled: t < 0.5 ? glassEnabled : other.glassEnabled,
       motionEnabled: t < 0.5 ? motionEnabled : other.motionEnabled,
+      bodyFontFamily: t < 0.5 ? bodyFontFamily : other.bodyFontFamily,
+      displayFontFamily: t < 0.5 ? displayFontFamily : other.displayFontFamily,
     );
   }
 }

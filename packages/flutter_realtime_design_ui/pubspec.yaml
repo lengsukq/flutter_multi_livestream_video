@@ -1,5 +1,5 @@
 name: flutter_realtime_design_ui
-description: Independent pearl-light design tokens, glass surfaces and accessible controls for Flutter.
+description: Independent cool-gray design tokens, product surfaces and accessible controls for Flutter.
 version: 0.1.0
 publish_to: none
 repository: https://github.com/lengsukq/flutter_multi_livestream_video
@@ -16,3 +16,20 @@ dev_dependencies:
   flutter_lints: ^5.0.0
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Onest
+      fonts:
+        - asset: fonts/Onest-Regular.ttf
+          weight: 400
+        - asset: fonts/Onest-Medium.ttf
+          weight: 500
+        - asset: fonts/Onest-SemiBold.ttf
+          weight: 600
+        - asset: fonts/Onest-Bold.ttf
+          weight: 700
+    - family: BricolageGrotesque
+      fonts:
+        - asset: fonts/BricolageGrotesque-Medium.ttf
+          weight: 500
+        - asset: fonts/BricolageGrotesque-Bold.ttf
+          weight: 700

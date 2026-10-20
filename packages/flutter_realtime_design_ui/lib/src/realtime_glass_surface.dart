@@ -22,7 +22,7 @@ class RealtimeGlassSurface extends StatelessWidget {
   final double? _opacity;
   final double? _blur;
   double get radius => _radius ?? RealtimeUiTokens.cardRadius;
-  double get opacity => _opacity ?? .82;
+  double get opacity => _opacity ?? .94;
   double get blur => _blur ?? RealtimeUiTokens.subtleBlur;
   final bool shadow;
   final Color borderColor;
@@ -48,7 +48,7 @@ class RealtimeGlassSurface extends StatelessWidget {
           color: highContrast
               ? style.text
               : borderColor == RealtimeUiTokens.border
-              ? Colors.white.withValues(alpha: 0.8)
+              ? style.border
               : borderColor,
           width: highContrast ? 1.5 : 1.0,
         ),

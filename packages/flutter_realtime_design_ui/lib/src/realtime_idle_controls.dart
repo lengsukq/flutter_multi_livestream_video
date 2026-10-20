@@ -12,6 +12,7 @@ class RealtimeIdleControls extends StatefulWidget {
     required this.controls,
     this.topControls,
     this.autoHide = true,
+    this.autoHideTopControls = true,
     this.hideAfter = const Duration(seconds: 4),
     this.controlsBottom = 8,
     this.controlsMaxWidth = 800,
@@ -24,6 +25,9 @@ class RealtimeIdleControls extends StatefulWidget {
   /// Optional meeting header, faded by the same idle timer as the dock.
   final Widget? topControls;
   final bool autoHide;
+
+  /// Keep persistent chrome (the room header) visible while the dock fades.
+  final bool autoHideTopControls;
   final Duration hideAfter;
   final double controlsBottom;
   final double controlsMaxWidth;
@@ -192,18 +196,20 @@ class _RealtimeIdleControlsState extends State<RealtimeIdleControls> {
                   left: 6,
                   right: 6,
                   child: IgnorePointer(
-                    ignoring: hidden,
+                    ignoring: hidden && widget.autoHideTopControls,
                     child: AnimatedSlide(
                       duration: duration,
                       curve: Curves.easeOutCubic,
-                      offset: hidden ? const Offset(0, -0.25) : Offset.zero,
+                      offset: hidden && widget.autoHideTopControls
+                          ? const Offset(0, -0.25)
+                          : Offset.zero,
                       child: AnimatedOpacity(
                         duration: duration,
-                        opacity: hidden ? 0 : 1,
+                        opacity: hidden && widget.autoHideTopControls ? 0 : 1,
                         child: _focusableControls(
                           widget.topControls!,
                           _topControlsFocus,
-                          hidden,
+                          hidden && widget.autoHideTopControls,
                         ),
                       ),
                     ),

@@ -26,7 +26,7 @@ class RealtimeSheetHeader extends StatelessWidget {
             borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
             border: Border.all(color: style.primaryBorder),
           ),
-          child: Icon(icon, color: style.primary, size: 21),
+          child: Icon(icon, color: style.text, size: 21),
         ),
         const SizedBox(width: 12),
         Expanded(

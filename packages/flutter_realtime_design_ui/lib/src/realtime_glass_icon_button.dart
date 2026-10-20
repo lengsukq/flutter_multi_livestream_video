@@ -28,22 +28,22 @@ class RealtimeGlassIconButton extends StatelessWidget {
     final style = RealtimeStyle.of(context);
     final effectiveRadius =
         _radius ?? RealtimeUiThemeExtension.of(context).controlRadius;
-    final targetSize = size < 48 ? 48.0 : size;
+    final targetSize = size < 44 ? 44.0 : size;
     final bgColor = danger
-        ? style.danger
+        ? style.live
         : active
-        ? style.primarySubtle
+        ? style.accent
         : style.surfaceSubtle;
     final borderColor = danger
-        ? style.danger
+        ? style.live
         : active
         ? style.primaryBorder
         : style.border;
     final fgColor = danger
         ? Colors.white
         : active
-        ? style.primaryAccent
-        : style.text;
+        ? style.onAccent
+        : style.textSecondary;
 
     Widget button = RealtimeGlassPressable(
       borderRadius: effectiveRadius,
@@ -74,7 +74,7 @@ class RealtimeGlassIconButton extends StatelessWidget {
                   : active
                   ? [
                       BoxShadow(
-                        color: RealtimeUiTokens.primary.withValues(alpha: 0.14),
+                        color: style.accent.withValues(alpha: 0.28),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
@@ -108,7 +108,7 @@ class RealtimeGlassIconButton extends StatelessWidget {
                           minHeight: 16,
                         ),
                         decoration: BoxDecoration(
-                          color: RealtimeUiTokens.danger,
+                          color: style.live,
                           borderRadius: BorderRadius.circular(
                             RealtimeUiTokens.pillRadius,
                           ),
@@ -119,7 +119,7 @@ class RealtimeGlassIconButton extends StatelessWidget {
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 13,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
                           ),
                         ),

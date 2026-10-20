@@ -1,5 +1,6 @@
 part of '../flutter_realtime_design_ui.dart';
 
+/// Rounded white content card used by panels, lists and the green-room.
 class RealtimeCardSurface extends StatelessWidget {
   const RealtimeCardSurface({
     super.key,
@@ -7,7 +8,7 @@ class RealtimeCardSurface extends StatelessWidget {
     this.padding,
     this.margin,
     this._radius,
-    this.shadow = true,
+    this.shadow = false,
     this.borderColor,
     this.fillColor,
     this.onTap,
@@ -36,7 +37,7 @@ class RealtimeCardSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: effectiveFill,
         borderRadius: BorderRadius.circular(effectiveRadius),
-        border: Border.all(color: effectiveBorder, width: 0.8),
+        border: Border.all(color: effectiveBorder, width: 1),
         boxShadow: shadow ? style.cardShadow : const [],
       ),
       child: Material(color: Colors.transparent, child: child),

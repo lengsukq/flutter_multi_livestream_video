@@ -9,6 +9,54 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
+    'compact workspace keeps its header fixed and labels every destination',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1440, 900);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var destination = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RealtimeUiTheme.light(),
+          home: RealtimeWorkspaceShell(
+            selectedIndex: 0,
+            compactNavigation: true,
+            header: const SizedBox(height: 56, child: Text('Workspace header')),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                label: 'Home',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.chat_outlined),
+                label: 'Chat',
+              ),
+            ],
+            onDestinationSelected: (value) => destination = value,
+            child: ListView(
+              children: List.generate(
+                30,
+                (i) => SizedBox(height: 64, child: Text('Room $i')),
+              ),
+            ),
+          ),
+        ),
+      );
+      final header = tester.getRect(find.text('Workspace header'));
+      final chat = find.byTooltip('Chat');
+      expect(chat, findsOneWidget);
+      expect(tester.getRect(chat).right, lessThanOrEqualTo(60));
+      await tester.tap(chat);
+      expect(destination, 1);
+      await tester.drag(find.byType(ListView).last, const Offset(0, -400));
+      await tester.pumpAndSettle();
+      expect(tester.getRect(find.text('Workspace header')), header);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'join-type sliding selection matches the outer capsule radius and toggles',
     (tester) async {
       var selected = 0;
@@ -245,6 +293,7 @@ void main() {
             appearance: const RealtimeUiThemeExtension(
               cardRadius: 40,
               controlRadius: 37,
+              glassEnabled: true,
               blur: 30,
               glassOpacity: .6,
             ),
@@ -360,15 +409,25 @@ void main() {
     },
   );
 
-  test('the accented light palette keeps text and actions readable', () {
+  test('the cool-gray palette keeps text and actions readable', () {
     final palette = RealtimeStyle.light;
-    expect(palette.background, const Color(0xFFF5F5F7));
-    expect(palette.primary, RealtimeUiTokens.primary);
+    expect(palette.background, const Color(0xFFE9EDF2));
+    expect(palette.primary, RealtimeUiTokens.accent);
+    expect(palette.accent, const Color(0xFFF5C518));
     expect(_contrast(palette.text, palette.surface), greaterThan(16));
     expect(_contrast(palette.textMuted, palette.surface), greaterThan(4.5));
-    expect(_contrast(palette.surface, palette.primary), greaterThan(4.5));
-    expect(_contrast(palette.surface, palette.primaryAccent), greaterThan(4.5));
+    // Amber is a filled-action color: its label must be the dark ink.
+    expect(_contrast(palette.onAccent, palette.accent), greaterThan(7));
+    expect(_contrast(palette.surface, palette.accent), lessThan(2));
     expect(_contrast(palette.surface, palette.danger), greaterThan(4.5));
+    expect(_contrast(palette.surface, palette.speak), greaterThan(3));
+    expect(_contrast(palette.speakStrong, palette.surface), greaterThan(4.5));
+    expect(_contrast(palette.surface, palette.speakStrong), greaterThan(4.5));
+    expect(_contrast(palette.success, palette.successSubtle), greaterThan(4.5));
+    expect(
+      palette.copyWith(speakStrong: Colors.black).speakStrong,
+      Colors.black,
+    );
     expect(RealtimeUiTheme.light().brightness, Brightness.light);
     // ignore: deprecated_member_use
     expect(RealtimeUiTheme.dark().brightness, Brightness.light);

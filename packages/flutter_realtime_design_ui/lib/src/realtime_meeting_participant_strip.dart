@@ -8,7 +8,7 @@ class RealtimeMeetingParticipantStrip extends StatefulWidget {
     this.participants = const [],
     this.onSelectParticipant,
     this.leading,
-    this.height = 110,
+    this.height = 100,
   });
 
   final List<RealtimeMeetingTileData> participants;
@@ -34,8 +34,9 @@ class _RealtimeMeetingParticipantStripState
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final compact = constraints.maxWidth < 600;
-      final width = compact ? 120.0 : 156.0;
+      final compact =
+          constraints.maxWidth < RealtimeBreakpoints.compactMaxWidth;
+      final width = compact ? 112.0 : 150.0;
       final count =
           widget.participants.length + (widget.leading == null ? 0 : 1);
       if (count == 0) return const SizedBox.shrink();
@@ -44,7 +45,7 @@ class _RealtimeMeetingParticipantStripState
           ? (constraints.maxWidth - contentWidth) / 2
           : 12.0;
       return SizedBox(
-        height: compact ? widget.height.clamp(48.0, 92.0) : widget.height,
+        height: compact ? widget.height.clamp(48.0, 88.0) : widget.height,
         child: ScrollConfiguration(
           behavior: ScrollConfiguration.of(context).copyWith(
             dragDevices: {
@@ -88,30 +89,23 @@ class _RealtimeMeetingParticipantStripState
     required bool compact,
   }) {
     final style = RealtimeStyle.of(context);
-    final isDark = style.isDark;
-    final width = compact ? 120.0 : 156.0;
+    final width = compact ? 112.0 : 150.0;
+    final radius = RealtimeUiThemeExtension.of(context).controlRadius;
 
     return RealtimeGlassPressable(
       onTap: () => widget.onSelectParticipant?.call(item),
       child: Container(
         width: width,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(
-            RealtimeUiThemeExtension.of(context).controlRadius,
-          ),
+          borderRadius: BorderRadius.circular(radius),
           border: Border.all(
-            color: item.isSpeaking
-                ? RealtimeUiTokens.appleTeal
-                : (isDark ? const Color(0x2EFFFFFF) : const Color(0x1F000000)),
-            width: item.isSpeaking ? 1.8 : 0.8,
+            color: item.isSpeaking ? style.speak : style.border,
+            width: item.isSpeaking ? 2 : 1,
           ),
-          color: isDark
-              ? RealtimeUiTokens.canvasDarkElevated
-              : const Color(0xFFF5F5F7),
-          boxShadow: RealtimeUiTokens.iosCardShadow,
+          color: style.tile,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(radius),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -120,59 +114,84 @@ class _RealtimeMeetingParticipantStripState
                     child: RealtimeAvatar(
                       name: item.displayName,
                       avatarUrl: item.avatarUrl,
-                      size: 40,
+                      size: compact ? 32 : 40,
                     ),
                   ),
-
-              // Bottom Overlay: Mute icon + Name
+              if (item.handRaised)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: style.accent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.pan_tool_rounded,
+                      size: 13,
+                      color: style.onAccent,
+                    ),
+                  ),
+                )
+              else if (item.isMuted)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0C121C).withValues(alpha: 0.6),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.mic_off_rounded,
+                      size: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               Positioned(
                 left: 6,
                 right: 6,
                 bottom: 6,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(
-                    RealtimeUiTokens.compactRadius,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
                   ),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.compactRadius,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0C121C).withValues(alpha: 0.62),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            item.isMuted
-                                ? Icons.mic_off_rounded
-                                : Icons.mic_rounded,
-                            size: 13,
-                            color: item.isMuted
-                                ? RealtimeUiTokens.appleDanger
-                                : RealtimeUiTokens.appleTeal,
+                      if (item.isSpeaking) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: style.speak,
+                            shape: BoxShape.circle,
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              item.displayName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11.0,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),

@@ -148,6 +148,62 @@ def copy_bundled_assets(root: Path, destination: Path, names: list[str]) -> tupl
     return entries, asset_modules
 
 
+def copy_bundled_fonts(root: Path, destination: Path) -> str:
+    """Copy the design system's bundled fonts and declare them.
+
+    Flutter resolves a package font as `packages/<package>/<family>`. Once the
+    design package is folded into `flutter_realtime_sdk`, those literals must
+    be rewritten (see rewrite_bundled_font_families) or every Text falls back
+    to the platform font at runtime.
+    """
+    source = root / "packages" / "flutter_realtime_design_ui" / "fonts"
+    if not source.is_dir():
+        return ""
+    target = destination / "fonts"
+    shutil.copytree(source, target)
+    families: dict[str, list[tuple[str, int]]] = {}
+    for font in sorted(target.glob("*.ttf")):
+        family, _, weight_name = font.stem.partition("-")
+        weight = {
+            "Regular": 400,
+            "Medium": 500,
+            "SemiBold": 600,
+            "Bold": 700,
+        }.get(weight_name, 400)
+        families.setdefault(family, []).append((font.name, weight))
+    lines = ["  fonts:"]
+    for family in sorted(families):
+        lines.append(f"    - family: {family}")
+        lines.append("      fonts:")
+        for filename, weight in sorted(
+            families[family], key=lambda item: item[1]
+        ):
+            lines.append(f"        - asset: fonts/{filename}")
+            lines.append(f"          weight: {weight}")
+    return "\n".join(lines) + "\n"
+
+
+def rewrite_bundled_font_families(destination: Path, names: list[str]) -> int:
+    """Point `packages/<ui package>/<Family>` literals at the single package."""
+    pattern = re.compile(
+        r"packages/("
+        + "|".join(re.escape(n) for n in names)
+        + r")/(Onest|BricolageGrotesque)"
+    )
+    changed = 0
+    for dart in destination.rglob("*.dart"):
+        code = dart.read_text(encoding="utf-8")
+        if "packages/" not in code:
+            continue
+        rewritten = pattern.sub(
+            lambda m: f"packages/flutter_realtime_sdk/{m.group(2)}", code
+        )
+        if rewritten != code:
+            dart.write_text(rewritten, encoding="utf-8")
+            changed += 1
+    return changed
+
+
 def assemble(root: Path, destination: Path) -> dict:
     names = json.loads((root / "scripts/sdk_packages.json").read_text())
     destination = destination.resolve()
@@ -160,6 +216,8 @@ def assemble(root: Path, destination: Path) -> dict:
     destination.mkdir(parents=True)
     count = copy_dart_tree(root, destination, names)
     assets, asset_modules = copy_bundled_assets(root, destination, names)
+    font_declarations = copy_bundled_fonts(root, destination)
+    font_files_rewritten = rewrite_bundled_font_families(destination, names)
     # Deliberately curate the single user-facing import surface. The internal
     # package names are not exported to the user, only their public libraries.
     public = [
@@ -238,6 +296,8 @@ def assemble(root: Path, destination: Path) -> dict:
     )
     if assets:
         pubspec += "  assets:\n" + "\n".join(assets) + "\n"
+    if font_declarations:
+        pubspec += font_declarations
     (destination / "pubspec.yaml").write_text(pubspec)
     (destination / "README.md").write_text(
         "# Flutter Realtime SDK — generated release candidate\n\n"
@@ -266,6 +326,8 @@ def assemble(root: Path, destination: Path) -> dict:
         "target": str(destination),
         "dartLibraries": count,
         "assetModules": asset_modules,
+        "bundledFonts": bool(font_declarations),
+        "fontFilesRewritten": font_files_rewritten,
         "publicExports": public,
         "nativePluginRegistrationComplete": False,
         "publishable": False,

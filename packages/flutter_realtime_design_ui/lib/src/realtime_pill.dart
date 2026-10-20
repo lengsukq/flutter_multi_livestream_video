@@ -43,11 +43,11 @@ class RealtimePill extends StatelessWidget {
       // Passive status chips stay compact; actionable chips provide the
       // minimum mobile touch target without relying on invisible overlays.
       constraints: onTap == null ? null : const BoxConstraints(minHeight: 48),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: effectiveBg.a < 0.99
             ? effectiveBg
-            : effectiveBg.withValues(alpha: 0.88),
+            : effectiveBg.withValues(alpha: 0.94),
         borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
         border: Border.all(color: effectiveBorder),
       ),
@@ -64,12 +64,6 @@ class RealtimePill extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: leadingDotColor,
-                boxShadow: [
-                  BoxShadow(
-                    color: leadingDotColor!.withValues(alpha: 0.45),
-                    blurRadius: 6,
-                  ),
-                ],
               ),
             ),
             const SizedBox(width: 6),
@@ -84,8 +78,8 @@ class RealtimePill extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: effectiveFg,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
                 letterSpacing: 0.1,
               ),
             ),

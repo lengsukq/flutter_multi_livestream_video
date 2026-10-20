@@ -106,7 +106,7 @@ class _RealtimeGlassTextFieldState extends State<RealtimeGlassTextField> {
                     labelText: widget.label,
                     labelStyle: Theme.of(context).textTheme.labelMedium!
                         .copyWith(
-                          color: _focused ? style.primary : style.textMuted,
+                          color: _focused ? style.text : style.textMuted,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),

@@ -23,11 +23,7 @@ class RealtimeGlassButton extends StatelessWidget {
     final enabled = onPressed != null && !isLoading;
     final foregroundColor = secondary
         ? (enabled ? style.text : style.textMuted)
-        : (enabled
-              ? Colors.white
-              : (style.isDark
-                    ? const Color(0xFF64748B)
-                    : const Color(0xFF94A3B8)));
+        : (enabled ? style.onAccent : style.textMuted);
 
     return RealtimeGlassPressable(
       borderRadius: radius,
@@ -36,26 +32,24 @@ class RealtimeGlassButton extends StatelessWidget {
           context,
         ).duration(context, RealtimeUiTokens.animNormal),
         curve: Curves.easeOutCubic,
-        height: 50,
+        height: 48,
         decoration: BoxDecoration(
           color: secondary
               ? (enabled
                     ? style.surfaceSubtle
                     : style.surfaceSubtle.withValues(alpha: 0.50))
-              : (enabled ? style.primary : style.border),
+              : (enabled ? style.accent : style.border),
           borderRadius: BorderRadius.circular(radius),
           border: Border.all(
             color: secondary
                 ? style.border
-                : (enabled
-                      ? Colors.white.withValues(alpha: 0.24)
-                      : Colors.transparent),
+                : (enabled ? style.primaryBorder : Colors.transparent),
           ),
           boxShadow: enabled && !secondary
               ? (style.isDark
                     ? [
                         BoxShadow(
-                          color: style.primary.withValues(alpha: 0.35),
+                          color: style.accent.withValues(alpha: 0.35),
                           blurRadius: 18,
                           offset: const Offset(0, 6),
                         ),
@@ -94,9 +88,9 @@ class RealtimeGlassButton extends StatelessWidget {
                             style: Theme.of(context).textTheme.labelLarge!
                                 .copyWith(
                                   color: foregroundColor,
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.2,
+                                  letterSpacing: 0.1,
                                 ),
                             child: child,
                           ),

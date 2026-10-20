@@ -115,6 +115,39 @@ class SingleSdkDistributionTest(unittest.TestCase):
             directory = file.parent.relative_to(self.root).as_posix()
             self.assertIn(f"    - {directory}/", pubspec, str(file))
 
+    def test_bundled_fonts_are_packaged_and_resolved_from_the_single_package(self):
+        """A folded design package must still find its own font files."""
+        fonts = self.root / "fonts"
+        expected = {
+            "Onest-Regular.ttf",
+            "Onest-Medium.ttf",
+            "Onest-SemiBold.ttf",
+            "Onest-Bold.ttf",
+            "BricolageGrotesque-Medium.ttf",
+            "BricolageGrotesque-Bold.ttf",
+        }
+        self.assertEqual({p.name for p in fonts.glob("*.ttf")}, expected)
+        pubspec = (self.root / "pubspec.yaml").read_text()
+        self.assertIn("  fonts:", pubspec)
+        for family in ("Onest", "BricolageGrotesque"):
+            self.assertIn(f"    - family: {family}", pubspec)
+        for font in expected:
+            self.assertIn(f"        - asset: fonts/{font}", pubspec)
+        # Families must be addressed through the hosted package, not the
+        # internal design package that no longer exists at runtime.
+        theme = (
+            self.root
+            / "lib/src/_bundled/flutter_realtime_design_ui/src/realtime_ui_theme.dart"
+        ).read_text()
+        self.assertIn("packages/flutter_realtime_sdk/Onest", theme)
+        self.assertIn("packages/flutter_realtime_sdk/BricolageGrotesque", theme)
+        self.assertNotIn("packages/flutter_realtime_design_ui/Onest", theme)
+        self.assertNotIn(
+            "packages/flutter_realtime_design_ui/BricolageGrotesque", theme
+        )
+        self.assertTrue(self.report["bundledFonts"])
+        self.assertGreaterEqual(self.report["fontFilesRewritten"], 1)
+
     def test_ios_resolves_official_binaries_without_nonexistent_pods(self):
         import json
         from assemble_single_sdk_ios import ivs_frameworks
