@@ -1,3 +1,4 @@
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter/material.dart';
 import 'whiteboard_strings.dart';
 
@@ -91,7 +92,7 @@ class _WhiteboardColorPickerDialogState
     final theme = Theme.of(context);
     final currentColor = Color(_currentColor);
 
-    return AlertDialog(
+    return RealtimeGlassDialog(
       title: Text(s.t('selectColor')),
       content: SingleChildScrollView(
         child: SizedBox(

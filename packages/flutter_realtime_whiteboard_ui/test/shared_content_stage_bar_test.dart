@@ -49,7 +49,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.delete_outline_rounded));
       expect(del, 1);
 
-      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.tap(find.byTooltip('Stop Sharing'));
       expect(stop, 1);
     },
   );
@@ -91,7 +91,9 @@ void main() {
       expect(annotateToggled, true);
       expect(find.byIcon(Icons.edit_rounded), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.close_rounded));
+      // The reference sharing bar uses a labelled stop control. Assert the
+      // action through its accessible name instead of the old close glyph.
+      await tester.tap(find.byTooltip('Stop Sharing'));
       expect(stopped, true);
     },
   );
@@ -125,7 +127,7 @@ void main() {
         ),
       );
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.tap(find.byTooltip('Stop Sharing'));
       expect(stopped, isTrue);
     },
   );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'annotation_surface.dart';
 import 'shared_content_stage_bar.dart';
@@ -32,6 +33,7 @@ class SharedContentStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = WhiteboardStrings.of(context);
+    final style = RealtimeStyle.of(context);
     return switch (mode) {
       SharedContentMode.members => members,
       SharedContentMode.whiteboard => WhiteboardView(
@@ -77,28 +79,30 @@ class SharedContentStage extends StatelessWidget {
                   ),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                       child: Center(
                         child: AspectRatio(
                           aspectRatio: screenAspectRatio,
                           child: Container(
                             decoration: BoxDecoration(
                               color: const Color(0xFF1D1D1F),
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(
+                                RealtimeUiThemeExtension.of(
+                                  context,
+                                ).stageRadius,
+                              ),
                               border: Border.all(
-                                color: Colors.black.withValues(alpha: 0.08),
+                                color: Colors.black.withValues(alpha: 0.12),
                                 width: 1,
                               ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.08),
-                                  blurRadius: 28,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
+                              boxShadow: style.cardShadow,
                             ),
                             child: ClipRRect(
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(
+                                RealtimeUiThemeExtension.of(
+                                  context,
+                                ).stageRadius,
+                              ),
                               child: screenAnnotations == null
                                   ? screen!
                                   : AnnotationSurface(
@@ -107,7 +111,8 @@ class SharedContentStage extends StatelessWidget {
                                       ),
                                       session: screenAnnotations!,
                                       allowEditing: canAnnotateScreen,
-                                      toolbarAtTop: true,
+                                      toolbarAtTop: false,
+                                      constrainToolbarToCanvas: true,
                                       background: screen,
                                     ),
                             ),

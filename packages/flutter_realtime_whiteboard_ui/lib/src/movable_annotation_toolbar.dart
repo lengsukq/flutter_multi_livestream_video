@@ -24,10 +24,11 @@ class _MovableAnnotationToolbarState extends State<MovableAnnotationToolbar> {
   final _toolbar = GlobalKey();
   final _portal = OverlayPortalController();
   Offset? _overlayPosition;
-  Offset _position = const Offset(1, 0);
+  late Offset _position;
   @override
   void initState() {
     super.initState();
+    _position = widget.startAtTop ? const Offset(1, 0) : const Offset(.5, 1);
     _portal.show();
   }
 

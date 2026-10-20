@@ -1,9 +1,8 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'whiteboard_strings.dart';
 
-/// Unified Material 3 / Glassmorphic stage bar for shared content.
+/// Opaque teal sharing status bar with accessible labels and actions.
 ///
 /// Used identically for Whiteboard and Screen Share stages to give viewers and
 /// presenters a consistent, polished header with status, page controls,
@@ -57,220 +56,135 @@ class SharedContentStageBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = RealtimeStyle.of(context).isDark;
-    final appearance = RealtimeUiThemeExtension.of(context);
-    final opaque =
-        !appearance.glassEnabled || MediaQuery.highContrastOf(context);
-    final s = WhiteboardStrings.of(context);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(appearance.controlRadius),
-      child: BackdropFilter(
-        enabled: !opaque,
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: (isDark ? const Color(0xFF1E293B) : Colors.white).withValues(
-              alpha: opaque ? 1 : 0.88,
-            ),
-            borderRadius: BorderRadius.circular(appearance.controlRadius),
-            border: Border.all(
-              color: (isDark ? Colors.white12 : Colors.black12),
-              width: 1,
-            ),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 12,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) => constraints.maxWidth < 480
-                ? _compactBar(context, s, theme)
-                : Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    runSpacing: 4,
-                    children: [
-                      // Badge Icon & Title
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.12,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              badgeIcon ?? Icons.present_to_all_rounded,
-                              size: 16,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (subtitle != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          subtitle!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-
-                      // Whiteboard Pagination Section
-                      if (pageCount != null && pageCount! > 0) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          height: 18,
-                          width: 1,
-                          color: theme.colorScheme.outlineVariant.withValues(
-                            alpha: 0.5,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          iconSize: 18,
-                          padding: const EdgeInsets.all(4),
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          tooltip: s.t('prevPage'),
-                          onPressed: onPreviousPage,
-                          icon: const Icon(Icons.chevron_left_rounded),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            '${(pageIndex ?? 0) + 1} / $pageCount',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          iconSize: 18,
-                          padding: const EdgeInsets.all(4),
-                          constraints: const BoxConstraints(
-                            minWidth: 28,
-                            minHeight: 28,
-                          ),
-                          tooltip: s.t('nextPage'),
-                          onPressed: onNextPage,
-                          icon: const Icon(Icons.chevron_right_rounded),
-                        ),
-                        if (onAddPage != null)
-                          IconButton(
-                            iconSize: 18,
-                            padding: const EdgeInsets.all(4),
-                            constraints: const BoxConstraints(
-                              minWidth: 28,
-                              minHeight: 28,
-                            ),
-                            tooltip: s.t('addPage'),
-                            onPressed: canAddPage ? onAddPage : null,
-                            icon: const Icon(Icons.add_circle_outline_rounded),
-                          ),
-                        if (onDeletePage != null)
-                          IconButton(
-                            iconSize: 18,
-                            padding: const EdgeInsets.all(4),
-                            constraints: const BoxConstraints(
-                              minWidth: 28,
-                              minHeight: 28,
-                            ),
-                            tooltip: s.t('deletePage'),
-                            onPressed: canDeletePage ? onDeletePage : null,
-                            icon: const Icon(Icons.delete_outline_rounded),
-                          ),
-                      ],
-
-                      if (extraActions != null) ...[
-                        const SizedBox(width: 6),
-                        ...extraActions!,
-                      ],
-
-                      // Annotation Toggle
-                      if (onToggleAnnotation != null && canAnnotate) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          height: 18,
-                          width: 1,
-                          color: theme.colorScheme.outlineVariant.withValues(
-                            alpha: 0.5,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        IconButton.filledTonal(
-                          iconSize: 18,
-                          padding: const EdgeInsets.all(6),
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                          isSelected: annotationEnabled,
-                          tooltip: s.t('annotate'),
-                          onPressed: onToggleAnnotation,
-                          icon: Icon(
-                            annotationEnabled
-                                ? Icons.edit_rounded
-                                : Icons.edit_outlined,
-                          ),
-                        ),
-                      ],
-
-                      // Stop sharing action
-                      if (onStop != null) ...[
-                        const SizedBox(width: 6),
-                        IconButton.filledTonal(
-                          iconSize: 18,
-                          style: IconButton.styleFrom(
-                            backgroundColor: const Color(
-                              0xFFFF3B30,
-                            ).withValues(alpha: isDark ? 0.25 : 0.12),
-                            foregroundColor: const Color(0xFFFF3B30),
-                          ),
-                          padding: const EdgeInsets.all(6),
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                          tooltip: stopTooltip ?? s.t('stopSharing'),
-                          onPressed: onStop,
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
-                    ],
-                  ),
-          ),
+    final style = RealtimeStyle.of(context);
+    final baseTheme = Theme.of(context);
+    final theme = baseTheme.copyWith(
+      colorScheme: baseTheme.colorScheme.copyWith(primary: Colors.white),
+      textTheme: baseTheme.textTheme.apply(
+        bodyColor: Colors.white,
+        displayColor: Colors.white,
+      ),
+    );
+    final strings = WhiteboardStrings.of(context);
+    Widget action(
+      IconData icon,
+      String label,
+      VoidCallback? callback, {
+      bool selected = false,
+    }) => IconButton(
+      tooltip: label,
+      onPressed: callback,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(44, 44),
+        foregroundColor: Colors.white,
+        disabledForegroundColor: Colors.white38,
+        backgroundColor: selected
+            ? Colors.white.withValues(alpha: .18)
+            : Colors.transparent,
+      ),
+      icon: Icon(icon, size: 18),
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: style.speakStrong,
+        borderRadius: BorderRadius.circular(
+          RealtimeUiThemeExtension.of(context).controlRadius,
         ),
+        border: MediaQuery.highContrastOf(context)
+            ? Border.all(color: Colors.white)
+            : null,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 480 ||
+              RealtimeBreakpoints.textScaleIsLarge(context)) {
+            return _compactBar(context, strings, theme);
+          }
+          return Row(
+            children: [
+              Icon(
+                badgeIcon ?? Icons.present_to_all_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                  ],
+                ),
+              ),
+              if (pageCount != null && pageCount! > 0) ...[
+                action(
+                  Icons.chevron_left_rounded,
+                  strings.t('prevPage'),
+                  onPreviousPage,
+                ),
+                Text(
+                  '${(pageIndex ?? 0) + 1} / $pageCount',
+                  style: theme.textTheme.bodySmall,
+                ),
+                action(
+                  Icons.chevron_right_rounded,
+                  strings.t('nextPage'),
+                  onNextPage,
+                ),
+                if (onAddPage != null)
+                  action(
+                    Icons.add_circle_outline_rounded,
+                    strings.t('addPage'),
+                    canAddPage ? onAddPage : null,
+                  ),
+                if (onDeletePage != null)
+                  action(
+                    Icons.delete_outline_rounded,
+                    strings.t('deletePage'),
+                    canDeletePage ? onDeletePage : null,
+                  ),
+              ],
+              ...?extraActions,
+              if (onToggleAnnotation != null && canAnnotate)
+                action(
+                  annotationEnabled ? Icons.edit_rounded : Icons.edit_outlined,
+                  strings.t('annotate'),
+                  onToggleAnnotation,
+                  selected: annotationEnabled,
+                ),
+              if (onStop != null)
+                Tooltip(
+                  message: stopTooltip ?? strings.t('stopSharing'),
+                  child: TextButton.icon(
+                    onPressed: onStop,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.white.withValues(alpha: .14),
+                    ),
+                    icon: const Icon(Icons.square_rounded, size: 13),
+                    label: Text(stopTooltip ?? strings.t('stopSharing')),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -338,6 +252,7 @@ class SharedContentStageBar extends StatelessWidget {
             ),
             if (actions.isNotEmpty)
               PopupMenuButton<VoidCallback>(
+                iconColor: Colors.white,
                 tooltip: s.zh ? '共享内容操作' : 'Shared content actions',
                 onSelected: (action) => action(),
                 itemBuilder: (_) => [
@@ -353,7 +268,7 @@ class SharedContentStageBar extends StatelessWidget {
               IconButton(
                 tooltip: stopTooltip ?? s.t('stopSharing'),
                 onPressed: onStop,
-                color: const Color(0xFFFF3B30),
+                color: Colors.white,
                 icon: const Icon(Icons.close_rounded),
               ),
           ],

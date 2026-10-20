@@ -64,6 +64,7 @@ class AnnotationToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = WhiteboardStrings.of(context);
     final theme = Theme.of(context);
+    final style = RealtimeStyle.of(context);
     final showTools = drawingEnabled || fixedTop;
     final borderRadius = BorderRadius.circular(RealtimeUiTokens.controlRadius);
 
@@ -74,6 +75,41 @@ class AnnotationToolbar extends StatelessWidget {
       color: theme.colorScheme.outlineVariant.withValues(alpha: .5),
     );
 
+    // Selected tools invert to amber, matching the reference teaching toolbar.
+    Widget toolButton({
+      required IconData icon,
+      required String tooltip,
+      required bool selected,
+      required VoidCallback? onPressed,
+    }) => Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: tooltip,
+        child: Padding(
+          padding: const EdgeInsets.all(1),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: onPressed,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: selected ? style.accent : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                size: 19,
+                color: selected ? style.onAccent : style.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
     return ClipRRect(
       borderRadius: borderRadius,
       child: RealtimeGlassSurface(
@@ -81,18 +117,15 @@ class AnnotationToolbar extends StatelessWidget {
         blur: RealtimeUiTokens.subtleBlur,
         shadow: false,
         child: Material(
-          color: theme.colorScheme.surface.withValues(alpha: 0),
+          color: Colors.transparent,
           elevation: 0,
-          shadowColor: Colors.black12,
           shape: RoundedRectangleBorder(
             borderRadius: borderRadius,
-            side: BorderSide(
-              color: theme.colorScheme.outlineVariant.withValues(alpha: .5),
-            ),
+            side: BorderSide(color: style.border),
           ),
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: fixedTop ? 8 : 6,
+              horizontal: fixedTop ? 6 : 4,
               vertical: 4,
             ),
             child: Wrap(
@@ -103,21 +136,26 @@ class AnnotationToolbar extends StatelessWidget {
                 if (showDragHandle)
                   Tooltip(
                     message: s.t('moveTools'),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                      child: Icon(Icons.drag_indicator, size: 20),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      child: Icon(
+                        Icons.drag_indicator,
+                        size: 20,
+                        color: style.textMuted,
+                      ),
                     ),
                   ),
                 if (showDrawingToggle)
-                  IconButton(
+                  toolButton(
+                    icon: drawingEnabled
+                        ? Icons.draw_outlined
+                        : Icons.pan_tool_outlined,
                     tooltip: editTooltip ?? s.t('annotate'),
-                    isSelected: drawingEnabled,
+                    selected: drawingEnabled,
                     onPressed: canEdit ? onDrawingToggle : null,
-                    icon: Icon(
-                      drawingEnabled
-                          ? Icons.draw_outlined
-                          : Icons.pan_tool_outlined,
-                    ),
                   ),
                 if (showTools) ...[
                   if (showDrawingToggle || showDragHandle) divider(),
@@ -128,13 +166,13 @@ class AnnotationToolbar extends StatelessWidget {
                     (AnnotationTool.arrow, Icons.arrow_outward, 'arrow'),
                     (AnnotationTool.text, Icons.text_fields, 'label'),
                   ])
-                    IconButton(
+                    toolButton(
+                      icon: item.$2,
                       tooltip: s.t(item.$3),
-                      isSelected: tool == item.$1,
+                      selected: tool == item.$1,
                       onPressed: canEdit && onToolChanged != null
                           ? () => onToolChanged!(item.$1)
                           : null,
-                      icon: Icon(item.$2),
                     ),
                   if (onColorChanged != null) ...[
                     divider(),
@@ -177,8 +215,8 @@ class AnnotationToolbar extends StatelessWidget {
                       tooltip: s.t('moreColors'),
                       iconSize: 18,
                       constraints: const BoxConstraints(
-                        minWidth: 28,
-                        minHeight: 28,
+                        minWidth: 32,
+                        minHeight: 32,
                       ),
                       padding: const EdgeInsets.all(4),
                       onPressed: canEdit
@@ -202,30 +240,33 @@ class AnnotationToolbar extends StatelessWidget {
                                   selectedColor,
                                 )
                             ? Color(selectedColor!)
-                            : null,
+                            : style.textSecondary,
                       ),
                     ),
                   ],
                   if (onUndo != null || onClear != null) divider(),
                   if (onUndo != null)
-                    IconButton(
+                    toolButton(
+                      icon: Icons.undo,
                       tooltip: s.t('undo'),
+                      selected: false,
                       onPressed: canUndo ? onUndo : null,
-                      icon: const Icon(Icons.undo),
                     ),
                   if (onClear != null)
-                    IconButton(
+                    toolButton(
+                      icon: Icons.delete_sweep_outlined,
                       tooltip: s.t('clear'),
+                      selected: false,
                       onPressed: canClear ? onClear : null,
-                      icon: const Icon(Icons.delete_sweep_outlined),
                     ),
                 ],
                 if (onClose != null && canClose) ...[
                   divider(),
-                  IconButton(
+                  toolButton(
+                    icon: Icons.close,
                     tooltip: s.t('close'),
+                    selected: false,
                     onPressed: onClose,
-                    icon: const Icon(Icons.close),
                   ),
                 ],
               ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'package:flutter_realtime_whiteboard_ui/flutter_realtime_whiteboard_ui.dart';
@@ -14,6 +15,37 @@ class _CountedScreen extends StatelessWidget {
 }
 
 void main() {
+  testWidgets(
+    'annotation labels follow the host font and repaint when it changes',
+    (tester) async {
+      final session = WhiteboardSession.local();
+      await session.start();
+      addTearDown(session.dispose);
+      Future<AnnotationPainter> mount(String family) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: RealtimeUiTheme.light(
+              appearance: RealtimeUiThemeExtension(bodyFontFamily: family),
+            ),
+            home: Scaffold(body: AnnotationSurface(session: session)),
+          ),
+        );
+        await tester.pumpAndSettle();
+        return tester
+            .widgetList<CustomPaint>(find.byType(CustomPaint))
+            .map((widget) => widget.painter)
+            .whereType<AnnotationPainter>()
+            .single;
+      }
+
+      final first = await mount('HostNotes');
+      expect(first.fontFamily, 'HostNotes');
+      final next = await mount('AccessibleNotes');
+      expect(next.fontFamily, 'AccessibleNotes');
+      expect(next.shouldRepaint(first), isTrue);
+    },
+  );
+
   testWidgets(
     'screen stage shares all tools, keeps the screen renderer and respects portrait/landscape letterboxes',
     (tester) async {

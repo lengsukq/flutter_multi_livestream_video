@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'whiteboard_strings.dart';
 import 'movable_annotation_toolbar.dart';
@@ -18,6 +19,7 @@ class AnnotationSurface extends StatefulWidget {
     this.allowEditing = true,
     this.enableNavigation = true,
     this.toolbarAtTop = false,
+    this.constrainToolbarToCanvas = false,
     this.toolbarPlacement = AnnotationToolbarPlacement.floating,
     this.initialColor = 0xfff59e0b,
     this.tool,
@@ -25,12 +27,16 @@ class AnnotationSurface extends StatefulWidget {
     this.drawingEnabled,
     this.onToolChanged,
     this.editTooltip,
+    this.transformationController,
   });
   final AnnotationController session;
   final Widget? background;
   final bool allowEditing;
   final bool enableNavigation;
   final bool toolbarAtTop;
+
+  /// Keeps floating tools inside a shared image instead of over side panels.
+  final bool constrainToolbarToCanvas;
   final AnnotationToolbarPlacement toolbarPlacement;
   final int initialColor;
   final AnnotationTool? tool;
@@ -38,6 +44,9 @@ class AnnotationSurface extends StatefulWidget {
   final bool? drawingEnabled;
   final ValueChanged<AnnotationTool>? onToolChanged;
   final String? editTooltip;
+
+  /// Host-owned zoom/pan transform. When null the surface owns one.
+  final TransformationController? transformationController;
   @override
   State<AnnotationSurface> createState() => _AnnotationSurfaceState();
 }
@@ -58,11 +67,14 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
   bool _finishing = false;
   static final _random = math.Random.secure();
   String _canvasId = '';
-  final _transform = TransformationController();
+  TransformationController? _ownedTransform;
+  TransformationController get _transform =>
+      widget.transformationController ??
+      (_ownedTransform ??= TransformationController());
   @override
   void dispose() {
     _flushTimer?.cancel();
-    _transform.dispose();
+    _ownedTransform?.dispose();
     super.dispose();
   }
 
@@ -249,7 +261,7 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
                                 _draft != null &&
                                 _canvasId == canvas.canvasId)
                               _draft!,
-                          ]),
+                          ], fontFamily: RealtimeFonts.bodyOf(context)),
                         ),
                       ),
                     ],
@@ -323,6 +335,7 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
                 else
                   MovableAnnotationToolbar(
                     startAtTop: widget.toolbarAtTop,
+                    constrainToCanvas: widget.constrainToolbarToCanvas,
                     child: Padding(
                       padding: const EdgeInsets.all(6),
                       child: AnnotationToolbar(
@@ -379,7 +392,10 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
 
 /// Public for hosts that supply their own annotation toolbar and gestures.
 class AnnotationPainter extends CustomPainter {
-  AnnotationPainter(this.shapes);
+  AnnotationPainter(this.shapes, {this.fontFamily = RealtimeFonts.body});
+
+  /// Font used for annotation labels, independent of a host's widget tree.
+  final String fontFamily;
   final List<AnnotationShape> shapes;
   @override
   void paint(Canvas canvas, Size size) {
@@ -440,6 +456,7 @@ class AnnotationPainter extends CustomPainter {
               text: shape.text,
               style: TextStyle(
                 color: paint.color,
+                fontFamily: fontFamily.isEmpty ? null : fontFamily,
                 fontSize: math.max(10, 22 * scale),
               ),
             ),
@@ -454,7 +471,8 @@ class AnnotationPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(AnnotationPainter oldDelegate) =>
-      !identical(shapes, oldDelegate.shapes);
+      !identical(shapes, oldDelegate.shapes) ||
+      fontFamily != oldDelegate.fontFamily;
 }
 
 class _AnnotationLabelDialog extends StatefulWidget {
@@ -484,7 +502,7 @@ class _AnnotationLabelDialogState extends State<_AnnotationLabelDialog> {
   @override
   Widget build(BuildContext context) {
     final s = widget.strings;
-    return AlertDialog(
+    return RealtimeGlassDialog(
       title: Text(s.t('label')),
       content: TextField(
         controller: _controller,
