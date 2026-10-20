@@ -381,6 +381,67 @@ void main() {
     );
     await preview.closeLevels();
   });
+
+  testWidgets('enabled microphone keeps the compact inline waveform', (
+    tester,
+  ) async {
+    final preview = _PreviewWithLevels();
+    final controller = RealtimePreJoinController(
+      runCheck: () async => _check(role: MediaRole.participant),
+      openPreview: (_, _) async => preview,
+      permissionRequester: const _PermissionRequester(),
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimePreJoinScope(
+          controller: controller,
+          child: const Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 440,
+                child: RealtimePreJoinMediaControls(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RealtimeMicrophoneLevelMeter), findsNothing);
+
+    await controller.setMicrophoneEnabled(true);
+    await tester.pumpAndSettle();
+    final meter = find.byType(RealtimeMicrophoneLevelMeter);
+    expect(meter, findsOneWidget);
+    expect(tester.getSize(meter).height, 22);
+    expect(tester.getSize(meter).width, closeTo(84, 1));
+    final microphoneLabel = find.text('Microphone');
+    expect(microphoneLabel, findsOneWidget);
+    expect(
+      tester.getRect(meter).left,
+      greaterThan(tester.getRect(microphoneLabel).right),
+    );
+    expect(
+      tester.getCenter(meter).dy,
+      closeTo(tester.getCenter(microphoneLabel).dy, 4),
+    );
+    expect(tester.getSemantics(meter).value, '0 of 9');
+
+    preview.emitLevel(0.25);
+    await tester.pump();
+    expect(tester.getSemantics(meter).value, isNot('0 of 9'));
+    preview.emitLevel(0);
+    await tester.pump();
+    expect(tester.getSemantics(meter).value, '0 of 9');
+
+    await controller.setMicrophoneEnabled(false);
+    await tester.pumpAndSettle();
+    expect(meter, findsNothing);
+    await preview.closeLevels();
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _PreviewWithLevels extends _Preview

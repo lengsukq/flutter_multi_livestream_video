@@ -1,9 +1,59 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'desktop wheel and arrows scroll overflow participant thumbnails',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 340,
+                child: RealtimeMeetingParticipantStrip(
+                  participants: List.generate(
+                    12,
+                    (i) => RealtimeMeetingTileData(
+                      id: 'member-$i',
+                      displayName: 'Member $i',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final list = tester.widget<ListView>(find.byType(ListView));
+      final scroll = list.controller!;
+      expect(scroll.position.maxScrollExtent, greaterThan(0));
+      expect(scroll.offset, 0);
+      expect(find.byTooltip('Next participants'), findsOneWidget);
+      await tester.tap(find.byTooltip('Next participants'));
+      await tester.pumpAndSettle();
+      expect(scroll.offset, greaterThan(0));
+      final beforeWheel = scroll.offset;
+      tester.binding.handlePointerEvent(
+        PointerScrollEvent(
+          position: tester.getCenter(find.byType(ListView)),
+          scrollDelta: const Offset(0, 240),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(scroll.offset, greaterThan(beforeWheel));
+      expect(find.byTooltip('Previous participants'), findsOneWidget);
+      await tester.tap(find.byTooltip('Previous participants'));
+      await tester.pumpAndSettle();
+      expect(scroll.offset, lessThan(beforeWheel + 240));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'participant previews support keyboard selection and scrolling to remaining members',
     (tester) async {

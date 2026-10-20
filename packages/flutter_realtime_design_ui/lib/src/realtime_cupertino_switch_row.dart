@@ -66,7 +66,7 @@ class RealtimeCupertinoSwitchRow extends StatelessWidget {
           ],
           CupertinoSwitch(
             value: value,
-            activeTrackColor: RealtimeStyle.of(context).primary,
+            activeTrackColor: RealtimeStyle.of(context).speak,
             onChanged: enabled ? onChanged : null,
           ),
         ],

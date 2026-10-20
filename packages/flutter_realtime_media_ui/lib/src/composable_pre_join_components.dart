@@ -143,9 +143,14 @@ class RealtimePreJoinReadinessCard extends StatefulWidget {
   const RealtimePreJoinReadinessCard({
     super.key,
     this.initiallyExpanded = false,
+    this.embedded = false,
   });
 
   final bool initiallyExpanded;
+
+  /// Drops the card shell so the checks can live inside a combined settings
+  /// card without a card-inside-card border.
+  final bool embedded;
 
   @override
   State<RealtimePreJoinReadinessCard> createState() =>
@@ -177,80 +182,83 @@ class _RealtimePreJoinReadinessCardState
             ? RealtimeUiTokens.danger
             : RealtimeUiTokens.warning;
 
-        return RealtimeCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () => setState(() => _expanded = !_expanded),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.14),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isReady
-                            ? Icons.check_circle_rounded
-                            : hasBlocking
-                            ? Icons.error_rounded
-                            : Icons.info_rounded,
-                        size: 17,
-                        color: statusColor,
-                      ),
+        final content = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => setState(() => _expanded = !_expanded),
+              child: Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.14),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        isReady
-                            ? strings.systemReady
-                            : hasBlocking
-                            ? strings.resolveBlockingIssues
-                            : strings.checkAttention,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.2,
-                        ),
-                      ),
+                    child: Icon(
+                      isReady
+                          ? Icons.check_circle_rounded
+                          : hasBlocking
+                          ? Icons.error_rounded
+                          : Icons.info_rounded,
+                      size: 17,
+                      color: statusColor,
                     ),
-                    Text(
-                      '${checks.where((c) => c.passed).length}/${checks.length}',
-                      style: TextStyle(
-                        fontSize: 11.5,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      isReady
+                          ? strings.systemReady
+                          : hasBlocking
+                          ? strings.resolveBlockingIssues
+                          : strings.checkAttention,
+                      style: const TextStyle(
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: RealtimeUiTokens.textMuted,
+                        letterSpacing: -0.2,
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      _expanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      size: 18,
+                  ),
+                  Text(
+                    '${checks.where((c) => c.passed).length}/${checks.length}',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
                       color: RealtimeUiTokens.textMuted,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: RealtimeUiTokens.textMuted,
+                  ),
+                ],
               ),
-              if (_expanded) ...[
-                const SizedBox(height: 10),
-                Divider(
-                  height: 1,
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : Colors.black.withValues(alpha: 0.06),
-                ),
-                const SizedBox(height: 10),
-                const RealtimePreJoinCheckList(),
-              ],
+            ),
+            if (_expanded) ...[
+              const SizedBox(height: 10),
+              Divider(
+                height: 1,
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.black.withValues(alpha: 0.06),
+              ),
+              const SizedBox(height: 10),
+              const RealtimePreJoinCheckList(),
             ],
-          ),
+          ],
+        );
+
+        if (widget.embedded) return content;
+        return RealtimeCard(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: content,
         );
       },
     );
@@ -377,11 +385,14 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          const SizedBox(
-                            width: 84,
-                            child: RealtimeMicrophoneLevelMeter(),
-                          ),
+                          if (preview.settings.microphoneEnabled)
+                            const Padding(
+                              padding: EdgeInsets.only(left: 12),
+                              child: SizedBox(
+                                width: 84,
+                                child: RealtimeMicrophoneLevelMeter(),
+                              ),
+                            ),
                         ],
                       ),
               ),
@@ -610,17 +621,22 @@ class RealtimePreJoinDevicePicker extends StatelessWidget {
 
 /// Real input-level meter. An enabled microphone is not evidence of sound.
 class RealtimeMicrophoneLevelMeter extends StatelessWidget {
-  const RealtimeMicrophoneLevelMeter({super.key, this.active});
+  const RealtimeMicrophoneLevelMeter({
+    super.key,
+    this.active,
+    this.height = 22,
+  });
 
   /// Optional override for whether the microphone is active. If omitted,
   /// reads `controller.preview?.settings.microphoneEnabled` from [RealtimePreJoinScope].
   final bool? active;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     final controller = RealtimePreJoinScope.maybeOf(context);
     if (controller == null) {
-      return const _RealtimeMicrophoneLevelMeterVisual(level: 0);
+      return _RealtimeMicrophoneLevelMeterVisual(level: 0, height: height);
     }
     return ListenableBuilder(
       listenable: controller,
@@ -665,6 +681,7 @@ class RealtimeMicrophoneLevelMeter extends StatelessWidget {
             }
             return _RealtimeMicrophoneLevelMeterVisual(
               level: levels == null ? 0 : (snapshot.data ?? 0),
+              height: height,
             );
           },
         );
@@ -673,66 +690,188 @@ class RealtimeMicrophoneLevelMeter extends StatelessWidget {
   }
 }
 
-class _RealtimeMicrophoneLevelMeterVisual extends StatelessWidget {
-  const _RealtimeMicrophoneLevelMeterVisual({required this.level});
+class _RealtimeMicrophoneLevelMeterVisual extends StatefulWidget {
+  const _RealtimeMicrophoneLevelMeterVisual({
+    required this.level,
+    required this.height,
+  });
   final double level;
+  final double height;
+
+  @override
+  State<_RealtimeMicrophoneLevelMeterVisual> createState() =>
+      _RealtimeMicrophoneLevelMeterVisualState();
+}
+
+class _RealtimeMicrophoneLevelMeterVisualState
+    extends State<_RealtimeMicrophoneLevelMeterVisual>
+    with SingleTickerProviderStateMixin {
+  static const _barCount = 25;
+  static const _semanticSteps = 9;
+
+  late final _ticker = createTicker(_onTick);
+  Duration _lastElapsed = Duration.zero;
+  double _eased = 0;
+  double _phase = 0;
+  bool _reduceMotion = false;
+
+  /// Only real input moves the waveform. The noise floor stays flat and
+  /// measured levels are compressed to preserve resolution for normal voice.
+  double get _targetStrength {
+    final level = widget.level;
+    final clean = level.isFinite ? (level - 0.015).clamp(0.0, 1.0) : 0.0;
+    return sqrt((clean / 0.4).clamp(0.0, 1.0));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _eased = _targetStrength;
+    if (_eased > 0) _start();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (_reduceMotion) {
+      if (_ticker.isActive) _ticker.stop();
+    } else if (_targetStrength > 0 && !_ticker.isActive) {
+      _start();
+    }
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant _RealtimeMicrophoneLevelMeterVisual oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (!_reduceMotion && _targetStrength > 0 && !_ticker.isActive) _start();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  void _start() {
+    _lastElapsed = Duration.zero;
+    _ticker.start();
+  }
+
+  void _onTick(Duration elapsed) {
+    final dt = min(
+      (elapsed - _lastElapsed).inMicroseconds / Duration.microsecondsPerSecond,
+      0.05,
+    );
+    _lastElapsed = elapsed;
+    final target = _targetStrength;
+    // Fast attack and a slower release keeps speech legible, while the bars
+    // keep breathing at the sample level instead of snapping frame to frame.
+    final rate = target > _eased ? 30.0 : 9.0;
+    final next = dt <= 0
+        ? _eased
+        : _eased + (target - _eased) * (1 - exp(-rate * dt));
+    final idle = target <= 0.001 && next < 0.004;
+    setState(() {
+      _eased = idle ? 0 : next;
+      _phase += dt;
+    });
+    // Stop scheduling frames once the input is silent; a muted meter must not
+    // keep repainting (or block pumpAndSettle in host tests).
+    if (idle) _ticker.stop();
+  }
 
   @override
   Widget build(BuildContext context) {
     final style = RealtimeStyle.of(context);
-    // Only real input moves the waveform. The noise floor stays flat and
-    // measured levels are compressed to preserve resolution for normal voice.
-    final cleanLevel = level.isFinite ? (level - 0.015).clamp(0.0, 1.0) : 0.0;
-    final strength = sqrt((cleanLevel / 0.4).clamp(0.0, 1.0));
-    const barCount = 9;
-    final lit = (strength * barCount).round().clamp(0, barCount);
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final target = _targetStrength;
+    final strength = _reduceMotion ? target : _eased.clamp(0.0, 1.0);
+    final lit = (target * _semanticSteps).round().clamp(0, _semanticSteps);
+    final active = strength > 0.002;
+    final settle = _reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 160);
+    final phase = _reduceMotion ? 0.0 : _phase;
+    // Keep distinct bars at the original compact width (~84px). Wider
+    // consumers may still use the more detailed waveform.
+    final barCount = widget.height <= 26 ? 11 : _barCount;
+    final spacing = widget.height <= 26 ? 2.5 : 3.0;
 
     return Semantics(
       label: 'Microphone level',
-      value: '$lit of $barCount',
+      value: '$lit of $_semanticSteps',
       child: SizedBox(
-        height: 22,
+        height: widget.height,
         child: Stack(
           alignment: Alignment.center,
           children: [
             AnimatedOpacity(
-              duration: reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 160),
-              opacity: lit == 0 ? 1 : 0,
-              child: Container(
-                height: 2,
-                decoration: BoxDecoration(
-                  color: style.borderStrong.withValues(alpha: 0.65),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            AnimatedOpacity(
-              duration: reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 160),
-              opacity: lit == 0 ? 0 : 1,
+              duration: settle,
+              opacity: active ? 0 : 1,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   for (var i = 0; i < barCount; i++) ...[
-                    if (i > 0) const SizedBox(width: 3),
+                    if (i > 0) SizedBox(width: spacing),
                     Expanded(
-                      child: AnimatedContainer(
-                        duration: reduceMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 120),
-                        curve: Curves.easeOutCubic,
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: style.borderStrong.withValues(alpha: .65),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            AnimatedOpacity(
+              duration: settle,
+              opacity: active ? 1 : 0,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < barCount; i++) ...[
+                    if (i > 0) SizedBox(width: spacing),
+                    Expanded(
+                      child: Container(
+                        // A centered envelope keeps the inline meter legible.
+                        // All movement is gated by captured input strength:
+                        // silence never produces a synthetic waveform.
                         height:
                             3 +
-                            19 *
+                            (widget.height - 3) *
                                 strength *
-                                (0.35 + 0.65 * sin((i + 1) * 0.64).abs()),
+                                (0.25 +
+                                    0.75 *
+                                        pow(
+                                          sin(pi * (i + 1) / (barCount + 1)),
+                                          .7,
+                                        ).toDouble()) *
+                                (0.55 +
+                                    0.45 *
+                                        (0.5 +
+                                            0.5 * sin(phase * 8 + i * 0.67))),
                         decoration: BoxDecoration(
-                          color: style.speakStrong,
+                          color: Color.lerp(
+                            style.speakStrong,
+                            const Color(0xFF39AFE8),
+                            i / (barCount - 1),
+                          ),
                           borderRadius: BorderRadius.circular(8),
+                          boxShadow: strength > .1
+                              ? [
+                                  BoxShadow(
+                                    color: style.speakStrong.withValues(
+                                      alpha: strength * .19,
+                                    ),
+                                    blurRadius: 8,
+                                  ),
+                                ]
+                              : null,
                         ),
                       ),
                     ),

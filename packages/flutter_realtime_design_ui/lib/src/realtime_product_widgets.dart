@@ -150,6 +150,7 @@ class RealtimeBoardSurface extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.gridSize = 24,
     this.showGrid = true,
+    this.color,
     this.radius,
     this.onTap,
   });
@@ -158,6 +159,9 @@ class RealtimeBoardSurface extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final double gridSize;
   final bool showGrid;
+
+  /// Overrides the paper color; defaults to the theme's board token.
+  final Color? color;
   final double? radius;
   final VoidCallback? onTap;
 
@@ -169,7 +173,7 @@ class RealtimeBoardSurface extends StatelessWidget {
     Widget surface = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: style.board,
+        color: color ?? style.board,
         borderRadius: BorderRadius.circular(effectiveRadius),
         border: Border.all(color: style.border),
         boxShadow: style.cardShadow,
