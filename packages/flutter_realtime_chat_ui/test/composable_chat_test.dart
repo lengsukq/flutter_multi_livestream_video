@@ -28,6 +28,34 @@ void main() {
   });
 
   testWidgets(
+    'meeting timeline starts at top and aligns local messages with avatars',
+    (tester) async {
+      final session = _FakeHostSession();
+      session.add('First message', id: 'one');
+      session.add('My reply', id: 'two', userId: 'teacher');
+      addTearDown(session.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ChatUiScope(
+            session: session,
+            child: const Scaffold(
+              body: SizedBox(width: 340, child: ChatPanel(timelineStyle: true)),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final first = tester.getRect(find.text('First message'));
+      final second = tester.getRect(find.text('My reply'));
+      expect(first.top, lessThan(second.top));
+      expect(first.top, lessThan(200));
+      expect(second.left, closeTo(first.left, 2));
+      expect(find.text('You'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'empty chat and connection state follow the host Chinese locale',
     (tester) async {
       final session = _FakeChatSession();
@@ -314,12 +342,12 @@ class _FakeChatSession extends Fake implements ChatSession {
   @override
   Stream<ChatEvent> get events => const Stream.empty();
 
-  void add(String content, {required String id}) {
+  void add(String content, {required String id, String userId = 'u'}) {
     _messages.add(
       ChatMessage(
         id: id,
-        userId: 'u',
-        displayName: 'User',
+        userId: userId,
+        displayName: userId == 'teacher' ? 'Teacher' : 'User',
         message: content,
         timestamp: DateTime(2026),
       ),

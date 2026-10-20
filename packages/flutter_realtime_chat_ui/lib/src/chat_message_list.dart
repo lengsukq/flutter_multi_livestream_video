@@ -11,9 +11,49 @@ import 'chat_components_chat_avatar.dart';
 /// Messages read like the reference room chat: avatar, name, time, optional
 /// role tag and body text. The local user's messages align end and use a subtle
 /// surface instead of a saturated bubble, so the stream stays calm.
-class ChatMessageList extends StatelessWidget {
-  const ChatMessageList({super.key, this.onMessageTap});
+class ChatMessageList extends StatefulWidget {
+  const ChatMessageList({
+    super.key,
+    this.onMessageTap,
+    this.timelineStyle = false,
+  });
   final ValueChanged<ChatMessage>? onMessageTap;
+  final bool timelineStyle;
+
+  @override
+  State<ChatMessageList> createState() => _ChatMessageListState();
+}
+
+class _ChatMessageListState extends State<ChatMessageList> {
+  final _timelineScroll = ScrollController();
+  int? _previousLength;
+
+  @override
+  void dispose() {
+    _timelineScroll.dispose();
+    super.dispose();
+  }
+
+  void _followNewMessages(int count) {
+    if (!widget.timelineStyle || _previousLength == count) return;
+    final follow =
+        _previousLength == null ||
+        !_timelineScroll.hasClients ||
+        _timelineScroll.position.extentAfter < 80;
+    _previousLength = count;
+    if (follow) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_timelineScroll.hasClients) return;
+        unawaited(
+          _timelineScroll.animateTo(
+            _timelineScroll.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +65,7 @@ class ChatMessageList extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         final messages = controller.filteredMessages;
+        _followNewMessages(messages.length);
         final localId = controller.session is ChatSessionIdentity
             ? (controller.session as ChatSessionIdentity).localUserId
             : null;
@@ -77,12 +118,19 @@ class ChatMessageList extends StatelessWidget {
           );
         }
         return ListView.builder(
-          reverse: true,
+          // A classroom timeline begins at the top with successive messages
+          // below it; the regular chat layout still follows the newest first.
+          reverse: !widget.timelineStyle,
+          controller: widget.timelineStyle ? _timelineScroll : null,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           itemCount: messages.length,
           itemBuilder: (context, index) {
-            final message = messages[messages.length - index - 1];
+            final message =
+                messages[widget.timelineStyle
+                    ? index
+                    : messages.length - index - 1];
             final own = message.userId == localId;
+            final rightAligned = own && !widget.timelineStyle;
             final canDelete =
                 (own || controller.isHost) &&
                 (capabilities.deleteMessage.supported ||
@@ -183,12 +231,12 @@ class ChatMessageList extends StatelessWidget {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(
-                mainAxisAlignment: own
+                mainAxisAlignment: rightAligned
                     ? MainAxisAlignment.end
                     : MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (!own) ...[
+                  if (!rightAligned) ...[
                     ChatComponentsChatAvatar(
                       name: senderName,
                       avatarUrl: message.avatarUrl,
@@ -198,14 +246,14 @@ class ChatMessageList extends StatelessWidget {
                   ],
                   Flexible(
                     child: Column(
-                      crossAxisAlignment: own
+                      crossAxisAlignment: rightAligned
                           ? CrossAxisAlignment.end
                           : CrossAxisAlignment.start,
                       children: [
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (own) ...[
+                            if (rightAligned) ...[
                               Text(
                                 zh ? '你' : 'You',
                                 style: theme.textTheme.bodySmall?.copyWith(
@@ -217,7 +265,9 @@ class ChatMessageList extends StatelessWidget {
                             ] else ...[
                               Flexible(
                                 child: Text(
-                                  senderName,
+                                  own && widget.timelineStyle
+                                      ? (zh ? '你' : 'You')
+                                      : senderName,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall?.copyWith(
@@ -234,20 +284,20 @@ class ChatMessageList extends StatelessWidget {
                         const SizedBox(height: 3),
                         InkWell(
                           borderRadius: BorderRadius.circular(10),
-                          onTap: onMessageTap == null
+                          onTap: widget.onMessageTap == null
                               ? () => controller.selectReply(message)
-                              : () => onMessageTap!(message),
+                              : () => widget.onMessageTap!(message),
                           onLongPress: showActions,
                           child: Container(
                             constraints: const BoxConstraints(maxWidth: 460),
-                            padding: own
+                            padding: rightAligned
                                 ? const EdgeInsets.symmetric(
                                     horizontal: 12,
                                     vertical: 8,
                                   )
                                 : const EdgeInsets.only(top: 2, bottom: 6),
                             decoration: BoxDecoration(
-                              color: own
+                              color: rightAligned
                                   ? theme.colorScheme.surfaceContainer
                                   : theme.colorScheme.surface,
                               borderRadius: BorderRadius.circular(10),
@@ -263,7 +313,7 @@ class ChatMessageList extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (own) ...[
+                  if (rightAligned) ...[
                     const SizedBox(width: 10),
                     ChatComponentsChatAvatar(
                       name: senderName,
