@@ -6,7 +6,7 @@ import 'demo_strings.dart';
 
 /// Authentic Tandem waiting room panel for room discovery.
 /// Styled after Tandem Green Room `.waiting` panel with `.mini` action buttons.
-class DemoAvailableRooms extends StatefulWidget {
+class DemoAvailableRooms extends StatelessWidget {
   const DemoAvailableRooms({
     super.key,
     required this.rooms,
@@ -23,13 +23,6 @@ class DemoAvailableRooms extends StatefulWidget {
   final bool busy;
   final VoidCallback onRefresh;
   final ValueChanged<MediaRoomSummary> onJoin;
-
-  @override
-  State<DemoAvailableRooms> createState() => _DemoAvailableRoomsState();
-}
-
-class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
-  MediaRoomMode? _filter;
 
   Color _avatarColor(String code) {
     const colors = [
@@ -55,10 +48,7 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
     final strings = DemoStrings.of(context);
     final displayFamily = RealtimeFonts.displayOf(context);
     final bodyFamily = RealtimeFonts.bodyOf(context);
-    final allRooms = widget.rooms;
-    final rooms = _filter == null
-        ? allRooms
-        : allRooms.where((r) => r.roomMode == _filter).toList();
+    final rooms = this.rooms;
 
     return RealtimeCardSurface(
       fillColor: style.surface,
@@ -73,7 +63,7 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
             children: [
               Expanded(
                 child: Text(
-                  '${strings.availableRooms} (${allRooms.length})',
+                  '${strings.availableRooms} (${rooms.length})',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -97,10 +87,8 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
                     side: BorderSide(color: style.border),
                   ),
                 ),
-                onPressed: widget.loading || widget.busy
-                    ? null
-                    : widget.onRefresh,
-                icon: widget.loading
+                onPressed: loading || busy ? null : onRefresh,
+                icon: loading
                     ? SizedBox(
                         width: 14,
                         height: 14,
@@ -113,57 +101,8 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
               ),
             ],
           ),
-          if (allRooms.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                RealtimePill(
-                  label: strings.allFilter,
-                  foreground: _filter == null
-                      ? Colors.white
-                      : style.textSecondary,
-                  background: _filter == null
-                      ? style.text
-                      : style.surfaceSubtle,
-                  borderColor: _filter == null ? style.text : style.border,
-                  onTap: () => setState(() => _filter = null),
-                ),
-                RealtimePill(
-                  label: strings.meeting,
-                  icon: Icons.groups_rounded,
-                  foreground: _filter == MediaRoomMode.meeting
-                      ? Colors.white
-                      : style.textSecondary,
-                  background: _filter == MediaRoomMode.meeting
-                      ? style.text
-                      : style.surfaceSubtle,
-                  borderColor: _filter == MediaRoomMode.meeting
-                      ? style.text
-                      : style.border,
-                  onTap: () => setState(() => _filter = MediaRoomMode.meeting),
-                ),
-                RealtimePill(
-                  label: strings.live,
-                  icon: Icons.sensors_rounded,
-                  foreground: _filter == MediaRoomMode.broadcast
-                      ? Colors.white
-                      : style.textSecondary,
-                  background: _filter == MediaRoomMode.broadcast
-                      ? style.live
-                      : style.surfaceSubtle,
-                  borderColor: _filter == MediaRoomMode.broadcast
-                      ? style.live
-                      : style.border,
-                  onTap: () =>
-                      setState(() => _filter = MediaRoomMode.broadcast),
-                ),
-              ],
-            ),
-          ],
           const SizedBox(height: 14),
-          if (widget.error != null)
+          if (error != null)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -181,7 +120,7 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      widget.error!,
+                      error!,
                       style: TextStyle(
                         fontFamily: bodyFamily,
                         fontSize: 12,
@@ -215,11 +154,7 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    _filter == MediaRoomMode.broadcast
-                        ? strings.noActiveLiveStreams
-                        : (_filter == MediaRoomMode.meeting
-                              ? strings.noActiveMeetings
-                              : strings.noActiveRooms),
+                    strings.noActiveRooms,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: displayFamily,
@@ -287,7 +222,7 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
 
     if (isCompact) {
       return InkWell(
-        onTap: widget.busy ? null : () => widget.onJoin(room),
+        onTap: busy ? null : () => onJoin(room),
         borderRadius: BorderRadius.circular(10),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
@@ -373,7 +308,7 @@ class _DemoAvailableRoomsState extends State<DemoAvailableRooms> {
     }
 
     return InkWell(
-      onTap: widget.busy ? null : () => widget.onJoin(room),
+      onTap: busy ? null : () => onJoin(room),
       borderRadius: BorderRadius.circular(10),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),

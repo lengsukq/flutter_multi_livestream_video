@@ -210,30 +210,30 @@ void main() {
             .id,
         'bob',
       );
-      // Only the floating dock fades: the room header is persistent chrome
-      // so the timer, recording state and leave action stay reachable.
-      final fadingBars = find.descendant(
+      // Room controls stay on screen: the dock intentionally does not fade.
+      final dockFadeBars = find.descendant(
         of: find.byType(RealtimeIdleControls),
         matching: find.byType(AnimatedOpacity),
       );
-      expect(fadingBars, findsOneWidget);
+      expect(dockFadeBars, findsOneWidget);
       final persistentHeader = tester.getRect(
         find.byType(RealtimeMeetingTopBar),
       );
       expect(persistentHeader.height, inInclusiveRange(56, 90));
       await tester.pump(const Duration(seconds: 5));
       await tester.pump(const Duration(milliseconds: 300));
+      // Idling must not hide the room actions.
       expect(
         tester
-            .widgetList<AnimatedOpacity>(fadingBars)
-            .every((bar) => bar.opacity == 0),
+            .widgetList<AnimatedOpacity>(dockFadeBars)
+            .every((bar) => bar.opacity == 1),
         isTrue,
       );
       await tester.tapAt(const Offset(600, 400));
       await tester.pump();
       expect(
         tester
-            .widgetList<AnimatedOpacity>(fadingBars)
+            .widgetList<AnimatedOpacity>(dockFadeBars)
             .every((bar) => bar.opacity == 1),
         isTrue,
       );
@@ -274,10 +274,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(RealtimeMeetingFilmstripStage), findsOneWidget);
 
-      // Layout is owned by the stage bar; the header and rail do not repeat it.
+      // Layout is a single rail toggle; there is no stage bar above the tiles.
       final gridAction = find.descendant(
-        of: find.byType(RealtimeMeetingStageBar),
-        matching: find.text('Grid view'),
+        of: find.byType(RealtimeMeetingRail),
+        matching: find.byTooltip('Grid view'),
       );
       expect(gridAction, findsOneWidget);
       await tester.tap(gridAction);
@@ -297,8 +297,8 @@ void main() {
       expect(first.bottom, lessThan(800)); // Above the floating dock.
 
       final focusAction = find.descendant(
-        of: find.byType(RealtimeMeetingStageBar),
-        matching: find.text('Speaker view'),
+        of: find.byType(RealtimeMeetingRail),
+        matching: find.byTooltip('Speaker view'),
       );
       expect(focusAction, findsOneWidget);
       await tester.tap(focusAction);

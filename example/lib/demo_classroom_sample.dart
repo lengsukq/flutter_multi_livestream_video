@@ -26,6 +26,7 @@ abstract final class DemoClassroomSample {
   static RealtimePreJoinSessionInfo sessionInfo() => RealtimePreJoinSessionInfo(
     title: meetingTitle,
     subject: subject,
+    subjectIcon: Icons.functions_rounded,
     scheduleLabel: scheduleLabel,
     timeRangeLabel: timeRangeLabel,
     startsAt: startsAt(),

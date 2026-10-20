@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'demo_background.dart';
+import 'demo_classroom_sample.dart';
 import 'demo_custom_interaction.dart';
 
 /// The SDK owns the complete UI; the Demo supplies configuration and events.
@@ -25,6 +26,11 @@ class DemoComposableMeetingPage extends StatelessWidget {
     config: RealtimeRoomViewConfig(
       initialMediaSettings: initialSettings,
       initialSharedContentMode: initialSharedContentMode,
+      brand: DemoClassroomSample.brand,
+      // Sample course copy is Demo-only; a real host supplies its own
+      // control-plane title and pinned message through the same slots.
+      sessionInfo: _hasClassroom ? DemoClassroomSample.meetingInfo : null,
+      pinnedMessage: _hasClassroom ? DemoClassroomSample.pinnedMessage : null,
     ),
     loadImagePresets: () =>
         DemoBackground.loadPresets(isZh: RealtimeStrings.of(context).isZh),
