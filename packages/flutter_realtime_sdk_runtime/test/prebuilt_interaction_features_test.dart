@@ -126,6 +126,32 @@ RealtimeRoom _room({
 
 void main() {
   test(
+    'standard meetings skip teaching while shared content works independently',
+    () async {
+      final teaching = _ClassroomRepository();
+      final memory = MemoryWhiteboardRepository();
+      final shared = _IndependentSharedRepository(await memory.snapshot());
+      await memory.close();
+      final room = _room(
+        metadata: {'roomMode': 'meeting', 'meetingMode': 'standard'},
+        plugins: [
+          ClassroomPreset(repositoryFactory: (_) => teaching),
+          SharedContentPreset(repositoryFactory: (_) => shared),
+        ],
+      );
+      await room.initialize();
+      expect(room.classroom, isNull);
+      expect(teaching.reads, 0);
+      await room.sharedContent!.start();
+      await room.sharedContent!.selectMode(SharedContentMode.whiteboard);
+      expect(room.sharedContent!.content!.mode, SharedContentMode.whiteboard);
+      expect(room.sharedContent!.screenAnnotations.canEdit, isTrue);
+      await room.dispose();
+      expect(shared.closed, isTrue);
+    },
+  );
+
+  test(
     'core meeting without presets never creates classroom or live sessions',
     () async {
       final room = _room(
@@ -243,4 +269,35 @@ void main() {
       await room.dispose();
     },
   );
+}
+
+class _IndependentSharedRepository extends SharedContentRepository {
+  _IndependentSharedRepository(this.whiteboard);
+  final WhiteboardState whiteboard;
+  SharedContentMode mode = SharedContentMode.members;
+  int revision = 0;
+  bool closed = false;
+  @override
+  Future<SharedContentState> snapshot() async => SharedContentState(
+    mode: mode,
+    whiteboard: whiteboard,
+    screen: AnnotationCanvas(),
+    canManage: true,
+    revision: revision,
+  );
+  @override
+  Future<SharedContentState> action(SharedContentCommand command) async {
+    if (command.action == SharedContentAction.mode) {
+      mode = SharedContentMode.values.byName(
+        command.payload['mode']! as String,
+      );
+    }
+    revision++;
+    return snapshot();
+  }
+
+  @override
+  void close() {
+    closed = true;
+  }
 }

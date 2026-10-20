@@ -28,6 +28,42 @@ void main() {
     },
   );
 
+  test(
+    'pre-join resolves meeting policy and provider from one discovery read',
+    () async {
+      var discoveries = 0;
+      final transport = FakeTransport((request) {
+        if (request.uri.path == '/health') {
+          return jsonResponse({'contractVersion': 1, 'activeProvider': 'fake'});
+        }
+        if (request.uri.path == '/rooms/discover') {
+          discoveries++;
+          return jsonResponse({
+            'rooms': [
+              {
+                'roomCode': 'normal',
+                'provider': 'fake',
+                'roomMode': 'meeting',
+                'meetingMode': 'standard',
+              },
+            ],
+          });
+        }
+        throw StateError('Unexpected request');
+      });
+      final client = MediaClient(
+        backendUrl: 'https://example.test',
+        registry: MediaRegistry([_ProbeFactory()]),
+        transport: transport,
+        permissionProbe: const _PermissionProbe(),
+      );
+      addTearDown(client.dispose);
+      final result = await client.runPreJoinCheck(roomCode: 'normal');
+      expect(result.meetingMode, MediaMeetingMode.standard);
+      expect(result.providerId, 'fake');
+      expect(discoveries, 1);
+    },
+  );
   group('MediaClient.runPreJoinCheck', () {
     test('returns ready when required checks pass', () async {
       final factory = _ProbeFactory();

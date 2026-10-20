@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../model/media_capabilities.dart';
 import '../model/media_background_effect.dart';
 import '../model/media_device.dart';
@@ -69,6 +71,17 @@ abstract interface class MediaLocalPreviewSession
   Future<void> setCameraEnabled(bool enabled);
 
   Future<void> dispose();
+}
+
+/// Optional real microphone signal levels for the pre-join device check.
+///
+/// Values are normalized to [0, 1]. Implementations must derive samples from
+/// actual capture, emit no synthetic levels, and stop sampling after preview
+/// disposal. The UI treats an unavailable/idle stream as silence, not speech.
+/// The stream must not trigger capture on its own: capture is explicitly
+/// enabled through [MediaLocalPreviewSession.setMicrophoneEnabled].
+abstract interface class MediaLocalPreviewAudioLevels {
+  Stream<double> get microphoneLevels;
 }
 
 /// Opt-in factory implemented by adapters that support independent local

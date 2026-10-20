@@ -68,6 +68,12 @@ void main() {
       );
       expect(preview.settings.cameraEnabled, isFalse);
       expect(preview.settings.microphoneEnabled, isFalse);
+      expect(preview.capabilities.canPublishAudio, isFalse);
+      await expectLater(
+        preview.setMicrophoneEnabled(true),
+        throwsA(isA<RealtimeException>()),
+      );
+      expect(preview.settings.microphoneEnabled, isFalse);
       expect(preview.cameraTrack, isNull);
       await preview.listMediaDevices();
       await preview.setBackgroundEffect(const MediaBackgroundEffect.blur());

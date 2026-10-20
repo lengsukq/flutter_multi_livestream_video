@@ -104,9 +104,11 @@ class RealtimeRequest {
     this.roomOwnerCredential,
     this.mediaRole,
     this.chatRole,
+    this.meetingMode,
   });
 
   factory RealtimeRequest.create({
+    MediaMeetingMode? meetingMode,
     required RealtimeExperience type,
     required RealtimeUser user,
     String? roomCode,
@@ -115,6 +117,7 @@ class RealtimeRequest {
     MediaRole? mediaRole,
     ChatRole? chatRole,
   }) => RealtimeRequest._(
+    meetingMode: meetingMode,
     action: RealtimeAction.create,
     experience: type,
     user: user,
@@ -150,6 +153,7 @@ class RealtimeRequest {
   final String? roomCode;
   final String? roomOwnerCredential;
   final RealtimeSource source;
+  final MediaMeetingMode? meetingMode;
   final MediaRole? mediaRole;
   final ChatRole? chatRole;
 }

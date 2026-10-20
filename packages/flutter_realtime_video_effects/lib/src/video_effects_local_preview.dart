@@ -84,7 +84,9 @@ class VideoEffectsLocalPreviewSession
 
   @override
   MediaCapabilities get capabilities => const MediaCapabilities(
-    canPublishAudio: true,
+    // This adapter owns processed video only. Audio capture is delegated to
+    // the provider preview by RealtimeSdk.createLocalPreview.
+    canPublishAudio: false,
     canPublishVideo: true,
     canBlurBackground: true,
     canReplaceBackgroundImage: true,
@@ -160,9 +162,13 @@ class VideoEffectsLocalPreviewSession
   @override
   Future<void> setMicrophoneEnabled(bool enabled) async {
     _ensureActive();
-    // Microphone permission/checking is handled by the normal Pre-Join
-    // diagnostics. The effects bridge intentionally owns video only.
-    _settings = _settings.copyWith(microphoneEnabled: enabled);
+    if (enabled) {
+      throw RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message: 'videoEffects.preview.microphoneUnavailable',
+        providerId: providerId,
+      );
+    }
   }
 
   @override

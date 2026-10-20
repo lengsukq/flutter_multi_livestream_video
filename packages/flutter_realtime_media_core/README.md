@@ -39,7 +39,7 @@ is the backend, which must issue viewer credentials without publish permission.
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 
 final registry = MediaRegistry([LiveKitSessionFactory()]); // adapter package
-final client = MediaClient(backendUrl: 'http://192.168.31.8:3000', registry: registry);
+final client = MediaClient(backendUrl: 'http://192.168.31.2:3000', registry: registry);
 
 final room = await client.createRoomAndJoinIdentity(
   identity: const MediaIdentity(
@@ -125,6 +125,18 @@ LiveKit currently uses this extension to enumerate microphone and camera
 devices before joining. A provider diagnostic that needs room credentials must
 return `unsupported` rather than create a room or consume normal join
 credentials.
+
+Pre-Join input meters must not interpret `microphoneEnabled` as speech. A local
+preview may optionally implement `MediaLocalPreviewAudioLevels` and expose
+`microphoneLevels` as normalized real capture samples (`0..1`). The SDK UI
+only lights the level bars for samples received while the microphone is on;
+when capture is disabled or the provider does not support metering, the bars
+remain idle. The LiveKit local preview uses the already-open microphone track
+for this measurement and releases the visualizer when muted or disposed.
+When processed-camera effects are enabled, the runtime composes that
+video-only preview with the provider's local audio preview. This keeps camera
+effects, microphone capture, audio input/output selection and lifetime cleanup
+independent without creating a backend room.
 
 `GET /health` is optional diagnostics rather than a required media-backend
 endpoint. An HTTP 404/missing health endpoint does not make a compatible backend

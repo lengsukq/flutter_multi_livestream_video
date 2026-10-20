@@ -57,7 +57,7 @@ const { roomDirectory, providerRegistry, classroomDirectory, resolveRoom, withRo
         ? joinRoleForRoom(entry, input.body?.roomOwnerCredential)
         : requestedRole ?? 'participant';
       assertRole(provider, role, entry);
-      if (entry.roomMode === 'meeting') {
+      if (entry.roomMode === 'meeting' && entry.meetingMode !== 'standard') {
         const previous = new Set(entry.attendees.filter(person =>
           person.userId !== entry.classroomTeacherUserId && person.role !== 'host' &&
           (person.userId === userId || (deviceId && person.deviceId === deviceId)))
@@ -83,7 +83,7 @@ const { roomDirectory, providerRegistry, classroomDirectory, resolveRoom, withRo
         role,
         userId,
         deviceId,
-        classroomMicrophoneAllowed: entry.roomMode !== 'meeting' ||
+        classroomMicrophoneAllowed: entry.roomMode !== 'meeting' || entry.meetingMode === 'standard' ||
           Boolean(
             String(input.body?.roomOwnerCredential ?? '').trim() &&
             matchesRoomOwnerCredential(entry, String(input.body.roomOwnerCredential).trim()),
@@ -91,6 +91,7 @@ const { roomDirectory, providerRegistry, classroomDirectory, resolveRoom, withRo
     });
     if (entry.chatProvider) response.chatProvider = entry.chatProvider;
     if (entry.roomMode) response.roomMode = entry.roomMode;
+    if (entry.meetingMode) response.meetingMode = entry.meetingMode;
     if (entry.roomMode === 'broadcast') response.liveInteractions = true;
     response.management = mediaManagementCapabilities(provider);
     const presentedOwnerCredential = String(
@@ -118,7 +119,7 @@ const { roomDirectory, providerRegistry, classroomDirectory, resolveRoom, withRo
       response.participantId,
     );
     roomDirectory.flush();
-    if (entry.roomMode === 'meeting') {
+    if (entry.roomMode === 'meeting' && entry.meetingMode !== 'standard') {
       classroomDirectory.snapshot(
         entry, Boolean(response.roomOwnerCredential), userId,
       );

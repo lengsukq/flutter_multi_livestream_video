@@ -1,4 +1,5 @@
 import 'media_room_mode.dart';
+import 'media_meeting_mode.dart';
 
 /// Lightweight room information returned by backend room discovery.
 class MediaRoomSummary {
@@ -7,6 +8,7 @@ class MediaRoomSummary {
     required this.providerId,
     required this.attendeeCount,
     this.roomMode,
+    this.meetingMode,
     this.createdAt,
     this.engineId,
   });
@@ -17,6 +19,7 @@ class MediaRoomSummary {
   /// Concrete engine id when [providerId] is a public vendor such as `aws`.
   final String? engineId;
   final MediaRoomMode? roomMode;
+  final MediaMeetingMode? meetingMode;
   final int attendeeCount;
   final DateTime? createdAt;
 
@@ -40,6 +43,9 @@ class MediaRoomSummary {
       providerId: providerId,
       engineId: rawEngineId == null || rawEngineId.isEmpty ? null : rawEngineId,
       roomMode: roomMode,
+      meetingMode: roomMode == MediaRoomMode.meeting
+          ? MediaMeetingMode.fromMetadata(json)
+          : null,
       attendeeCount: attendeeCount,
       createdAt: createdAt,
     );

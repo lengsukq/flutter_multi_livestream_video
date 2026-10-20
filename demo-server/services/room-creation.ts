@@ -10,6 +10,7 @@ import { issueRoomOwnerCredential } from '../room-owner-credential.ts';
 export interface RoomCreationInput {
   roomCode: string;
   roomMode: RoomMode;
+  meetingMode?: 'standard' | 'classroom';
   role: MediaRole;
   provider: ProviderAdapter;
   selectedChatProvider: string | null;
@@ -39,6 +40,7 @@ export function createRoomProvisioner(deps: RoomCreationDependencies) {
   return async function provisionRoom({
     roomCode,
     roomMode,
+    meetingMode,
     role,
     provider,
     selectedChatProvider,
@@ -71,7 +73,11 @@ export function createRoomProvisioner(deps: RoomCreationDependencies) {
     }
 
     created.entry.roomMode = roomMode;
-    if (roomMode === 'meeting') {
+    if (roomMode === 'meeting' && meetingMode) {
+      created.entry.meetingMode = meetingMode;
+      created.response.meetingMode = meetingMode;
+    }
+    if (roomMode === 'meeting' && meetingMode !== 'standard') {
       created.entry.classroomSpeakEnforcement =
         provider.setClassroomMicrophonePermission ? 'provider' : 'advisory';
     }

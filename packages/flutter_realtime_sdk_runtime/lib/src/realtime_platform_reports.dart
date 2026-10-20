@@ -36,6 +36,7 @@ class RealtimePlatformReports {
     if (!replaced) checks.add(platformCheck);
     return MediaPreJoinResult(
       role: result.role,
+      meetingMode: result.meetingMode,
       providerId: providerId,
       checks: List.unmodifiable(checks),
       backgroundCapabilities: result.backgroundCapabilities,

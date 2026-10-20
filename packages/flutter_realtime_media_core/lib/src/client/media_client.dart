@@ -5,6 +5,7 @@ import '../model/media_error.dart';
 import '../model/media_identity.dart';
 import '../model/media_role.dart';
 import '../model/media_room_mode.dart';
+import '../model/media_meeting_mode.dart';
 import '../model/media_room_summary.dart';
 import '../session/media_join_info.dart';
 import '../session/media_credential_refresh.dart';
@@ -226,12 +227,38 @@ class MediaClient {
   Future<MediaRoomSession> createRoomAndJoinIdentity({
     required MediaIdentity identity,
     MediaRoomMode roomMode = MediaRoomMode.meeting,
+    MediaMeetingMode? meetingMode,
     MediaRole? role,
     String? roomCode,
   }) async {
+    if (meetingMode != null && roomMode != MediaRoomMode.meeting) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.invalidArgument,
+        message: 'meetingMode.requiresMeeting',
+      );
+    }
     final value = identity.normalized();
     final custom = provisioner;
     if (custom != null) {
+      if (meetingMode != null) {
+        if (custom is! MediaMeetingRoomProvisioner) {
+          throw const RealtimeException(
+            code: RealtimeErrorCode.unsupportedFeature,
+            message: 'provisioner.meetingMode',
+          );
+        }
+        return _joinResponse(
+          await custom.create(
+            identity: value,
+            roomMode: roomMode,
+            meetingMode: meetingMode,
+            role: role,
+            roomCode: roomCode,
+          ),
+          credentialRefresher: custom,
+          identity: value,
+        );
+      }
       return _joinResponse(
         await custom.create(
           identity: value,
@@ -245,6 +272,7 @@ class MediaClient {
     }
     return _joinCreatedResponse(
       await _requireBackend('create rooms').createRoomWithIdentity(
+        meetingMode: meetingMode,
         role: role,
         roomMode: roomMode,
         roomCode: roomCode,
@@ -254,6 +282,7 @@ class MediaClient {
         deviceId: value.deviceId,
       ),
       identity: value,
+      expectedMeetingMode: meetingMode,
     );
   }
 
@@ -299,8 +328,16 @@ class MediaClient {
   Future<MediaRoomSession> _joinCreatedResponse(
     MediaRoomJoinResponse response, {
     MediaIdentity? identity,
+    MediaMeetingMode? expectedMeetingMode,
   }) async {
     try {
+      if (expectedMeetingMode != null &&
+          MediaMeetingMode.fromMetadata(response.json) != expectedMeetingMode) {
+        throw const RealtimeException(
+          code: RealtimeErrorCode.unsupportedFeature,
+          message: 'meetingMode.notAcknowledged',
+        );
+      }
       return await _joinResponse(
         response,
         leaveOnFailure: false,

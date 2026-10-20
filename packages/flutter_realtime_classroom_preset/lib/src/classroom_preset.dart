@@ -7,6 +7,7 @@ import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart'
         RealtimeFeaturePlugin,
         RealtimeRoom,
         RealtimeFeatureKey,
+        MediaMeetingMode,
         ChatInteractionRevisionTransport,
         MediaInteractionRevisionTransport;
 import 'package:flutter_realtime_interaction_core/flutter_realtime_interaction_core.dart';
@@ -44,6 +45,10 @@ class ClassroomPreset extends RealtimeFeaturePlugin<ClassroomSession> {
     final media = context.media;
     if (media.backendMetadata['roomMode'] != 'meeting' &&
         !(enableForDirectRooms && repositoryFactory != null)) {
+      return null;
+    }
+    if (media.backendMetadata['meetingMode'] ==
+        MediaMeetingMode.standard.name) {
       return null;
     }
     final credential = media.participantCredential;

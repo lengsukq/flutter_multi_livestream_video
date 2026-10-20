@@ -222,6 +222,7 @@ class RealtimeClient {
   Future<RealtimeRoom> createRoomAndJoinIdentity({
     required MediaIdentity identity,
     MediaRoomMode roomMode = MediaRoomMode.meeting,
+    MediaMeetingMode? meetingMode,
     MediaRole? role,
     String? roomCode,
   }) async {
@@ -230,6 +231,7 @@ class RealtimeClient {
       final room = await client.createRoomAndJoinIdentity(
         identity: identity,
         roomMode: roomMode,
+        meetingMode: meetingMode,
         role: role,
         roomCode: roomCode,
       );

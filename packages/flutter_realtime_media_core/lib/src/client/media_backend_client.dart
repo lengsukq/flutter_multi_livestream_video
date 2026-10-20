@@ -1,5 +1,6 @@
 import '../model/media_role.dart';
 import '../model/media_room_mode.dart';
+import '../model/media_meeting_mode.dart';
 import '../model/media_room_participant_summary.dart';
 import '../model/media_room_summary.dart';
 import 'media_backend_config.dart';
@@ -270,6 +271,7 @@ class MediaBackendClient
     String? deviceId,
     String? avatarUrl,
     MediaRoomMode roomMode = MediaRoomMode.meeting,
+    MediaMeetingMode? meetingMode,
     MediaRole? role,
   }) async {
     final body = <String, Object?>{
@@ -278,6 +280,7 @@ class MediaBackendClient
       'nickname': displayName.trim(),
       if (avatarUrl != null) 'avatarUrl': avatarUrl,
       'roomMode': roomMode.wireName,
+      if (meetingMode != null) 'meetingMode': meetingMode.name,
       if (role != null) 'role': role.wireName,
       if (deviceId != null && deviceId.trim().isNotEmpty)
         'deviceId': deviceId.trim(),

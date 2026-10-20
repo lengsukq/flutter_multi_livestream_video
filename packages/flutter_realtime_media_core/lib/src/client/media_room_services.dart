@@ -1,6 +1,7 @@
 import '../model/media_identity.dart';
 import '../model/media_role.dart';
 import '../model/media_room_mode.dart';
+import '../model/media_meeting_mode.dart';
 import '../model/media_room_summary.dart';
 import 'media_backend_client.dart';
 
@@ -31,4 +32,17 @@ abstract interface class MediaRoomProvisioner {
 
 abstract interface class MediaRoomDiscovery {
   Future<List<MediaRoomSummary>> listRooms();
+}
+
+/// Optional creation policy support; existing custom provisioners stay compatible.
+abstract interface class MediaMeetingRoomProvisioner
+    implements MediaRoomProvisioner {
+  @override
+  Future<MediaRoomJoinResponse> create({
+    required MediaIdentity identity,
+    MediaRoomMode roomMode = MediaRoomMode.meeting,
+    MediaMeetingMode? meetingMode,
+    MediaRole? role,
+    String? roomCode,
+  });
 }

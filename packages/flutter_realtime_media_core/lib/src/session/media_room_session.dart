@@ -19,6 +19,7 @@ import '../recording/cloud_recording_blueprints.dart';
 import '../recording/cloud_recording_descriptor.dart';
 import '../recording/recording_options.dart';
 import 'media_session.dart';
+import '../model/media_meeting_mode.dart';
 import 'media_background_effects_controller.dart';
 import 'media_room_extensions.dart';
 
@@ -114,6 +115,11 @@ class MediaRoomSession implements MediaBackgroundEffectsController {
   /// Provider-neutral backend response metadata retained for high-level
   /// orchestration such as capability negotiation.
   final Map<String, dynamic> backendMetadata;
+
+  /// Authoritative meeting policy, absent for direct and broadcast sessions.
+  MediaMeetingMode? get meetingMode => backendMetadata['roomMode'] == 'meeting'
+      ? MediaMeetingMode.fromMetadata(backendMetadata)
+      : null;
   final MediaSession session;
   late final _RoomParticipantProfiles _profiles;
   final MediaRoomPresence? _presence;

@@ -32,6 +32,42 @@ void main() {
     registry = MediaRegistry([factory]);
   });
 
+  test(
+    'a backend that ignores an explicit ordinary policy is rolled back before media joins',
+    () async {
+      final client = clientFor(
+        (request) => request.uri.path.endsWith('/close')
+            ? jsonResponse({'ok': true})
+            : jsonResponse(
+                liveKitJoinPayload(
+                  provider: 'fake',
+                  participantCredential: 'proof',
+                  roomOwnerCredential: 'owner',
+                ),
+              ),
+        heartbeatInterval: Duration.zero,
+      );
+      addTearDown(client.dispose);
+      await expectLater(
+        client.createRoomAndJoinIdentity(
+          identity: const MediaIdentity(userId: 'host', displayName: 'Host'),
+          meetingMode: MediaMeetingMode.standard,
+        ),
+        throwsA(
+          isA<RealtimeException>().having(
+            (e) => e.code,
+            'code',
+            RealtimeErrorCode.unsupportedFeature,
+          ),
+        ),
+      );
+      expect(transport.requests.map((r) => r.uri.path), [
+        '/rooms',
+        '/rooms/482913/close',
+      ]);
+    },
+  );
+
   group('createRoomAndJoin', () {
     test(
       'identity avatars survive backend responses that omit profile fields',

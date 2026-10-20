@@ -71,6 +71,7 @@ export class ClassroomStateDirectory {
     if (entry.roomMode !== 'meeting') {
       fail('Classroom requires a meeting room', 'unsupported-feature', 400);
     }
+    if (entry.meetingMode === 'standard') fail('Teaching is disabled in standard meetings', 'unsupported-feature', 400);
     if (!isTeacher) fail('Teacher permission required', 'forbidden', 403);
     const action = String(raw.action ?? '');
     if (action !== 'speak.grant' && action !== 'speak.revoke') {
@@ -204,6 +205,10 @@ export class ClassroomStateDirectory {
       }
     }
     // A missing participant cannot leave a stale raised hand or speaking grant.
+    // Recover old snapshots in which a teacher could raise their own hand.
+    if (entry.classroomTeacherUserId) {
+      changed = state.raised.delete(entry.classroomTeacherUserId) || changed;
+    }
     for (const id of state.raised.keys()) {
       if (!attendees.has(id)) changed = state.raised.delete(id) || changed;
     }
@@ -239,7 +244,7 @@ export class ClassroomStateDirectory {
       students, questions,
       feedbackSupported: true,
       feedback: state.feedback.filter(item => isTeacher || item.userId === selfUserId),
-      tools: classroomToolsSnapshot(this.getTools(entry), isTeacher, selfUserId),
+      tools: this.toolsSnapshot(entry, isTeacher, selfUserId),
       attendance: [...state.seenStudents.values()]
         .filter(person => person.userId !== entry.classroomTeacherUserId && (isTeacher || person.userId === selfUserId))
         .map(person => ({ userId: person.userId, displayName: person.displayName,
@@ -261,6 +266,16 @@ export class ClassroomStateDirectory {
     };
   }
 
+  private toolsSnapshot(entry: RoomEntry, isTeacher: boolean, selfUserId: string) {
+    const tools = this.getTools(entry);
+    const snapshot = classroomToolsSnapshot(tools, isTeacher, selfUserId);
+    const participant = entry.attendees.find(a => (a.userId ?? a.externalUserId) === selfUserId);
+    if (entry.meetingMode === 'standard') {
+      snapshot.content.canManage = isTeacher || Boolean(participant && tools.mode === 'screen' && tools.annotation.participantId === participant.attendeeId);
+    }
+    return { ...snapshot, content: { ...snapshot.content, canShareScreen: entry.meetingMode === 'standard' || isTeacher, canAnnotateScreen: entry.meetingMode === 'standard' ? Boolean(participant && tools.mode === 'screen' && tools.annotation.participantId === participant.attendeeId) : isTeacher } };
+  }
+
   act(
     entry: RoomEntry, requester: RoomAttendee, isTeacher: boolean,
     raw: Record<string, unknown>,
@@ -270,6 +285,8 @@ export class ClassroomStateDirectory {
     const userId = requester.userId ?? requester.externalUserId;
     if (!userId) fail('Unknown user identity', 'forbidden', 403);
     const action = String(raw.action ?? '');
+    if (entry.meetingMode === 'standard' && !action.startsWith('tool.content.') && !action.startsWith('tool.annotation.') && !action.startsWith('tool.whiteboard.')) fail('Teaching is disabled in standard meetings', 'unsupported-feature', 400);
+    if ((isTeacher || userId === entry.classroomTeacherUserId) && ['hand.raise', 'hand.lower', 'question.ask'].includes(action)) fail('Only students can perform this action', 'forbidden', 403);
     const teacherOnly = new Set(['speak.grant', 'speak.revoke', 'question.answer', 'question.resolve']);
     if (teacherOnly.has(action) && !isTeacher) fail('Teacher permission required', 'forbidden', 403);
 
@@ -388,7 +405,22 @@ export class ClassroomStateDirectory {
       }
       default:
         if (action.startsWith('tool.')) {
-          changed = applyClassroomTool(this.getTools(entry), action, raw, requester, isTeacher);
+          const tools = this.getTools(entry);
+          let authority = isTeacher;
+          if (entry.meetingMode === 'standard' && action.startsWith('tool.annotation.') &&
+              (tools.mode !== 'screen' || tools.annotation.participantId !== requester.attendeeId)) {
+            fail('Only the current screen sharer can annotate', 'forbidden', 403);
+          }
+          if (entry.meetingMode === 'standard' && !isTeacher) {
+            let data: unknown;
+            try { data = JSON.parse(String(raw.payload ?? '{}')); } catch { fail('Invalid tool payload'); }
+            if (!data || typeof data !== 'object' || Array.isArray(data)) fail('Invalid tool payload');
+            const payload = data as Record<string, unknown>;
+            const ownsScreen = tools.mode === 'screen' && tools.annotation.participantId === requester.attendeeId;
+            authority = (action === 'tool.content.mode' && (payload.mode === 'screen' || (ownsScreen && payload.mode === 'members'))) ||
+              (action.startsWith('tool.annotation.') && ownsScreen);
+          }
+          changed = applyClassroomTool(tools, action, raw, requester, authority);
         } else fail('Unknown classroom action');
     }
     if (idempotency) {

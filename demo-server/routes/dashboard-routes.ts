@@ -216,6 +216,7 @@ app.get('/rooms/discover', (req, res) => {
       ...(summary.chatProvider ? { chatProvider: summary.chatProvider } : {}),
       roomCode: summary.roomCode,
       roomMode: summary.roomMode ?? 'meeting',
+      ...(entry.meetingMode ? { meetingMode: entry.meetingMode } : {}),
       createdAt: summary.createdAt,
       attendeeCount: summary.attendeeCount,
     };

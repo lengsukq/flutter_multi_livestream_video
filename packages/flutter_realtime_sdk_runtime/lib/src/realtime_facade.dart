@@ -183,6 +183,13 @@ class Realtime {
 
   Future<RealtimeConnection> open(RealtimeRequest request) async {
     try {
+      if (request.meetingMode != null &&
+          request.experience != RealtimeExperience.meeting) {
+        throw const RealtimeException(
+          code: RealtimeErrorCode.invalidArgument,
+          message: 'meetingMode.requiresMeeting',
+        );
+      }
       final user = request.user.normalized();
       final source = request.source;
       if (source is RealtimeBackendSource) {
@@ -224,6 +231,7 @@ class Realtime {
       room = await sdk.createRoom(
         user: identity,
         mode: mode,
+        meetingMode: request.meetingMode,
         role: request.mediaRole ?? _defaultMediaRole(request),
         roomCode: roomCode,
       );

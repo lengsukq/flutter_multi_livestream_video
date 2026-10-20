@@ -31,6 +31,7 @@ export 'src/model/media_message.dart';
 export 'src/model/media_participant.dart';
 export 'src/model/media_role.dart';
 export 'src/model/media_room_mode.dart';
+export 'src/model/media_meeting_mode.dart';
 export 'src/model/media_room_participant_summary.dart';
 export 'src/model/media_room_summary.dart';
 export 'src/model/media_recovery_status.dart';

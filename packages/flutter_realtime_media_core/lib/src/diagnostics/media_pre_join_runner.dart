@@ -1,5 +1,6 @@
 import '../client/media_backend_client.dart';
 import '../model/media_background_effect.dart';
+import '../model/media_room_summary.dart';
 import '../session/media_background_effects_controller.dart';
 import '../session/media_session_factory.dart';
 import 'media_doctor.dart';
@@ -72,10 +73,32 @@ class MediaPreJoinRunner {
       );
     }
 
-    final resolvedProvider = await _resolveProvider(
+    MediaRoomSummary? discoveredRoom;
+    final code = request.roomCode;
+    if (backend != null && backendReachable && code != null) {
+      try {
+        final rooms = await backend!.listRooms();
+        for (final room in rooms) {
+          if (room.roomCode == code) {
+            discoveredRoom = room;
+            break;
+          }
+        }
+      } catch (error) {
+        checks.add(
+          MediaPreJoinCheck(
+            type: MediaPreJoinCheckType.backend,
+            status: MediaPreJoinStatus.unknown,
+            severity: MediaPreJoinSeverity.warning,
+            message: 'preJoin.roomMode',
+          ),
+        );
+      }
+    }
+    final resolvedProvider = _resolveProvider(
       request,
       doctor,
-      backendReachable: backendReachable,
+      discoveredRoom: discoveredRoom,
     );
     final factory = resolvedProvider == null
         ? null
@@ -97,6 +120,7 @@ class MediaPreJoinRunner {
 
     return MediaPreJoinResult(
       role: request.role,
+      meetingMode: discoveredRoom?.meetingMode,
       providerId: resolvedProvider,
       checks: List.unmodifiable(checks),
       backgroundCapabilities: switch (factory) {
@@ -109,27 +133,17 @@ class MediaPreJoinRunner {
     );
   }
 
-  Future<String?> _resolveProvider(
+  String? _resolveProvider(
     MediaPreJoinRequest request,
     MediaDoctorReport doctor, {
-    required bool backendReachable,
-  }) async {
+    MediaRoomSummary? discoveredRoom,
+  }) {
     final explicit = request.providerId?.trim().toLowerCase();
     if (explicit != null && explicit.isNotEmpty) return explicit;
 
     final roomCode = request.roomCode?.trim();
     if (roomCode != null && roomCode.isNotEmpty) {
-      final backend = this.backend;
-      if (backend == null || !backendReachable) return null;
-      try {
-        final rooms = await backend.listRooms();
-        for (final room in rooms) {
-          if (room.roomCode == roomCode) return room.providerId;
-        }
-        return null;
-      } catch (_) {
-        return null;
-      }
+      return discoveredRoom?.engineId ?? discoveredRoom?.providerId;
     }
     return doctor.activeProvider;
   }

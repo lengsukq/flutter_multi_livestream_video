@@ -301,8 +301,10 @@ void main() {
           type: RealtimeExperience.meeting,
           user: const RealtimeUser(id: 'member-1', name: 'Member'),
           roomCode: 'meeting-1',
+          meetingMode: MediaMeetingMode.standard,
         ),
       );
+      expect(provisioner.lastMeetingMode, MediaMeetingMode.standard);
       expect(provisioner.lastCreateMode, MediaRoomMode.meeting);
       expect(provisioner.lastCreateRole, MediaRole.participant);
       await meetingCreated.dispose();
@@ -512,11 +514,12 @@ List<RealtimeProviderDriver> _awsLikeDrivers(
   ];
 }
 
-class _FakeMediaProvisioner implements MediaRoomProvisioner {
+class _FakeMediaProvisioner implements MediaMeetingRoomProvisioner {
   _FakeMediaProvisioner(this.providerId);
 
   final String providerId;
   MediaRoomMode? lastCreateMode;
+  MediaMeetingMode? lastMeetingMode;
   MediaRole? lastCreateRole;
   MediaRole? lastJoinRole;
   String? lastRoomOwnerCredential;
@@ -525,10 +528,12 @@ class _FakeMediaProvisioner implements MediaRoomProvisioner {
   Future<MediaRoomJoinResponse> create({
     required MediaIdentity identity,
     MediaRoomMode roomMode = MediaRoomMode.meeting,
+    MediaMeetingMode? meetingMode,
     MediaRole? role,
     String? roomCode,
   }) async {
     lastCreateMode = roomMode;
+    lastMeetingMode = meetingMode;
     lastCreateRole = role;
     final effectiveRole =
         role ??

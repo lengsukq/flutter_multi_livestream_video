@@ -41,6 +41,7 @@ interface ApiBody {
   roomOwnerCredential?: string;
   role?: string;
   roomMode?: string;
+  meetingMode?: string;
   speakEnforcement?: string;
   livekit?: { token: string };
   revision?: number;
@@ -78,6 +79,7 @@ interface ApiBody {
     provider?: string;
     roomCode?: string;
     roomMode?: string;
+  meetingMode?: string;
     attendeeCount?: number;
     attendees?: Array<{
       externalUserId?: string;
@@ -862,4 +864,29 @@ test('a failed in-flight grant releases queued revocation and leaves the student
   } finally { failLiveKitUpdateParticipant=false; gate.release(); }
   assert.equal((await action('speak.grant')).status,200);
   await post(`/rooms/${code}/close`,teacherAuth);
+});
+
+
+test('standard meeting policy survives join and discovery without classroom microphone restrictions', async () => {
+  await post('/api/provider', {provider: 'livekit'});
+  const invalid = await post('/rooms', {roomCode: 'modeBad001', roomMode: 'broadcast', meetingMode: 'standard', nickname: 'Host'});
+  assert.equal(invalid.status, 400);
+  const created = await post('/rooms', {roomCode: 'standardSdk1', roomMode: 'meeting', meetingMode: 'standard', nickname: 'Host', userId: 'standard-host'});
+  assert.equal(created.status, 200);
+  assert.equal(created.body.meetingMode, 'standard');
+  const member = await post('/rooms/standardSdk1/join', {userId: 'standard-member', displayName: 'Member', meetingMode: 'classroom'});
+  assert.equal(member.status, 200);
+  assert.equal(member.body.meetingMode, 'standard');
+  const token = JSON.parse(Buffer.from(member.body.livekit!.token.split('.')[1]!, 'base64url').toString()) as {video: {canPublish: boolean; canPublishSources?: string[]}};
+  assert.equal(token.video.canPublish, true);
+  assert.ok(token.video.canPublishSources == null || token.video.canPublishSources.includes('microphone'));
+  const rooms = await (await fetch(`${requireBaseUrl()}/rooms/discover`)).json() as ApiBody;
+  assert.equal(rooms.rooms?.find(room => room.roomCode === 'standardSdk1')?.meetingMode, 'standard');
+  const studentAuth = {requesterParticipantId: member.body.participantId, participantCredential: member.body.participantCredential};
+  assert.equal((await post('/rooms/standardSdk1/classroom/action', {...studentAuth, action: 'hand.raise'})).status, 400);
+  const hostAuth = {requesterParticipantId: created.body.participantId, participantCredential: created.body.participantCredential, roomOwnerCredential: created.body.roomOwnerCredential};
+  const rejoined = await post('/rooms/standardSdk1/join', {userId: 'standard-host', displayName: 'Host', roomOwnerCredential: created.body.roomOwnerCredential});
+  assert.equal(rejoined.body.meetingMode, 'standard');
+  assert.equal(rejoined.body.roomOwnerCredential, created.body.roomOwnerCredential);
+  assert.equal((await post('/rooms/standardSdk1/close', {...hostAuth, requesterParticipantId: rejoined.body.participantId, participantCredential: rejoined.body.participantCredential})).status, 200);
 });

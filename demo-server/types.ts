@@ -133,6 +133,7 @@ export interface RoomEntry extends Partial<ChatRoomEntry> {
   closePending?: boolean;
   roomCode: string;
   roomMode?: RoomMode;
+  meetingMode?: 'standard' | 'classroom';
   roomOwnerCredentialHash?: string;
   createdAt: string;
   attendees: RoomAttendee[];
@@ -200,6 +201,7 @@ export interface RoomSummary {
   chatProvider?: string;
   roomCode: string;
   roomMode?: RoomMode;
+  meetingMode?: 'standard' | 'classroom';
   meetingId?: string;
   externalMeetingId?: string;
   mediaRegion?: string;

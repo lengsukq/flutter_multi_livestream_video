@@ -4,6 +4,7 @@ import 'realtime_credentials_parser.dart';
 
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+import 'composed_local_preview.dart';
 import 'realtime_video_effects.dart';
 
 import 'provider_driver.dart';
@@ -174,10 +175,25 @@ class RealtimeSdk {
             role: role,
           )) {
         try {
-          return await effects.createPreview(
+          final camera = await effects.createPreview(
             providerId: engineProvider,
             role: role,
           );
+          // A processed-video preview does not own microphone capture.
+          // Compose the provider's credential-free local audio preview so
+          // volume levels and input selection are backed by real capture.
+          final factory = plugins.media.lookup(engineProvider)?.sessionFactory;
+          if (factory is MediaLocalPreviewFactory) {
+            try {
+              final audio = await (factory as MediaLocalPreviewFactory)
+                  .createLocalPreview(role: role);
+              return ComposedLocalPreview(video: camera, audio: audio);
+            } catch (_) {
+              await camera.dispose();
+              rethrow;
+            }
+          }
+          return ComposedLocalPreview(video: camera, audio: null);
         } catch (error, stack) {
           if (_diagnostics.length == 64) _diagnostics.removeAt(0);
           _diagnostics.add(
@@ -387,6 +403,7 @@ class RealtimeSdk {
       if (publicProvider != null && publicProvider != result.providerId) {
         result = MediaPreJoinResult(
           role: result.role,
+          meetingMode: result.meetingMode,
           providerId: publicProvider,
           checks: result.checks,
           backgroundCapabilities: result.backgroundCapabilities,
@@ -404,6 +421,7 @@ class RealtimeSdk {
           )) {
             result = MediaPreJoinResult(
               role: result.role,
+              meetingMode: result.meetingMode,
               providerId: result.providerId,
               checks: result.checks,
               backgroundCapabilities: await _probeEffects(
@@ -425,12 +443,14 @@ class RealtimeSdk {
   Future<RealtimeRoom> createRoom({
     required MediaIdentity user,
     MediaRoomMode mode = MediaRoomMode.meeting,
+    MediaMeetingMode? meetingMode,
     MediaRole? role,
     String? roomCode,
   }) => _guard(() async {
     return createClient().createRoomAndJoinIdentity(
       identity: user,
       roomMode: mode,
+      meetingMode: meetingMode,
       role: role,
       roomCode: roomCode,
     );

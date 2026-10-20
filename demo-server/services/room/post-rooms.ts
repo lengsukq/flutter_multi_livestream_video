@@ -44,6 +44,8 @@ const provisionRoom = createRoomProvisioner({
     }
     const roomMode: RoomMode =
       requestedRoomMode ?? (requestedRole === 'host' || requestedRole === 'viewer' ? 'broadcast' : 'meeting');
+    const meetingMode = input.body?.meetingMode;
+    if (meetingMode != null && (!['standard', 'classroom'].includes(String(meetingMode)) || roomMode !== 'meeting')) return fail(400, 'invalid-argument', 'meetingMode requires a meeting and must be standard or classroom.');
     const derivedCreatorRole = creatorRoleForMode(roomMode);
     if (requestedRoomMode && requestedRole && requestedRole !== derivedCreatorRole) {
       return fail(
@@ -69,7 +71,7 @@ const provisionRoom = createRoomProvisioner({
     }
     const rawNickname = input.body?.displayName?.trim() || input.body?.nickname?.trim() || null;
     const { created, roomOwnerCredential } = await provisionRoom({
-      roomCode, roomMode, role, provider,
+      roomCode, roomMode, meetingMode: meetingMode as 'standard' | 'classroom' | undefined, role, provider,
       selectedChatProvider: currentChatProvider(),
     });
 
@@ -92,6 +94,7 @@ const provisionRoom = createRoomProvisioner({
     });
     if (created.entry.chatProvider) response.chatProvider = created.entry.chatProvider;
     response.roomMode = roomMode;
+    if (created.entry.meetingMode) response.meetingMode = created.entry.meetingMode;
     if (roomMode === 'broadcast') response.liveInteractions = true;
     if (roomOwnerCredential) {
       response.roomOwnerCredential = roomOwnerCredential;
@@ -111,7 +114,7 @@ const provisionRoom = createRoomProvisioner({
       response.participantId,
     );
     roomDirectory.flush();
-    if (roomMode === 'meeting') {
+    if (roomMode === 'meeting' && created.entry.meetingMode !== 'standard') {
       classroomDirectory.snapshot(created.entry, true, userId);
     }
     logEvent('join', `${response.displayName} created+joined room ${roomCode} via ${provider.displayName}`);

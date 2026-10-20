@@ -27,6 +27,45 @@ void main() {
     );
   }
 
+  test('meeting policy is explicit on create and absent on join', () async {
+    final client = clientFor((_) => jsonResponse(liveKitJoinPayload()));
+    addTearDown(client.dispose);
+    await client.createRoomWithIdentity(
+      userId: 'host',
+      displayName: 'Host',
+      meetingMode: MediaMeetingMode.standard,
+    );
+    expect(transport.requests.last.json!['meetingMode'], 'standard');
+    expect(transport.requests.last.json!.containsKey('provider'), isFalse);
+    await client.joinRoomWithIdentity(
+      roomCode: '482913',
+      userId: 'student',
+      displayName: 'Student',
+    );
+    expect(transport.requests.last.json!.containsKey('meetingMode'), isFalse);
+    await client.createRoomWithIdentity(userId: 'host', displayName: 'Host');
+    expect(transport.requests.last.json!.containsKey('meetingMode'), isFalse);
+  });
+
+  test(
+    'discovery keeps authoritative meeting policy and legacy classroom defaults',
+    () {
+      MediaRoomSummary room(Map<String, dynamic> extra) =>
+          MediaRoomSummary.fromJson({
+            'roomCode': 'room',
+            'provider': 'fake',
+            'roomMode': 'meeting',
+            ...extra,
+          });
+      expect(
+        room({'meetingMode': 'standard'}).meetingMode,
+        MediaMeetingMode.standard,
+      );
+      expect(room({}).meetingMode, MediaMeetingMode.classroom);
+      expect(MediaMeetingMode.fromMetadata({}), MediaMeetingMode.classroom);
+    },
+  );
+
   group('createRoom', () {
     test(
       'sends role, room code, and contract headers without provider',

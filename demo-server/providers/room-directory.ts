@@ -53,7 +53,7 @@ export class RoomDirectory {
         return {
           provider: e.provider, roomCode: e.roomCode,
           createdAt: e.createdAt, lastHeartbeatMs: e.lastHeartbeatMs,
-          vendor: e.vendor, engine: e.engine, roomMode: e.roomMode,
+          vendor: e.vendor, engine: e.engine, roomMode: e.roomMode, meetingMode: e.meetingMode,
           providerRoomName: e.providerRoomName, scene: e.scene,
           classroomTeacherUserId: e.classroomTeacherUserId,
           classroomSpeakEnforcement: e.classroomSpeakEnforcement,

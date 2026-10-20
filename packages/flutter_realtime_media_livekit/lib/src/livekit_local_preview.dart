@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
@@ -6,7 +8,8 @@ import 'package:livekit_client/livekit_client.dart' as lk;
 import 'livekit_media_track.dart';
 import 'livekit_track_renderer.dart';
 
-class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
+class LiveKitLocalPreviewSession
+    implements MediaLocalPreviewSession, MediaLocalPreviewAudioLevels {
   LiveKitLocalPreviewSession._({
     required this.role,
     required this.capabilities,
@@ -26,6 +29,66 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
       capabilities: capabilities,
       cameraTrack: null,
     );
+  }
+
+  Future<void> _startAudioMeter(lk.LocalAudioTrack track) async {
+    try {
+      final meter = lk.createVisualizer(
+        track,
+        options: const lk.AudioVisualizerOptions(
+          barCount: 16,
+          centeredBands: false,
+          smoothTransition: false,
+        ),
+      );
+      final listener = meter.createListener();
+      _audioVisualizer = meter;
+      _audioListener = listener;
+      listener.on<lk.AudioVisualizerEvent>((event) {
+        if (_disposed || _microphoneLevels.isClosed) return;
+        var peak = 0.0;
+        for (final sample in event.event) {
+          if (sample is num && sample.isFinite) {
+            final amplitude = sample.toDouble();
+            if (amplitude > peak) peak = amplitude;
+          }
+        }
+        // SDK visualizer samples are normalized, but some native versions
+        // report byte amplitudes instead. Both are based on captured audio.
+        final normalized = peak > 1 ? peak / 255 : peak;
+        _microphoneLevels.add(normalized.clamp(0.0, 1.0));
+      });
+      await meter.start();
+    } catch (_) {
+      // A missing native visualizer (older hosts) is not a capture failure.
+      // No visualizer means an idle meter rather than a fabricated signal.
+      await _stopAudioMeter();
+    }
+  }
+
+  Future<void> _stopAudioMeter() async {
+    final listener = _audioListener;
+    final meter = _audioVisualizer;
+    _audioListener = null;
+    _audioVisualizer = null;
+    try {
+      await listener?.dispose();
+    } catch (_) {
+      // A visualizer shutdown failure must not leave microphone capture on.
+    }
+    if (meter != null) {
+      try {
+        await meter.stop();
+      } catch (_) {
+        // Best-effort visualizer cleanup; track.stop() still owns capture.
+      }
+      try {
+        await meter.dispose();
+      } catch (_) {
+        // The preview's microphone track is stopped separately.
+      }
+    }
+    if (!_disposed && !_microphoneLevels.isClosed) _microphoneLevels.add(0);
   }
 
   static MediaCapabilities _previewCapabilities(bool canPublish) {
@@ -69,6 +132,12 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
 
   lk.LocalVideoTrack? _cameraTrack;
   lk.LocalAudioTrack? _microphoneTrack;
+  final _microphoneLevels = StreamController<double>.broadcast();
+  lk.AudioVisualizer? _audioVisualizer;
+  lk.EventsListener<lk.AudioVisualizerEvent>? _audioListener;
+
+  @override
+  Stream<double> get microphoneLevels => _microphoneLevels.stream;
   MediaDevice? _selectedMicrophone;
   MediaDevice? _selectedCamera;
   MediaDevice? _selectedOutput;
@@ -170,6 +239,10 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
           _ensureActive();
         }
         _microphoneTrack = track;
+        // The visualizer reads this exact local capture track, not an
+        // animation or a second microphone stream. Meter failure must never
+        // prevent publishing audio in a subsequent meeting.
+        await _startAudioMeter(track);
       } catch (error) {
         throw RealtimeException(
           code: _isPermissionFailure(error)
@@ -181,6 +254,7 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
         );
       }
     } else {
+      await _stopAudioMeter();
       await _microphoneTrack?.stop();
       _microphoneTrack = null;
     }
@@ -238,6 +312,7 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
     _microphoneTrack = null;
     _cameraTrack = null;
     final cleanup = Cleanup(timeout: cleanupTimeout);
+    await _stopAudioMeter();
     await cleanup.run('preview.microphone', () async {
       await microphone?.stop();
     });
@@ -245,6 +320,7 @@ class LiveKitLocalPreviewSession implements MediaLocalPreviewSession {
       await camera?.stop();
     });
     cleanup.finish(domain: 'media');
+    await _microphoneLevels.close();
   }
 
   void _ensureActive() {
