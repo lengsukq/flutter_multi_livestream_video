@@ -115,7 +115,8 @@ class RealtimeSharedContentButton extends StatelessWidget {
       initialData: shared.status,
       builder: (context, snapshot) {
         final status = snapshot.data ?? shared.status;
-        if (status.content?.canManage != true) {
+        if (status.content?.canManage != true &&
+            status.content?.canShareScreen != true) {
           return const SizedBox.shrink();
         }
         final zh = RealtimeStrings.of(context).isZh;
@@ -124,15 +125,13 @@ class RealtimeSharedContentButton extends StatelessWidget {
             await action();
           } catch (error) {
             if (context.mounted) {
-              ScaffoldMessenger.maybeOf(
-                context,
-              )?.showSnackBar(SnackBar(content: Text(error.toString())));
+              RealtimeRoomUiScope.of(context).reportActionError(error);
             }
           }
         }
 
         return PopupMenuButton<String>(
-          tooltip: zh ? '课堂内容' : 'Class content',
+          tooltip: zh ? '共享内容' : 'Shared content',
           enabled: !status.busy,
           icon: const Icon(Icons.present_to_all_rounded),
           onSelected: (value) {
@@ -148,7 +147,7 @@ class RealtimeSharedContentButton extends StatelessWidget {
                   final approved = await showDialog<bool>(
                     context: context,
                     useRootNavigator: true,
-                    builder: (dialogContext) => AlertDialog(
+                    builder: (dialogContext) => RealtimeGlassDialog(
                       title: Text(zh ? '跨应用标注' : 'Draw across apps'),
                       content: Text(
                         zh
@@ -188,21 +187,25 @@ class RealtimeSharedContentButton extends StatelessWidget {
           itemBuilder: (_) => [
             PopupMenuItem(
               value: SharedContentMode.members.name,
+              enabled: status.content?.canManage == true,
               child: Text(zh ? '成员画面' : 'Participants'),
             ),
             PopupMenuItem(
               value: SharedContentMode.whiteboard.name,
+              enabled: status.content?.whiteboard.canEdit == true,
               child: Text(zh ? '白板' : 'Whiteboard'),
             ),
             PopupMenuItem(
               value: SharedContentMode.screen.name,
-              enabled: shared.canShare,
+              enabled:
+                  shared.canShare && status.content?.canShareScreen == true,
               child: Text(zh ? '屏幕共享' : 'Share screen'),
             ),
             PopupMenuItem(
               value: 'system',
               enabled:
                   status.captureActive &&
+                  status.content?.canAnnotateScreen == true &&
                   status.content?.mode == SharedContentMode.screen,
               child: Text(
                 shared.systemAnnotations.active

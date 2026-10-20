@@ -14,8 +14,7 @@ class MeetingDockReactionEmojiButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final style = RealtimeStyle.of(context);
 
     return InkWell(
       onTap: onTap,
@@ -29,23 +28,9 @@ class MeetingDockReactionEmojiButton extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: (isDark ? Colors.white : Colors.black).withValues(
-                  alpha: isDark ? 0.08 : 0.04,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: (isDark ? Colors.white : Colors.black).withValues(
-                    alpha: isDark ? 0.12 : 0.07,
-                  ),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                color: style.surfaceSubtle,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: style.border),
               ),
               child: Center(
                 child: Text(emoji, style: const TextStyle(fontSize: 24)),
@@ -57,7 +42,7 @@ class MeetingDockReactionEmojiButton extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white70 : RealtimeUiTokens.textMuted,
+                color: style.textMuted,
               ),
             ),
           ],

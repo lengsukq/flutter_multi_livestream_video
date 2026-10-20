@@ -31,8 +31,8 @@ class RealtimeDockHandQueueButton extends StatelessWidget {
         }
         final pending = state.raisedHands.length;
         return RealtimeDockItem(
-          icon: pending > 0 ? Icons.pan_tool_rounded : Icons.pan_tool_outlined,
-          label: strings.classroomHands,
+          icon: Icons.pending_actions_rounded,
+          label: strings.isZh ? '举手申请' : 'Hand requests',
           tooltip: strings.isZh ? '举手申请：$pending' : 'Hand requests: $pending',
           badgeCount: pending,
           isActive: pending > 0,

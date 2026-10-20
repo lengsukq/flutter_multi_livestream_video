@@ -16,13 +16,11 @@ class RealtimeDockMicrophoneButton extends StatelessWidget {
       action: RealtimeRoomUiAction.microphone,
       builder: (context, onPressed, active, pending) {
         return RealtimeDockItem(
-          icon: active ? Icons.mic_rounded : Icons.mic_off_rounded,
-          label: active ? strings.micOn : strings.muted,
-          isActive: active,
+          icon: active ? Icons.mic_none_rounded : Icons.mic_off_rounded,
+          label: active ? strings.mute : strings.unmute,
           isLoading: pending,
           onPressed: onPressed,
           showLabel: showLabel,
-          activeColor: RealtimeUiTokens.iosBlue,
         );
       },
     );

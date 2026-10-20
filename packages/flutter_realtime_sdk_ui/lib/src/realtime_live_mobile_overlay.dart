@@ -146,7 +146,7 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                       const SizedBox(width: 8),
                       RealtimeGlassSurface(
                         radius: RealtimeUiTokens.pillRadius,
-                        fillColor: const Color(0xFF242426),
+                        fillColor: RealtimeUiTokens.canvasDarkElevated,
                         opacity: .64,
                         borderColor: Colors.white.withValues(alpha: .22),
                         padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -194,12 +194,20 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                             IconButton.filled(
                               tooltip: RealtimeStrings.of(context).leave,
                               style: IconButton.styleFrom(
-                                backgroundColor: RealtimeUiTokens.appleDanger,
+                                backgroundColor: RealtimeUiTokens.live,
                                 foregroundColor: Colors.white,
-                                minimumSize: const Size(48, 48),
+                                minimumSize: const Size(44, 44),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    RealtimeUiTokens.controlRadius,
+                                  ),
+                                ),
                               ),
                               onPressed: onExit,
-                              icon: const Icon(Icons.close_rounded, size: 20),
+                              icon: const Icon(
+                                Icons.call_end_rounded,
+                                size: 19,
+                              ),
                             ),
                       ],
                     ],
@@ -283,7 +291,7 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                                     onOpenGiftSheet != null) ...[
                                   _CircleIconButton(
                                     icon: Icons.card_giftcard_rounded,
-                                    color: RealtimeUiTokens.appleRose,
+                                    color: RealtimeUiTokens.live,
                                     onPressed: onOpenGiftSheet!,
                                   ),
                                   const SizedBox(width: 8),
@@ -350,9 +358,9 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
   void _openDisplayOptions(BuildContext context) {
     final strings = RealtimeStrings.of(context);
     unawaited(
-      showModalBottomSheet<void>(
+      showRealtimeGlassBottomSheet<void>(
         context: context,
-        showDragHandle: true,
+        isScrollControlled: true,
         builder: (sheetContext) => SafeArea(
           top: false,
           child: SingleChildScrollView(
@@ -466,7 +474,7 @@ class _MobileHostCapsule extends StatelessWidget {
           ? const EdgeInsets.all(4)
           : const EdgeInsets.fromLTRB(4, 4, 10, 4),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.40),
+        color: const Color(0xFF0C121C).withValues(alpha: 0.48),
         borderRadius: BorderRadius.circular(RealtimeUiTokens.radiusPill),
         border: Border.all(
           color: Colors.white.withValues(alpha: 0.15),
@@ -476,31 +484,11 @@ class _MobileHostCapsule extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (host != null)
-            RealtimeAvatar(
-              name: host.displayName,
-              avatarUrl: host.avatarUrl,
-              size: 28,
-            )
-          else
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    RealtimeUiTokens.appleBlue,
-                    RealtimeUiTokens.appleIndigo,
-                  ],
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.person_rounded,
-                color: Colors.white,
-                size: 16,
-              ),
-            ),
+          RealtimeAvatar(
+            name: host?.displayName ?? room.media.roomCode,
+            avatarUrl: host?.avatarUrl,
+            size: 28,
+          ),
           if (!avatarOnly) const SizedBox(width: 8),
           if (!avatarOnly)
             Flexible(
@@ -518,16 +506,12 @@ class _MobileHostCapsule extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const Text(
-                    'LIVE',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Color(0xFFFFB0B7),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
+                  const SizedBox(height: 2),
+                  RealtimeStatusPill(
+                    label: RealtimeStrings.of(context).liveStatus,
+                    tone: RealtimeStatusTone.live,
+                    showDot: true,
+                    blink: true,
                   ),
                 ],
               ),

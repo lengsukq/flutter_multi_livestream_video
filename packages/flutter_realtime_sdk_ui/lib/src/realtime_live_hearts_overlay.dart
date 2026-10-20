@@ -132,9 +132,9 @@ class _HeartBurstState extends State<_HeartBurst>
                       -(constraints.maxHeight - 36).clamp(0, double.infinity) *
                           progress,
                     ),
-              child: const Icon(
+              child: Icon(
                 Icons.favorite_rounded,
-                color: Color(0xFFFF375F),
+                color: RealtimeStyle.of(context).live,
                 size: 32,
               ),
             ),

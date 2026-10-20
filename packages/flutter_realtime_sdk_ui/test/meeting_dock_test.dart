@@ -72,6 +72,73 @@ void main() {
     },
   );
 
+  testWidgets('labeled dock items render icon and text on one 40 pt row', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: RealtimeUiTheme.light(),
+        home: Scaffold(
+          body: Row(
+            children: [
+              RealtimeDockItem(
+                icon: Icons.mic_none_rounded,
+                label: 'Mute',
+                onPressed: () {},
+              ),
+              RealtimeDockItem(
+                icon: Icons.present_to_all_rounded,
+                label: 'Sharing',
+                isActive: true,
+                activeColor: RealtimeUiTokens.speak,
+                onPressed: () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Mute'), findsOneWidget);
+    expect(find.text('Sharing'), findsOneWidget);
+
+    // Icon and label share one horizontal row instead of stacking.
+    final muteIcon = tester.getRect(find.byIcon(Icons.mic_none_rounded));
+    final muteLabel = tester.getRect(find.text('Mute'));
+    expect(muteLabel.center.dy, closeTo(muteIcon.center.dy, 1));
+    expect(muteLabel.left, greaterThan(muteIcon.right));
+
+    // Active sharing fills teal with white text, like the reference dock.
+    final sharing = tester.widget<AnimatedContainer>(
+      find
+          .ancestor(
+            of: find.text('Sharing'),
+            matching: find.byType(AnimatedContainer),
+          )
+          .first,
+    );
+    final decoration = sharing.decoration! as BoxDecoration;
+    expect(decoration.color, RealtimeUiTokens.speak);
+    expect(
+      tester.widget<Text>(find.text('Sharing')).style?.color,
+      Colors.white,
+    );
+    expect(
+      tester
+          .getSize(
+            find
+                .ancestor(
+                  of: find.text('Sharing'),
+                  matching: find.byType(AnimatedContainer),
+                )
+                .first,
+          )
+          .height,
+      40,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('RealtimeDockMoreButton opens sheet and executes action', (
     tester,
   ) async {

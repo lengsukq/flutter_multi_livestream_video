@@ -98,7 +98,7 @@ class RealtimeClassroomHandQueue extends StatelessWidget {
                     child: Icon(
                       Icons.pan_tool_outlined,
                       size: 28,
-                      color: style.primary,
+                      color: style.text,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -126,7 +126,9 @@ class RealtimeClassroomHandQueue extends StatelessWidget {
           itemCount: students.length,
           itemBuilder: (context, index) {
             final student = students[index];
-            final statusColor = student.canSpeak ? Colors.green : Colors.orange;
+            final statusColor = student.canSpeak
+                ? RealtimeUiTokens.speakStrong
+                : RealtimeUiTokens.warning;
             final statusText = student.canSpeak
                 ? strings.speakingPermitted
                 : strings.handRaisedStatus;
@@ -304,7 +306,9 @@ class RealtimeClassroomRoster extends StatelessWidget {
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: member.microphoneOn!
-                            ? Colors.green.withValues(alpha: 0.12)
+                            ? RealtimeUiTokens.speakStrong.withValues(
+                                alpha: 0.12,
+                              )
                             : Colors.grey.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
@@ -312,7 +316,7 @@ class RealtimeClassroomRoster extends StatelessWidget {
                         member.microphoneOn! ? Icons.mic : Icons.mic_off,
                         size: 16,
                         color: member.microphoneOn!
-                            ? Colors.green
+                            ? RealtimeUiTokens.speakStrong
                             : Colors.grey,
                       ),
                     ),
@@ -360,7 +364,7 @@ class RealtimeClassroomQuestions extends StatelessWidget {
                     child: Icon(
                       Icons.forum_outlined,
                       size: 28,
-                      color: style.primary,
+                      color: style.text,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -391,8 +395,8 @@ class RealtimeClassroomQuestions extends StatelessWidget {
           itemBuilder: (context, index) {
             final question = state.questions[index];
             final statusColor = switch (question.status) {
-              ClassroomQuestionStatus.pending => Colors.orange,
-              ClassroomQuestionStatus.answered => Colors.green,
+              ClassroomQuestionStatus.pending => RealtimeUiTokens.warning,
+              ClassroomQuestionStatus.answered => RealtimeUiTokens.speakStrong,
               ClassroomQuestionStatus.resolved => Colors.grey,
             };
             final statusLabel = switch (question.status) {
@@ -500,7 +504,7 @@ class RealtimeClassroomQuestions extends StatelessWidget {
                                   Icon(
                                     Icons.reply_rounded,
                                     size: 16,
-                                    color: style.primary,
+                                    color: style.text,
                                   ),
                                   const SizedBox(width: 8),
                                   Text(strings.answer),
@@ -516,7 +520,7 @@ class RealtimeClassroomQuestions extends StatelessWidget {
                                     const Icon(
                                       Icons.check_circle_outline_rounded,
                                       size: 16,
-                                      color: Colors.green,
+                                      color: RealtimeUiTokens.speakStrong,
                                     ),
                                     const SizedBox(width: 8),
                                     Text(strings.resolve),
@@ -558,7 +562,7 @@ class RealtimeClassroomQuestions extends StatelessWidget {
                               Icon(
                                 Icons.school_rounded,
                                 size: 14,
-                                color: style.primary,
+                                color: style.text,
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -566,7 +570,7 @@ class RealtimeClassroomQuestions extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
-                                  color: style.primary,
+                                  color: style.text,
                                 ),
                               ),
                             ],
@@ -817,9 +821,7 @@ Future<bool> _runClassroomAction(
     return true;
   } catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text(error.toString())));
+      RealtimeRoomUiScope.of(context).reportActionError(error);
     }
     return false;
   }

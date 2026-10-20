@@ -13,6 +13,7 @@ class RealtimeMeetingStage extends StatefulWidget {
     this.showFilmstrip = true,
     this.showClassroom = true,
     this.showAnnotations = true,
+    this.showSelfView = false,
     this.participantBuilder,
     this.overlayBuilder,
   });
@@ -23,6 +24,9 @@ class RealtimeMeetingStage extends StatefulWidget {
   final bool showFilmstrip;
   final bool showClassroom;
   final bool showAnnotations;
+
+  /// Overlay a small local camera tile in the top-right of the stage.
+  final bool showSelfView;
   final MediaParticipantBuilder? participantBuilder;
   final WidgetBuilder? overlayBuilder;
 
@@ -48,7 +52,7 @@ class _RealtimeMeetingStageState extends State<RealtimeMeetingStage> {
       _stageUpdates = controller.room.sharedContent?.stageUpdates;
     }
     return StreamBuilder<Object?>(
-      stream: widget.showClassroom ? _stageUpdates : null,
+      stream: _stageUpdates,
       builder: (context, _) => ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
@@ -59,6 +63,15 @@ class _RealtimeMeetingStageState extends State<RealtimeMeetingStage> {
             showClassroom: widget.showClassroom,
           );
           _reconcileFocus(shared, snapshot.participants);
+          final local = snapshot.localParticipant;
+          final showSelf =
+              widget.showSelfView &&
+              !widget.useGrid &&
+              !shared.active &&
+              snapshot.participants.length > 1 &&
+              local != null &&
+              local.isVideoEnabled &&
+              local.videoTrack != null;
           return Stack(
             fit: StackFit.expand,
             children: [
@@ -66,15 +79,27 @@ class _RealtimeMeetingStageState extends State<RealtimeMeetingStage> {
                 _buildSharing(context, controller, shared)
               else
                 _buildMembers(context, controller),
-              if (widget.showClassroom && controller.room.classroom != null)
+              if (showSelf)
                 Positioned(
                   top: widget.topOverlayInset + 8,
-                  left: 12,
                   right: 12,
-                  child: RealtimeClassroomEventOverlay(
-                    classroom: controller.room.classroom!,
+                  child: RealtimeSelfView(
+                    participant: local,
+                    renderer: controller.room.renderer,
+                    onTap: () =>
+                        setState(() => _pinnedParticipantId = local.id),
                   ),
                 ),
+              Positioned(
+                top: widget.topOverlayInset + 8,
+                bottom: 8,
+                left: 12,
+                right: showSelf ? 180 : 12,
+                child: RealtimeRoomEventOverlay(
+                  room: controller.room,
+                  showClassroom: widget.showClassroom,
+                ),
+              ),
               if (widget.overlayBuilder != null)
                 widget.overlayBuilder!(context),
             ],
@@ -119,6 +144,11 @@ class _RealtimeMeetingStageState extends State<RealtimeMeetingStage> {
     avatarUrl: p.avatarUrl,
     isMuted: p.isMuted,
     isSpeaking: p.isSpeaking,
+    handRaised:
+        controller.classroomState?.students.any(
+          (student) => student.userId == p.id && student.handRaised,
+        ) ??
+        false,
     videoWidget:
         widget.participantBuilder?.call(context, p, controller.room.renderer) ??
         RealtimeVideoTile(
@@ -183,9 +213,39 @@ class _RealtimeMeetingStageState extends State<RealtimeMeetingStage> {
           children: [
             Expanded(
               child: focused == null
-                  ? shared.buildMain(
-                      context,
-                      withAnnotations: widget.showAnnotations,
+                  ? LayoutBuilder(
+                      builder: (context, stage) {
+                        final local = controller.snapshot.localParticipant;
+                        final cameraVisible =
+                            widget.showSelfView &&
+                            local != null &&
+                            local.isVideoEnabled &&
+                            local.videoTrack != null &&
+                            stage.maxWidth >= 300 &&
+                            stage.maxHeight >= 200;
+                        return Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            shared.buildMain(
+                              context,
+                              withAnnotations: widget.showAnnotations,
+                            ),
+                            if (cameraVisible)
+                              Positioned(
+                                top: 56,
+                                right: 12,
+                                child: RealtimeSelfView(
+                                  participant: local,
+                                  renderer: controller.room.renderer,
+                                  width: (stage.maxWidth * .24).clamp(
+                                    100.0,
+                                    200.0,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
                     )
                   : RealtimeMeetingFilmstripStage(
                       primaryParticipant: _tile(context, controller, focused),

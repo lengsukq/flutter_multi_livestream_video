@@ -1,5 +1,6 @@
 import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'room_ui_controller.dart';
 import 'realtime_dock_item.dart';
@@ -31,7 +32,13 @@ class RealtimeDockFeedbackButton extends StatelessWidget {
             label: strings.classroomFeedback,
             showLabel: showLabel,
           ),
-          onSelected: (kind) => controller.sendClassroomFeedback(kind),
+          onSelected: (kind) {
+            unawaited(
+              controller
+                  .sendClassroomFeedback(kind)
+                  .catchError(controller.reportActionError),
+            );
+          },
           itemBuilder: (_) => [
             for (final kind in ClassroomFeedbackKind.values)
               PopupMenuItem(

@@ -18,6 +18,8 @@ class RealtimeRoomUiController extends room_ui.RealtimeRoomUiController {
         .listen((_) {
           if (!isDisposed) notifyListeners();
         });
+    _classroomErrors = room.classroom?.errors.listen(reportActionError);
+    _liveErrors = room.liveInteractions?.errors.listen(reportActionError);
     _liveState = room.liveInteractions?.state;
     _liveSubscription = room.liveInteractions?.states.listen((state) {
       if (isDisposed) return;
@@ -31,6 +33,7 @@ class RealtimeRoomUiController extends room_ui.RealtimeRoomUiController {
     });
   }
   StreamSubscription<Object?>? _classroomSubscription;
+  StreamSubscription<Object>? _classroomErrors, _liveErrors;
   StreamSubscription<LiveInteractionState>? _liveSubscription;
   StreamSubscription<LiveLikeEvent>? _likeSubscription;
   LiveInteractionState? _liveState;
@@ -161,6 +164,8 @@ class RealtimeRoomUiController extends room_ui.RealtimeRoomUiController {
     final cleanup = Cleanup(timeout: null);
     final classroomRelease = cleanup.run('room.ui.classroom', () async {
       await _classroomSubscription?.cancel();
+      await _classroomErrors?.cancel();
+      await _liveErrors?.cancel();
     });
     final liveRelease = cleanup.run('room.ui.live', () async {
       await _liveSubscription?.cancel();

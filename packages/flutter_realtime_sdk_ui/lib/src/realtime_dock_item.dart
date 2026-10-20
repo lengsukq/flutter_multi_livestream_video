@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
+/// Single dock control.
+///
+/// With a label it renders as the reference row button: icon and label on one
+/// line inside the white capsule group, 40 pt tall and 10 pt radius. Active
+/// controls fill with the action color; danger controls fill with live red.
+/// Without a label it keeps the compact square used on phones.
 class RealtimeDockItem extends StatelessWidget {
   const RealtimeDockItem({
     super.key,
@@ -16,6 +22,7 @@ class RealtimeDockItem extends StatelessWidget {
     this.showLabel = true,
     this.isLoading = false,
     this.activeColor,
+    this.activeForegroundColor,
     this.tooltip,
   });
 
@@ -29,98 +36,49 @@ class RealtimeDockItem extends StatelessWidget {
   final bool showLabel;
   final bool isLoading;
   final Color? activeColor;
+  final Color? activeForegroundColor;
   final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final primaryColor = activeColor ?? RealtimeUiTokens.appleTeal;
+    final style = RealtimeStyle.of(context);
+    final accent = activeColor ?? style.accent;
 
-    Color iconBgColor;
-    Color iconColor;
-
+    Color background;
+    Color foreground;
     if (isDanger) {
-      iconBgColor = const Color(
-        0xFFFF3B30,
-      ).withValues(alpha: isDark ? 0.35 : 0.14);
-      iconColor = const Color(0xFFFF3B30);
+      background = style.live;
+      foreground = Colors.white;
     } else if (isActive) {
-      iconBgColor = primaryColor.withValues(alpha: isDark ? 0.35 : 0.18);
-      iconColor = primaryColor;
+      background = accent;
+      foreground =
+          activeForegroundColor ??
+          (accent == style.speak ||
+                  accent == style.speakStrong ||
+                  accent == style.live
+              ? Colors.white
+              : style.onAccent);
     } else {
-      iconBgColor = (isDark ? Colors.white : Colors.black).withValues(
-        alpha: 0.06,
-      );
-      iconColor = theme.colorScheme.onSurface;
+      background = Colors.transparent;
+      foreground = style.textSecondary;
     }
 
-    final buttonContent = Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Badge(
-          isLabelVisible:
-              (badgeCount != null && badgeCount! > 0) || showBadgeDot,
-          label: badgeCount != null && badgeCount! > 0
-              ? Text(
-                  '$badgeCount',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                )
-              : null,
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: iconBgColor,
-              borderRadius: BorderRadius.circular(
-                RealtimeUiTokens.controlRadius,
+    final badge = Badge(
+      isLabelVisible: (badgeCount != null && badgeCount! > 0) || showBadgeDot,
+      backgroundColor: style.live,
+      label: badgeCount != null && badgeCount! > 0
+          ? Text(
+              badgeCount! > 9 ? '9+' : '$badgeCount',
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
               ),
-              border: isActive && !isDanger
-                  ? Border.all(
-                      color: primaryColor.withValues(alpha: 0.5),
-                      width: 1.2,
-                    )
-                  : Border.all(
-                      color: (isDark ? Colors.white : Colors.black).withValues(
-                        alpha: 0.08,
-                      ),
-                      width: 0.6,
-                    ),
-            ),
-            child: Center(
-              child: isLoading
-                  ? SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: iconColor,
-                      ),
-                    )
-                  : Icon(icon, size: 21, color: iconColor),
-            ),
-          ),
-        ),
-        if (showLabel) ...[
-          const SizedBox(height: 4),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13.0,
-              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              color: isActive
-                  ? primaryColor
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ],
+            )
+          : null,
+      child: showLabel
+          ? _inlineContent(style, background, foreground)
+          : _stackedIcon(background, foreground, style),
     );
 
     return Semantics(
@@ -131,7 +89,11 @@ class RealtimeDockItem extends StatelessWidget {
       child: Tooltip(
         message: tooltip ?? label,
         child: InkWell(
-          borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+          borderRadius: BorderRadius.circular(
+            showLabel
+                ? RealtimeUiTokens.compactRadius
+                : RealtimeUiTokens.controlRadius,
+          ),
           onTap: isLoading || onPressed == null
               ? null
               : () {
@@ -139,16 +101,100 @@ class RealtimeDockItem extends StatelessWidget {
                   onPressed?.call();
                 },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: buttonContent,
+            padding: showLabel
+                ? EdgeInsets.zero
+                : const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+            child: badge,
           ),
         ),
       ),
     );
   }
-}
 
-/// A unified Glassmorphic Meeting Dock for conference and classroom rooms.
-///
-/// Groups controls cleanly into Media, Sharing, Panels, and Exit zones,
-/// preventing multi-row clutter and broken layouts.
+  /// Reference dock row: icon + label in one 40 pt capsule.
+  ///
+  /// Falls back to the compact square when an ancestor gives the item less
+  /// room than the icon and label need (for example a fixed-width toolbar).
+  Widget _inlineContent(
+    RealtimeStyle style,
+    Color background,
+    Color foreground,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.hasBoundedWidth && constraints.maxWidth < 64) {
+          return _stackedIcon(background, foreground, style);
+        }
+        return AnimatedContainer(
+          duration: RealtimeUiTokens.animFast,
+          curve: Curves.easeOutCubic,
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(RealtimeUiTokens.compactRadius),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLoading)
+                SizedBox(
+                  width: 17,
+                  height: 17,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: foreground,
+                  ),
+                )
+              else
+                Icon(icon, size: 18, color: foreground),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isActive || isDanger
+                        ? FontWeight.w600
+                        : FontWeight.w500,
+                    color: foreground,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _stackedIcon(Color background, Color foreground, RealtimeStyle style) {
+    return AnimatedContainer(
+      duration: RealtimeUiTokens.animFast,
+      curve: Curves.easeOutCubic,
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
+        border: isDanger || isActive
+            ? null
+            : Border.all(color: style.border, width: 1),
+      ),
+      child: Center(
+        child: isLoading
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: foreground,
+                ),
+              )
+            : Icon(icon, size: 20, color: foreground),
+      ),
+    );
+  }
+}

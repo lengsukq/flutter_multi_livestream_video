@@ -37,10 +37,10 @@ class RealtimeDockMoreButton extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final availableWidth = constraints.maxWidth;
-                  final crossAxisCount = (availableWidth / 78).floor().clamp(
-                    3,
-                    6,
-                  );
+                  final scale = MediaQuery.textScalerOf(context).scale(1);
+                  final crossAxisCount = (availableWidth / (88 * scale))
+                      .floor()
+                      .clamp(2, 6);
                   final itemWidth =
                       (availableWidth - (crossAxisCount - 1) * 10) /
                       crossAxisCount;
@@ -71,31 +71,10 @@ class RealtimeDockMoreButton extends StatelessWidget {
                         if (items.isNotEmpty) const SizedBox(height: 14),
                         Container(
                           decoration: BoxDecoration(
-                            color:
-                                (Theme.of(context).brightness == Brightness.dark
-                                        ? Colors.white
-                                        : Colors.black)
-                                    .withValues(
-                                      alpha:
-                                          Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? 0.05
-                                          : 0.035,
-                                    ),
-                            borderRadius: BorderRadius.circular(16),
+                            color: RealtimeStyle.of(context).surfaceSubtle,
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color:
-                                  (Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? Colors.white
-                                          : Colors.black)
-                                      .withValues(
-                                        alpha:
-                                            Theme.of(context).brightness ==
-                                                Brightness.dark
-                                            ? 0.08
-                                            : 0.06,
-                                      ),
+                              color: RealtimeStyle.of(context).border,
                             ),
                           ),
                           clipBehavior: Clip.antiAlias,

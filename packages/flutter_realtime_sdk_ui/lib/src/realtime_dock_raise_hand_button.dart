@@ -36,9 +36,7 @@ class RealtimeDockRaiseHandButton extends StatelessWidget {
                     await controller.setHandRaised(!raised);
                   } catch (error) {
                     if (context.mounted) {
-                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                        SnackBar(content: Text(error.toString())),
-                      );
+                      controller.reportActionError(error);
                     }
                   }
                 },

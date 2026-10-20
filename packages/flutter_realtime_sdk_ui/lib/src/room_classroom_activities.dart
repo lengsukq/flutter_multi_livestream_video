@@ -112,7 +112,7 @@ class RealtimeClassroomActivityList extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: style.primary,
+                            color: style.text,
                           ),
                         ),
                       ),

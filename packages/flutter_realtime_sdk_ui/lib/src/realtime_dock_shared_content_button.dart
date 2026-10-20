@@ -34,7 +34,7 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
             isLoading: pending,
             onPressed: onPressed,
             showLabel: showLabel,
-            activeColor: RealtimeUiTokens.primary,
+            activeColor: RealtimeStyle.of(context).speakStrong,
           );
         },
       );
@@ -78,10 +78,11 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                         title: strings.whiteboard,
                         subtitle: strings.whiteboardDescription,
                         icon: Icons.draw_rounded,
-                        iconColor: theme.colorScheme.primary,
+                        iconColor: RealtimeStyle.of(context).text,
                         iconBackgroundColor: theme.colorScheme.primary
                             .withValues(alpha: 0.12),
                         isSelected: mode == SharedContentMode.whiteboard,
+                        enabled: status.content?.whiteboard.canEdit == true,
                         activeBadgeText: strings.activeSharing,
                         onTap: () {
                           Navigator.pop(sheetContext);
@@ -97,14 +98,16 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                         iconBackgroundColor: RealtimeUiTokens.iosGreen
                             .withValues(alpha: 0.12),
                         isSelected: mode == SharedContentMode.screen,
-                        enabled: shared.canShare,
+                        enabled:
+                            shared.canShare &&
+                            status.content?.canShareScreen == true,
                         activeBadgeText: strings.activeSharing,
                         onTap: () {
                           Navigator.pop(sheetContext);
                           unawaited(changeMode(SharedContentMode.screen));
                         },
                       ),
-                      if (isSharing) ...[
+                      if (isSharing && status.content?.canManage == true) ...[
                         const SizedBox(height: 14),
                         Container(
                           height: 1,
@@ -146,12 +149,15 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
                                     color: theme.colorScheme.error,
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    strings.stopSharing,
-                                    style: TextStyle(
-                                      fontSize: 14.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: theme.colorScheme.error,
+                                  Flexible(
+                                    child: Text(
+                                      strings.stopSharing,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: theme.colorScheme.error,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -181,9 +187,13 @@ class RealtimeDockSharedContentButton extends StatelessWidget {
               : strings.shareContent,
           isActive: isSharing,
           isLoading: status.busy,
-          onPressed: status.content?.canManage == true ? openMenu : null,
+          onPressed:
+              status.content?.canManage == true ||
+                  status.content?.canShareScreen == true
+              ? openMenu
+              : null,
           showLabel: showLabel,
-          activeColor: RealtimeUiTokens.primary,
+          activeColor: RealtimeStyle.of(context).speakStrong,
         );
       },
     );

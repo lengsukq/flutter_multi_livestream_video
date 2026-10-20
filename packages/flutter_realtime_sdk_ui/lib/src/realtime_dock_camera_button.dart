@@ -16,13 +16,11 @@ class RealtimeDockCameraButton extends StatelessWidget {
       action: RealtimeRoomUiAction.camera,
       builder: (context, onPressed, active, pending) {
         return RealtimeDockItem(
-          icon: active ? Icons.videocam_rounded : Icons.videocam_off_rounded,
-          label: active ? strings.camOn : strings.camOff,
-          isActive: active,
+          icon: active ? Icons.videocam_outlined : Icons.videocam_off_rounded,
+          label: active ? strings.stopVideo : strings.startVideo,
           isLoading: pending,
           onPressed: onPressed,
           showLabel: showLabel,
-          activeColor: RealtimeUiTokens.iosTeal,
         );
       },
     );

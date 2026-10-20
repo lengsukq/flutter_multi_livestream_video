@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 import '../flutter_realtime_sdk_ui.dart';
 import 'prepare_room_page.dart';
@@ -8,6 +9,10 @@ import 'recording_action.dart';
 import 'meeting_shared_content.dart';
 
 /// Responsive meeting page built from independently reusable SDK components.
+///
+/// Desktop (>=1000): persistent header, vertical tool rail, stage + stage bar
+/// and a trailing 340 pt panel. Phones: header, stage and a floating dock; side
+/// panels open as a right-hand drawer.
 class RealtimeMeetingPage extends StatefulWidget {
   const RealtimeMeetingPage({
     super.key,
@@ -26,6 +31,10 @@ class RealtimeMeetingPage extends StatefulWidget {
     this.participantBuilder,
     this.onCustomReaction,
     this.stageOverlayBuilder,
+    this.sessionInfo,
+    this.brand,
+    this.pinnedMessage,
+    this.initialSharedContentMode,
   });
 
   final RealtimeRoom room;
@@ -44,6 +53,18 @@ class RealtimeMeetingPage extends StatefulWidget {
   final Future<void> Function(BuildContext context)? onCustomReaction;
   final WidgetBuilder? stageOverlayBuilder;
 
+  /// Host-provided room identity. Falls back to the backend room code.
+  final RealtimeMeetingSessionInfo? sessionInfo;
+
+  /// Product mark shown before the room identity on wide headers.
+  final Widget? brand;
+
+  /// Host-provided pinned message for the chat panel.
+  final String? pinnedMessage;
+
+  /// Shared-content mode applied once after the room is ready.
+  final SharedContentMode? initialSharedContentMode;
+
   @override
   State<RealtimeMeetingPage> createState() => _RealtimeMeetingPageState();
 }
@@ -57,6 +78,7 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
   bool _recordingBusy = false;
   bool _useGrid = false;
   bool _showFilmstrip = true;
+  bool _openedInitialPanel = false;
   final _stageKey = GlobalKey();
   late DateTime _enteredAt;
 
@@ -94,6 +116,23 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
       isCurrent: isCurrent,
       startSharedContent: true,
     );
+    if (!mounted || !isCurrent()) return;
+    final initialMode = widget.initialSharedContentMode;
+    if (initialMode != null && initialMode != SharedContentMode.members) {
+      try {
+        await room.sharedContent?.selectMode(initialMode);
+      } catch (error) {
+        room.reportLifecycleFailure(
+          normalizeRealtimeException(
+            error,
+            domain: 'roomPage',
+            operation: 'initialSharedContent',
+            providerId: room.providerId,
+            stackTrace: StackTrace.current,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -107,6 +146,7 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
       _classroomTab = 0;
       _classroomPanelVisit = 0;
       _useGrid = false;
+      _openedInitialPanel = false;
       _enteredAt = DateTime.now();
     }
   }
@@ -116,7 +156,7 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
     final strings = RealtimeStrings.of(context);
     return await showDialog<bool>(
           context: context,
-          builder: (dialogContext) => AlertDialog(
+          builder: (dialogContext) => RealtimeGlassDialog(
             title: Text(strings.leaveRoomTitle),
             content: Text(strings.leaveRoomConfirmation),
             actions: [
@@ -150,21 +190,6 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
     );
   }
 
-  /// Compact More-menu equivalent of [RealtimeDockRaiseHandButton].
-  Future<void> _toggleRaiseHand(BuildContext context) async {
-    final controller = RealtimeRoomUiScope.of(context);
-    final state = controller.classroomState;
-    if (state == null) return;
-    final raised = state.students.any(
-      (student) => student.userId == state.selfUserId && student.handRaised,
-    );
-    try {
-      await controller.setHandRaised(!raised);
-    } catch (error) {
-      controller.reportActionError(error);
-    }
-  }
-
   Future<void> _sendWave(BuildContext context) async {
     try {
       await widget.onCustomReaction?.call(context);
@@ -190,6 +215,25 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
             onClose: () => Navigator.maybeOf(sheetContext)?.pop(),
           ),
         ),
+      ),
+    );
+  }
+
+  /// Opens the real publish dialog for a classroom tool kind.
+  Future<void> _openClassroomTool(BuildContext context, String kind) async {
+    final classroom = widget.room.classroom;
+    if (classroom == null) return;
+    final strings = ClassroomStrings.of(context);
+    await showDialog<void>(
+      context: context,
+      builder: (_) => ClassroomPublishToolDialog(
+        kind: ClassroomToolKind.values.firstWhere(
+          (value) => value.name == kind,
+        ),
+        classroom: classroom,
+        strings: strings,
+        onActionError: (RealtimeException error) =>
+            RealtimeRoomUiScope.of(context).reportActionError(error),
       ),
     );
   }
@@ -231,144 +275,206 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
           backgroundColor: RealtimeUiTokens.background,
           body: RealtimeAmbientBackground(
             child: SafeArea(
+              bottom: false,
               child: LayoutBuilder(
                 builder: (context, constraints) => ListenableBuilder(
                   listenable: RealtimeRoomUiScope.of(context),
                   builder: (context, _) {
-                    final wide =
-                        constraints.maxWidth >= 1000 &&
-                        MediaQuery.textScalerOf(context).scale(17) < 28;
-                    // Compact (<600pt, e.g. phones): dock collapses to core
-                    // actions + More so nothing overflows; timer moves up.
-                    final compact = constraints.maxWidth < 600;
-                    // When a wide desktop sidebar opens, the available *video*
-                    // pane is narrower by 330pt. Collapse secondary dock
-                    // actions into More rather than leaving buttons visually
-                    // behind the sidebar or outside the hit-testable scroll.
-                    final collapseDock =
-                        compact ||
-                        (wide && _panel != RealtimeMeetingPanel.closed);
-                    // At 1024px the existing meeting actions already use the
-                    // available dock width. Keep virtual background in More
-                    // until there is room for a dedicated, hit-testable action.
-                    final showBackgroundInDock =
-                        !collapseDock && constraints.maxWidth >= 1280;
+                    final width = constraints.maxWidth;
+                    final wide = RealtimeBreakpoints.isWide(context, width);
+                    final compact = width < RealtimeBreakpoints.compactMaxWidth;
+                    final tablet =
+                        !wide && width >= RealtimeBreakpoints.tabletMinWidth;
+                    final controller = RealtimeRoomUiScope.of(context);
+                    if (wide &&
+                        !_openedInitialPanel &&
+                        _panel == RealtimeMeetingPanel.closed) {
+                      _openedInitialPanel = true;
+                      final initialPanel =
+                          widget.showChat && widget.room.chat != null
+                          ? RealtimeMeetingPanel.chat
+                          : widget.showClassroom &&
+                                widget.room.classroom != null
+                          ? RealtimeMeetingPanel.participants
+                          : RealtimeMeetingPanel.closed;
+                      if (initialPanel != RealtimeMeetingPanel.closed) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted &&
+                              _panel == RealtimeMeetingPanel.closed) {
+                            setState(() => _panel = initialPanel);
+                          }
+                        });
+                      }
+                    }
+                    final participants = controller.snapshot.participants;
+                    final sharedContent = MeetingSharedContent(
+                      room: widget.room,
+                      snapshot: controller.snapshot,
+                      showClassroom: widget.showClassroom,
+                    );
+                    final sharing = sharedContent.active;
+                    // Classroom rooms use the reference teaching workspace:
+                    // the whiteboard owns its own tool rail, panels live in
+                    // Chat/People/Q&A, and the timer reads as a live class.
+                    final classroomWorkspace =
+                        widget.showClassroom && widget.room.classroom != null;
+                    final whiteboardWorkspace =
+                        classroomWorkspace &&
+                        sharedContent.mode == SharedContentMode.whiteboard;
+                    final dockLabels = RealtimeStrings.of(context);
+                    final dockShowsLabels =
+                        wide && width >= RealtimeBreakpoints.largeMinWidth;
+
+                    final stage = RealtimeMeetingStage(
+                      key: _stageKey,
+                      // The dock owns its own row below the stage (reference
+                      // classroom layout), so the stage does not reserve a
+                      // floating overlay area.
+                      bottomControlsInset: 0,
+                      useGrid: _useGrid,
+                      showFilmstrip: _showFilmstrip,
+                      showClassroom: widget.showClassroom,
+                      showAnnotations: widget.showAnnotations,
+                      showSelfView: true,
+                      participantBuilder: widget.participantBuilder,
+                      overlayBuilder: widget.stageOverlayBuilder,
+                      topOverlayInset: 0,
+                    );
+
                     final dock = Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                      padding: EdgeInsets.fromLTRB(
+                        compact ? 8 : 12,
+                        0,
+                        compact ? 8 : 12,
+                        compact ? 8 : 10,
+                      ),
                       child: RealtimeMeetingDock(
-                        showLabels:
-                            wide &&
-                            !collapseDock &&
-                            constraints.maxWidth >= 1150,
-                        leadingStatus: collapseDock
-                            ? null
-                            : RealtimeMeetingTimerBadge(startedAt: _enteredAt),
+                        showLabels: dockShowsLabels,
+                        // Panels live in the rail on tablets/desktop; phones
+                        // keep them in the dock so no action needs a second
+                        // surface to discover.
                         mediaGroup: [
-                          RealtimeDockMicrophoneButton(showLabel: wide),
-                          RealtimeDockCameraButton(showLabel: wide),
-                          if (showBackgroundInDock)
+                          RealtimeDockMicrophoneButton(
+                            showLabel: dockShowsLabels,
+                          ),
+                          RealtimeDockCameraButton(showLabel: dockShowsLabels),
+                          // Tablets and desktop keep the background action in
+                          // the dock; phones reach it from More. The header,
+                          // rail and More never repeat it.
+                          if (!compact)
                             Builder(
-                              builder: (context) {
-                                final controller = RealtimeRoomUiScope.of(
-                                  context,
-                                );
-                                return ListenableBuilder(
-                                  listenable: controller,
-                                  builder: (context, _) =>
-                                      controller
-                                          .snapshot
-                                          .capabilities
-                                          .canPublishVideo
-                                      ? RealtimeDockItem(
-                                          icon: Icons.blur_on_outlined,
-                                          label: RealtimeStrings.of(
-                                            context,
-                                          ).virtualBackground,
-                                          showLabel: wide,
-                                          isActive: controller
-                                              .room
-                                              .backgroundEffect
-                                              .enabled,
-                                          tooltip:
-                                              controller
-                                                  .room
-                                                  .backgroundCapabilities
-                                                  .isSupported
-                                              ? null
-                                              : (RealtimeStrings.of(
-                                                      context,
-                                                    ).isZh
-                                                    ? '当前不可用，点击查看原因'
-                                                    : 'Unavailable — tap for details'),
-                                          onPressed: () =>
-                                              unawaited(_openEffects(context)),
-                                        )
-                                      : const SizedBox.shrink(),
-                                );
-                              },
-                            ),
-                          if (collapseDock)
-                            (widget.showClassroom
-                                ? RealtimeDockSharedContentButton(
-                                    showLabel: wide,
-                                  )
-                                : const RealtimeScreenShareButton())
-                          else ...[
-                            if (widget.showClassroom)
-                              RealtimeDockRaiseHandButton(showLabel: wide),
-                            if (widget.showClassroom)
-                              RealtimeDockHandQueueButton(
-                                showLabel: wide,
-                                onPressed: () =>
-                                    _openClassroomHands(isWide: wide),
+                              builder: (context) => ListenableBuilder(
+                                listenable: controller,
+                                builder: (context, _) =>
+                                    controller
+                                        .snapshot
+                                        .capabilities
+                                        .canPublishVideo
+                                    ? RealtimeDockItem(
+                                        icon: Icons.blur_on_outlined,
+                                        label: RealtimeStrings.of(
+                                          context,
+                                        ).virtualBackground,
+                                        showLabel: false,
+                                        isActive: controller
+                                            .room
+                                            .backgroundEffect
+                                            .enabled,
+                                        onPressed: () =>
+                                            unawaited(_openEffects(context)),
+                                      )
+                                    : const SizedBox.shrink(),
                               ),
+                            ),
+                          RealtimeDockSharedContentButton(
+                            showLabel: dockShowsLabels,
+                          ),
+                          StreamBuilder<RecordingStatus>(
+                            stream: widget.room.recordingStatuses,
+                            initialData: widget.room.recordingStatus,
+                            builder: (context, snapshot) {
+                              final recording =
+                                  snapshot.data == RecordingStatus.recording;
+                              return RealtimeDockItem(
+                                icon: recording
+                                    ? Icons.stop_circle_outlined
+                                    : Icons.fiber_manual_record_rounded,
+                                label: recording
+                                    ? (RealtimeStrings.of(context).isZh
+                                          ? '停止录制'
+                                          : 'Stop rec')
+                                    : (RealtimeStrings.of(context).isZh
+                                          ? '录制'
+                                          : 'Record'),
+                                isDanger: recording,
+                                showBadgeDot: recording,
+                                showLabel: dockShowsLabels,
+                                onPressed: () =>
+                                    unawaited(_handleRecording(context)),
+                              );
+                            },
+                          ),
+                        ],
+                        collaborationGroup: [
+                          RealtimeDockReactionsButton(
+                            showLabel: false,
+                            onWave: widget.onCustomReaction != null
+                                ? () => unawaited(_sendWave(context))
+                                : null,
+                          ),
+                          if (widget.showClassroom) ...[
+                            if (classroomWorkspace &&
+                                controller
+                                        .classroomState
+                                        ?.capabilities
+                                        .canPublishTools ==
+                                    true) ...[
+                              RealtimeDockItem(
+                                icon: Icons.poll_outlined,
+                                label: dockLabels.isZh ? '投票' : 'Poll',
+                                showLabel: dockShowsLabels,
+                                onPressed: () =>
+                                    _openClassroomTool(context, 'poll'),
+                              ),
+                              RealtimeDockItem(
+                                icon: Icons.timer_outlined,
+                                label: dockLabels.isZh ? '计时' : 'Timer',
+                                showLabel: dockShowsLabels,
+                                onPressed: () =>
+                                    _openClassroomTool(context, 'timer'),
+                              ),
+                            ],
+                            RealtimeDockRaiseHandButton(showLabel: false),
+                            RealtimeDockHandQueueButton(
+                              showLabel: false,
+                              onPressed: () =>
+                                  _openClassroomHands(isWide: wide),
+                            ),
                           ],
                         ],
-                        collaborationGroup: collapseDock
-                            ? const []
-                            : [
-                                (widget.showClassroom
-                                    ? RealtimeDockSharedContentButton(
-                                        showLabel: wide,
-                                      )
-                                    : const RealtimeScreenShareButton()),
-                                RealtimeDockReactionsButton(
-                                  showLabel: wide,
-                                  onWave: widget.onCustomReaction != null
-                                      ? () => unawaited(_sendWave(context))
-                                      : null,
-                                ),
-                              ],
-                        panelsGroup: collapseDock
+                        panelsGroup: !compact
                             ? const []
                             : [
                                 if (widget.showChat && widget.room.chat != null)
                                   RealtimeDockItem(
                                     icon: Icons.chat_bubble_outline_rounded,
                                     label: RealtimeStrings.of(context).chat,
-                                    isActive:
-                                        wide &&
-                                        _panel == RealtimeMeetingPanel.chat,
                                     onPressed: () => _toggle(
                                       RealtimeMeetingPanel.chat,
-                                      isWide: wide,
+                                      isWide: false,
                                     ),
-                                    showLabel: wide,
+                                    showLabel: false,
                                   ),
                                 RealtimeDockItem(
                                   icon: Icons.people_outline_rounded,
                                   label: RealtimeStrings.of(
                                     context,
                                   ).participants,
-                                  isActive:
-                                      wide &&
-                                      _panel ==
-                                          RealtimeMeetingPanel.participants,
                                   onPressed: () => _toggle(
                                     RealtimeMeetingPanel.participants,
-                                    isWide: wide,
+                                    isWide: false,
                                   ),
-                                  showLabel: wide,
+                                  showLabel: false,
                                 ),
                                 if (widget.showClassroom &&
                                     widget.room.classroom != null)
@@ -377,357 +483,101 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                                     label: RealtimeStrings.of(
                                       context,
                                     ).classroom,
-                                    isActive:
-                                        wide &&
-                                        _panel ==
-                                            RealtimeMeetingPanel.classroom,
                                     onPressed: () => _toggle(
                                       RealtimeMeetingPanel.classroom,
-                                      isWide: wide,
+                                      isWide: false,
                                     ),
-                                    showLabel: wide,
+                                    showLabel: false,
                                   ),
                               ],
-                        moreAction: StreamBuilder<RecordingStatus>(
-                          stream: widget.room.recordingStatuses,
-                          initialData: widget.room.recordingStatus,
-                          builder: (context, snapshot) {
-                            final recStatus =
-                                snapshot.data ?? RecordingStatus.idle;
-                            final isRecording =
-                                recStatus == RecordingStatus.recording;
-                            final isZh =
-                                Localizations.localeOf(context).languageCode ==
-                                'zh';
-                            final isCloud = widget.room.recording.isConfigured;
+                        moreAction: _buildMoreAction(
+                          context,
+                          controller,
+                          wide: wide,
+                          compact: compact,
+                        ),
+                        // Leaving stays in the persistent header so the fading
+                        // dock never becomes the only exit.
+                      ),
+                    );
 
-                            final roomController = RealtimeRoomUiScope.of(
-                              context,
-                            );
-                            return ListenableBuilder(
-                              listenable: roomController,
-                              builder: (context, _) => RealtimeDockMoreButton(
-                                showLabel: wide,
-                                hasActiveBadge: isRecording,
-                                items: [
-                                  // Compact overflow: actions hidden from the
-                                  // dock stay one tap away in More.
-                                  if (widget.showClassroom &&
-                                      collapseDock &&
-                                      roomController.canRaiseHand &&
-                                      roomController.classroomState != null)
-                                    RealtimeDockMoreItem(
-                                      icon: Icons.pan_tool_outlined,
-                                      title: RealtimeStrings.of(
-                                        context,
-                                      ).raiseHand,
-                                      onTap: () =>
-                                          unawaited(_toggleRaiseHand(context)),
-                                    ),
-                                  if (widget.showClassroom && collapseDock)
-                                    RealtimeDockMoreItem(
-                                      icon: Icons.group_outlined,
-                                      title: RealtimeStrings.of(
-                                        context,
-                                      ).classroomHands,
-                                      onTap: () =>
-                                          _openClassroomHands(isWide: false),
-                                    ),
-                                  if (collapseDock &&
-                                      widget.onCustomReaction != null)
-                                    RealtimeDockMoreItem(
-                                      icon: Icons.waving_hand_rounded,
-                                      title: RealtimeStrings.of(context).wave,
-                                      onTap: () =>
-                                          unawaited(_sendWave(context)),
-                                    ),
-                                  if (collapseDock &&
-                                      widget.showChat &&
-                                      widget.room.chat != null)
-                                    RealtimeDockMoreItem(
-                                      icon: Icons.chat_bubble_outline_rounded,
-                                      title: RealtimeStrings.of(context).chat,
-                                      onTap: () => _toggle(
-                                        RealtimeMeetingPanel.chat,
-                                        isWide: wide,
-                                      ),
-                                    ),
-                                  if (collapseDock)
-                                    RealtimeDockMoreItem(
-                                      icon: Icons.people_outline_rounded,
-                                      title: RealtimeStrings.of(
-                                        context,
-                                      ).participants,
-                                      onTap: () => _toggle(
-                                        RealtimeMeetingPanel.participants,
-                                        isWide: wide,
-                                      ),
-                                    ),
-                                  if (collapseDock &&
-                                      widget.showClassroom &&
-                                      widget.room.classroom != null)
-                                    RealtimeDockMoreItem(
-                                      icon: Icons.school_outlined,
-                                      title: RealtimeStrings.of(
-                                        context,
-                                      ).classroom,
-                                      onTap: () => _toggle(
-                                        RealtimeMeetingPanel.classroom,
-                                        isWide: wide,
-                                      ),
-                                    ),
-                                  RealtimeDockMoreItem(
-                                    icon: Icons.cameraswitch_rounded,
-                                    title: RealtimeStrings.of(
-                                      context,
-                                    ).flipCamera,
-                                    subtitle: isZh ? '前后切换' : 'Flip',
-                                    onTap: () {
-                                      final controller = RealtimeRoomUiScope.of(
-                                        context,
-                                      );
-                                      unawaited(controller.switchCamera());
-                                    },
-                                  ),
-                                  if (!showBackgroundInDock &&
-                                      roomController
-                                          .snapshot
-                                          .capabilities
-                                          .canPublishVideo)
-                                    RealtimeDockMoreItem(
-                                      icon: Icons.blur_on_rounded,
-                                      title: RealtimeStrings.of(
-                                        context,
-                                      ).virtualBackground,
-                                      subtitle:
-                                          roomController
-                                              .room
-                                              .backgroundCapabilities
-                                              .isSupported
-                                          ? (isZh ? '背景特效' : 'Effects')
-                                          : (isZh
-                                                ? '查看不可用原因'
-                                                : 'Why unavailable'),
-                                      onTap: () =>
-                                          unawaited(_openEffects(context)),
-                                    ),
-                                  RealtimeDockMoreItem(
-                                    icon: isRecording
-                                        ? Icons.stop_circle_rounded
-                                        : Icons.fiber_manual_record_rounded,
-                                    title: isRecording
-                                        ? (isZh ? '停止录制' : 'Stop Rec')
-                                        : (isZh ? '会议录制' : 'Record'),
-                                    subtitle: isRecording
-                                        ? (isZh ? '录制中' : 'Recording')
-                                        : (isCloud
-                                              ? (isZh ? '云端录制' : 'Cloud')
-                                              : (isZh
-                                                    ? '录制不可用'
-                                                    : 'Unavailable')),
-                                    isDanger: isRecording,
-                                    showBadgeDot: isRecording,
-                                    onTap: () =>
-                                        unawaited(_handleRecording(context)),
-                                  ),
-                                  if (isCloud)
-                                    RealtimeDockMoreItem(
-                                      icon: Icons.cloud_download_rounded,
-                                      title: isZh ? '录制结果' : 'Recordings',
-                                      subtitle: isZh ? '查看云录像' : 'Files',
-                                      onTap: () =>
-                                          _showCloudResultDialog(context),
-                                    ),
-                                  if (widget.showClassroom &&
-                                      widget
-                                              .room
-                                              .classroom
-                                              ?.state
-                                              ?.capabilities
-                                              .canUseTools ==
-                                          true)
-                                    RealtimeDockMoreItem(
-                                      icon: Icons.build_outlined,
-                                      title: RealtimeStrings.of(
-                                        context,
-                                      ).classroomTools,
-                                      subtitle: isZh ? '互动工具' : 'Tools',
-                                      onTap: () => _openClassroomTools(context),
-                                    ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                        exitAction: RealtimeDockItem(
-                          icon: Icons.call_end_rounded,
-                          label: RealtimeStrings.of(context).leave,
-                          isDanger: true,
-                          onPressed: () async {
-                            final confirmed = await _confirmLeave(context);
-                            if (confirmed == true && context.mounted) {
-                              final controller = RealtimeRoomUiScope.of(
-                                context,
-                              );
-                              await controller.leave();
-                              if (context.mounted) {
-                                _onLeft();
-                              }
-                            }
-                          },
-                          showLabel: wide,
-                        ),
-                      ),
+                    final header = _buildHeader(
+                      context,
+                      controller,
+                      wide: wide,
+                      compact: compact,
+                      participants: participants,
                     );
-                    final roomController = RealtimeRoomUiScope.of(context);
-                    final sharing = MeetingSharedContent(
-                      room: widget.room,
-                      snapshot: roomController.snapshot,
-                      showClassroom: widget.showClassroom,
-                    ).active;
-                    final stage = RealtimeMeetingStage(
-                      key: _stageKey,
-                      bottomControlsInset: compact || sharing ? 0 : 90,
-                      useGrid: _useGrid,
-                      showFilmstrip: _showFilmstrip,
-                      showClassroom: widget.showClassroom,
-                      showAnnotations: widget.showAnnotations,
-                      participantBuilder: widget.participantBuilder,
-                      overlayBuilder: widget.stageOverlayBuilder,
-                      topOverlayInset: wide ? 58 : 0,
+
+                    final stageBar = _buildStageBar(
+                      context,
+                      wide: wide,
+                      sharing: sharing,
+                      participantCount: participants.length,
+                      classroomWorkspace: classroomWorkspace,
                     );
-                    final header = ListenableBuilder(
-                      listenable: roomController,
-                      builder: (context, _) => RealtimeMeetingTopBar(
-                        compact: !wide,
-                        dense: wide,
-                        title: widget.room.media.roomCode,
-                        // The UUID is available in the members panel. It made
-                        // the floating header three lines tall over the video.
-                        subtitle: wide ? null : widget.room.media.participantId,
-                        statusWidgets: [
-                          if (widget.showProvider) Text(widget.room.providerId),
-                          Tooltip(
-                            message: RealtimePresentationRole.forMeeting(
-                              widget.room.media,
-                            ).label(isZh: RealtimeStrings.of(context).isZh),
-                            child: Icon(
-                              widget.room.media.isLogicalOwner
-                                  ? Icons.admin_panel_settings_outlined
-                                  : Icons.person_outline_rounded,
-                              size: 16,
-                              color: RealtimeUiTokens.textMuted,
-                            ),
-                          ),
-                          RealtimeRecordingBadge(
-                            room: widget.room,
-                            compact: true,
-                          ),
-                          if (compact)
-                            RealtimeMeetingTimerBadge(startedAt: _enteredAt),
-                        ],
-                        trailingActions: [
-                          if (wide) const RealtimeConnectionIndicator(),
-                          if (!sharing &&
-                              roomController.snapshot.participants.length > 1)
-                            IconButton(
-                              tooltip: _useGrid
-                                  ? (RealtimeStrings.of(context).isZh
-                                        ? '聚焦布局'
-                                        : 'Focus layout')
-                                  : (RealtimeStrings.of(context).isZh
-                                        ? '网格布局'
-                                        : 'Grid layout'),
-                              icon: Icon(
-                                _useGrid
-                                    ? Icons.view_carousel_outlined
-                                    : Icons.grid_view_rounded,
-                                size: 20,
-                              ),
-                              onPressed: () =>
-                                  setState(() => _useGrid = !_useGrid),
-                            ),
-                          if ((sharing &&
-                                  roomController
-                                      .snapshot
-                                      .participants
-                                      .isNotEmpty) ||
-                              (!_useGrid &&
-                                  roomController.snapshot.participants.length >
-                                      1))
-                            IconButton(
-                              key: const ValueKey('meeting-toggle-filmstrip'),
-                              tooltip: RealtimeStrings.of(context).isZh
-                                  ? (_showFilmstrip ? '隐藏缩略图' : '显示缩略图')
-                                  : (_showFilmstrip
-                                        ? 'Hide thumbnails'
-                                        : 'Show thumbnails'),
-                              icon: Icon(
-                                _showFilmstrip
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
-                                size: 20,
-                              ),
-                              onPressed: () => setState(
-                                () => _showFilmstrip = !_showFilmstrip,
-                              ),
-                            ),
-                          IconButton(
-                            icon: const Icon(Icons.blur_on_rounded, size: 20),
-                            tooltip: RealtimeStrings.of(
-                              context,
-                            ).virtualBackground,
-                            onPressed: () => unawaited(_openEffects(context)),
-                          ),
-                          RealtimeLeaveButton(
-                            iconOnly:
-                                constraints.maxWidth < 380 ||
-                                MediaQuery.textScalerOf(context).scale(17) >=
-                                    28,
-                            onConfirm: _confirmLeave,
-                            onLeft: _onLeft,
-                          ),
-                        ],
-                      ),
-                    );
+
                     return Column(
                       children: [
                         if (widget.header != null) widget.header!,
-                        if (!wide) header,
+                        header,
+                        // Keep tablet navigation attached to the header rather
+                        // than floating over the media stage.
+                        if (tablet)
+                          RealtimeMeetingRail(
+                            horizontal: true,
+                            items: _railItems(context, controller, wide: false),
+                          ),
                         if (widget.showRtcDataMessages) _rtcDataPanel(),
                         Expanded(
-                          child: compact
-                              ? Column(
-                                  children: [
-                                    Expanded(child: stage),
-                                    dock,
-                                  ],
-                                )
-                              : wide
-                              // Header and dock belong to the *video pane*
-                              // only. When a right sidebar is open, it must
-                              // remain a sibling rather than sit behind the
-                              // full-width header's Stack/hit testing.
-                              ? Row(
-                                  children: [
-                                    Expanded(
-                                      child: RealtimeIdleControls(
-                                        child: stage,
-                                        controls: dock,
-                                        topControls: header,
-                                        reserveControlsSpace: sharing,
-                                        controlsMaxWidth: 1100,
-                                      ),
-                                    ),
-                                    if (_panel != RealtimeMeetingPanel.closed)
-                                      SizedBox(width: 330, child: _sidePanel()),
-                                  ],
-                                )
-                              : RealtimeIdleControls(
-                                  child: stage,
-                                  controls: dock,
-                                  reserveControlsSpace: sharing,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (wide && !whiteboardWorkspace)
+                                RealtimeMeetingRail(
+                                  items: _railItems(
+                                    context,
+                                    controller,
+                                    wide: wide,
+                                  ),
                                 ),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    stageBar,
+                                    Expanded(
+                                      child: compact
+                                          ? Column(
+                                              children: [
+                                                Expanded(child: stage),
+                                                dock,
+                                              ],
+                                            )
+                                          : RealtimeIdleControls(
+                                              child: stage,
+                                              controls: dock,
+                                              controlsMaxWidth: 1100,
+                                              // Dedicated bottom row, like the
+                                              // reference dock under the tiles.
+                                              reserveControlsSpace: true,
+                                              autoHide:
+                                                  !MediaQuery.accessibleNavigationOf(
+                                                    context,
+                                                  ),
+                                            ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (wide && _panel != RealtimeMeetingPanel.closed)
+                                SizedBox(
+                                  width: 340,
+                                  child: _sidePanel(
+                                    workspaceMode: classroomWorkspace,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ],
                     );
@@ -741,9 +591,271 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
     },
   );
 
+  Widget _buildHeader(
+    BuildContext context,
+    RealtimeRoomUiController controller, {
+    required bool wide,
+    required bool compact,
+    required List<MediaParticipant> participants,
+  }) {
+    final strings = RealtimeStrings.of(context);
+    final name = widget.room.media.roomCode;
+    final role = RealtimePresentationRole.forMeeting(widget.room.media);
+    final classroomMode = widget.showClassroom && widget.room.classroom != null;
+    final classroomState = controller.classroomState;
+    final roleLabel = classroomState == null
+        ? role.label(isZh: strings.isZh)
+        : classroomState.isTeacher
+        ? (strings.isZh ? '老师' : 'Teacher')
+        : (strings.isZh ? '学生' : 'Student');
+    final info = widget.sessionInfo;
+    final modeLabel =
+        (widget.room.media.meetingMode ??
+                (widget.room.classroom != null
+                    ? MediaMeetingMode.classroom
+                    : MediaMeetingMode.standard))
+            .label(isZh: strings.isZh);
+    final names = participants
+        .map((p) => p.displayName.isEmpty ? p.id : p.displayName)
+        .toList(growable: false);
+    void invite() {
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      unawaited(
+        Clipboard.setData(ClipboardData(text: name)).then((_) {
+          messenger?.showSnackBar(
+            SnackBar(content: Text(strings.meetingCodeCopied)),
+          );
+        }),
+      );
+    }
+
+    return RealtimeMeetingTopBar(
+      brand: widget.brand,
+      title: info?.title ?? name,
+      subtitle: wide
+          ? info?.subtitle ??
+                '$roleLabel · ${participants.length} ${strings.isZh ? "人在线" : "online"}${widget.showProvider ? " · ${widget.room.providerId}" : ""}'
+          : '$modeLabel · $roleLabel',
+      compact: !wide,
+      dense: wide,
+      inviteAction: invite,
+      statusWidgets: [
+        if (wide)
+          RealtimePill(
+            label:
+                (widget.room.media.meetingMode ??
+                        (widget.room.classroom != null
+                            ? MediaMeetingMode.classroom
+                            : MediaMeetingMode.standard))
+                    .label(isZh: strings.isZh),
+          ),
+        if (!classroomMode)
+          Tooltip(
+            message: roleLabel,
+            child: Icon(
+              widget.room.media.isLogicalOwner
+                  ? Icons.admin_panel_settings_outlined
+                  : Icons.person_outline_rounded,
+              size: 16,
+              color: RealtimeUiTokens.textMuted,
+            ),
+          ),
+        RealtimeMeetingTimerBadge(startedAt: _enteredAt, live: classroomMode),
+        RealtimeRecordingBadge(room: widget.room, compact: true),
+        if (wide) const RealtimeConnectionIndicator(),
+      ],
+      audienceNames: compact ? const [] : names,
+      audienceCount: compact ? null : participants.length,
+      trailingActions: [
+        // The labelled invite button only renders on wide headers, so phones
+        // and tablets get an icon-only equivalent instead of a second copy
+        // action.
+        if (!wide)
+          IconButton.outlined(
+            tooltip: strings.isZh ? '邀请' : 'Invite',
+            style: IconButton.styleFrom(
+              foregroundColor: RealtimeStyle.of(context).textSecondary,
+              side: BorderSide(color: RealtimeStyle.of(context).border),
+              minimumSize: const Size(40, 40),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(
+                  RealtimeUiTokens.controlRadius,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.person_add_alt_1_outlined, size: 19),
+            onPressed: invite,
+          ),
+        const SizedBox(width: 4),
+        RealtimeLeaveButton(
+          iconOnly: compact,
+          onConfirm: _confirmLeave,
+          onLeft: _onLeft,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStageBar(
+    BuildContext context, {
+    required bool wide,
+    required bool sharing,
+    required int participantCount,
+    bool classroomWorkspace = false,
+  }) {
+    final strings = RealtimeStrings.of(context);
+    // The whiteboard owns its page tabs; a single "Shared content" tab would
+    // duplicate them in classroom rooms, so only keep camera layout tabs.
+    if (sharing && classroomWorkspace) return const SizedBox.shrink();
+    final tabs = sharing
+        ? <String>[strings.isZh ? '共享内容' : 'Shared content']
+        : <String>[strings.speakerMode, strings.gridMode];
+    final selected = sharing ? 0 : (_useGrid ? 1 : 0);
+    return RealtimeMeetingStageBar(
+      tabs: tabs,
+      selectedTab: selected,
+      onTabSelected: sharing
+          ? null
+          : (int index) => setState(() => _useGrid = index == 1),
+      actions: [
+        if ((sharing && participantCount > 0) ||
+            (!sharing && participantCount > 1 && !_useGrid))
+          IconButton(
+            tooltip: strings.isZh
+                ? (_showFilmstrip ? '隐藏缩略图' : '显示缩略图')
+                : (_showFilmstrip ? 'Hide thumbnails' : 'Show thumbnails'),
+            icon: Icon(
+              _showFilmstrip
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              size: 18,
+            ),
+            onPressed: () => setState(() => _showFilmstrip = !_showFilmstrip),
+          ),
+      ],
+    );
+  }
+
+  Widget? _buildMoreAction(
+    BuildContext context,
+    RealtimeRoomUiController controller, {
+    required bool wide,
+    required bool compact,
+  }) {
+    final isZh = RealtimeStrings.of(context).isZh;
+    final strings = RealtimeStrings.of(context);
+    return RealtimeDockMoreButton(
+      showLabel: false,
+      hasActiveBadge: widget.room.recordingStatus == RecordingStatus.recording,
+      items: [
+        if (compact && widget.onCustomReaction != null)
+          RealtimeDockMoreItem(
+            icon: Icons.waving_hand_rounded,
+            title: strings.wave,
+            onTap: () => unawaited(_sendWave(context)),
+          ),
+        if (compact && widget.showChat && widget.room.chat != null)
+          RealtimeDockMoreItem(
+            icon: Icons.chat_bubble_outline_rounded,
+            title: strings.chat,
+            onTap: () => _toggle(RealtimeMeetingPanel.chat, isWide: false),
+          ),
+        if (compact)
+          RealtimeDockMoreItem(
+            icon: Icons.people_outline_rounded,
+            title: strings.participants,
+            onTap: () =>
+                _toggle(RealtimeMeetingPanel.participants, isWide: false),
+          ),
+        if (compact && widget.showClassroom && widget.room.classroom != null)
+          RealtimeDockMoreItem(
+            icon: Icons.school_outlined,
+            title: strings.classroom,
+            onTap: () => _toggle(RealtimeMeetingPanel.classroom, isWide: false),
+          ),
+        RealtimeDockMoreItem(
+          icon: Icons.cameraswitch_rounded,
+          title: strings.flipCamera,
+          subtitle: isZh ? '前后切换' : 'Flip',
+          onTap: () {
+            final current = RealtimeRoomUiScope.of(context);
+            unawaited(current.switchCamera());
+          },
+        ),
+        if (compact && controller.snapshot.capabilities.canPublishVideo)
+          RealtimeDockMoreItem(
+            icon: Icons.blur_on_rounded,
+            title: strings.virtualBackground,
+            subtitle: controller.room.backgroundCapabilities.isSupported
+                ? (isZh ? '背景特效' : 'Effects')
+                : (isZh ? '查看不可用原因' : 'Why unavailable'),
+            onTap: () => unawaited(_openEffects(context)),
+          ),
+        if (controller.room.recording.isConfigured)
+          RealtimeDockMoreItem(
+            icon: Icons.cloud_download_rounded,
+            title: isZh ? '录制结果' : 'Recordings',
+            subtitle: isZh ? '查看云录像' : 'Files',
+            onTap: () => _showCloudResultDialog(context),
+          ),
+        if (widget.showClassroom &&
+            widget.room.classroom?.state?.capabilities.canUseTools == true)
+          RealtimeDockMoreItem(
+            icon: Icons.build_outlined,
+            title: strings.classroomTools,
+            subtitle: isZh ? '互动工具' : 'Tools',
+            onTap: () => _openClassroomTools(context),
+          ),
+      ],
+    );
+  }
+
+  List<RealtimeMeetingRailItem> _railItems(
+    BuildContext context,
+    RealtimeRoomUiController controller, {
+    required bool wide,
+  }) {
+    final strings = RealtimeStrings.of(context);
+    // Panels and the host reaction live here. Action entry points stay
+    // single-sourced: raise hand in the dock, background in the dock/More and
+    // layout in the stage bar.
+    return [
+      if (widget.showChat && widget.room.chat != null)
+        RealtimeMeetingRailItem(
+          icon: Icons.chat_bubble_outline_rounded,
+          tooltip: strings.chat,
+          active: wide && _panel == RealtimeMeetingPanel.chat,
+          onPressed: () => _toggle(RealtimeMeetingPanel.chat, isWide: wide),
+        ),
+      RealtimeMeetingRailItem(
+        icon: Icons.people_outline_rounded,
+        tooltip: strings.participants,
+        active: wide && _panel == RealtimeMeetingPanel.participants,
+        onPressed: () =>
+            _toggle(RealtimeMeetingPanel.participants, isWide: wide),
+      ),
+      if (widget.showClassroom && widget.room.classroom != null)
+        RealtimeMeetingRailItem(
+          icon: Icons.school_outlined,
+          tooltip: strings.classroom,
+          active: wide && _panel == RealtimeMeetingPanel.classroom,
+          onPressed: () =>
+              _toggle(RealtimeMeetingPanel.classroom, isWide: wide),
+        ),
+      if (widget.onCustomReaction != null) ...[
+        const RealtimeMeetingRailItem.divider(),
+        RealtimeMeetingRailItem(
+          icon: Icons.waving_hand_rounded,
+          tooltip: strings.reactions,
+          onPressed: () => unawaited(_sendWave(context)),
+        ),
+      ],
+    ];
+  }
+
   void _toggle(RealtimeMeetingPanel panel, {required bool isWide}) {
     if (!isWide) {
-      _openMobileSheet(panel);
+      _openDrawer(panel);
       return;
     }
     setState(() {
@@ -757,7 +869,7 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
 
   void _openClassroomHands({required bool isWide}) {
     if (!isWide) {
-      _openMobileSheet(RealtimeMeetingPanel.classroom, classroomTab: 1);
+      _openDrawer(RealtimeMeetingPanel.classroom, classroomTab: 1);
       return;
     }
     setState(() {
@@ -768,138 +880,33 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
     });
   }
 
-  void _openMobileSheet(RealtimeMeetingPanel panel, {int classroomTab = 0}) {
+  void _openDrawer(RealtimeMeetingPanel panel, {int classroomTab = 0}) {
     final strings = RealtimeStrings.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     unawaited(
-      showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (sheetContext) {
-          final viewInsets = MediaQuery.viewInsetsOf(sheetContext);
-          return Padding(
-            padding: EdgeInsets.only(bottom: viewInsets.bottom),
-            child: RealtimeRoomUiScope(
-              room: widget.room,
-              child: Container(
-                height: MediaQuery.of(sheetContext).size.height * 0.72,
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      blurRadius: 24,
-                      offset: const Offset(0, -6),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 38,
-                        height: 4.5,
-                        margin: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(2.5),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: (switch (panel) {
-                                RealtimeMeetingPanel.chat => const Color(
-                                  0xFF0284C7,
-                                ),
-                                RealtimeMeetingPanel.classroom => const Color(
-                                  0xFF8B5CF6,
-                                ),
-                                _ => const Color(0xFF1D1D1F),
-                              }).withValues(alpha: 0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              switch (panel) {
-                                RealtimeMeetingPanel.chat =>
-                                  Icons.chat_bubble_outline_rounded,
-                                RealtimeMeetingPanel.classroom =>
-                                  Icons.school_outlined,
-                                _ => Icons.people_outline_rounded,
-                              },
-                              size: 16,
-                              color: switch (panel) {
-                                RealtimeMeetingPanel.chat => const Color(
-                                  0xFF0284C7,
-                                ),
-                                RealtimeMeetingPanel.classroom => const Color(
-                                  0xFF8B5CF6,
-                                ),
-                                _ => const Color(0xFF1D1D1F),
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            switch (panel) {
-                              RealtimeMeetingPanel.chat => strings.chat,
-                              RealtimeMeetingPanel.classroom =>
-                                strings.classroom,
-                              _ => strings.participants,
-                            },
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: isDark
-                                  ? Colors.white
-                                  : const Color(0xFF1D1D1F),
-                            ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded),
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => Navigator.pop(sheetContext),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Divider(
-                      height: 1,
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.08)
-                          : const Color(0xFFE5E5EA),
-                    ),
-                    Expanded(
-                      child: switch (panel) {
-                        RealtimeMeetingPanel.chat => const RealtimeChatPanel(),
-                        RealtimeMeetingPanel.classroom =>
-                          RealtimeClassroomPanel(
-                            showHeader: false,
-                            initialTab: classroomTab,
-                            onClose: () => Navigator.pop(sheetContext),
-                          ),
-                        _ => const RealtimeManagedParticipantList(),
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
+      showRealtimeRoomDrawer<void>(
+        context,
+        title: switch (panel) {
+          RealtimeMeetingPanel.chat => strings.chat,
+          RealtimeMeetingPanel.classroom => strings.classroom,
+          _ => strings.participants,
         },
+        icon: switch (panel) {
+          RealtimeMeetingPanel.chat => Icons.chat_bubble_outline_rounded,
+          RealtimeMeetingPanel.classroom => Icons.school_outlined,
+          _ => Icons.people_outline_rounded,
+        },
+        child: RealtimeRoomUiScope(
+          room: widget.room,
+          child: switch (panel) {
+            RealtimeMeetingPanel.chat => const RealtimeChatPanel(),
+            RealtimeMeetingPanel.classroom => RealtimeClassroomPanel(
+              showHeader: false,
+              initialTab: classroomTab,
+              onClose: () => Navigator.maybePop(context),
+            ),
+            _ => const RealtimeManagedParticipantList(),
+          },
+        ),
       ),
     );
   }
@@ -918,10 +925,23 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
     },
   );
 
-  Widget _sidePanel() => RealtimeMeetingSidePanel(
+  Widget _sidePanel({bool workspaceMode = false}) => RealtimeMeetingSidePanel(
     panel: _panel,
     classroomTab: _classroomTab,
     classroomPanelVisit: _classroomPanelVisit,
+    workspaceMode: workspaceMode,
+    pinnedMessage: widget.pinnedMessage,
+    recordingPanel:
+        workspaceMode &&
+            widget.room.recording.isConfigured &&
+            widget.room.media.isLogicalOwner
+        ? RealtimeRecordingPanel(
+            room: widget.room,
+            busy: _recordingBusy,
+            onToggleRecording: () => unawaited(_handleRecording(context)),
+            onOpenResult: () => _showCloudResultDialog(context),
+          )
+        : null,
     onClose: () => setState(() => _panel = RealtimeMeetingPanel.closed),
   );
 

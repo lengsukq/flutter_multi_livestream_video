@@ -3,7 +3,7 @@ import '../flutter_realtime_sdk_ui.dart';
 
 /// Side-panel selection for the built-in meeting layout.
 ///
-/// Wide screens show a trailing column; narrow screens use a bottom sheet.
+/// Wide screens show a trailing column; narrow screens use a right drawer.
 enum RealtimeMeetingPanel { closed, chat, participants, classroom }
 
 /// Trailing side panel: classroom tools or chat/participants sidebar.
@@ -16,6 +16,9 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
     required this.classroomTab,
     required this.classroomPanelVisit,
     required this.onClose,
+    this.workspaceMode = false,
+    this.pinnedMessage,
+    this.recordingPanel,
   });
 
   final RealtimeMeetingPanel panel;
@@ -23,45 +26,78 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
   final int classroomPanelVisit;
   final VoidCallback onClose;
 
+  /// Rooms with the classroom plugin use the reference workspace panel:
+  /// underlined Chat / People / Q&A tabs instead of the segmented sidebar.
+  final bool workspaceMode;
+  final String? pinnedMessage;
+  final Widget? recordingPanel;
+
   @override
   Widget build(BuildContext context) {
-    final RealtimeStrings strings = RealtimeStrings.of(context);
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final RealtimeRoomUiController controller = RealtimeRoomUiScope.of(context);
+    final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
+    final controller = RealtimeRoomUiScope.of(context);
 
-    if (panel == RealtimeMeetingPanel.classroom) {
+    if (panel == RealtimeMeetingPanel.classroom ||
+        (workspaceMode && panel == RealtimeMeetingPanel.chat) ||
+        (workspaceMode && panel == RealtimeMeetingPanel.participants)) {
+      if (workspaceMode) {
+        final hasChat = controller.room.chat != null;
+        // The classroom panel targets Q&A and the hand queue by label, not by
+        // index: chat is optional and the queue tab only exists for teachers.
+        final initialTab = panel == RealtimeMeetingPanel.participants
+            ? (hasChat ? 1 : 0)
+            : 0;
+        return Container(
+          decoration: BoxDecoration(
+            color: style.surface,
+            border: Border(left: BorderSide(color: style.border)),
+          ),
+          child: RealtimeClassroomSidePanel(
+            key: ValueKey<int>(classroomPanelVisit),
+            initialTab: initialTab,
+            initialTabLabel: switch (panel) {
+              RealtimeMeetingPanel.participants =>
+                strings.isZh ? '成员' : 'People',
+              RealtimeMeetingPanel.closed => null,
+              _ when classroomTab == 1 && controller.canGrantSpeak =>
+                strings.classroomHands,
+              _ => strings.isZh ? '问答' : 'Q&A',
+            },
+            pinnedMessage: pinnedMessage,
+            recordingPanel: recordingPanel,
+            onClose: onClose,
+          ),
+        );
+      }
       return Container(
-        margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
-        child: RealtimeCardSurface(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 8, 8),
+        decoration: BoxDecoration(
+          color: style.surface,
+          border: Border(left: BorderSide(color: style.border)),
+        ),
+        child: Column(
+          children: [
+            SizedBox(
+              height: 52,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 4, 0),
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1D1D1F).withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.school_outlined,
-                        size: 16,
-                        color: Color(0xFF1D1D1F),
-                      ),
+                    Icon(
+                      Icons.school_outlined,
+                      size: 18,
+                      color: style.textSecondary,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         strings.classroom,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF1D1D1F),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: style.text,
                         ),
                       ),
                     ),
@@ -72,32 +108,27 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
                         minHeight: 44,
                       ),
                       onPressed: onClose,
-                      icon: Icon(
-                        Icons.close_rounded,
-                        color: isDark ? Colors.white70 : Colors.black54,
-                      ),
+                      icon: const Icon(Icons.close_rounded, size: 20),
                     ),
                   ],
                 ),
               ),
-              const Divider(height: 1),
-              Expanded(
-                child: RealtimeClassroomPanel(
-                  key: ValueKey<int>(classroomPanelVisit),
-                  showHeader: false,
-                  initialTab: classroomTab,
-                  onClose: onClose,
-                ),
+            ),
+            Divider(height: 1, color: style.border),
+            Expanded(
+              child: RealtimeClassroomPanel(
+                key: ValueKey<int>(classroomPanelVisit),
+                showHeader: false,
+                initialTab: classroomTab,
+                onClose: onClose,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }
 
-    final List<RealtimeMeetingMemberItem> members = controller
-        .snapshot
-        .participants
+    final members = controller.snapshot.participants
         .map(
           (p) => RealtimeMeetingMemberItem(
             id: p.id,
@@ -106,21 +137,27 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
             roleTitle: p.isLocal ? (strings.isZh ? '我' : 'You') : null,
             isMuted: p.isMuted,
             isVideoOff: !p.isVideoEnabled,
+            isSpeaking: p.isSpeaking,
+            handRaised:
+                controller.classroomState?.students
+                    .where((student) => student.handRaised)
+                    .any((student) => student.displayName == p.displayName) ??
+                false,
           ),
         )
         .toList();
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(0, 8, 8, 8),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-        child: RealtimeMeetingSidebar(
-          members: members,
-          initialTab: panel == RealtimeMeetingPanel.participants ? 1 : 0,
-          chatWidget: const RealtimeChatPanel(),
-          membersWidget: const RealtimeManagedParticipantList(),
-          onClose: onClose,
-        ),
+      decoration: BoxDecoration(
+        color: style.surface,
+        border: Border(left: BorderSide(color: style.border)),
+      ),
+      child: RealtimeMeetingSidebar(
+        members: members,
+        initialTab: panel == RealtimeMeetingPanel.participants ? 1 : 0,
+        chatWidget: const RealtimeChatPanel(),
+        membersWidget: const RealtimeManagedParticipantList(),
+        onClose: onClose,
       ),
     );
   }

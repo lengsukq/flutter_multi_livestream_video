@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
-/// Floating room controls. Primary media and exit actions remain visible;
-/// secondary groups scroll independently when the window is narrow.
+/// Floating room controls.
+///
+/// Groups are rendered as separate white capsules (media, collaboration,
+/// panels, exit) exactly like the reference dock. Narrow windows keep the two
+/// primary media actions and the exit visible, and let the rest scroll.
 class RealtimeMeetingDock extends StatelessWidget {
   const RealtimeMeetingDock({
     super.key,
@@ -23,70 +26,102 @@ class RealtimeMeetingDock extends StatelessWidget {
   final bool showLabels;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    top: false,
-    child: RealtimeGlassSurface(
-      radius: RealtimeUiTokens.pillRadius,
-      blur: RealtimeUiTokens.blur,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    return SafeArea(
+      top: false,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final narrow = constraints.maxWidth < 600;
-          final divider = Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: SizedBox(
-              height: 24,
-              child: VerticalDivider(
-                width: 1,
-                color: RealtimeStyle.of(context).border,
-              ),
-            ),
-          );
-          final secondary = [
+          final narrow =
+              constraints.maxWidth < RealtimeBreakpoints.compactMaxWidth;
+          // Phones pin mic/camera and the exit action. Panel toggles come
+          // first in the scroll region so chat/members stay one tap away;
+          // sharing extras and More follow.
+          final narrowSecondary = [
+            ...panelsGroup,
             ...mediaGroup.skip(2),
             ...collaborationGroup,
-            ...panelsGroup,
             if (moreAction != null) moreAction!,
           ];
+          Widget group(List<Widget> children) => Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: style.surface,
+              borderRadius: BorderRadius.circular(RealtimeUiTokens.dockRadius),
+              border: Border.all(color: style.border),
+              boxShadow: style.cardShadow,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 2),
+                  children[i],
+                ],
+              ],
+            ),
+          );
+
           if (narrow) {
             return Row(
               children: [
-                ...mediaGroup.take(2),
-                if (exitAction != null) exitAction!,
-                if (secondary.isNotEmpty) ...[
-                  divider,
+                group(mediaGroup.take(2).toList(growable: false)),
+                if (narrowSecondary.isNotEmpty) ...[
+                  const SizedBox(width: 6),
                   Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: secondary,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: narrowSecondary,
+                        ),
                       ),
                     ),
                   ),
+                ] else
+                  const Spacer(),
+                if (exitAction != null) ...[
+                  const SizedBox(width: 6),
+                  group([exitAction!]),
                 ],
               ],
             );
           }
+
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                if (leadingStatus != null) ...[leadingStatus!, divider],
-                ...mediaGroup,
-                if (exitAction != null) ...[divider, exitAction!],
-                if (collaborationGroup.isNotEmpty) ...[
-                  divider,
-                  ...collaborationGroup,
+                if (leadingStatus != null) ...[
+                  leadingStatus!,
+                  const SizedBox(width: 8),
                 ],
-                if (panelsGroup.isNotEmpty) ...[divider, ...panelsGroup],
-                if (moreAction != null) ...[divider, moreAction!],
+                group(mediaGroup),
+                if (collaborationGroup.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  group(collaborationGroup),
+                ],
+                if (panelsGroup.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  group(panelsGroup),
+                ],
+                if (moreAction != null) ...[
+                  const SizedBox(width: 8),
+                  group([moreAction!]),
+                ],
+                if (exitAction != null) ...[
+                  const SizedBox(width: 8),
+                  group([exitAction!]),
+                ],
               ],
             ),
           );
         },
       ),
-    ),
-  );
+    );
+  }
 }

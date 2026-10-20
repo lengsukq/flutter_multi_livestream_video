@@ -8,7 +8,7 @@ class MeetingSharedContent {
     required this.room,
     required this.snapshot,
     required bool showClassroom,
-  }) : content = showClassroom ? room.sharedContent?.content : null;
+  }) : content = room.sharedContent?.content;
 
   final RealtimeRoom room;
   final MediaSnapshot snapshot;

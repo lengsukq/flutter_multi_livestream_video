@@ -75,7 +75,7 @@ class MeetingDockRealtimeClassroomPanelState
                             ),
                           ],
                         ),
-                        labelColor: style.primary,
+                        labelColor: style.text,
                         unselectedLabelColor: style.textMuted,
                         labelPadding: const EdgeInsets.symmetric(horizontal: 4),
                         labelStyle: const TextStyle(

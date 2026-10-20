@@ -29,9 +29,7 @@ class RealtimeLiveLikeButton extends StatelessWidget {
             await controller.sendLiveLike();
           } catch (error) {
             if (context.mounted) {
-              ScaffoldMessenger.maybeOf(
-                context,
-              )?.showSnackBar(SnackBar(content: Text(error.toString())));
+              controller.reportActionError(error);
             }
           }
         }

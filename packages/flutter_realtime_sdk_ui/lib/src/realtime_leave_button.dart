@@ -48,30 +48,38 @@ class RealtimeLeaveButton extends StatelessWidget {
             message: label,
             child: IconButton.filled(
               style: IconButton.styleFrom(
-                backgroundColor: RealtimeUiTokens.appleDanger,
+                backgroundColor: RealtimeUiTokens.live,
                 foregroundColor: Colors.white,
-                minimumSize: const Size(48, 48),
+                minimumSize: const Size(44, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    RealtimeUiTokens.controlRadius,
+                  ),
+                ),
               ),
               onPressed: leaveAction,
-              icon: const Icon(Icons.call_end_rounded, size: 20),
+              icon: const Icon(Icons.call_end_rounded, size: 19),
             ),
           );
         }
         return FilledButton.icon(
           onPressed: leaveAction,
           style: FilledButton.styleFrom(
-            backgroundColor: RealtimeUiTokens.appleDanger,
+            backgroundColor: RealtimeUiTokens.live,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            minimumSize: const Size(44, 40),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+              borderRadius: BorderRadius.circular(
+                RealtimeUiTokens.controlRadius,
+              ),
             ),
             elevation: 0,
           ),
           icon: const Icon(Icons.call_end_rounded, size: 18),
           label: Text(
             label,
-            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
         );
       },

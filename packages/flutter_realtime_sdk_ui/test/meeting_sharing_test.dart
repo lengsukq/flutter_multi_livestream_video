@@ -4,6 +4,37 @@ import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'support/meeting_sharing_fixture.dart';
 
 void main() {
+  testWidgets(
+    'ordinary meeting keeps the shared whiteboard without teaching features',
+    (tester) async {
+      final fixture = await MeetingSharingFixture.create(
+        mode: SharedContentMode.whiteboard,
+        teaching: false,
+      );
+      addTearDown(fixture.room.dispose);
+      expect(
+        fixture.room.sharedContent!.content?.mode,
+        SharedContentMode.whiteboard,
+      );
+      expect(fixture.room.sharedContent!.status.error, isNull);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RealtimeUiTheme.light(),
+          home: RealtimeMeetingPage(room: fixture.room, showClassroom: false),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(fixture.room.classroom, isNull);
+      expect(find.byType(AnnotationSurface), findsWidgets);
+      expect(find.byType(RealtimeDockSharedContentButton), findsOneWidget);
+      expect(find.byTooltip('Raise hand'), findsNothing);
+      expect(find.byType(RealtimeClassroomSidePanel), findsNothing);
+      expect(fixture.room.sharedContent!.screenAnnotations.canEdit, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(fixture.room.dispose);
+    },
+  );
+
   Future<void> mount(
     WidgetTester tester,
     MeetingSharingFixture f, {

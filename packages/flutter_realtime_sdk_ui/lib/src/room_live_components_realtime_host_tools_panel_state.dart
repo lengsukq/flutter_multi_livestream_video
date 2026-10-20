@@ -61,13 +61,15 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
         children: [
           Icon(icon, size: 14, color: style.textMuted),
           const SizedBox(width: 6),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: style.textMuted,
-              letterSpacing: 0.2,
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: style.textMuted,
+                letterSpacing: 0.2,
+              ),
             ),
           ),
         ],
@@ -134,13 +136,16 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                       ),
                       child: Icon(
                         Icons.tune_rounded,
-                        color: style.primary,
+                        color: style.text,
                         size: 18,
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Row(
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
                           Text(
                             isZh ? '主播工具' : 'Host Tools',
@@ -154,9 +159,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                           const SizedBox(width: 8),
                           RealtimePill(
                             label: isZh ? '主播控制台' : 'Broadcaster',
-                            foreground: isHost
-                                ? style.primary
-                                : style.textMuted,
+                            foreground: isHost ? style.text : style.textMuted,
                             background: isHost
                                 ? style.primarySubtle
                                 : style.surfaceSubtle,
@@ -186,7 +189,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                 controller.isPending(RealtimeRoomUiAction.audioOutput))
               LinearProgressIndicator(
                 minHeight: 2,
-                color: style.primary,
+                color: style.text,
                 backgroundColor: style.primarySubtle,
               ),
             Expanded(
@@ -246,7 +249,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                       vertical: 12,
                     ),
                     radius: RealtimeUiTokens.cardRadius,
-                    child: Row(
+                    child: _HostToolRow(
                       children: [
                         Container(
                           width: 36,
@@ -267,7 +270,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                           child: const Icon(
                             Icons.cameraswitch_outlined,
                             size: 19,
-                            color: RealtimeUiTokens.iosBlue,
+                            color: RealtimeUiTokens.text,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -299,7 +302,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: style.primary,
+                            foregroundColor: style.text,
                             side: BorderSide(color: style.primaryBorder),
                             backgroundColor: style.primarySubtle,
                             padding: const EdgeInsets.symmetric(
@@ -348,7 +351,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                       vertical: 12,
                     ),
                     radius: RealtimeUiTokens.cardRadius,
-                    child: Row(
+                    child: _HostToolRow(
                       children: [
                         Container(
                           width: 36,
@@ -379,7 +382,10 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 6,
+                                runSpacing: 4,
                                 children: [
                                   Text(
                                     isZh ? '屏幕共享' : 'Screen Share',
@@ -393,7 +399,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                                     const SizedBox(width: 6),
                                     RealtimePill(
                                       label: isZh ? '共享中' : 'Sharing',
-                                      foreground: RealtimeUiTokens.iosGreen,
+                                      foreground: RealtimeUiTokens.speakStrong,
                                       background: RealtimeUiTokens.iosGreen
                                           .withValues(alpha: 0.12),
                                       borderColor: RealtimeUiTokens.iosGreen
@@ -424,7 +430,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                           style: OutlinedButton.styleFrom(
                             foregroundColor: snapshot.localScreenShareEnabled
                                 ? style.danger
-                                : style.primary,
+                                : style.text,
                             side: BorderSide(
                               color: snapshot.localScreenShareEnabled
                                   ? style.danger.withValues(alpha: 0.35)
@@ -525,7 +531,7 @@ class RoomLiveComponentsRealtimeHostToolsPanelState
                                 child: const Icon(
                                   Icons.blur_on_rounded,
                                   size: 19,
-                                  color: RealtimeUiTokens.iosIndigo,
+                                  color: RealtimeUiTokens.text,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -782,6 +788,34 @@ Future<void> showRealtimeHostToolsBottomSheet(
                 : content,
           ),
         ),
+      );
+    },
+  );
+}
+
+// Keep labels and actions reachable when a tool cannot fit on one line.
+class _HostToolRow extends StatelessWidget {
+  const _HostToolRow({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final stack =
+          constraints.maxWidth < 430 ||
+          MediaQuery.textScalerOf(context).scale(1) > 1.3;
+      if (!stack) return Row(children: children);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final child in children)
+            if (child is Expanded)
+              child.child
+            else if (child is SizedBox)
+              const SizedBox(height: 8)
+            else
+              Align(alignment: Alignment.centerLeft, child: child),
+        ],
       );
     },
   );

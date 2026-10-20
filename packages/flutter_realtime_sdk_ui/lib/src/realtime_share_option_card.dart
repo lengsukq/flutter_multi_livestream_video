@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
 class RealtimeShareOptionCard extends StatelessWidget {
   const RealtimeShareOptionCard({
@@ -26,35 +27,27 @@ class RealtimeShareOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final baseBorderColor = (isDark ? Colors.white : Colors.black).withValues(
-      alpha: isDark ? 0.08 : 0.06,
-    );
-    final selectedBorderColor = theme.colorScheme.primary;
-    final borderColor = isSelected ? selectedBorderColor : baseBorderColor;
-
+    final style = RealtimeStyle.of(context);
+    final appearance = RealtimeUiThemeExtension.of(context);
+    final borderColor = isSelected ? style.accent : style.border;
     final backgroundColor = isSelected
-        ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.12 : 0.06)
-        : (isDark
-              ? Colors.white.withValues(alpha: 0.03)
-              : Colors.black.withValues(alpha: 0.02));
+        ? style.primarySubtle
+        : style.surfaceSubtle;
 
     return Opacity(
       opacity: enabled ? 1.0 : 0.45,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(appearance.controlRadius),
           onTap: enabled ? onTap : null,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+            duration: appearance.duration(context, RealtimeUiTokens.animNormal),
             curve: Curves.easeInOut,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: backgroundColor,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(appearance.controlRadius),
               border: Border.all(
                 color: borderColor,
                 width: isSelected ? 1.5 : 1.0,
@@ -77,32 +70,27 @@ class RealtimeShareOptionCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
-                          Flexible(
-                            child: Text(
-                              title,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? Colors.white
-                                    : const Color(0xFF1D1D1F),
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: style.text,
                             ),
                           ),
                           if (isSelected && activeBadgeText != null) ...[
-                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 7,
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.primary.withValues(
-                                  alpha: 0.15,
-                                ),
+                                color: style.accent,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
@@ -110,7 +98,7 @@ class RealtimeShareOptionCard extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.primary,
+                                  color: style.onAccent,
                                 ),
                               ),
                             ),
@@ -122,7 +110,7 @@ class RealtimeShareOptionCard extends StatelessWidget {
                         subtitle,
                         style: TextStyle(
                           fontSize: 12.5,
-                          color: isDark ? Colors.white60 : Colors.black54,
+                          color: style.textMuted,
                           height: 1.25,
                         ),
                       ),
@@ -133,15 +121,13 @@ class RealtimeShareOptionCard extends StatelessWidget {
                 if (isSelected)
                   Icon(
                     Icons.check_circle_rounded,
-                    color: theme.colorScheme.primary,
+                    color: style.speakStrong,
                     size: 22,
                   )
                 else
                   Icon(
                     Icons.chevron_right_rounded,
-                    color: (isDark ? Colors.white : Colors.black).withValues(
-                      alpha: 0.25,
-                    ),
+                    color: style.textMuted,
                     size: 22,
                   ),
               ],

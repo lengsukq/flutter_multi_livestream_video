@@ -26,12 +26,6 @@ class RealtimeDockReactionsButton extends StatelessWidget {
     final strings = RealtimeStrings.of(context);
 
     Widget buildContent(ClassroomState? state) {
-      final raised =
-          state != null &&
-          state.students.any(
-            (s) => s.userId == state.selfUserId && s.handRaised,
-          );
-      final canRaise = controller?.canRaiseHand ?? false;
       final canFeedback = state?.capabilities.canSendFeedback == true;
 
       void openMenu() {
@@ -51,8 +45,10 @@ class RealtimeDockReactionsButton extends StatelessWidget {
                         horizontal: 16,
                         vertical: 4,
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceAround,
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           for (final kind in ClassroomFeedbackKind.values)
                             MeetingDockReactionEmojiButton(
@@ -76,7 +72,11 @@ class RealtimeDockReactionsButton extends StatelessWidget {
                                 Navigator.pop(sheetContext);
                                 if (controller != null) {
                                   unawaited(
-                                    controller.sendClassroomFeedback(kind),
+                                    controller
+                                        .sendClassroomFeedback(kind)
+                                        .catchError(
+                                          controller.reportActionError,
+                                        ),
                                   );
                                 }
                               },
@@ -86,7 +86,7 @@ class RealtimeDockReactionsButton extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                   ],
-                  if (canRaise || onWave != null)
+                  if (onWave != null)
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -94,81 +94,32 @@ class RealtimeDockReactionsButton extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          if (canRaise)
-                            Expanded(
-                              child: FilledButton.tonalIcon(
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  backgroundColor: raised
-                                      ? RealtimeUiTokens.iosOrange.withValues(
-                                          alpha: 0.2,
-                                        )
-                                      : null,
-                                  foregroundColor: raised
-                                      ? RealtimeUiTokens.iosOrange
-                                      : null,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
                                 ),
-                                icon: Icon(
-                                  raised
-                                      ? Icons.pan_tool_rounded
-                                      : Icons.pan_tool_outlined,
-                                  size: 20,
-                                  color: raised
-                                      ? RealtimeUiTokens.iosOrange
-                                      : null,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
-                                label: Text(
-                                  raised
-                                      ? strings.lowerHand
-                                      : strings.raiseHand,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                onPressed: () {
-                                  Navigator.pop(sheetContext);
-                                  if (controller != null) {
-                                    unawaited(
-                                      controller.setHandRaised(!raised),
-                                    );
-                                  }
-                                },
                               ),
-                            ),
-                          if (canRaise && onWave != null)
-                            const SizedBox(width: 12),
-                          if (onWave != null)
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                icon: const Icon(
-                                  Icons.waving_hand_outlined,
-                                  size: 20,
-                                ),
-                                label: Text(
-                                  strings.wave,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                onPressed: () {
-                                  Navigator.pop(sheetContext);
-                                  onWave!();
-                                },
+                              icon: const Icon(
+                                Icons.waving_hand_outlined,
+                                size: 20,
                               ),
+                              label: Text(
+                                strings.wave,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.pop(sheetContext);
+                                onWave!();
+                              },
                             ),
+                          ),
                         ],
                       ),
                     ),
@@ -191,11 +142,10 @@ class RealtimeDockReactionsButton extends StatelessWidget {
         );
       }
 
+      // Raising a hand owns its own dock control; reactions never mirror it.
       return RealtimeDockItem(
-        icon: raised ? Icons.pan_tool_rounded : Icons.add_reaction_outlined,
-        label: raised ? strings.handRaised : strings.reactions,
-        isActive: raised,
-        activeColor: RealtimeUiTokens.primary,
+        icon: Icons.add_reaction_outlined,
+        label: strings.reactions,
         showLabel: showLabel,
         onPressed: openMenu,
       );

@@ -4,9 +4,16 @@ import '../flutter_realtime_sdk_ui.dart';
 
 /// Elapsed-time badge for the meeting dock (tabular figures, dot + text).
 class RealtimeMeetingTimerBadge extends StatefulWidget {
-  const RealtimeMeetingTimerBadge({super.key, this.startedAt});
+  const RealtimeMeetingTimerBadge({
+    super.key,
+    this.startedAt,
+    this.live = false,
+  });
 
   final DateTime? startedAt;
+
+  /// Reference classroom style: a filled red LIVE pill with elapsed time.
+  final bool live;
 
   @override
   State<RealtimeMeetingTimerBadge> createState() =>
@@ -59,15 +66,17 @@ class _RealtimeMeetingTimerBadgeState extends State<RealtimeMeetingTimerBadge> {
         .padLeft(2, '0');
     final int h = _elapsed.inHours;
     final String timeStr = h > 0 ? '$h:$m:$s' : '$m:$s';
+    final style = RealtimeStyle.of(context);
 
     return Semantics(
       label: RealtimeStrings.of(context).isZh
           ? '已进行 $timeStr'
           : 'Elapsed time $timeStr',
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: RealtimeStyle.of(context).surfaceSubtle,
+          color: widget.live ? style.live : style.text,
           borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
         ),
         child: Row(
@@ -76,18 +85,19 @@ class _RealtimeMeetingTimerBadgeState extends State<RealtimeMeetingTimerBadge> {
             Container(
               width: 6,
               height: 6,
-              decoration: const BoxDecoration(
-                color: RealtimeUiTokens.appleSuccess,
+              decoration: BoxDecoration(
+                color: widget.live ? Colors.white : style.speak,
                 shape: BoxShape.circle,
               ),
             ),
             const SizedBox(width: 6),
             Text(
               timeStr,
-              style: const TextStyle(
+              style: TextStyle(
+                color: widget.live ? Colors.white : style.surface,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
               ),
             ),
           ],

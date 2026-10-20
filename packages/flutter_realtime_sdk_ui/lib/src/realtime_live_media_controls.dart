@@ -26,7 +26,7 @@ class RealtimeLiveMediaControls extends StatelessWidget {
         }
         return RealtimeGlassSurface(
           radius: RealtimeUiTokens.pillRadius,
-          fillColor: const Color(0xFF242426),
+          fillColor: RealtimeUiTokens.canvasDarkElevated,
           opacity: .76,
           borderColor: Colors.white.withValues(alpha: .22),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),

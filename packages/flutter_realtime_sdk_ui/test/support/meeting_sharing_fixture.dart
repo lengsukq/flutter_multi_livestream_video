@@ -11,10 +11,15 @@ class MeetingSharingFixture {
 
   static Future<MeetingSharingFixture> create({
     SharedContentMode? mode,
+    bool teaching = true,
     bool localShare = false,
     bool withTrack = true,
+    MediaTrackRenderer renderer = const SharingRenderer(),
+    MediaCloudRecordingSession? cloudRecording,
+    MediaRole role = MediaRole.participant,
+    ChatSession? chat,
   }) async {
-    final media = SharingMedia();
+    final media = SharingMedia()..testRole = role;
     media.current = media.current.copyWith(
       localScreenShareEnabled: localShare,
       capabilities: media.current.capabilities.copyWith(canScreenShare: true),
@@ -39,15 +44,23 @@ class MeetingSharingFixture {
         participantId: 'self',
         session: media,
       ),
-      renderer: const SharingRenderer(),
+      renderer: renderer,
+      chat: chat,
+      cloudRecordingSession: cloudRecording,
       featurePlugins: [
         if (repo != null) ...[
-          ClassroomPreset(
-            repositoryFactory: (_) => repo,
-            enableForDirectRooms: true,
-            pollInterval: const Duration(hours: 1),
-          ),
-          const SharedContentPreset(),
+          if (teaching)
+            ClassroomPreset(
+              repositoryFactory: (_) => repo,
+              enableForDirectRooms: true,
+              pollInterval: const Duration(hours: 1),
+            ),
+          if (teaching)
+            const SharedContentPreset()
+          else
+            SharedContentPreset(
+              repositoryFactory: (_) => ClassroomSharedContentRepository(repo),
+            ),
         ],
       ],
       disposeClients: () {},
@@ -90,6 +103,7 @@ class SharingRenderer extends MediaTrackRenderer {
 }
 
 class SharingMedia extends InteractiveMediaSession {
+  MediaRole testRole = MediaRole.participant;
   final changes = StreamController<MediaSnapshot>.broadcast();
   final eventChanges = StreamController<MediaEvent>.broadcast();
   final mutations = <String>[];
@@ -123,7 +137,7 @@ class SharingMedia extends InteractiveMediaSession {
   @override
   String get providerId => 'test';
   @override
-  MediaRole get role => MediaRole.participant;
+  MediaRole get role => testRole;
   @override
   MediaCapabilities get capabilities => current.capabilities;
   @override
@@ -192,6 +206,7 @@ class SharingRepository implements ClassroomRepository {
   SharedContentMode mode;
   String canvasId = 'screen-session-1';
   int revision = 1;
+  bool annotationActive = false;
   final commands = <ClassroomCommand>[];
   @override
   Future<ClassroomState> snapshot() async {
@@ -203,6 +218,13 @@ class SharingRepository implements ClassroomRepository {
       questions: const [],
       stats: const ClassroomStats(),
       tools: ClassroomToolsState(
+        annotation: annotationActive
+            ? AnnotationCanvas(
+                canvasId: canvasId,
+                sourceKey: 'screen',
+                participantId: owner,
+              )
+            : null,
         content: SharedContentState(
           mode: mode,
           whiteboard: whiteboard,

@@ -138,7 +138,7 @@ class _RealtimeRecordingResultDialogState
       RecordingTaskState.idle => zh ? '没有找到录制任务' : 'No recording task found',
       _ => zh ? '正在查询云端录制状态' : 'Checking cloud recording status',
     };
-    return AlertDialog(
+    return RealtimeGlassDialog(
       title: Text(strings.cloudRecording),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),

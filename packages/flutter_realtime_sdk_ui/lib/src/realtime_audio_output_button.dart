@@ -28,38 +28,51 @@ class RealtimeAudioOutputButton extends StatelessWidget {
             await showDialog<void>(
               context: context,
               useRootNavigator: true,
-              builder: (dialogContext) => SimpleDialog(
+              builder: (dialogContext) => RealtimeGlassDialog(
                 title: Text(zh ? '音频输出设备' : 'Audio output devices'),
-                children: [
-                  if (devices.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(zh ? '没有可用设备' : 'No devices'),
-                    ),
-                  for (final device in devices)
-                    ListTile(
-                      title: Text(device.label),
-                      subtitle: controller.canSelectAudioOutput
-                          ? null
-                          : Text(zh ? '当前设备不支持切换' : 'Selection unavailable'),
-                      enabled: controller.canSelectAudioOutput,
-                      onTap: () async {
-                        try {
-                          await controller.selectAudioOutput(device);
-                          if (dialogContext.mounted) {
-                            Navigator.of(dialogContext).pop();
-                          }
-                        } catch (error) {
-                          if (dialogContext.mounted) {
-                            ScaffoldMessenger.maybeOf(
-                              dialogContext,
-                            )?.showSnackBar(
-                              SnackBar(content: Text(error.toString())),
-                            );
-                          }
-                        }
-                      },
-                    ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (devices.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(zh ? '没有可用设备' : 'No devices'),
+                        ),
+                      for (final device in devices)
+                        ListTile(
+                          title: Text(device.label),
+                          subtitle: controller.canSelectAudioOutput
+                              ? null
+                              : Text(
+                                  zh ? '当前设备不支持切换' : 'Selection unavailable',
+                                ),
+                          enabled: controller.canSelectAudioOutput,
+                          onTap: () async {
+                            try {
+                              await controller.selectAudioOutput(device);
+                              if (dialogContext.mounted) {
+                                Navigator.of(dialogContext).pop();
+                              }
+                            } catch (error) {
+                              if (dialogContext.mounted) {
+                                ScaffoldMessenger.maybeOf(
+                                  dialogContext,
+                                )?.showSnackBar(
+                                  SnackBar(content: Text(error.toString())),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: Text(zh ? '关闭' : 'Close'),
+                  ),
                 ],
               ),
             );

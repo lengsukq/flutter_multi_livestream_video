@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 
 /// Shared recording layout picker. The provider-neutral SDK exposes the options and
@@ -56,24 +57,34 @@ Future<RecordingLayout?> showRealtimeRecordingLayoutPicker(
   };
   return showDialog<RecordingLayout>(
     context: context,
-    builder: (dialogContext) => SimpleDialog(
+    builder: (dialogContext) => RealtimeGlassDialog(
+      icon: Icons.video_settings_outlined,
       title: Text(zh ? '选择云端录制布局' : 'Cloud recording layout'),
-      children: choices
-          .map(
-            (mode) => SimpleDialogOption(
-              onPressed: () => Navigator.pop(dialogContext, mode),
-              child: ListTile(
-                leading: Icon(switch (mode) {
-                  RecordingLayout.grid => Icons.grid_view,
-                  RecordingLayout.featuredParticipant => Icons.person_pin,
-                  _ => Icons.record_voice_over,
-                }),
-                title: Text(title(mode)),
-                subtitle: Text(subtitle(mode)),
-              ),
-            ),
-          )
-          .toList(),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: choices
+              .map(
+                (mode) => ListTile(
+                  onTap: () => Navigator.pop(dialogContext, mode),
+                  leading: Icon(switch (mode) {
+                    RecordingLayout.grid => Icons.grid_view,
+                    RecordingLayout.featuredParticipant => Icons.person_pin,
+                    _ => Icons.record_voice_over,
+                  }),
+                  title: Text(title(mode)),
+                  subtitle: Text(subtitle(mode)),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: Text(zh ? '取消' : 'Cancel'),
+        ),
+      ],
     ),
   );
 }

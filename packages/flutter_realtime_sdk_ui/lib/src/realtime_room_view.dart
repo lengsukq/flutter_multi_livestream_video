@@ -89,6 +89,10 @@ class RealtimeRoomView extends StatelessWidget {
       showAnnotations: showAnnotations,
       onCustomReaction: onCustomReaction,
       stageOverlayBuilder: stageOverlayBuilder,
+      initialSharedContentMode: config.initialSharedContentMode,
+      sessionInfo: config.sessionInfo,
+      brand: config.brand,
+      pinnedMessage: config.pinnedMessage,
     );
   }
 }

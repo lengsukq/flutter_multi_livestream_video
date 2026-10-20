@@ -309,6 +309,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Background blur'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Background blur'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Background blur'));
     await tester.pumpAndSettle();
     expect(preview.backgroundCalls, [const MediaBackgroundEffect.blur()]);
@@ -350,13 +352,18 @@ void main() {
     await tester.tap(find.text('Open preparation'));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byType(CupertinoSwitch).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byType(CupertinoSwitch).first);
     await tester.pump();
     expect(preview.settings.microphoneEnabled, isTrue);
     final microphonePicker = find.byWidgetPredicate(
-      (widget) => widget is DropdownButtonFormField<MediaDevice>,
+      (widget) => widget is DropdownButton<MediaDevice>,
     );
-    await tester.tap(microphonePicker.first);
+    // Device fields follow the reference order: camera, microphone, speakers.
+    await tester.ensureVisible(microphonePicker.at(1));
+    await tester.pumpAndSettle();
+    await tester.tap(microphonePicker.at(1));
     await tester.pumpAndSettle();
     await tester.tap(find.text('USB microphone').last);
     await tester.pumpAndSettle();

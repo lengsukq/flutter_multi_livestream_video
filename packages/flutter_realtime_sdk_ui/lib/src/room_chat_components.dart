@@ -75,7 +75,7 @@ class RealtimeBulkMuteButton extends StatelessWidget {
                       final confirmed = await showDialog<bool>(
                         context: context,
                         useRootNavigator: true,
-                        builder: (dialogContext) => AlertDialog(
+                        builder: (dialogContext) => RealtimeGlassDialog(
                           title: Text(
                             strings.isZh ? '全员静音？' : 'Mute all participants?',
                           ),
@@ -183,7 +183,7 @@ class _RealtimeManagedParticipantListState
       final confirm = await showDialog<bool>(
         context: context,
         useRootNavigator: true,
-        builder: (dialogContext) => AlertDialog(
+        builder: (dialogContext) => RealtimeGlassDialog(
           title: Text(
             action == 'removeChat'
                 ? strings.removeFromChat
@@ -289,7 +289,7 @@ class _RealtimeManagedParticipantListState
                           width: 6,
                           height: 6,
                           decoration: const BoxDecoration(
-                            color: Colors.green,
+                            color: RealtimeUiTokens.speakStrong,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -299,7 +299,7 @@ class _RealtimeManagedParticipantListState
                           style: TextStyle(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w700,
-                            color: style.primary,
+                            color: style.text,
                           ),
                         ),
                       ],
@@ -462,7 +462,7 @@ class _RealtimeManagedParticipantListState
                                       width: 9,
                                       height: 9,
                                       decoration: BoxDecoration(
-                                        color: Colors.green,
+                                        color: RealtimeUiTokens.speakStrong,
                                         shape: BoxShape.circle,
                                         border: Border.all(
                                           color: isDark
@@ -505,21 +505,16 @@ class _RealtimeManagedParticipantListState
                                               vertical: 1.5,
                                             ),
                                             decoration: BoxDecoration(
-                                              gradient: const LinearGradient(
-                                                colors: [
-                                                  Color(0xFFF59E0B),
-                                                  Color(0xFFD97706),
-                                                ],
-                                              ),
+                                              color: style.accent,
                                               borderRadius:
                                                   BorderRadius.circular(4),
                                             ),
                                             child: Text(
                                               strings.isZh ? '主持人' : 'Host',
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 9,
                                                 fontWeight: FontWeight.w800,
-                                                color: Colors.white,
+                                                color: style.onAccent,
                                               ),
                                             ),
                                           ),
@@ -545,7 +540,7 @@ class _RealtimeManagedParticipantListState
                                               style: TextStyle(
                                                 fontSize: 9,
                                                 fontWeight: FontWeight.w700,
-                                                color: style.primary,
+                                                color: style.text,
                                               ),
                                             ),
                                           ),
@@ -599,7 +594,8 @@ class _RealtimeManagedParticipantListState
                                                     size: 11,
                                                     color: isMuted
                                                         ? Colors.redAccent
-                                                        : Colors.green,
+                                                        : RealtimeUiTokens
+                                                              .speakStrong,
                                                   ),
                                                   const SizedBox(width: 3),
                                                   Text(
@@ -734,7 +730,7 @@ class _ParticipantActions extends StatelessWidget {
               final approved = await showDialog<bool>(
                 context: context,
                 useRootNavigator: true,
-                builder: (ctx) => AlertDialog(
+                builder: (ctx) => RealtimeGlassDialog(
                   title: Text(strings.removeParticipant),
                   content: Text(member.displayName),
                   actions: [

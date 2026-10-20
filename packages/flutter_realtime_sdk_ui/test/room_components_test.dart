@@ -169,7 +169,7 @@ void main() {
     await tester.tap(find.byType(OutlinedButton));
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('video-effects service is not configured'),
+      find.textContaining('Background effects are unavailable'),
       findsOneWidget,
     );
     await tester.tap(find.text('OK'));
@@ -177,7 +177,7 @@ void main() {
     await tester.tap(find.byType(RealtimeRoomActionButton));
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('video-effects service is not configured'),
+      find.textContaining('Background effects are unavailable'),
       findsOneWidget,
     );
   });

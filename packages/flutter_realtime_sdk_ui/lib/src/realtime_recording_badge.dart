@@ -36,45 +36,27 @@ class RealtimeRecordingBadge extends StatelessWidget {
               .remainder(60)
               .toString()
               .padLeft(2, '0');
+          final strings = RealtimeStrings.of(context);
           if (compact) {
-            final strings = RealtimeStrings.of(context);
             return Tooltip(
               message: strings.isZh
                   ? '云端录制中 · $minutes:$seconds'
                   : 'Cloud recording · $minutes:$seconds',
-              child: Container(
-                width: 28,
-                height: 28,
-                margin: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: BoxDecoration(
-                  color: Colors.red.withAlpha(40),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.red.withAlpha(160)),
-                ),
-                child: const Icon(
-                  Icons.fiber_manual_record_rounded,
-                  size: 13,
-                  color: Colors.redAccent,
-                ),
+              child: RealtimeStatusPill(
+                label: '$minutes:$seconds',
+                tone: RealtimeStatusTone.recording,
+                showDot: true,
+                blink: true,
               ),
             );
           }
-          return Container(
-            margin: const EdgeInsets.symmetric(horizontal: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.red.withAlpha(40),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.red.withAlpha(160)),
-            ),
-            child: Text(
-              'CLOUD $minutes:$seconds',
-              style: const TextStyle(
-                color: Colors.redAccent,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
+          return RealtimeStatusPill(
+            label: strings.isZh
+                ? '录制中 $minutes:$seconds'
+                : 'Recording $minutes:$seconds',
+            tone: RealtimeStatusTone.recording,
+            showDot: true,
+            blink: true,
           );
         },
       );

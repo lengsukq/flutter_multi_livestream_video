@@ -19,9 +19,9 @@ Future<void> showRealtimeBackgroundEffectsSheet(
   final strings = RealtimeStrings.of(context);
   if (!controller.snapshot.capabilities.canPublishVideo) return;
   if (!controller.room.backgroundCapabilities.isSupported) {
-    await showModalBottomSheet<void>(
+    await showRealtimeGlassBottomSheet<void>(
       context: context,
-      builder: (sheetContext) => SafeArea(
+      builder: (sheetContext) => SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -35,8 +35,8 @@ Future<void> showRealtimeBackgroundEffectsSheet(
               const SizedBox(height: 12),
               Text(
                 strings.isZh
-                    ? '当前平台、供应商或设备不支持背景特效，或者尚未配置视频特效服务。请检查 SDK 的 videoEffectsFactory 与摄像头权限。'
-                    : 'Background effects are unavailable on this platform, provider or device, or the video-effects service is not configured. Check the SDK videoEffectsFactory and camera permissions.',
+                    ? '当前平台、服务或设备暂不支持背景特效。'
+                    : 'Background effects are unavailable on this platform, service or device.',
               ),
               Align(
                 alignment: Alignment.centerRight,
@@ -64,7 +64,7 @@ Future<void> showRealtimeBackgroundEffectsSheet(
     }
   }
   if (!context.mounted) return;
-  await showModalBottomSheet<void>(
+  await showRealtimeGlassBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     builder: (sheetContext) => SafeArea(
