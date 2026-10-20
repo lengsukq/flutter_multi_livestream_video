@@ -8,8 +8,7 @@
 
 | 版本/形态 | 状态 | 如何接入 |
 | --- | --- | --- |
-| [`flutter_realtime_sdk 0.1.0-dev.4`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.4) | **已发布预览版** | 一个 pub.dev 包，一个公开 import |
-| `0.1.0-dev.5` | **本地准备，交由维护者发布** | 共享屏幕/白板时保留参会者缩略图，支持主画面切换和隐藏恢复 |
+| [`flutter_realtime_sdk 0.1.0-dev.9`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.9) | **已发布预览版（2026-10-19）** | 修复 Web 入会与生命周期、限制页面准备时长、呈现异步错误并校验桥协议版本 |
 | 源码仓库 | 开发用 | Facade + 选定的 Provider/UI 内部包 |
 
 **不要混淆两种使用方式：** pub.dev 发布物把 44 个内部模块组装为**一个公开 SDK 包**；本仓库开发时仍然是多模块源码，依赖配置不同。支持列表不代表每个供应商和设备都完成实机验收，Windows/Linux、部分平台组合和第三方许可审查仍有待完成。
@@ -20,7 +19,7 @@
 
 ~~~yaml
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.4
+  flutter_realtime_sdk: ^0.1.0-dev.9
 ~~~
 
 已发布的单包 SDK **只需要一个 Dart import**：
@@ -50,10 +49,10 @@ UI 可以选择 `RealtimeRoomView`、组合式按钮/网格，或全部自己实
 
 ### Headless 摄像头及虚拟背景
 
-已发布的 **`0.1.0-dev.4`** 提供 `room.setCameraEnabled(bool)`，并且从**同一个公开 import** 导出 `DefaultRealtimeVideoEffects`。它保证背景处理源的采集与摄像头发布进入统一操作队列。
+已发布的 **`0.1.0-dev.9`** 提供 `room.setCameraEnabled(bool)`，并且从**同一个公开 import** 导出 `DefaultRealtimeVideoEffects`。该版本还包含 Web 入会错误分类、页面准备超时保护及 UI 错误呈现。
 
 ~~~dart
-// dev.4 已提供此接口；dev.5 继续保留：
+// 当前已发布的 dev.9 包含此接口：
 final realtime = Realtime(
   backendUrl: 'https://your-backend.example',
   providers: [createLivekitProvider()],

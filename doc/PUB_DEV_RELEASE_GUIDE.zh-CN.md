@@ -1,21 +1,50 @@
 # Flutter Realtime SDK — pub.dev 单包发布清单
 
-> **dev.7 发布候选（尚未上传 pub.dev）：**
+> **当前发布形态（2026-10-20）：** 对外唯一发布物是聚合包
+> [`flutter_realtime_sdk 0.1.0-dev.9`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.9)，
+> 该版本于 2026-10-19 发布。44 个内部源码模块与根目录 tooling workspace
+> 均保持 `publish_to: none`，不逐个发布。dev.9 包含 Web 入会/生命周期修复、
+> 页面准备超时保护、房间 UI 异步错误呈现和 Web bridge 协议版本校验。
+> Windows/Linux、真实设备/供应商 E2E 和第三方许可审查仍是独立验收项。
+>
+> 以下 dev.4–dev.8 条目是按时间保留的历史记录，不是当前发布状态；
+> 不要对已发布版本目录重新发布。下一个版本必须使用新的显式版本号，
+> 并由维护者审查后手动发布。本指南不执行发布或上传。
+>
+> **历史快照提醒：** 下文候选目录、待发布标记和旧版本命令只还原当时状态，
+> 不代表这些版本现在仍未发布，也不能当作当前版本或重新发布指引。
+
+## 当前接入版本
+
+```yaml
+dependencies:
+  flutter_realtime_sdk: ^0.1.0-dev.9
+```
+
+只需导入 `package:flutter_realtime_sdk/flutter_realtime_sdk.dart`。
+发布构建由发行脚本聚合源码模块、Provider、可选 UI、Preset 和平台资源，
+开发时仍保留分层的多包结构；这两种形态不可混用。
+
+---
+
+## 历史发布记录：dev.7
+
+> 以下仅用于追溯当时修复和发布步骤，不再是待发布候选。
+>
 > `0.1.0-dev.7` 修复 Web Demo 的 Pre-Join 正常但进入会议/直播后
 > 普通摄像头无法启动的问题：无虚拟背景时不再提前绑定处理视频源，
 > 模糊/换图仍按需启用；白板切换前刷新课堂版本，只对明确的 409 版本冲突
-> 重试一次；会议/直播会显示摄像头和共享内容操作错误。
-> 此版本保留 dev.6 的 Web 模型/WASM 资源修复。
->
-> 在本仓库根目录手动发布：`bash scripts/publish_single_sdk_dev7.command`。
-> 脚本会确认发布目录版本、执行 Web 资产校验、静态分析和
-> pub.dev dry-run，只有明确输入 `PUBLISH 0.1.0-dev.7`
-> 才开始实际上传。已通过的单元测试和 Web 构建不等于真实浏览器
-> 的供应商音视频/白板全量验收。
+> 重试一次；会议/直播会显示摄像头和共享内容操作错误。此版本保留 dev.6
+> 的 Web 模型/WASM 资源修复。dev.7 目前已被后续版本取代。
+> 当时使用 `scripts/publish_single_sdk_dev7.command`，后续版本应使用其对应的
+> 版本化脚本与新候选目录，并始终先执行 dry-run。真实浏览器和供应商 E2E
+> 验收仍不能由单元测试或 Web 构建替代。
 
-> **2026-10-15 dev.6 Web 虚拟背景修复（本地待发布）：**
-> 新版 `0.1.0-dev.6` 已生成至
-> `build/pub_release/0.1.0-dev.6/flutter_realtime_sdk/`，**尚未上传**。
+---
+
+> **历史记录（2026-10-15，dev.6 Web 虚拟背景修复）：**
+> 当时的 `0.1.0-dev.6` 候选生成至
+> `build/pub_release/0.1.0-dev.6/flutter_realtime_sdk/`；当时的候选状态已被后续版本取代。
 > 修复两处 `dev.5` 单包问题：Flutter 资产目录不递归导致嵌套
 > MediaPipe `vision.js`、WASM、TFLite 文件漏打包；
 > 以及 `video-effects-bridge.js` 仍请求内部源码包旧 URL。
@@ -24,7 +53,7 @@
 > SDK 静态分析及 `flutter pub publish --dry-run` 通过（0 警告）。
 > 此检查不等同于不同浏览器、真实摄像头和供应商 E2E 验收。
 
-**dev.6 维护者手动发布：** 在仓库根目录执行：
+**历史发布步骤：dev.6** 在仓库根目录执行：
 
 ```sh
 bash scripts/publish_single_sdk_dev6.command
@@ -32,7 +61,7 @@ bash scripts/publish_single_sdk_dev6.command
 
 脚本仅操作已准备的 `dev.6` 发布目录，检查包版本号、资源声明和 JS
 地址，运行 `flutter pub get`、静态分析与 `flutter pub publish --dry-run`，
-并要求明确输入 `PUBLISH 0.1.0-dev.6` 后才执行不可撤销的上传。
+当时的脚本要求输入 `PUBLISH 0.1.0-dev.6` 才执行上传；此命令仅为历史记录，不能重发已发布版本。
 如果仅需重新检查 Web 资源：
 
 ```sh
@@ -41,22 +70,21 @@ python3 scripts/verify_single_sdk_web_assets.py \
   --web-build build/single_sdk_web_smoke/build/web
 ```
 
-第三方 Flutter Web 宿主应直接依赖 **`flutter_realtime_sdk: ^0.1.0-dev.6`**
-（待正式发布后）；**无需**在宿主 `pubspec.yaml` 额外声明/复制 SDK
+第三方 Flutter Web 宿主应直接依赖 **`flutter_realtime_sdk: ^0.1.0-dev.9`**；**无需**在宿主 `pubspec.yaml` 额外声明/复制 SDK
 内部的 `web/models`、`web/wasm`。仍需配置
 `RealtimeRoomServices(videoEffectsFactory: DefaultRealtimeVideoEffects.new)`
 及摄像头权限、HTTPS 或 localhost。此修复仅修改单包的资源组装方式，
 并不改变内部源码包的模型路径。
 
-> **2026-10-15 dev.5 发布准备：** `0.1.0-dev.5` 已生成在
+> **历史记录（2026-10-15，dev.5 发布准备）：** `0.1.0-dev.5` 当时生成在
 > `build/pub_release/0.1.0-dev.5/flutter_realtime_sdk/`，交由维护者手动发布，
 > 本次没有执行上传。该版本修复会议屏幕/白板共享时参会者画面消失的问题，
 > 加入主画面切换、缩略图隐藏/恢复和小屏共享工具栏适配。
 > 静态分析及发布预检见 `build/quality/pub-dev5-analysis.log`、
 > `build/quality/pub-dev5-dry-run.log`；全包检查见 `meeting-sharing-full.log`。
 >
-> **已发布状态已核对：** pub.dev 的 `0.1.0-dev.4` 版本元数据记录发布时间为
-> 2026-10-15 14:41（北京时间）。唯一公开 SDK 包是 `flutter_realtime_sdk`，
+> **历史发布核对：** pub.dev 的 `0.1.0-dev.4` 版本元数据记录发布时间为
+> 2026-10-15 14:41（北京时间）；当前已发布版本见本文顶部。唯一公开 SDK 包是 `flutter_realtime_sdk`，
 > 不单独发布仓库内部 44 个模块。此前原生宿主构建证据不能替代本轮真机、
 > 双设备共享与白板验收；Windows/Linux 和第三方许可审查继续保留其待验收状态。
 > 此前“先依次发布 44 包、最后再发 Facade”的方案已废弃。
@@ -66,9 +94,9 @@ python3 scripts/verify_single_sdk_web_assets.py \
 ## 1. 最终交付形态
 
 ```yaml
-# 预览版（首次上传后可能需等待版本同步）
+# 当前已发布预览版
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.4
+  flutter_realtime_sdk: ^0.1.0-dev.9
 ```
 
 对外只需要 `package:flutter_realtime_sdk/flutter_realtime_sdk.dart`。
@@ -118,9 +146,9 @@ Windows/Linux 尚需各自在目标 OS 编译；需要双设备实际音视频�
 可供 pub dry-run 验证的公开元数据目录，不改源码，不自动上传。
 
 ```sh
-# 示例：dev.5 首次准备（已存在的版本目录不能覆盖）
-python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.5
-# 目录：build/pub_release/0.1.0-dev.5/flutter_realtime_sdk/
+# 新版本候选示例（版本号必须未使用，已发布版本不可重建）
+python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.10
+# 目录：build/pub_release/0.1.0-dev.10/flutter_realtime_sdk/
 ```
 
 ### README 中英文独立维护
@@ -140,14 +168,13 @@ python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.5
 可以执行仅更新 README 与文件校验清单的安全操作：
 
 ```sh
-python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.5 --refresh-readmes
-cd build/pub_release/0.1.0-dev.5/flutter_realtime_sdk
+python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.10 --refresh-readmes
+cd build/pub_release/0.1.0-dev.10/flutter_realtime_sdk
 flutter pub publish --dry-run
 ```
 
 发版前在 dry-run 的文件树中确认中文文件已被包含，并以完整独立宿主进行
-音视频验证。当前 `dev.5` **尚未上传 pub.dev**，不要在第三方 Demo
-中把其 API 当作已发布版本的能力。
+音视频验证。以上是当时针对 dev.5 的历史记录；当前接入请使用顶部所列的已发布 dev.9。
 
 ## 3. 正式单包发版验收门槛
 
@@ -213,9 +240,9 @@ Flutter SDK **只持有短期凭据和控制合同**，不能把录制后台服�
 参见 [云录制](CLOUD_RECORDING.md) 和
 [角色与 UI 语义](ROLE_UI_SEMANTICS.md)。
 
-## 6. 现阶段结论
+## 6. 当前结论
 
-**单包预览版 `0.1.0-dev.1` 已上传成功，稳定版的全面验收尚未完成。**
+**当前已发布的聚合单包预览版为 `0.1.0-dev.9`；稳定版的全面验收尚未完成。**
 内部 44 包的 `publish_to: none` 保持不变；独立分发准备器仅支持
 `0.1.0-dev.N`，生成真实接入 README、CHANGELOG、文件哈希清单，并排除
 iOS 厂商框架和本地缓存。实际上传使用经过 dry-run 的同一目录，由维护者

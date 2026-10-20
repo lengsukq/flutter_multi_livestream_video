@@ -50,8 +50,8 @@ operation、suggestedAction；私有诊断日志保留 cause、details、stackTr
 
 ## 第三方接入
 
-未发布候选：`build/pub_release/0.1.0-dev.8/flutter_realtime_sdk`。
-该目录仍是预览修复候选，未上传 pub.dev。继续依赖 dev.7 不会获得本次修复。
+本记录完成后，此修复随 `flutter_realtime_sdk 0.1.0-dev.8` 发布；后续的 dev.9
+已于 2026-10-19 发布并取代该版本。继续依赖 dev.7 不会获得本记录中的修复。
 
 临时本地验证可在第三方项目使用如下 `pubspec_overrides.yaml`，然后执行
 `flutter pub get --offline` 并完整重新启动 Web 应用（热重载不替换已加载的 JS）：
@@ -62,4 +62,4 @@ dependency_overrides:
     path: /Users/leo/Documents/code/flutter_multi_livestream_video/build/pub_release/0.1.0-dev.8/flutter_realtime_sdk
 ```
 
-正式接入待发布新的版本后更新版本约束；不应修改系统 pub-cache 中的 dev.7。
+正式接入请使用当前已发布的 `flutter_realtime_sdk: ^0.1.0-dev.9`；不应修改系统 pub-cache 中的旧版本。

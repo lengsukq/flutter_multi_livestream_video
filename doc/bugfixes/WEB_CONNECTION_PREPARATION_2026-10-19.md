@@ -61,6 +61,6 @@ SnackBar 不能替代持续可见的连接失败状态。单包的中英文 READ
 
 ## 本地交付
 
-未发布候选：`build/pub_release/0.1.0-dev.9/flutter_realtime_sdk`。
-手动发布入口：`scripts/publish_single_sdk_dev9.command`。
-旧 dev.8 候选保持原样；更新版本、解析依赖后须完整重启 Web。
+此修复已包含在当前已发布的聚合包 `flutter_realtime_sdk 0.1.0-dev.9`
+（2026-10-19）。`scripts/publish_single_sdk_dev9.command` 是当时使用的
+受保护发布入口；dev.8 是此前的已发布版本。更新版本、解析依赖后须完整重启 Web。

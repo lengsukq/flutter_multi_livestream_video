@@ -67,8 +67,9 @@ aws chime-sdk-meetings delete-meeting \
 - **SDK（`packages/`）是真正的资产**，可发布给外部接入方使用。
 - **Demo（`example/` + `demo-server/`）是快速构建的展示场**，
   用来证明 SDK 在真实链路下可行。Demo 不享有特权，使用的必须是公开 API。
-- 仓库名 `flutter_multi_livestream_video` 是历史名；真正的 pub 包是
-  `flutter_aws_chime`，根目录只是 tooling workspace（`publish_to: none`）。
+- 仓库名 `flutter_multi_livestream_video` 是历史名；对外唯一聚合发布包是
+  `flutter_realtime_sdk`。根目录是私有 tooling workspace，内部源码包（包括
+  `flutter_aws_chime`）均不是独立发布目标，并保持 `publish_to: none`。
 
 ### 2.2 流向规则（最核心）
 
@@ -94,7 +95,7 @@ aws chime-sdk-meetings delete-meeting \
                  sdk_ui / media_ui / chat_ui / classroom_ui / live_ui / whiteboard_ui
 ```
 
-- 完整包清单见 `scripts/sdk_packages.json`（41 个），新增包必须登记。
+- 完整包清单见 `scripts/sdk_packages.json`（44 个内部源码模块），新增包必须登记。
 - 关键文档：`doc/INTERACTION_ARCHITECTURE.md`、`doc/SDK_CODE_QUALITY.md`、
   `doc/LIGHTWEIGHT_SDK.md`、`doc/PROVIDER_ADAPTER_GUIDE.md`、
   `doc/P1_CLEAN_CODE_BASELINE.md`。

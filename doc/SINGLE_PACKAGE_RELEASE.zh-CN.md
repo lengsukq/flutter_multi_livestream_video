@@ -1,17 +1,33 @@
 # Flutter Realtime SDK：仅公开 1 个 pub.dev 包的发行方案
 
 > **产品目标：外部开发者只安装 `flutter_realtime_sdk`。**
-> 这与仓库内部保留 44 个分层模块不矛盾。**2026-10-15 已修复 iOS IVS 依赖，独立宿主 iOS Release 真机目标（无签名）构建通过；维护者已成功上传 `0.1.0-dev.1` 预览版。**
-> 服务器提示版本同步最多需 10 分钟；真机通话、Windows/Linux 等待验证项不作为首发预览版已完成能力宣传。
+> 开发根目录（本仓库根）是私有 tooling workspace，`publish_to: none`；44 个内部源码模块
+> 同样保持 `publish_to: none`，不逐个发布。发行脚本把这些模块聚合为唯一对外发布包
+> `flutter_realtime_sdk`。
+> **当前已发布版本为 `flutter_realtime_sdk 0.1.0-dev.9`（2026-10-19）。**
+> `0.1.0-dev.1`（2026-10-15）是首个单包预览版，相关发布叙述仅为历史记录，
+> 已被后续版本取代，不代表当前版本。
+> 真机通话、Windows/Linux、部分供应商组合和第三方许可仍需单独验收，不因包已发布而视为完成。
 > 本文为发布工程的唯一目标规范，取代之前“把 44 个包逐个发布 pub.dev”的路线。
+
+## 版本状态
+
+| 版本 | 状态 | 说明 |
+| --- | --- | --- |
+| `0.1.0-dev.9` | **当前已发布（2026-10-19）** | 外部宿主依赖 `^0.1.0-dev.9`；本文所有“当前版本”均指此版本 |
+| `0.1.0-dev.10` | 未发布（示例版本号） | 仅用于下文准备命令示例，尚未生成或发布；是否发布由维护者单独决定 |
+| `0.1.0-dev.1` | 历史（2026-10-15） | 首个单包预览版，已被 dev.2–dev.8 及 dev.9 取代，不是当前版本 |
+
+dev.1 的“已上传/已发布”叙述只还原当时的首发动作；当前接入、升级和问题定位
+一律以 dev.9 为准，不要据此安装或引用 dev.1。
 
 ## 目标、边界和必须接受的代价
 
-**宿主的依赖和导入只有一个 SDK 名称**：
+**宿主的依赖和导入只有一个 SDK 名称。当前已发布版本（dev.9）的声明如下**：
 
 ```yaml
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.1
+  flutter_realtime_sdk: ^0.1.0-dev.9
 ```
 
 ```dart
@@ -57,7 +73,7 @@ python3 -m unittest scripts.tests.test_audit_single_pub_package
 Windows/Linux/Web 各 1 个（包含几个只声明平台而不直接使用原生源的包装层）。
 这些数据由脚本动态计算，源代码变化后需重新运行，不将它们当作不变量。
 
-## 已实现：生成隔离的 Dart + 六平台原生单包候选（2026-10-15）
+## 已实现：生成隔离的 Dart + 六平台原生单包候选（初版 2026-10-15，记录保留）
 
 ```sh
 python3 scripts/assemble_single_sdk_distribution.py
@@ -85,7 +101,10 @@ flutter pub publish --dry-run
 6. 生成不含内部 `path:` / `git:` 的公开依赖清单，并**始终保留**
    `publish_to: none`，直至真正通过全部平台与版权门禁。
 
-### 实际独立宿主验收结果（2026-10-15）
+### 实际独立宿主验收结果（2026-10-15，历史记录）
+
+> 本表是 2026-10-15 对当时候选（早于 dev.9）的验收证据，保留用于追溯技术方案；
+> 它不是对当前已发布 dev.9 的验收结论。当前版本仍待完成的验收项见文末“后续阶段与验收门槛”。
 
 使用 `build/single_sdk_host`（仅依赖单一 SDK 路径包），不是现有大 Demo：
 
@@ -144,13 +163,13 @@ Flutter 使用 `:path` 安装插件，CocoaPods 不会执行 `prepare_command`�
 
 已有开发宿主可以继续按
 [当前开发版接入指南](APP_INTEGRATION_QUICKSTART.zh-CN.md)
-使用 `flutter_realtime_sdk` + 选定 Provider 的**本地 path 依赖**，
-预览版分发由下面的命令准备，源码模块和候选仍保留 `publish_to: none`：
+使用 `flutter_realtime_sdk` + 选定 Provider 的**本地 path 依赖**。
+源码模块仍保留 `publish_to: none`；准备下一个尚未发布的新预览版本时：
 
 ```sh
 python3 scripts/assemble_single_sdk_distribution.py
-python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.1
-cd build/pub_release/0.1.0-dev.1/flutter_realtime_sdk
+python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.10
+cd build/pub_release/0.1.0-dev.10/flutter_realtime_sdk
 flutter pub get
 flutter analyze --no-pub
 flutter pub publish --dry-run
