@@ -16,3 +16,8 @@ dependencies:
     path: ../flutter_realtime_media_core
   flutter_realtime_whiteboard_core:
     path: ../flutter_realtime_whiteboard_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

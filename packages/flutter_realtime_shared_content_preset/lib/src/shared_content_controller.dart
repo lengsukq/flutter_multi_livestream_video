@@ -2,7 +2,11 @@ import 'dart:async';
 import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
-import 'classroom_whiteboard_repository.dart';
+import 'classroom_shared_content_repository.dart';
+import 'shared_content_repository.dart';
+import 'shared_content_session.dart';
+import 'shared_content_command.dart';
+import 'shared_content_whiteboard_repository.dart';
 
 class SharedContentStatus {
   const SharedContentStatus({
@@ -18,10 +22,27 @@ class SharedContentStatus {
 
 /// Coordinates capture and authoritative content state without touching camera/mic.
 class SharedContentController {
-  SharedContentController({required this.media, required this.classroom}) {
+  SharedContentController({
+    required this.media,
+    this.classroom,
+    SharedContentRepository? repository,
+    Duration? pollInterval = const Duration(seconds: 2),
+  }) {
+    assert(classroom != null || repository != null);
+    _contentSession = SharedContentSession(
+      repository ??
+          ClassroomSharedContentRepository(
+            classroom!.repository,
+            classroom: classroom,
+          ),
+      pollInterval: classroom == null ? pollInterval : null,
+      onError: (error, stack) => _emit(),
+    );
     _hadLocalCapture = media.snapshot.localScreenShareEnabled;
-    whiteboard = WhiteboardSession(ClassroomWhiteboardRepository(classroom));
-    _classSub = classroom.states.listen((_) {
+    whiteboard = WhiteboardSession(
+      SharedContentWhiteboardRepository(_contentSession),
+    );
+    _classSub = _contentSession.states.listen((_) {
       if (_openingSystem && content?.canManage != true) {
         unawaited(
           systemAnnotations.stop().catchError((Object e) {
@@ -47,18 +68,20 @@ class SharedContentController {
     });
   }
   final MediaSession media;
-  final ClassroomSession classroom;
+  final ClassroomSession? classroom;
+  late final SharedContentSession _contentSession;
   late final WhiteboardSession whiteboard;
   SystemAnnotationBridge _systemAnnotations =
       const UnavailableSystemAnnotationBridge();
   SystemAnnotationBridge get systemAnnotations => _systemAnnotations;
 
   Future<void> setSystemAnnotations(SystemAnnotationBridge bridge) async {
-    if (_disposed)
+    if (_disposed) {
       throw const RealtimeException(
         code: RealtimeErrorCode.invalidState,
         message: 'content.disposed',
       );
+    }
     await _systemSub?.cancel();
     await _systemAnnotations.dispose();
     _systemAnnotations = bridge;
@@ -80,7 +103,7 @@ class SharedContentController {
     _systemSub = systemAnnotations.changes.listen((_) {
       _emit();
       if (!systemAnnotations.active &&
-          classroom.annotations.canvas.embeddedInVideo &&
+          _contentSession.canvas.embeddedInVideo &&
           !_openingSystem) {
         unawaited(_restoreAnnotationLayer());
       }
@@ -91,9 +114,9 @@ class SharedContentController {
   bool _openingSystem = false;
   Future<void>? _systemStarting;
   Future<void>? _restoreSystem;
-  AnnotationController get screenAnnotations => classroom.annotations;
+  AnnotationController get screenAnnotations => _contentSession;
   final _statuses = StreamController<SharedContentStatus>.broadcast();
-  StreamSubscription<ClassroomState>? _classSub;
+  StreamSubscription<SharedContentState?>? _classSub;
   StreamSubscription<MediaSnapshot>? _mediaSub;
   bool _busy = false, _disposed = false;
   Future<void>? _disposeFuture;
@@ -103,20 +126,22 @@ class SharedContentController {
   String? _fallbackSource;
   Future<void>? _reconciling;
   Future<void>? _operation;
-  SharedContentState? get content => classroom.state?.tools?.content;
+  SharedContentState? get content => classroom != null
+      ? classroom!.state?.tools?.content
+      : _contentSession.state;
   bool get supported => content != null;
   SharedContentStatus get status => SharedContentStatus(
     content: content,
     busy: _busy,
     captureActive: media.snapshot.localScreenShareEnabled,
-    error: _error ?? systemAnnotations.error,
+    error: _error ?? _contentSession.lastError ?? systemAnnotations.error,
   );
   Stream<SharedContentStatus> get statuses => _statuses.stream;
   // Drawing updates remain inside the annotation widget, never rebuilding video.
   Stream<Object?> get stageUpdates => statuses
       .map(
         (s) => (
-          classroom.state != null,
+          _contentSession.isLoaded,
           s.content?.mode,
           s.content?.screen.canvasId,
           s.content?.screen.participantId,
@@ -138,7 +163,7 @@ class SharedContentController {
     }
     if (!media.snapshot.localScreenShareEnabled ||
         content?.mode != SharedContentMode.screen ||
-        content?.canManage != true) {
+        content?.canAnnotateScreen != true) {
       throw RealtimeException(
         code: RealtimeErrorCode.invalidState,
         message:
@@ -168,15 +193,15 @@ class SharedContentController {
       await systemAnnotations.requestPermission();
       if (_disposed ||
           !media.snapshot.localScreenShareEnabled ||
-          content?.canManage != true) {
+          content?.canAnnotateScreen != true) {
         throw RealtimeException(
           code: RealtimeErrorCode.invalidState,
           message: 'The shared screen changed while requesting permission',
         );
       }
       await _restoreSystem;
-      await classroom.annotations.setEmbeddedInVideo(embeddedInVideo);
-      if (classroom.annotations.canvas.embeddedInVideo != embeddedInVideo) {
+      await _contentSession.setEmbeddedInVideo(embeddedInVideo);
+      if (_contentSession.canvas.embeddedInVideo != embeddedInVideo) {
         throw RealtimeException(
           code: RealtimeErrorCode.unsupportedFeature,
           message:
@@ -203,10 +228,10 @@ class SharedContentController {
   Future<void> _restoreAnnotationLayer() {
     return _restoreSystem ??= (() async {
       try {
-        if (classroom.annotations.canvas.active &&
-            classroom.annotations.canEdit &&
-            classroom.annotations.canvas.embeddedInVideo) {
-          await classroom.annotations.setEmbeddedInVideo(false);
+        if (_contentSession.canvas.active &&
+            _contentSession.canEdit &&
+            _contentSession.canvas.embeddedInVideo) {
+          await _contentSession.setEmbeddedInVideo(false);
         }
       } catch (e) {
         _error = e;
@@ -228,7 +253,7 @@ class SharedContentController {
   Future<void> start() async {
     try {
       _error = null;
-      await classroom.start();
+      await _contentSession.start();
       if (supported) await whiteboard.start();
       _emit();
     } catch (e) {
@@ -245,25 +270,32 @@ class SharedContentController {
   }
 
   Future<void> _commit(SharedContentMode mode, int revision) =>
-      classroom.toolAction(ClassroomToolAction.contentMode, {
-        'mode': mode.name,
-        'expectedRevision': revision,
-        if (mode == SharedContentMode.screen) 'sourceKey': _source(),
-      });
+      _contentSession.execute(
+        SharedContentCommand(SharedContentAction.mode, {
+          'mode': mode.name,
+          'expectedRevision': revision,
+          if (mode == SharedContentMode.screen) 'sourceKey': _source(),
+        }),
+      );
 
   /// A screen stop / annotation cleanup can race classroom revision updates.
   /// Refresh before committing and retry only an explicit revision conflict,
   /// never authorization, network or unrelated backend failures.
   Future<void> _commitFresh(SharedContentMode mode) async {
-    await classroom.refresh();
-    if (content == null || content!.canManage != true) {
+    await _contentSession.refresh();
+    if (content == null || !_canSelect(mode)) {
       throw const RealtimeException(
         code: RealtimeErrorCode.invalidState,
         message: 'Shared content is no longer manageable.',
         domain: 'sharedContent',
       );
     }
-    if (content!.mode == mode) return;
+    if (content!.mode == mode &&
+        (mode != SharedContentMode.screen ||
+            content!.screen.participantId ==
+                media.snapshot.localParticipantId)) {
+      return;
+    }
     try {
       await _commit(mode, content!.revision);
     } on RealtimeException catch (error) {
@@ -272,11 +304,26 @@ class SharedContentController {
           (error.details as Map)['backendCode'] != 'content-conflict') {
         rethrow;
       }
-      await classroom.refresh();
-      if (content == null || content!.canManage != true) rethrow;
-      if (content!.mode == mode) return;
+      await _contentSession.refresh();
+      if (content == null || !_canSelect(mode)) {
+        rethrow;
+      }
+      if (content!.mode == mode &&
+          (mode != SharedContentMode.screen ||
+              content!.screen.participantId ==
+                  media.snapshot.localParticipantId)) {
+        return;
+      }
       await _commit(mode, content!.revision);
     }
+  }
+
+  bool _canSelect(SharedContentMode mode) {
+    final state = content;
+    if (state == null) return false;
+    if (mode == SharedContentMode.whiteboard) return state.whiteboard.canEdit;
+    return state.canManage ||
+        (mode == SharedContentMode.screen && state.canShareScreen);
   }
 
   Future<void> selectMode(SharedContentMode mode) {
@@ -315,10 +362,10 @@ class SharedContentController {
           message: 'Shared content is unavailable',
         );
       }
-      if (content!.canManage != true) {
+      if (!_canSelect(mode)) {
         throw RealtimeException(
           code: RealtimeErrorCode.invalidState,
-          message: 'Teacher permission required',
+          message: 'sharedContent.permission',
         );
       }
       final interactive = media is InteractiveMediaSession
@@ -348,7 +395,7 @@ class SharedContentController {
         } catch (e) {
           throw RealtimeException(
             code: RealtimeErrorCode.invalidState,
-            message: 'Content mode change failed after capture stopped: $e',
+            message: 'sharedContent.commitAfterCaptureStop',
             cause: e,
             recoverable: true,
             suggestedAction: 'retry-content-change',
@@ -412,8 +459,10 @@ class SharedContentController {
       }
     } catch (e, stack) {
       try {
-        await classroom.refresh();
-      } catch (_) {}
+        await _contentSession.refresh();
+      } catch (refreshError) {
+        _error = refreshError;
+      }
       _error = normalizeRealtimeException(
         e,
         domain: 'sharedContent',
@@ -446,7 +495,7 @@ class SharedContentController {
         (!active && current.mode != SharedContentMode.screen)) {
       return;
     }
-    _reconciling = classroom.annotations
+    _reconciling = _contentSession
         .setSource(source)
         .catchError((Object e) {
           _error = e;
@@ -490,6 +539,7 @@ class SharedContentController {
     await cleanup.run('whiteboard', () async {
       await whiteboard.dispose();
     });
+    await cleanup.run('content.session', _contentSession.dispose);
     await cleanup.run('statuses', () async {
       await _statuses.close();
     });
