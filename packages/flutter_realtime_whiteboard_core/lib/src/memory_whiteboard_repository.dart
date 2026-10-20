@@ -182,14 +182,14 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
                 (p) =>
                     !p.x.isFinite ||
                     !p.y.isFinite ||
-                    p.x < 0 ||
-                    p.x > 1 ||
-                    p.y < 0 ||
-                    p.y > 1,
+                    p.x < -1000 ||
+                    p.x > 1000 ||
+                    p.y < -1000 ||
+                    p.y > 1000,
               )) {
             throw RealtimeException(
               code: RealtimeErrorCode.invalidArgument,
-              message: 'Use 1-100 normalized points',
+              message: 'Use 1-100 finite whiteboard scene points',
             );
           }
           final id = JsonReader(data).required<String>('id');

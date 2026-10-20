@@ -44,6 +44,28 @@ test('teacher plus two students follow pages, modes and every annotation tool; l
   f.mode('whiteboard'); f.board('page.delete',{pageId:second});
   assert.throws(()=>f.board('page.delete'),/at least one/);
 });
+
+test('whiteboard persists marks outside the original page; screen annotation stays bounded',()=>{
+  const f=fixture();
+  f.mode('whiteboard');
+  f.board('begin',{
+    id:'beyond-page', tool:'pen', color:0xff2563eb, width:3,
+    points:[{x:-2.5,y:1.4},{x:1.7,y:-0.5}],
+  });
+  assert.deepEqual(
+    f.snap(false,'alice').tools.content.whiteboard.canvas.shapes[0]?.points,
+    [{x:-2.5,y:1.4},{x:1.7,y:-0.5}],
+  );
+  assert.throws(()=>f.board('begin',{
+    id:'huge',tool:'pen',color:1,width:3,points:[{x:1001,y:0}],
+  }),/out of range/);
+  f.mode('screen','display1');
+  const canvasId=f.snap().tools.annotation.canvasId;
+  assert.throws(()=>f.act('annotation.begin',{
+    canvasId,id:'bad-screen',tool:'pen',color:1,width:3,
+    points:[{x:-.5,y:1.4}],
+  }),/normalized/);
+});
 test('page limits, revision conflicts, idempotency and active-page deletion are enforced',()=>{
   const f=fixture(); f.mode('whiteboard');
   const state=f.snap().tools.content.whiteboard;

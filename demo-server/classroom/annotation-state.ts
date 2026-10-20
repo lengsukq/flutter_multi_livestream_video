@@ -17,22 +17,24 @@ export const integer = (value: unknown, min: number, max: number): number => {
   }
   return value as number;
 };
-const points = (raw: unknown): Point[] => {
+const points = (raw: unknown, unbounded = false): Point[] => {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > 100) fail('Expected 1-100 annotation points');
   return (raw as unknown[]).map(value => {
     const p = value as Partial<Point> | null;
+    const min = unbounded ? -1000 : 0;
+    const max = unbounded ? 1000 : 1;
     if (!p || typeof p.x !== 'number' || typeof p.y !== 'number' ||
-        !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < 0 || p.x > 1 || p.y < 0 || p.y > 1) {
-      fail('Annotation coordinates must be normalized');
+        !Number.isFinite(p.x) || !Number.isFinite(p.y) || p.x < min || p.x > max || p.y < min || p.y > max) {
+      fail(unbounded ? 'Whiteboard scene coordinates out of range' : 'Annotation coordinates must be normalized');
     }
     return { x: p!.x!, y: p!.y! };
   });
 };
-export function applyAnnotation(canvas: AnnotationCanvas, operation: string, data: Record<string, unknown>): boolean {
+export function applyAnnotation(canvas: AnnotationCanvas, operation: string, data: Record<string, unknown>, unbounded = false): boolean {
       if (operation === 'clear') { canvas.shapes = []; return true; }
       if (operation === 'undo') { if (!canvas.shapes.length) return false; canvas.shapes.pop(); return true; }
       const id = text(data.id, 'Shape id', 128);
-      const batch = points(data.points);
+      const batch = points(data.points, unbounded);
       if (operation === 'begin') {
         if (canvas.shapes.some(shape => shape.id === id)) fail('Shape already exists', 'idempotency-conflict', 409);
         if (!['pen', 'highlight', 'circle', 'arrow', 'text'].includes(String(data.tool))) fail('Unknown annotation tool');

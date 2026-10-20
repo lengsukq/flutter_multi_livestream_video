@@ -145,7 +145,7 @@ void main() {
             'expectedRevision': first.revision,
             'id': 'bad',
             'points': [
-              {'x': 2, 'y': 0},
+              {'x': 1001, 'y': 0},
             ],
           }, eventId: 'bad'),
         ),

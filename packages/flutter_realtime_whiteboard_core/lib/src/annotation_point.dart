@@ -1,6 +1,7 @@
 import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
 
-/// Points are relative to the shared content rectangle, excluding letterboxes.
+/// Scene coordinates relative to a shared reference canvas. Screen annotation
+/// overlays remain inside [0, 1]; unbounded whiteboards can extend beyond it.
 class AnnotationPoint {
   const AnnotationPoint(this.x, this.y);
   final double x, y;

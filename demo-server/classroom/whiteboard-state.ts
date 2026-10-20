@@ -40,7 +40,7 @@ export function applyWhiteboard(board: Whiteboard, operation: string, data: Reco
     }
     case 'begin': case 'append': case 'undo': case 'clear':
       if (data.pageId !== board.activePageId || data.canvasId !== current.canvas.canvasId) conflict('Canvas or active page changed');
-      if (!applyAnnotation(current.canvas, operation, data)) return false;
+      if (!applyAnnotation(current.canvas, operation, data, true)) return false;
       break;
     default: throw new ProviderOperationError(400, 'invalid-argument', 'Unknown whiteboard action');
   }
