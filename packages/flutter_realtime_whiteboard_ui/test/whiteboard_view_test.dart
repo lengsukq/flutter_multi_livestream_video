@@ -130,7 +130,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(MovableAnnotationToolbar), findsNothing);
       expect(find.byIcon(Icons.drag_indicator), findsNothing);
-      expect(find.byTooltip('Draw / navigate'), findsNothing);
+      expect(find.byTooltip('Draw / navigate'), findsOneWidget);
       final surface = find.byType(AnnotationSurface);
       final rect = tester.getRect(surface);
       for (final label in ['Pen', 'Highlight', 'Circle', 'Arrow']) {
@@ -183,8 +183,12 @@ void main() {
     },
   );
   testWidgets(
-    'student cannot edit or change pages, content excludes letterbox',
+    'student cannot edit or change pages, mobile viewport fills available stage',
     (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 760);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
       final session = WhiteboardSession.local(canEdit: false);
       await session.start();
       await tester.pumpWidget(
@@ -201,10 +205,13 @@ void main() {
       expect(find.byTooltip('Add page'), findsNothing);
       expect(find.byTooltip('Delete current page'), findsNothing);
       final size = tester.getSize(find.byType(AnnotationSurface));
+      expect(size.width, closeTo(390, 1));
+      expect(size.height, greaterThan(size.width));
       expect(
-        size.width / size.height,
-        closeTo(16 / 9, .005),
-        reason: 'Unexpected board surface dimensions: $size',
+        tester
+            .widget<AnnotationSurface>(find.byType(AnnotationSurface))
+            .infiniteCanvas,
+        isTrue,
       );
       await tester.drag(find.byType(AnnotationSurface), const Offset(40, 20));
       await tester.pumpAndSettle();
@@ -222,11 +229,10 @@ void main() {
         MaterialApp(home: WhiteboardView(session: session)),
       );
       await tester.pumpAndSettle();
-      final viewer = tester.widget<InteractiveViewer>(
-        find.byType(InteractiveViewer),
-      );
-      viewer.transformationController!.value = Matrix4.identity()
-        ..scaleByDouble(2, 2, 1, 1);
+      final transform = tester
+          .widget<AnnotationSurface>(find.byType(AnnotationSurface))
+          .transformationController!;
+      transform.value = Matrix4.identity()..scaleByDouble(2, 2, 1, 1);
       await tester.pumpAndSettle();
       final rect = tester.getRect(find.byType(AnnotationSurface));
       final start = rect.topLeft + Offset(rect.width * .5, rect.height * .5);
@@ -234,8 +240,14 @@ void main() {
       await gesture.moveBy(const Offset(20, 20));
       await gesture.up();
       await tester.pumpAndSettle();
-      expect(session.canvas.shapes.single.points.first.x, closeTo(.25, .01));
-      expect(session.canvas.shapes.single.points.first.y, closeTo(.25, .01));
+      expect(
+        session.canvas.shapes.single.points.first.x,
+        closeTo(rect.width / (2 * 1600 * 2), .02),
+      );
+      expect(
+        session.canvas.shapes.single.points.first.y,
+        closeTo(rect.height / (2 * 900 * 2), .02),
+      );
       await tester.pumpWidget(const SizedBox());
       await tester.runAsync(session.dispose);
     },
@@ -256,17 +268,16 @@ void main() {
 
     final rect = tester.getRect(find.byType(AnnotationSurface));
     final center = Offset(rect.width / 2, rect.height / 2);
-    final viewer = tester.widget<InteractiveViewer>(
-      find.byType(InteractiveViewer),
-    );
-    final transform = viewer.transformationController!;
+    final transform = tester
+        .widget<AnnotationSurface>(find.byType(AnnotationSurface))
+        .transformationController!;
 
     for (final percent in [125, 150, 175, 200, 225, 250, 275, 300]) {
       await tester.tap(find.byTooltip('Zoom in'));
       await tester.pumpAndSettle();
       expect(find.text('$percent%'), findsOneWidget);
-      expect(transform.toScene(center).dx, closeTo(center.dx, .01));
-      expect(transform.toScene(center).dy, closeTo(center.dy, .01));
+      expect(transform.toScene(center).dx, closeTo(800, .01));
+      expect(transform.toScene(center).dy, closeTo(450, .01));
     }
 
     await tester.dragFrom(rect.center, const Offset(32, 24));
@@ -275,20 +286,150 @@ void main() {
     final points = session.canvas.shapes.single.points;
     expect(points.first.x, closeTo(.5, .01));
     expect(points.first.y, closeTo(.5, .01));
-    expect(points.last.x, closeTo(.5 + 32 / rect.width / 3, .01));
-    expect(points.last.y, closeTo(.5 + 24 / rect.height / 3, .01));
+    expect(points.last.x, closeTo(.5 + 32 / 1600 / 3, .01));
+    expect(points.last.y, closeTo(.5 + 24 / 900 / 3, .01));
 
     for (final percent in [275, 250, 225, 200, 175, 150, 125, 100]) {
       await tester.tap(find.byTooltip('Zoom out'));
       await tester.pumpAndSettle();
       expect(find.text('$percent%'), findsOneWidget);
-      expect(transform.toScene(center).dx, closeTo(center.dx, .01));
-      expect(transform.toScene(center).dy, closeTo(center.dy, .01));
+      expect(transform.toScene(center).dx, closeTo(800, .01));
+      expect(transform.toScene(center).dy, closeTo(450, .01));
     }
     await tester.dragFrom(rect.center, const Offset(32, 24));
     await tester.pumpAndSettle();
     expect(session.canvas.shapes, hasLength(2));
     expect(session.canvas.shapes.last.points.first.x, closeTo(.5, .01));
     expect(session.canvas.shapes.last.points.first.y, closeTo(.5, .01));
+  });
+
+  testWidgets(
+    'mobile two-finger zoom and pan keep one-finger drawing aligned',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 760);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      final session = WhiteboardSession.local();
+      await session.start();
+      addTearDown(session.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: WhiteboardView(session: session)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final surface = find.byType(AnnotationSurface);
+      final rect = tester.getRect(surface);
+      final transform = tester
+          .widget<AnnotationSurface>(surface)
+          .transformationController!;
+      expect(transform.value.getMaxScaleOnAxis(), closeTo(1, .01));
+
+      final first = await tester.startGesture(
+        rect.center + const Offset(-45, 0),
+        pointer: 11,
+      );
+      final second = await tester.startGesture(
+        rect.center + const Offset(45, 0),
+        pointer: 12,
+      );
+      await tester.pump();
+      await first.moveBy(const Offset(-75, 0));
+      await tester.pump();
+      await second.moveBy(const Offset(75, 0));
+      await tester.pump();
+      expect(transform.value.getMaxScaleOnAxis(), greaterThan(1.2));
+      final oldCenter = transform.toScene(rect.center - rect.topLeft);
+      await first.moveBy(const Offset(0, 65));
+      await second.moveBy(const Offset(0, 65));
+      await tester.pump();
+      final newCenter = transform.toScene(rect.center - rect.topLeft);
+      expect(newCenter.dy, lessThan(oldCenter.dy));
+      await first.up();
+      await second.up();
+      await tester.pumpAndSettle();
+      expect(
+        session.canvas.shapes,
+        isEmpty,
+        reason: 'Two fingers must navigate without drawing',
+      );
+
+      final expected = transform.toScene(rect.center - rect.topLeft);
+      await tester.dragFrom(rect.center, const Offset(30, 15));
+      await tester.pumpAndSettle();
+      expect(session.canvas.shapes, hasLength(1));
+      expect(
+        session.canvas.shapes.single.points.first.x,
+        closeTo(expected.dx / 1600, .02),
+      );
+      expect(
+        session.canvas.shapes.single.points.first.y,
+        closeTo(expected.dy / 900, .02),
+      );
+    },
+  );
+
+  testWidgets('whiteboard can persist ink outside the original page bounds', (
+    tester,
+  ) async {
+    final session = WhiteboardSession.local();
+    await session.start();
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: WhiteboardView(session: session)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final surface = find.byType(AnnotationSurface);
+    final rect = tester.getRect(surface);
+    final transform = tester
+        .widget<AnnotationSurface>(surface)
+        .transformationController!;
+    transform.value = Matrix4.identity()..translateByDouble(2200, 0, 0, 1);
+    await tester.pump();
+    await tester.dragFrom(rect.center, const Offset(35, 20));
+    await tester.pumpAndSettle();
+    expect(session.canvas.shapes.single.points.first.x, lessThan(0));
+    expect(session.canvas.shapes.single.toJson()['points'], isNotEmpty);
+  });
+
+  testWidgets('mobile hand tool pans with one finger and resets to center', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 760);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    final session = WhiteboardSession.local();
+    await session.start();
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: WhiteboardView(session: session)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final rect = tester.getRect(find.byType(AnnotationSurface));
+    final transform = tester
+        .widget<AnnotationSurface>(find.byType(AnnotationSurface))
+        .transformationController!;
+    final viewportCenter = Offset(rect.width / 2, rect.height / 2);
+    await tester.tap(find.byTooltip('Draw / navigate'));
+    await tester.pumpAndSettle();
+    await tester.dragFrom(rect.center, const Offset(85, 55));
+    await tester.pumpAndSettle();
+    expect(transform.toScene(viewportCenter).dx, lessThan(790));
+    expect(session.canvas.shapes, isEmpty);
+    await tester.tap(find.byTooltip('Reset whiteboard view'));
+    await tester.pumpAndSettle();
+    expect(transform.toScene(viewportCenter).dx, closeTo(800, .01));
+    expect(transform.toScene(viewportCenter).dy, closeTo(450, .01));
+    await tester.tap(find.byTooltip('Pen'));
+    await tester.pumpAndSettle();
+    await tester.dragFrom(rect.center, const Offset(30, 20));
+    await tester.pumpAndSettle();
+    expect(session.canvas.shapes, hasLength(1));
   });
 }

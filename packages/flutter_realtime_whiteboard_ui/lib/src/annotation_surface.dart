@@ -28,6 +28,8 @@ class AnnotationSurface extends StatefulWidget {
     this.onToolChanged,
     this.editTooltip,
     this.transformationController,
+    this.infiniteCanvas = false,
+    this.onViewportTransformChanged,
   });
   final AnnotationController session;
   final Widget? background;
@@ -47,6 +49,10 @@ class AnnotationSurface extends StatefulWidget {
 
   /// Host-owned zoom/pan transform. When null the surface owns one.
   final TransformationController? transformationController;
+
+  /// Unbounded, shared whiteboard world. Screen-share overlays remain fitted.
+  final bool infiniteCanvas;
+  final ValueChanged<double>? onViewportTransformChanged;
   @override
   State<AnnotationSurface> createState() => _AnnotationSurfaceState();
 }
@@ -71,6 +77,12 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
   TransformationController get _transform =>
       widget.transformationController ??
       (_ownedTransform ??= TransformationController());
+  static const Size infiniteSceneSize = Size(1600, 900);
+  final _activePointers = <int>{};
+  final _pointerDownPositions = <int, Offset>{};
+  int _gesturePointers = 0;
+  Offset? _previousFocal;
+  double _previousGestureScale = 1;
   @override
   void dispose() {
     _flushTimer?.cancel();
@@ -81,8 +93,128 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
   AnnotationPoint _point(Offset offset, Size size) {
     final scene = _transform.toScene(offset);
     return AnnotationPoint(
-      (scene.dx / size.width).clamp(0.0, 1.0),
-      (scene.dy / size.height).clamp(0.0, 1.0),
+      widget.infiniteCanvas
+          ? scene.dx / size.width
+          : (scene.dx / size.width).clamp(0.0, 1.0),
+      widget.infiniteCanvas
+          ? scene.dy / size.height
+          : (scene.dy / size.height).clamp(0.0, 1.0),
+    );
+  }
+
+  void _navigate(Offset focal, double gestureScale) {
+    final previous = _previousFocal;
+    if (previous == null) {
+      _previousFocal = focal;
+      _previousGestureScale = gestureScale;
+      return;
+    }
+    final current = _transform.value.getMaxScaleOnAxis();
+    final ratio = _previousGestureScale == 0
+        ? 1.0
+        : gestureScale / _previousGestureScale;
+    final next = (current * ratio).clamp(0.25, 8.0);
+    final anchor = _transform.toScene(previous);
+    final offset = focal - anchor * next;
+    _transform.value = Matrix4.identity()
+      ..translateByDouble(offset.dx, offset.dy, 0, 1)
+      ..scaleByDouble(next, next, 1, 1);
+    widget.onViewportTransformChanged?.call(next);
+    _previousFocal = focal;
+    _previousGestureScale = gestureScale;
+  }
+
+  Widget _infiniteViewport(
+    BuildContext context,
+    AnnotationCanvas canvas,
+    bool teacher,
+    bool matches,
+    Size viewport,
+  ) {
+    final shapes = <AnnotationShape>[
+      if (matches && !canvas.embeddedInVideo)
+        ...canvas.shapes.where((shape) => shape.id != _draft?.id),
+      if (matches &&
+          !canvas.embeddedInVideo &&
+          _draft != null &&
+          _canvasId == canvas.canvasId)
+        _draft!,
+    ];
+    return Listener(
+      onPointerDown: (e) {
+        _activePointers.add(e.pointer);
+        _pointerDownPositions[e.pointer] = e.localPosition;
+      },
+      onPointerUp: (e) {
+        _activePointers.remove(e.pointer);
+        _pointerDownPositions.remove(e.pointer);
+      },
+      onPointerCancel: (e) {
+        _activePointers.remove(e.pointer);
+        _pointerDownPositions.remove(e.pointer);
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onScaleStart: (details) {
+          _gesturePointers = details.pointerCount;
+          _previousFocal = details.localFocalPoint;
+          _previousGestureScale = 1;
+          // Wait for a one-pointer move before starting ink. A second finger
+          // can arrive immediately after the first touch; creating a stroke
+          // here would leave a phantom mark after every pinch.
+        },
+        onScaleUpdate: (details) {
+          final multiTouch =
+              details.pointerCount > 1 || _activePointers.length > 1;
+          if (multiTouch) {
+            if (_gesturePointers <= 1) {
+              _finish();
+              _previousFocal = details.localFocalPoint;
+              _previousGestureScale = details.scale;
+            } else {
+              _navigate(details.localFocalPoint, details.scale);
+            }
+            _gesturePointers = 2;
+            return;
+          }
+          if (_gesturePointers > 1) return;
+          _gesturePointers = 1;
+          if (teacher && _isEditing) {
+            if (_draft != null) {
+              _update(details.localFocalPoint, infiniteSceneSize);
+            } else if (_activeTool != AnnotationTool.text && !_finishing) {
+              final start = _activePointers.length == 1
+                  ? _pointerDownPositions[_activePointers.single]
+                  : null;
+              _start(start ?? details.localFocalPoint, infiniteSceneSize);
+              _update(details.localFocalPoint, infiniteSceneSize);
+            }
+          } else {
+            _navigate(details.localFocalPoint, 1);
+          }
+        },
+        onScaleEnd: (_) {
+          _finish();
+          _gesturePointers = 0;
+          _previousFocal = null;
+          _previousGestureScale = 1;
+        },
+        onTapUp: teacher && _isEditing && _activeTool == AnnotationTool.text
+            ? (e) => _label(e.localPosition, infiniteSceneSize)
+            : null,
+        child: ClipRect(
+          child: CustomPaint(
+            size: viewport,
+            painter: _InfiniteWhiteboardPainter(
+              shapes: shapes,
+              transform: _transform,
+              sceneSize: infiniteSceneSize,
+              fontFamily: RealtimeFonts.bodyOf(context),
+            ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
     );
   }
 
@@ -232,6 +364,25 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
       return LayoutBuilder(
         builder: (context, constraints) {
           final size = constraints.biggest;
+          if (widget.infiniteCanvas) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                _infiniteViewport(context, canvas, teacher, matches, size),
+                if (_error != null)
+                  Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Material(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text('${s.t('syncError')} $_error'),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }
           return Stack(
             fit: StackFit.expand,
             children: [
@@ -398,9 +549,11 @@ class AnnotationPainter extends CustomPainter {
   final String fontFamily;
   final List<AnnotationShape> shapes;
   @override
-  void paint(Canvas canvas, Size size) {
+  void paint(Canvas canvas, Size size) => paintScene(canvas, size);
+
+  void paintScene(Canvas canvas, Size size, {bool clipToCanvas = true}) {
     canvas.save();
-    canvas.clipRect(Offset.zero & size);
+    if (clipToCanvas) canvas.clipRect(Offset.zero & size);
     for (final shape in shapes) {
       if (shape.points.isEmpty) continue;
       Offset position(AnnotationPoint p) =>
@@ -462,7 +615,11 @@ class AnnotationPainter extends CustomPainter {
             ),
             textDirection: TextDirection.ltr,
           );
-          label.layout(maxWidth: math.max(1, size.width - start.dx));
+          label.layout(
+            maxWidth: clipToCanvas
+                ? math.max(1, size.width - start.dx)
+                : size.width,
+          );
           label.paint(canvas, start);
       }
     }
@@ -472,6 +629,58 @@ class AnnotationPainter extends CustomPainter {
   @override
   bool shouldRepaint(AnnotationPainter oldDelegate) =>
       !identical(shapes, oldDelegate.shapes) ||
+      fontFamily != oldDelegate.fontFamily;
+}
+
+/// Paints the shared 1600x900 reference coordinate system across an
+/// unbounded viewport. The scene matrix is local to each user; only the
+/// scene-space annotation points are sent through the shared repository.
+class _InfiniteWhiteboardPainter extends CustomPainter {
+  _InfiniteWhiteboardPainter({
+    required this.shapes,
+    required this.transform,
+    required this.sceneSize,
+    required this.fontFamily,
+  }) : super(repaint: transform);
+
+  final List<AnnotationShape> shapes;
+  final TransformationController transform;
+  final Size sceneSize;
+  final String fontFamily;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawColor(Colors.white, BlendMode.src);
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    final a = transform.toScene(Offset.zero);
+    final b = transform.toScene(Offset(size.width, size.height));
+    canvas.transform(transform.value.storage);
+    const step = 80.0;
+    final grid = Paint()
+      ..color = const Color(0xFFEAF0F7)
+      ..strokeWidth = 1 / transform.value.getMaxScaleOnAxis();
+    final left = math.min(a.dx, b.dx);
+    final right = math.max(a.dx, b.dx);
+    final top = math.min(a.dy, b.dy);
+    final bottom = math.max(a.dy, b.dy);
+    for (var x = (left / step).floor() * step; x <= right; x += step) {
+      canvas.drawLine(Offset(x, top), Offset(x, bottom), grid);
+    }
+    for (var y = (top / step).floor() * step; y <= bottom; y += step) {
+      canvas.drawLine(Offset(left, y), Offset(right, y), grid);
+    }
+    AnnotationPainter(
+      shapes,
+      fontFamily: fontFamily,
+    ).paintScene(canvas, sceneSize, clipToCanvas: false);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_InfiniteWhiteboardPainter oldDelegate) =>
+      !identical(shapes, oldDelegate.shapes) ||
+      !identical(transform, oldDelegate.transform) ||
       fontFamily != oldDelegate.fontFamily;
 }
 

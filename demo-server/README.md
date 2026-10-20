@@ -373,7 +373,8 @@ Teaching snapshots declare `tools.content` with a content revision/mode, teacher
 manage permission, screen canvas and a paged whiteboard. The existing authenticated
 classroom action endpoint accepts `tool.content.mode` and `tool.whiteboard.*`.
 Content transitions require the content revision; page/drawing actions require the
-board revision. Drawing also checks current page/canvas IDs, normalized points and
+board revision. Drawing also checks current page/canvas IDs, finite shared
+whiteboard scene points (bounded to ±1000), and
 limits. Teacher identity and duplicate event payloads are validated before mutation.
 Only current-page marks are transmitted; other pages remain in room-lifecycle memory.
 No new persistence/storage is added. See [Whiteboard SDK](../doc/WHITEBOARD_SDK.md).

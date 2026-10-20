@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
@@ -67,6 +66,7 @@ class _WhiteboardViewState extends State<WhiteboardView> {
   int _zoomPercent = 100;
   final _transform = TransformationController();
   final _viewportKey = GlobalKey();
+  bool _initialViewportReady = false;
 
   static const _penColors = <int>[
     0xff1f2a3c,
@@ -113,7 +113,7 @@ class _WhiteboardViewState extends State<WhiteboardView> {
   }
 
   void _setZoom(double scale) {
-    final next = scale.clamp(1.0, 3.0);
+    final next = scale.clamp(0.25, 8.0);
     final size = _viewportSize;
     if (size == null) return;
     // Keep the scene point under the viewport center fixed while zooming.
@@ -122,18 +122,54 @@ class _WhiteboardViewState extends State<WhiteboardView> {
     // zoom step and eventually moving strokes out of the visible viewport.
     final center = Offset(size.width / 2, size.height / 2);
     final scene = _transform.toScene(center);
-    if (next == 1) {
-      _transform.value = Matrix4.identity();
-    } else {
-      final translation = center - scene * next;
-      _transform.value = Matrix4.identity()
-        ..translateByDouble(translation.dx, translation.dy, 0, 1)
-        ..scaleByDouble(next, next, 1, 1);
-    }
+    final translation = center - scene * next;
+    _transform.value = Matrix4.identity()
+      ..translateByDouble(translation.dx, translation.dy, 0, 1)
+      ..scaleByDouble(next, next, 1, 1);
     setState(() => _zoomPercent = (next * 100).round());
   }
 
+  void _resetViewport() {
+    final size = _viewportSize;
+    if (size == null) return;
+    final center = Offset(size.width / 2, size.height / 2);
+    _transform.value = Matrix4.identity()
+      ..translateByDouble(center.dx - 800, center.dy - 450, 0, 1);
+    setState(() => _zoomPercent = 100);
+  }
+
   Size? _viewportSize;
+
+  void _onViewportSize(Size size) {
+    if (size.isEmpty || size == _viewportSize && _initialViewportReady) return;
+    final previous = _viewportSize;
+    _viewportSize = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_initialViewportReady) {
+        const worldCenter = Offset(800, 450);
+        final center = Offset(size.width / 2, size.height / 2);
+        _transform.value = Matrix4.identity()
+          ..translateByDouble(
+            center.dx - worldCenter.dx,
+            center.dy - worldCenter.dy,
+            0,
+            1,
+          );
+        _initialViewportReady = true;
+      } else if (previous != null && previous != size) {
+        // Window rotations/resizes keep the viewed world point centered.
+        final previousCenter = Offset(previous.width / 2, previous.height / 2);
+        final scene = _transform.toScene(previousCenter);
+        final scale = _transform.value.getMaxScaleOnAxis();
+        final nextCenter = Offset(size.width / 2, size.height / 2);
+        final translation = nextCenter - scene * scale;
+        _transform.value = Matrix4.identity()
+          ..translateByDouble(translation.dx, translation.dy, 0, 1)
+          ..scaleByDouble(scale, scale, 1, 1);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -215,7 +251,13 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                       tool: _tools.tool,
                       selectedColor: _tools.color,
                       drawingEnabled: _tools.drawingEnabled,
-                      onViewportSize: (size) => _viewportSize = size,
+                      onViewportSize: _onViewportSize,
+                      onZoomChanged: (scale) {
+                        final percent = (scale * 100).round();
+                        if (percent != _zoomPercent && mounted) {
+                          setState(() => _zoomPercent = percent);
+                        }
+                      },
                     ),
                   ),
                 ],
@@ -276,13 +318,13 @@ class _WhiteboardViewState extends State<WhiteboardView> {
     final trailing = <Widget>[
       _ZoomControl(
         percent: _zoomPercent,
-        onZoomOut: _zoomPercent <= 100
+        onZoomOut: _zoomPercent <= 25
             ? null
             : () => _setZoom(_zoomPercent / 100 - .25),
-        onZoomIn: _zoomPercent >= 300
+        onZoomIn: _zoomPercent >= 800
             ? null
             : () => _setZoom(_zoomPercent / 100 + .25),
-        onReset: _zoomPercent == 100 ? null : () => _setZoom(1),
+        onReset: _resetViewport,
       ),
       if (state.canEdit) ...[
         const SizedBox(width: 4),
@@ -340,12 +382,13 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               ),
               if (narrow)
                 _CompactPageActions(
-                  onZoomOut: _zoomPercent <= 100
+                  onZoomOut: _zoomPercent <= 25
                       ? null
                       : () => _setZoom(_zoomPercent / 100 - .25),
-                  onZoomIn: _zoomPercent >= 300
+                  onZoomIn: _zoomPercent >= 800
                       ? null
                       : () => _setZoom(_zoomPercent / 100 + .25),
+                  onReset: _resetViewport,
                   onDelete: !state.canEdit
                       ? null
                       : (_busy || state.pages.length <= 1
@@ -383,6 +426,13 @@ class _WhiteboardViewState extends State<WhiteboardView> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _RailTool(
+            icon: Icons.pan_tool_outlined,
+            tooltip: s.t('annotate'),
+            selected: !_tools.drawingEnabled,
+            compact: true,
+            onTap: _tools.toggleDrawing,
+          ),
           for (final entry in const <(AnnotationTool, IconData, String)>[
             (AnnotationTool.pen, Icons.edit_rounded, 'pen'),
             (AnnotationTool.highlight, Icons.brush_rounded, 'highlight'),
@@ -540,9 +590,8 @@ class _WhiteboardToolRailState extends State<WhiteboardToolRail> {
   );
 }
 
-/// Fit the drawing area to both available dimensions without overflowing the
-/// stage on short windows. The zoom viewport and annotation coordinates share
-/// the same dimensions, including after responsive layout changes.
+/// The board fills available screen real estate, while its drawing coordinates
+/// remain a stable unbounded scene shared across viewport sizes and devices.
 class _BoardCanvas extends StatelessWidget {
   const _BoardCanvas({
     required this.viewportKey,
@@ -553,6 +602,7 @@ class _BoardCanvas extends StatelessWidget {
     required this.selectedColor,
     required this.drawingEnabled,
     required this.onViewportSize,
+    required this.onZoomChanged,
   });
 
   final GlobalKey viewportKey;
@@ -563,54 +613,33 @@ class _BoardCanvas extends StatelessWidget {
   final int selectedColor;
   final bool drawingEnabled;
   final ValueChanged<Size> onViewportSize;
+  final ValueChanged<double> onZoomChanged;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      const horizontalPadding = 8.0;
-      const verticalPadding = 8.0;
-      final width = math.max(
-        0.0,
-        math.min(
-          1100.0,
-          math.min(
-            constraints.maxWidth - horizontalPadding * 2,
-            (constraints.maxHeight - verticalPadding * 2) * 16 / 9,
-          ),
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(
+          RealtimeUiThemeExtension.of(context).stageRadius,
         ),
-      );
-      return Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: horizontalPadding,
-          vertical: verticalPadding,
-        ),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            width: width,
-            height: width * 9 / 16,
-            child: RealtimeBoardSurface(
-              radius: RealtimeUiThemeExtension.of(context).stageRadius,
-              // Pure white paper: the grid gave no drawing guidance and
-              // competed with ink, so the board reads as a blank sheet.
-              color: Colors.white,
-              showGrid: false,
-              child: LayoutBuilder(
-                key: viewportKey,
-                builder: (context, board) {
-                  onViewportSize(board.biggest);
-                  return AnnotationSurface(
-                    key: ValueKey(state.canvas.canvasId),
-                    session: session,
-                    tool: tool,
-                    selectedColor: selectedColor,
-                    drawingEnabled: drawingEnabled,
-                    toolbarPlacement: AnnotationToolbarPlacement.none,
-                    transformationController: transformationController,
-                  );
-                },
-              ),
-            ),
+        child: ColoredBox(
+          color: Colors.white,
+          child: LayoutBuilder(
+            key: viewportKey,
+            builder: (context, board) {
+              onViewportSize(board.biggest);
+              return AnnotationSurface(
+                key: ValueKey(state.canvas.canvasId),
+                session: session,
+                tool: tool,
+                selectedColor: selectedColor,
+                drawingEnabled: drawingEnabled,
+                toolbarPlacement: AnnotationToolbarPlacement.none,
+                transformationController: transformationController,
+                infiniteCanvas: true,
+                onViewportTransformChanged: onZoomChanged,
+              );
+            },
           ),
         ),
       );
@@ -667,12 +696,14 @@ class _CompactPageActions extends StatelessWidget {
   const _CompactPageActions({
     required this.onZoomOut,
     required this.onZoomIn,
+    required this.onReset,
     required this.onDelete,
     required this.onStop,
     required this.stopTooltip,
   });
   final VoidCallback? onZoomOut;
   final VoidCallback? onZoomIn;
+  final VoidCallback? onReset;
   final VoidCallback? onDelete;
   final VoidCallback? onStop;
   final String stopTooltip;
@@ -698,6 +729,14 @@ class _CompactPageActions extends StatelessWidget {
           padding: EdgeInsets.zero,
           onPressed: onZoomIn,
           icon: const Icon(Icons.add_rounded),
+        ),
+        IconButton(
+          tooltip: 'Reset whiteboard view',
+          iconSize: 16,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          padding: EdgeInsets.zero,
+          onPressed: onReset,
+          icon: const Icon(Icons.center_focus_strong_rounded),
         ),
         if (onDelete != null)
           IconButton(

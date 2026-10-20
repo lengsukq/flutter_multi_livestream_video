@@ -327,6 +327,18 @@ and activities to 100 per room. This extension remains in memory even when the
 legacy optional `CLASSROOM_STATE_DIR` store is enabled. No new persistence,
 payment or recording service is introduced.
 
+## Infinite whiteboard viewport
+
+The whiteboard uses one shared **1600 × 900 logical scene**, rather than fitting
+a small 16:9 rectangle inside a phone. The viewport fills the available stage.
+Single-touch drawing and two-finger pinch/drag coexist; the mobile hand tool
+enables one-finger panning, and **Reset whiteboard view** recenters the scene.
+Each user's pan and zoom matrix is local, while stroke points are stored in
+shared scene coordinates and can extend outside the original `[0,1]` page.
+The demo control plane bounds finite whiteboard coordinates to ±1000 for
+request safety, independently of the viewport. Screen annotations still use
+the original 0–1 normalized content rectangle and are **not** unbounded.
+
 ## Screen annotations
 
 `classroom.annotations` is an `AnnotationSession` facade with `canvases`,
