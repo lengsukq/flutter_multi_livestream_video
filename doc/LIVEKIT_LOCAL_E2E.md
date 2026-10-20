@@ -41,7 +41,7 @@ The unified demo contains `integration_test/livekit_local_e2e_test.dart`:
 
 ```bash
 flutter test integration_test/livekit_local_e2e_test.dart \
-  --dart-define=MEDIA_E2E_BACKEND_URL=http://192.168.31.8:3000
+  --dart-define=MEDIA_E2E_BACKEND_URL=http://192.168.31.2:3000
 ```
 
 Without `MEDIA_E2E_BACKEND_URL`, the platform project still builds and the test

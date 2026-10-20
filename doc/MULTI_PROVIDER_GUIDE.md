@@ -176,7 +176,7 @@ enumeration are not advertised by the first release.
 
 ```bash
 cd example
-flutter run --dart-define=MEDIA_BACKEND_URL=http://192.168.31.8:3000
+flutter run --dart-define=MEDIA_BACKEND_URL=http://192.168.31.2:3000
 ```
 
 For local application auth, `MEDIA_APP_TOKEN` may also be supplied as a Dart

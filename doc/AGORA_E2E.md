@@ -38,7 +38,7 @@ front/back camera switching. On macOS the adapter intentionally reports
 ```bash
 cd example
 flutter test integration_test/agora_device_e2e_test.dart -d <device-id> \
-  --dart-define=AGORA_E2E_BACKEND_URL=http://192.168.31.8:3000 \
+  --dart-define=AGORA_E2E_BACKEND_URL=http://192.168.31.2:3000 \
   --dart-define=AGORA_E2E_ROLE=host \
   --dart-define=AGORA_E2E_DEVICE_MEDIA=true
 ```
@@ -54,7 +54,7 @@ Use a fixed room code so both devices join the same room. Start the host first:
 
 ```bash
 flutter test integration_test/agora_device_e2e_test.dart -d <host-device> \
-  --dart-define=AGORA_E2E_BACKEND_URL=http://192.168.31.8:3000 \
+  --dart-define=AGORA_E2E_BACKEND_URL=http://192.168.31.2:3000 \
   --dart-define=AGORA_E2E_ROOM_CODE=482913 \
   --dart-define=AGORA_E2E_ROLE=host \
   --dart-define=AGORA_E2E_DEVICE_MEDIA=true \
@@ -66,7 +66,7 @@ Then start the viewer:
 
 ```bash
 flutter test integration_test/agora_device_e2e_test.dart -d <viewer-device> \
-  --dart-define=AGORA_E2E_BACKEND_URL=http://192.168.31.8:3000 \
+  --dart-define=AGORA_E2E_BACKEND_URL=http://192.168.31.2:3000 \
   --dart-define=AGORA_E2E_ROOM_CODE=482913 \
   --dart-define=AGORA_E2E_ROLE=viewer \
   --dart-define=AGORA_E2E_CREATE_ROOM=false \

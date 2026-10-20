@@ -29,7 +29,7 @@ video rendering:
 ```bash
 cd example
 flutter test integration_test/trtc_device_e2e_test.dart -d <device-id> \
-  --dart-define=TRTC_E2E_BACKEND_URL=http://192.168.31.8:3000 \
+  --dart-define=TRTC_E2E_BACKEND_URL=http://192.168.31.2:3000 \
   --dart-define=TRTC_E2E_ROLE=host \
   --dart-define=TRTC_E2E_DEVICE_MEDIA=true
 ```
@@ -45,7 +45,7 @@ both viewers join before sending a message:
 
 ```bash
 flutter test integration_test/trtc_device_e2e_test.dart -d <host-device> \
-  --dart-define=TRTC_E2E_BACKEND_URL=http://192.168.31.8:3000 \
+  --dart-define=TRTC_E2E_BACKEND_URL=http://192.168.31.2:3000 \
   --dart-define=TRTC_E2E_ROOM_CODE=482913 \
   --dart-define=TRTC_E2E_ROLE=host \
   --dart-define=TRTC_E2E_DEVICE_MEDIA=true \
@@ -57,7 +57,7 @@ Start each viewer on a separate device, using the same room code:
 
 ```bash
 flutter test integration_test/trtc_device_e2e_test.dart -d <viewer-device-1> \
-  --dart-define=TRTC_E2E_BACKEND_URL=http://192.168.31.8:3000 \
+  --dart-define=TRTC_E2E_BACKEND_URL=http://192.168.31.2:3000 \
   --dart-define=TRTC_E2E_ROOM_CODE=482913 \
   --dart-define=TRTC_E2E_ROLE=viewer \
   --dart-define=TRTC_E2E_CREATE_ROOM=false \
@@ -77,7 +77,7 @@ Set `TRTC_TOKEN_TTL_SECONDS=60` on the backend and run a single device with:
 
 ```bash
 flutter test integration_test/trtc_device_e2e_test.dart -d <device-id> \
-  --dart-define=TRTC_E2E_BACKEND_URL=http://192.168.31.8:3000 \
+  --dart-define=TRTC_E2E_BACKEND_URL=http://192.168.31.2:3000 \
   --dart-define=TRTC_E2E_ROLE=host \
   --dart-define=TRTC_E2E_EXPECT_RENEWAL=true \
   --dart-define=TRTC_E2E_RENEWAL_TIMEOUT_SECONDS=75
