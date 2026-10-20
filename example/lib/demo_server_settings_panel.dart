@@ -102,7 +102,7 @@ class DemoServerSettingsPanel extends StatelessWidget {
           RealtimeGlassTextField(
             controller: controller,
             label: DemoStrings.of(context).demoBackendUrl,
-            hintText: 'http://192.168.31.8:3000',
+            hintText: 'http://192.168.31.2:3000',
             prefixIcon: Icons.dns_outlined,
             keyboardType: TextInputType.url,
             onChanged: (_) {

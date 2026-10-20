@@ -139,9 +139,17 @@ Future<void> _confirmPreJoin(WidgetTester tester) async {
     if (find.byType(RealtimePreJoinPage).evaluate().isNotEmpty) break;
   }
   expect(find.byType(RealtimePreJoinPage), findsOneWidget);
-  final enter = find.text('Join meeting').evaluate().isNotEmpty
-      ? find.text('Join meeting').last
-      : find.text('Enter live room').last;
+  // The Demo supplies classroom session details, so the primary action reads
+  // "Start class" for hosts and "Join meeting" without them.
+  final enter = switch (find.text('Start class').evaluate().isNotEmpty) {
+    true => find.text('Start class').last,
+    false =>
+      find.text('Join class').evaluate().isNotEmpty
+          ? find.text('Join class').last
+          : find.text('Join meeting').evaluate().isNotEmpty
+          ? find.text('Join meeting').last
+          : find.text('Enter live room').last,
+  };
   expect(enter, findsOneWidget);
   await tester.tap(enter);
   await tester.pump();
@@ -149,6 +157,26 @@ Future<void> _confirmPreJoin(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('classroom selection is sent through the public SDK request', (
+    tester,
+  ) async {
+    final fake = _FakeRealtime();
+    fake.onOpen = (_) async => _FakeConnection();
+    await _pumpDemo(tester, fake, onRoom: (_) {});
+    await tester.tap(find.text('Create meeting').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Classroom'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Create meeting').last);
+    await tester.tap(find.text('Create meeting').last);
+    await _confirmPreJoin(tester);
+    await tester.pumpAndSettle();
+    expect(fake.opened.single.meetingMode, MediaMeetingMode.classroom);
+    await tester.tap(find.text('Leave fake room'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets(
     'create meeting stays on Pre-Join while connecting, then enters room once',
     (tester) async {
@@ -183,6 +211,7 @@ void main() {
       expect(fake.opened, hasLength(1));
       expect(fake.opened.single.experience, RealtimeExperience.meeting);
       expect(fake.opened.single.action, RealtimeAction.create);
+      expect(fake.opened.single.meetingMode, MediaMeetingMode.standard);
 
       opened.complete(connection);
       await tester.pumpAndSettle();
@@ -217,7 +246,11 @@ void main() {
       // Raw transport errors are normalized while the retry keeps its room code.
       expect(find.textContaining('simulated connection failure'), findsNothing);
       expect(find.textContaining('The SDK operation failed'), findsOneWidget);
-      await tester.tap(find.text('Join meeting').last);
+      await tester.tap(
+        find.text('Start class').evaluate().isNotEmpty
+            ? find.text('Start class').last
+            : find.text('Join meeting').last,
+      );
       await tester.pumpAndSettle();
       expect(attempts, 2);
       expect(find.text('Connected fake room'), findsOneWidget);

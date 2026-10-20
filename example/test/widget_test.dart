@@ -75,12 +75,26 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     final roomField = find.widgetWithText(TextField, 'Room code');
     await tester.enterText(roomField, 'meeting-123');
-    await tester.tap(find.text('Settings').last);
+    await tester.tap(
+      (find
+              .byKey(const ValueKey('realtime-destination-2'))
+              .evaluate()
+              .isNotEmpty
+          ? find.byKey(const ValueKey('realtime-destination-2'))
+          : find.text('Settings').last),
+    );
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Demo identity'), findsOneWidget);
     expect(find.text('Backend Service Endpoint'), findsOneWidget);
     expect(find.text('Display name'), findsOneWidget);
-    await tester.tap(find.text('Home').last);
+    await tester.tap(
+      (find
+              .byKey(const ValueKey('realtime-destination-0'))
+              .evaluate()
+              .isNotEmpty
+          ? find.byKey(const ValueKey('realtime-destination-0'))
+          : find.text('Home').last),
+    );
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('meeting-123'), findsOneWidget);
     expect(find.text('Backend Service Endpoint'), findsNothing);

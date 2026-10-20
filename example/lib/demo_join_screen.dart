@@ -3,6 +3,7 @@ import 'demo_identity_settings_panel.dart';
 import 'demo_join_coordinator.dart';
 import 'demo_realtime_configuration.dart';
 import 'demo_meeting_room_page.dart';
+import 'demo_classroom_sample.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -21,7 +22,7 @@ import 'standalone_chat_demo.dart';
 
 const String _defaultBackendUrl = String.fromEnvironment(
   'MEDIA_BACKEND_URL',
-  defaultValue: 'http://192.168.31.8:3000',
+  defaultValue: 'http://192.168.31.2:3000',
 );
 const String _appToken = String.fromEnvironment('MEDIA_APP_TOKEN');
 
@@ -75,6 +76,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   String? _error;
   DemoJoinFormError? _formError;
   MediaRoomMode _createRoomMode = MediaRoomMode.meeting;
+  MediaMeetingMode _createMeetingMode = MediaMeetingMode.standard;
   MediaRoomMode _joinRoomMode = MediaRoomMode.meeting;
 
   // Backend connection status: null = untested, true = online, false = offline
@@ -231,6 +233,10 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
         displayName: _displayNameController.text,
         avatarUrl: _avatarUrlController.text,
         mode: mode,
+        meetingMode:
+            kind == DemoRoomEntryKind.create && mode == MediaRoomMode.meeting
+            ? _createMeetingMode
+            : null,
         createRealtime: (url) =>
             widget.realtimeFactory?.call(url) ??
             createDemoRealtime(url, appToken: _appToken),
@@ -246,6 +252,8 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           await _runPreJoin(
             entry.realtime,
             role: entry.role,
+            meetingMode: entry.meetingMode,
+            roomMode: entry.mode,
             providerId: providerId,
             roomCode: kind == DemoRoomEntryKind.join ? entry.roomCode : null,
             displayName: entry.user.name,
@@ -258,6 +266,19 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                 connection,
                 initialMediaSettings: settings,
                 roomMode: entry.mode,
+              );
+            },
+            onEnterWithIntent: (preJoinContext, settings, intent) async {
+              final connection = await entry.connect();
+              await _openMeeting(
+                preJoinContext,
+                connection,
+                initialMediaSettings: settings,
+                roomMode: entry.mode,
+                initialSharedContentMode:
+                    intent == RealtimePreJoinJoinIntent.screenShare
+                    ? SharedContentMode.screen
+                    : null,
               );
             },
           );
@@ -274,10 +295,13 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   Future<void> _runPreJoin(
     Realtime realtime, {
     required MediaRole role,
+    MediaMeetingMode? meetingMode,
+    MediaRoomMode? roomMode,
     required String displayName,
     String? avatarUrl,
     required String roomLabel,
     required RealtimePreJoinEnter onEnter,
+    RealtimePreJoinEnterWithIntent? onEnterWithIntent,
     String? providerId,
     String? roomCode,
   }) async {
@@ -294,6 +318,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                 widget.permissionRequester ??
                 const DefaultMediaPermissionProbe(),
             onEnter: onEnter,
+            meetingMode: meetingMode,
             runCheck: () => realtime.preJoin(
               role: role,
               providerId: providerId,
@@ -305,7 +330,25 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             avatarUrl: avatarUrl,
             roomLabel: roomLabel,
             imagePresets: backgroundPresets,
-            title: role == MediaRole.viewer
+            onEnterWithIntent: onEnterWithIntent,
+            brand: DemoClassroomSample.brand,
+            sessionInfo: (meetingMode == MediaMeetingMode.classroom)
+                ? DemoClassroomSample.sessionInfo()
+                : null,
+            waitingGuests: (meetingMode == MediaMeetingMode.classroom)
+                ? DemoClassroomSample.waitingGuests
+                : const [],
+            agenda: (meetingMode == MediaMeetingMode.classroom)
+                ? DemoClassroomSample.agenda
+                : const [],
+            materials: (meetingMode == MediaMeetingMode.classroom)
+                ? DemoClassroomSample.materials
+                : const [],
+            title: roomMode == MediaRoomMode.meeting
+                ? (meetingMode ?? MediaMeetingMode.standard).label(
+                    isZh: DemoStrings.of(context).isZh,
+                  )
+                : role == MediaRole.viewer
                 ? DemoStrings.of(context).live
                 : role == MediaRole.host
                 ? DemoStrings.of(context).startLive
@@ -323,6 +366,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     RealtimeConnection connection, {
     required MediaLocalPreviewSettings initialMediaSettings,
     MediaRoomMode? roomMode,
+    SharedContentMode? initialSharedContentMode,
   }) async {
     if (!preJoinContext.mounted) {
       await connection.dispose();
@@ -340,6 +384,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             room: connection.mediaRoom!,
             initialMediaSettings: initialMediaSettings,
             roomMode: roomMode,
+            initialSharedContentMode: initialSharedContentMode,
           );
       await Navigator.of(preJoinContext).pushReplacement<void, void>(
         MaterialPageRoute(builder: (_) => destination),
@@ -359,6 +404,8 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     final strings = DemoStrings.of(context);
     final inset = MediaQuery.viewInsetsOf(context).bottom;
     return RealtimeWorkspaceShell(
+      compactNavigation: true,
+      header: _buildTopBar(),
       selectedIndex: _demoTabs.index,
       onDestinationSelected: _selectDestination,
       destinations: [
@@ -387,8 +434,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildTopBar(),
-                const SizedBox(height: 24),
                 if (_demoTabs.index == 0) ...[
                   _homeHero(compact: MediaQuery.sizeOf(context).width < 600),
                   const SizedBox(height: 24),
@@ -435,35 +480,111 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildTopBar() {
-    return RealtimeGlassSurface(
-      radius: RealtimeUiTokens.pillRadius,
-      opacity: 0.78,
-      blur: 20,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    final strings = DemoStrings.of(context);
+    final style = RealtimeStyle.of(context);
+    final displayFamily = RealtimeFonts.displayOf(context);
+    final bodyFamily = RealtimeFonts.bodyOf(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final isCompact =
+        width < 520 || MediaQuery.textScalerOf(context).scale(14) >= 20;
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: style.surface,
+        border: Border(bottom: BorderSide(color: style.border)),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.hub_rounded, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
+          // Tandem brand squircle mark
+          Container(
+            width: 26,
+            height: 26,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: style.accent,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(8),
+                topRight: Radius.circular(8),
+                bottomRight: Radius.circular(8),
+                bottomLeft: Radius.circular(2),
+              ),
+            ),
             child: Text(
-              'Realtime Media',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium,
+              't',
+              style: TextStyle(
+                fontFamily: displayFamily,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: style.onAccent,
+                height: 1.0,
+              ),
             ),
           ),
-          const SizedBox(width: 6),
+          if (!isCompact) ...[
+            const SizedBox(width: 8),
+            Text(
+              'Tandem',
+              style: TextStyle(
+                fontFamily: displayFamily,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+                color: style.text,
+              ),
+            ),
+            Container(
+              height: 20,
+              margin: const EdgeInsets.symmetric(horizontal: 14),
+              width: 1,
+              color: style.border,
+            ),
+          ] else
+            const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Realtime Media',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: displayFamily,
+                    fontSize: isCompact ? 13.5 : 14.5,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.2,
+                    color: style.text,
+                  ),
+                ),
+                if (!isCompact)
+                  Text(
+                    strings.workspaceEyebrow,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: bodyFamily,
+                      fontSize: 11,
+                      color: style.textMuted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
           _buildLanguageMenu(),
+          const SizedBox(width: 6),
           IconButton(
-            tooltip: DemoStrings.of(context).settings,
+            tooltip: strings.settings,
             onPressed: () => _selectDestination(2),
             icon: RealtimeAvatar(
               name: _displayNameController.text,
               avatarUrl: _avatarUrlController.text,
-              size: 30,
+              size: 28,
             ),
           ),
-          const SizedBox(width: 4),
         ],
       ),
     );
@@ -534,69 +655,486 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
   Widget _buildActionTabsCard() {
     final strings = DemoStrings.of(context);
     final style = RealtimeStyle.of(context);
-    final form = RealtimeCardSurface(
-      padding: const EdgeInsets.all(24),
+    final displayFamily = RealtimeFonts.displayOf(context);
+    final bodyFamily = RealtimeFonts.bodyOf(context);
+
+    final quickActionCards = LayoutBuilder(
+      builder: (context, constraints) {
+        final stack = constraints.maxWidth < 460;
+        final meetingCard = _QuickActionTile(
+          title: strings.createMeeting,
+          description: strings.meetingDescription,
+          icon: Icons.videocam_rounded,
+          accentColor: style.text,
+          subtleBackground: style.surfaceSubtle,
+          buttonIcon: Icons.add_rounded,
+          isLive: false,
+          busy: _busy,
+          onPressed: () => _showCreateForm(false),
+        );
+        final liveCard = _QuickActionTile(
+          title: strings.startLive,
+          description: strings.liveDescription,
+          icon: Icons.sensors_rounded,
+          accentColor: style.live,
+          subtleBackground: const Color(0xFFFDECEC),
+          buttonIcon: Icons.sensors_rounded,
+          isLive: true,
+          busy: _busy,
+          onPressed: () => _showCreateForm(true),
+        );
+        return stack
+            ? Column(
+                children: [meetingCard, const SizedBox(height: 12), liveCard],
+              )
+            : Row(
+                children: [
+                  Expanded(child: meetingCard),
+                  const SizedBox(width: 14),
+                  Expanded(child: liveCard),
+                ],
+              );
+      },
+    );
+
+    // Tandem Highlight Dark Card (.class-card)
+    final joinCard = Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF18202E),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x220A101D),
+            blurRadius: 28,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(strings.joinRoom, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 20),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5C518),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.bolt_rounded,
+                      size: 13,
+                      color: Color(0xFF2A2100),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'DIRECT ENTRY',
+                      style: TextStyle(
+                        fontFamily: bodyFamily,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.4,
+                        color: const Color(0xFF2A2100),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            strings.joinRoom,
+            style: TextStyle(
+              fontFamily: displayFamily,
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            strings.startHere,
+            style: TextStyle(
+              fontFamily: bodyFamily,
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.65),
+            ),
+          ),
+          const SizedBox(height: 18),
           RealtimeCupertinoSegmentedBar<MediaRoomMode>(
             groupValue: _joinRoomMode,
+            backgroundColor: Colors.white.withValues(alpha: 0.08),
+            thumbColor: Colors.white.withValues(alpha: 0.16),
             onValueChanged: (mode) => setState(() => _joinRoomMode = mode),
             children: {
-              MediaRoomMode.meeting: Text(strings.joinMeetingParticipant),
-              MediaRoomMode.broadcast: Text(strings.watchLiveViewer),
+              MediaRoomMode.meeting: Text(
+                strings.joinMeetingParticipant,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              MediaRoomMode.broadcast: Text(
+                strings.watchLiveViewer,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           _roomForm(
             code: _joinCodeController,
             codeLabel: strings.roomCode,
             actionLabel: strings.joinRoom,
             action: _joinRoom,
             isCreate: false,
+            isDarkCard: true,
           ),
-          const SizedBox(height: 20),
-          Divider(color: style.border),
           const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _busy ? null : () => _showCreateForm(false),
-            icon: const Icon(Icons.add_rounded),
-            label: Text(strings.createMeeting),
-          ),
-          const SizedBox(height: 8),
-          TextButton.icon(
-            onPressed: _busy ? null : () => _showCreateForm(true),
-            icon: const Icon(Icons.sensors_rounded),
-            label: Text(strings.startLive),
+          // Secondary actions (.alt)
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.22),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                  ),
+                  onPressed: _busy ? null : () => _showCreateForm(false),
+                  icon: const Icon(Icons.videocam_outlined, size: 15),
+                  label: Text(
+                    strings.createMeeting,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.22),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                  ),
+                  onPressed: _busy ? null : () => _showCreateForm(true),
+                  icon: const Icon(Icons.sensors_rounded, size: 15),
+                  label: Text(
+                    strings.startLive,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide =
-            constraints.maxWidth >= 850 &&
-            MediaQuery.textScalerOf(context).scale(17) < 28;
+            RealtimeBreakpoints.isWide(
+              context,
+              MediaQuery.sizeOf(context).width,
+            ) &&
+            constraints.maxWidth >= 850;
         return wide
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 360, child: form),
+                  Expanded(
+                    flex: 135,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        quickActionCards,
+                        const SizedBox(height: 20),
+                        _buildAvailableRooms(),
+                      ],
+                    ),
+                  ),
                   const SizedBox(width: 24),
-                  Expanded(child: _buildAvailableRooms()),
+                  Expanded(
+                    flex: 100,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        joinCard,
+                        const SizedBox(height: 20),
+                        _buildServiceReadinessCard(),
+                      ],
+                    ),
+                  ),
                 ],
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  form,
-                  const SizedBox(height: 24),
+                  joinCard,
+                  const SizedBox(height: 20),
+                  quickActionCards,
+                  const SizedBox(height: 20),
                   _buildAvailableRooms(),
+                  const SizedBox(height: 20),
+                  _buildServiceReadinessCard(),
                 ],
               );
       },
+    );
+  }
+
+  Widget _buildServiceReadinessCard() {
+    final style = RealtimeStyle.of(context);
+    final strings = DemoStrings.of(context);
+    final displayFamily = RealtimeFonts.displayOf(context);
+    final bodyFamily = RealtimeFonts.bodyOf(context);
+
+    final String mediaName = _testingServer
+        ? strings.checking
+        : _serverMediaProviderId == null
+        ? strings.unconfigured
+        : mediaProviderDisplayName(_serverMediaProviderId!);
+    final String chatName = _testingServer
+        ? strings.checking
+        : _serverChatProviderId == null
+        ? strings.unconfigured
+        : strings.chatProviderDisplayName(_serverChatProviderId!);
+
+    return RealtimeCardSurface(
+      fillColor: style.surface,
+      borderColor: style.border,
+      radius: 18,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Service readiness',
+                  style: TextStyle(
+                    fontFamily: displayFamily,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                    color: style.text,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 3.5,
+                ),
+                decoration: BoxDecoration(
+                  color: _serverOnline == true
+                      ? const Color(0xFFEFFAF8)
+                      : (_serverOnline == false
+                            ? const Color(0xFFFDECEC)
+                            : const Color(0xFFFFF6D6)),
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(
+                    color: _serverOnline == true
+                        ? const Color(0xFFAEDFD8)
+                        : (_serverOnline == false
+                              ? const Color(0xFFF5C2C4)
+                              : const Color(0xFFE9CE6A)),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: _serverOnline == true
+                            ? const Color(0xFF0E9E8E)
+                            : (_serverOnline == false
+                                  ? const Color(0xFFD93A3F)
+                                  : const Color(0xFFF5C518)),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      _serverOnline == true
+                          ? 'Online'
+                          : (_serverOnline == false ? 'Offline' : 'Checking'),
+                      style: TextStyle(
+                        fontFamily: bodyFamily,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _serverOnline == true
+                            ? const Color(0xFF0B7F72)
+                            : (_serverOnline == false
+                                  ? const Color(0xFFD93A3F)
+                                  : const Color(0xFF2A2100)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildReadinessRow(
+            icon: Icons.video_camera_front_rounded,
+            label: strings.videoProviderLabel,
+            value: mediaName,
+            statusColor: _serverMediaProviderId != null
+                ? const Color(0xFF0E9E8E)
+                : null,
+            style: style,
+            bodyFamily: bodyFamily,
+          ),
+          Divider(height: 16, thickness: 1, color: style.borderSubtle),
+          _buildReadinessRow(
+            icon: Icons.chat_bubble_outline_rounded,
+            label: strings.chatProviderLabel,
+            value: chatName,
+            statusColor: _serverChatProviderId != null
+                ? const Color(0xFF0E9E8E)
+                : null,
+            style: style,
+            bodyFamily: bodyFamily,
+          ),
+          Divider(height: 16, thickness: 1, color: style.borderSubtle),
+          _buildReadinessRow(
+            icon: Icons.dns_outlined,
+            label: 'Backend URL',
+            value: _server,
+            style: style,
+            bodyFamily: bodyFamily,
+            truncate: true,
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 36,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: style.textSecondary,
+                side: BorderSide(color: style.border),
+                backgroundColor: style.surfaceSubtle,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: () => _selectDestination(2),
+              icon: const Icon(Icons.tune_rounded, size: 15),
+              label: Text(
+                strings.settings,
+                style: TextStyle(
+                  fontFamily: bodyFamily,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReadinessRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required RealtimeStyle style,
+    required String bodyFamily,
+    Color? statusColor,
+    bool truncate = false,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: style.textMuted),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: bodyFamily,
+              fontSize: 12.5,
+              color: style.textMuted,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 3,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (statusColor != null) ...[
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: truncate
+                      ? TextOverflow.ellipsis
+                      : TextOverflow.clip,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontFamily: bodyFamily,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: style.text,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -607,49 +1145,59 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       showRealtimeGlassBottomSheet<void>(
         context: context,
         isScrollControlled: true,
-        builder: (sheetContext) => SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            24,
-            8,
-            24,
-            24 + MediaQuery.viewInsetsOf(sheetContext).bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: RealtimeSheetHeader(title: label)),
-                  IconButton(
-                    tooltip: RealtimeStrings.of(context).close,
-                    onPressed: () => Navigator.pop(sheetContext),
-                    icon: const Icon(Icons.close_rounded),
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (sheetContext, setSheetState) => SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              24,
+              8,
+              24,
+              24 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: RealtimeSheetHeader(title: label)),
+                    IconButton(
+                      tooltip: RealtimeStrings.of(context).close,
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  live
+                      ? strings.liveBannerDescription
+                      : strings.meetingBannerDescription,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+                if (!live) ...[
+                  RealtimeMeetingModeSelector(
+                    value: _createMeetingMode,
+                    onChanged: (mode) =>
+                        setSheetState(() => _createMeetingMode = mode),
                   ),
+                  const SizedBox(height: 20),
                 ],
-              ),
-              const SizedBox(height: 20),
-              Text(
-                live
-                    ? strings.liveBannerDescription
-                    : strings.meetingBannerDescription,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 24),
-              _roomForm(
-                code: _createCodeController,
-                codeLabel: strings.optionalRoomCode,
-                actionLabel: label,
-                isCreate: true,
-                action: () async {
-                  _createRoomMode = live
-                      ? MediaRoomMode.broadcast
-                      : MediaRoomMode.meeting;
-                  Navigator.pop(sheetContext);
-                  await _createRoom();
-                },
-              ),
-            ],
+                _roomForm(
+                  code: _createCodeController,
+                  codeLabel: strings.optionalRoomCode,
+                  actionLabel: label,
+                  isCreate: true,
+                  action: () async {
+                    _createRoomMode = live
+                        ? MediaRoomMode.broadcast
+                        : MediaRoomMode.meeting;
+                    Navigator.pop(sheetContext);
+                    await _createRoom();
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -662,18 +1210,145 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     required String actionLabel,
     required Future<void> Function() action,
     required bool isCreate,
+    bool isDarkCard = false,
   }) {
+    final strings = DemoStrings.of(context);
+    final displayFamily = RealtimeFonts.displayOf(context);
+
+    if (isDarkCard) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: code,
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+            cursorColor: const Color(0xFFF5C518),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: const Color(0xFF222D3E),
+              labelText: codeLabel,
+              labelStyle: const TextStyle(
+                color: Color(0xFF93A1B8),
+                fontSize: 13,
+              ),
+              hintText: strings.roomCodeHelp,
+              hintStyle: const TextStyle(
+                color: Color(0xFF5B6678),
+                fontSize: 13,
+              ),
+              prefixIcon: const Icon(
+                Icons.tag_rounded,
+                color: Color(0xFF93A1B8),
+                size: 20,
+              ),
+              suffixIcon: isCreate
+                  ? IconButton(
+                      tooltip: strings.random,
+                      icon: const Icon(
+                        Icons.casino_outlined,
+                        color: Color(0xFF93A1B8),
+                        size: 20,
+                      ),
+                      onPressed: _busy ? null : _generateRandomCreateCode,
+                    )
+                  : TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFF5C518),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      onPressed: _busy
+                          ? null
+                          : () => unawaited(_pasteJoinCode()),
+                      icon: const Icon(Icons.content_paste_rounded, size: 16),
+                      label: Text(
+                        RealtimeStrings.of(context).paste,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF2E3D56)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF2E3D56)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: Color(0xFFF5C518),
+                  width: 1.5,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 14,
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          // Signature Tandem .start button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF5C518),
+                foregroundColor: const Color(0xFF2A2100),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: _busy ? null : action,
+              child: _busy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Color(0xFF2A2100),
+                      ),
+                    )
+                  : FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.arrow_forward_rounded, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            actionLabel,
+                            style: TextStyle(
+                              fontFamily: displayFamily,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         RealtimeGlassTextField(
           controller: code,
           label: codeLabel,
-          hintText: DemoStrings.of(context).roomCodeHelp,
+          hintText: strings.roomCodeHelp,
           prefixIcon: Icons.tag_rounded,
           suffix: isCreate
               ? RealtimeFieldAction(
-                  label: DemoStrings.of(context).random,
+                  label: strings.random,
                   icon: Icons.casino_outlined,
                   onPressed: _busy ? null : _generateRandomCreateCode,
                 )
@@ -744,6 +1419,132 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             }),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionTile extends StatelessWidget {
+  const _QuickActionTile({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.accentColor,
+    required this.subtleBackground,
+    required this.buttonIcon,
+    required this.isLive,
+    required this.busy,
+    required this.onPressed,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color accentColor;
+  final Color subtleBackground;
+  final IconData buttonIcon;
+  final bool isLive;
+  final bool busy;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    final displayFamily = RealtimeFonts.displayOf(context);
+    final bodyFamily = RealtimeFonts.bodyOf(context);
+
+    return RealtimeCardSurface(
+      fillColor: style.surface,
+      borderColor: style.border,
+      radius: 18,
+      padding: const EdgeInsets.all(20),
+      onTap: busy ? null : onPressed,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: subtleBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isLive
+                        ? const Color(0xFFF5C2C4)
+                        : style.borderSubtle,
+                  ),
+                ),
+                child: Icon(icon, color: accentColor, size: 20),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.arrow_outward_rounded,
+                size: 18,
+                color: style.textMuted.withValues(alpha: 0.6),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: displayFamily,
+              fontSize: 16.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
+              color: style.text,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: bodyFamily,
+              fontSize: 12.5,
+              height: 1.4,
+              color: style.textMuted,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 38,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: isLive ? const Color(0xFFD93A3F) : style.text,
+                side: BorderSide(
+                  color: isLive ? const Color(0xFFF5C2C4) : style.border,
+                ),
+                backgroundColor: isLive
+                    ? const Color(0xFFFDECEC)
+                    : style.surfaceSubtle,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              onPressed: busy ? null : onPressed,
+              icon: Icon(buttonIcon, size: 16),
+              label: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: bodyFamily,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ),
           ),
         ],
       ),

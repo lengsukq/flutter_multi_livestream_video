@@ -151,11 +151,10 @@ void main() {
           expect((more.center.dy - exit.center.dy).abs(), lessThan(1));
           expect(find.byIcon(Icons.fit_screen_rounded), findsNothing);
         } else {
-          expect(
-            find.byTooltip('Virtual background'),
-            findsOneWidget,
-            reason: 'Desktop host should have a direct camera-effects action',
-          );
+          // Background effects live only inside Host Tools, so the header
+          // carries a single settings surface.
+          expect(find.byTooltip('Virtual background'), findsNothing);
+          expect(find.byTooltip('Host Tools'), findsOneWidget);
         }
         expect(tester.takeException(), isNull, reason: 'Host $size');
         if ([390.0, 550.0, 1440.0].contains(size.width)) {
@@ -184,7 +183,8 @@ void main() {
       await tester.tap(find.byTooltip('Display options'));
       await tester.pumpAndSettle();
       expect(find.text('Show full video'), findsOneWidget);
-      expect(find.text('Virtual background'), findsOneWidget);
+      expect(find.text('Virtual background'), findsNothing);
+      expect(find.text('Host tools'), findsOneWidget);
       await tester.tap(find.text('Show full video'));
       await tester.pumpAndSettle();
       expect(
@@ -287,7 +287,7 @@ void main() {
     await room.liveInteractions!.sendLike();
     await tester.pump();
     expect(heart, findsOneWidget);
-    expect(tester.widget<Icon>(heart).color, const Color(0xFFFF375F));
+    expect(tester.widget<Icon>(heart).color, RealtimeStyle.light.live);
     await tester.pump(const Duration(milliseconds: 400));
     await room.liveInteractions!.sendLike();
     await tester.pump();
@@ -354,20 +354,26 @@ void main() {
         );
         expect(find.byType(RealtimePreJoinPreview), findsNothing);
         expect(find.byType(RealtimePreJoinJoinButton), findsOneWidget);
-        expect(find.text('All systems ready'), findsOneWidget);
-        expect(find.byType(RealtimePreJoinReadinessCard), findsOneWidget);
+        expect(
+          find.byType(RealtimePreJoinReadinessCard, skipOffstage: false),
+          findsOneWidget,
+        );
+        expect(
+          find.text('All systems ready', skipOffstage: false),
+          findsOneWidget,
+        );
         // The page survives surface-size changes; its expansion state may
         // persist between viewport iterations.
         if (find.byType(RealtimePreJoinCheckList).evaluate().isEmpty) {
           // At 200% text the sticky join action occupies more vertical space.
           // Place the readiness trigger well inside its own scroll viewport.
           await Scrollable.ensureVisible(
-            tester.element(find.text('All systems ready')),
+            tester.element(find.text('All systems ready', skipOffstage: false)),
             alignment: 0.2,
             alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
           );
           await tester.pumpAndSettle();
-          await tester.tap(find.text('All systems ready'));
+          await tester.tap(find.text('All systems ready', skipOffstage: false));
           await tester.pumpAndSettle();
         }
         expect(

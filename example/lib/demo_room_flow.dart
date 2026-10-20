@@ -18,11 +18,13 @@ class DemoRoomFlow {
 
   static RealtimeRequest createRequest({
     required MediaRoomMode mode,
+    MediaMeetingMode? meetingMode,
     required String deviceId,
     required String displayName,
     String? avatarUrl,
     String? roomCode,
   }) => RealtimeRequest.create(
+    meetingMode: meetingMode,
     type: mode == MediaRoomMode.broadcast
         ? RealtimeExperience.live
         : RealtimeExperience.meeting,
@@ -58,6 +60,7 @@ class DemoRoomFlow {
 
   Future<RealtimeConnection> create({
     required MediaRoomMode mode,
+    MediaMeetingMode? meetingMode,
     required String deviceId,
     required String displayName,
     String? avatarUrl,
@@ -66,6 +69,7 @@ class DemoRoomFlow {
     final connection = await _open(
       createRequest(
         mode: mode,
+        meetingMode: meetingMode,
         deviceId: deviceId,
         displayName: displayName,
         avatarUrl: avatarUrl,

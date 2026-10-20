@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
+import 'package:flutter_realtime_media_example/demo_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _capture = bool.fromEnvironment('CAPTURE_REALTIME_DESIGN');
@@ -12,30 +13,49 @@ final _captureKey = GlobalKey();
 
 Future<void> initializeDesignCapture() async {
   if (!_capture) return;
-  final fontPath = Platform.environment['REALTIME_DESIGN_FONT'];
-  if (fontPath == null) return;
-  for (final family in ['DesignSystem', 'Ahem']) {
+  for (final (family, files) in [
+    (
+      RealtimeFonts.body,
+      [
+        'Onest-Regular.ttf',
+        'Onest-Medium.ttf',
+        'Onest-SemiBold.ttf',
+        'Onest-Bold.ttf',
+      ],
+    ),
+    (
+      RealtimeFonts.display,
+      ['BricolageGrotesque-Medium.ttf', 'BricolageGrotesque-Bold.ttf'],
+    ),
+  ]) {
     final loader = FontLoader(family);
-    loader.addFont(File(fontPath).readAsBytes().then(ByteData.sublistView));
+    for (final file in files) {
+      loader.addFont(
+        File(
+          '../packages/flutter_realtime_design_ui/fonts/$file',
+        ).readAsBytes().then(ByteData.sublistView),
+      );
+    }
     await loader.load();
   }
-  final icons = FontLoader('MaterialIcons');
-  icons.addFont(
-    File(
-      'build/unit_test_assets/fonts/MaterialIcons-Regular.otf',
-    ).readAsBytes().then(ByteData.sublistView),
+  final codeFont = FontLoader('monospace');
+  final menlo = File('/System/Library/Fonts/Menlo.ttc');
+  codeFont.addFont(
+    (menlo.existsSync()
+            ? menlo
+            : File(
+                '../packages/flutter_realtime_design_ui/fonts/Onest-Regular.ttf',
+              ))
+        .readAsBytes()
+        .then(ByteData.sublistView),
   );
+  await codeFont.load();
+  final icons = FontLoader('MaterialIcons');
+  icons.addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
   await icons.load();
 }
 
-ThemeData designTestTheme() {
-  final theme = RealtimeUiTheme.light();
-  return _capture
-      ? theme.copyWith(
-          textTheme: theme.textTheme.apply(fontFamily: 'DesignSystem'),
-        )
-      : theme;
-}
+ThemeData designTestTheme() => DemoTheme.themeData();
 
 Widget designCaptureApp(Widget child) =>
     RepaintBoundary(key: _captureKey, child: child);

@@ -106,10 +106,20 @@ void main() {
         expect(find.byType(RealtimeDockHandQueueButton), findsOneWidget);
       }
       if (width >= 1280) {
+        final backgrounds = find.byIcon(Icons.blur_on_outlined);
         expect(
-          find.byIcon(Icons.blur_on_outlined),
-          findsWidgets,
-          reason: 'Desktop meeting background action must be visible at $width',
+          backgrounds,
+          findsOneWidget,
+          reason:
+              'Desktop meeting exposes one background action, in the dock, at '
+              '$width',
+        );
+        expect(
+          find.descendant(
+            of: find.byType(RealtimeMeetingDock),
+            matching: backgrounds,
+          ),
+          findsOneWidget,
         );
       }
       final leave = tester.getRect(find.byType(RealtimeLeaveButton));
@@ -200,11 +210,17 @@ void main() {
             .id,
         'bob',
       );
+      // Only the floating dock fades: the room header is persistent chrome
+      // so the timer, recording state and leave action stay reachable.
       final fadingBars = find.descendant(
         of: find.byType(RealtimeIdleControls),
         matching: find.byType(AnimatedOpacity),
       );
-      expect(fadingBars, findsNWidgets(2));
+      expect(fadingBars, findsOneWidget);
+      final persistentHeader = tester.getRect(
+        find.byType(RealtimeMeetingTopBar),
+      );
+      expect(persistentHeader.height, inInclusiveRange(56, 90));
       await tester.pump(const Duration(seconds: 5));
       await tester.pump(const Duration(milliseconds: 300));
       expect(
@@ -258,15 +274,12 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.byType(RealtimeMeetingFilmstripStage), findsOneWidget);
 
-      // The layout action is part of the topmost header instead of being
-      // painted behind it in the media stage Stack.
+      // Layout is owned by the stage bar; the header and rail do not repeat it.
       final gridAction = find.descendant(
-        of: find.byType(RealtimeMeetingTopBar),
-        matching: find.byTooltip('Grid layout'),
+        of: find.byType(RealtimeMeetingStageBar),
+        matching: find.text('Grid view'),
       );
       expect(gridAction, findsOneWidget);
-      final header = tester.getRect(find.byType(RealtimeMeetingTopBar));
-      expect(header.contains(tester.getCenter(gridAction)), isTrue);
       await tester.tap(gridAction);
       await tester.pump();
 
@@ -284,8 +297,8 @@ void main() {
       expect(first.bottom, lessThan(800)); // Above the floating dock.
 
       final focusAction = find.descendant(
-        of: find.byType(RealtimeMeetingTopBar),
-        matching: find.byTooltip('Focus layout'),
+        of: find.byType(RealtimeMeetingStageBar),
+        matching: find.text('Speaker view'),
       );
       expect(focusAction, findsOneWidget);
       await tester.tap(focusAction);
@@ -330,9 +343,11 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 350));
 
+        // Desktop panels open from the vertical tool rail; the dock keeps
+        // media, collaboration and the exit action.
         final participantAction = find.descendant(
-          of: find.byType(RealtimeMeetingDock),
-          matching: find.text('Participants'),
+          of: find.byType(RealtimeMeetingRail),
+          matching: find.byTooltip('Participants'),
         );
         expect(participantAction, findsOneWidget);
         await tester.tap(participantAction);
@@ -343,9 +358,12 @@ void main() {
         expect(sidebar, findsOneWidget);
         final sidebarRect = tester.getRect(sidebar);
         final topBarRect = tester.getRect(topBar);
+        // The header is persistent chrome above the whole workspace: the
+        // stage and the trailing panel both start below it, so nothing is
+        // painted over the panel's tabs.
         expect(
-          topBarRect.right,
-          lessThanOrEqualTo(sidebarRect.left),
+          topBarRect.bottom,
+          lessThanOrEqualTo(sidebarRect.top + 1),
           reason: 'Header overlays the right sidebar at width $width',
         );
         expect(topBarRect.height, lessThan(75));
@@ -354,7 +372,8 @@ void main() {
           matching: find.byTooltip('Close Sidebar'),
         );
         expect(close, findsOneWidget);
-        expect(tester.getRect(close).top, lessThan(100));
+        // Below the 56 pt header plus the sidebar's own tab row.
+        expect(tester.getRect(close).top, lessThan(130));
         await tester.tap(close);
         await tester.pump();
         expect(find.byType(RealtimeMeetingSidePanel), findsNothing);

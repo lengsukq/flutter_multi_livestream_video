@@ -12,6 +12,7 @@ class MeetingRoomPage extends StatelessWidget {
     required this.room,
     required this.initialMediaSettings,
     this.roomMode,
+    this.initialSharedContentMode,
   });
 
   final RealtimeRoom room;
@@ -20,6 +21,9 @@ class MeetingRoomPage extends StatelessWidget {
   /// Pre-join display hint. The connected backend metadata / role is
   /// authoritative; this hint never confers Live broadcaster permissions.
   final MediaRoomMode? roomMode;
+
+  /// Shared-content mode requested by the Pre-Join entry intent.
+  final SharedContentMode? initialSharedContentMode;
 
   static bool isLiveSession(RealtimeRoom room) {
     return RealtimeRoomView.isLiveSession(room);
@@ -36,6 +40,7 @@ class MeetingRoomPage extends StatelessWidget {
     return DemoComposableMeetingPage(
       room: room,
       initialSettings: initialMediaSettings,
+      initialSharedContentMode: initialSharedContentMode,
     );
   }
 }

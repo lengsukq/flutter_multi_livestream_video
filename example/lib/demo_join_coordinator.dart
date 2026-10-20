@@ -37,17 +37,20 @@ class DemoPreparedRoomEntry {
     required this.role,
     required this.roomCode,
     required this.flow,
+    this.meetingMode,
   });
   final Realtime realtime;
   final DemoRoomEntryKind kind;
   final RealtimeUser user;
   final MediaRoomMode mode;
+  final MediaMeetingMode? meetingMode;
   final MediaRole role;
   final String? roomCode;
   final DemoRoomFlow flow;
   Future<RealtimeConnection> connect() => switch (kind) {
     DemoRoomEntryKind.create => flow.create(
       mode: mode,
+      meetingMode: meetingMode,
       deviceId: user.id,
       displayName: user.name,
       avatarUrl: user.avatarUrl,
@@ -79,6 +82,7 @@ class DemoJoinCoordinator {
     required String displayName,
     String? avatarUrl,
     required MediaRoomMode mode,
+    MediaMeetingMode? meetingMode,
     required Realtime Function(String) createRealtime,
   }) async {
     final backend = backendUrl.trim();
@@ -114,6 +118,7 @@ class DemoJoinCoordinator {
           kind: kind,
           user: user,
           mode: mode,
+          meetingMode: meetingMode,
           role: mode == MediaRoomMode.broadcast
               ? (kind == DemoRoomEntryKind.create
                     ? MediaRole.host

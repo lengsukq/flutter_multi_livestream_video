@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'demo_theme.dart';
 import 'demo_join_screen.dart';
 
 const _demoLocalePreferenceKey = 'realtime_media_demo_locale';
@@ -63,7 +64,7 @@ class _ChimeExampleAppState extends State<ChimeExampleApp> {
       locale: _locale,
       supportedLocales: RealtimeStrings.supportedLocales,
       localizationsDelegates: RealtimeStrings.localizationsDelegates,
-      theme: RealtimeUiTheme.light(),
+      theme: DemoTheme.themeData(),
       themeMode: ThemeMode.light,
       builder: (context, child) {
         final currentLocale = _locale ?? Localizations.localeOf(context);

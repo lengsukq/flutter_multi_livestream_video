@@ -473,7 +473,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                     const SizedBox(width: 8),
                     RealtimePill(
                       label: '${rooms.length}',
-                      foreground: style.primary,
+                      foreground: style.text,
                       background: style.primarySubtle,
                       borderColor: style.primaryBorder,
                     ),
@@ -554,7 +554,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                       child: Icon(
                         Icons.forum_outlined,
                         size: 20,
-                        color: style.primary,
+                        color: style.text,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -589,7 +589,7 @@ class _StandaloneChatDemoPageState extends State<StandaloneChatDemoPage> {
                     RealtimePill(
                       label: DemoStrings.of(context).join,
                       icon: Icons.login_rounded,
-                      foreground: style.primary,
+                      foreground: style.text,
                       background: style.primarySubtle,
                       borderColor: style.primaryBorder,
                       onTap: _busy

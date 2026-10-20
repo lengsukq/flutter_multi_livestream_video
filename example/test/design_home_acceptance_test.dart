@@ -57,7 +57,14 @@ void main() {
           if (scale == 1 && [390.0, 1440.0].contains(size.width)) {
             await captureDesign(tester, 'home-${size.width.toInt()}');
           }
-          await tester.tap(find.text('Settings').last);
+          await tester.tap(
+            (find
+                    .byKey(const ValueKey('realtime-destination-2'))
+                    .evaluate()
+                    .isNotEmpty
+                ? find.byKey(const ValueKey('realtime-destination-2'))
+                : find.text('Settings').last),
+          );
           await tester.pump(const Duration(milliseconds: 400));
           expect(find.text('Demo identity'), findsOneWidget);
           expect(
@@ -80,7 +87,14 @@ void main() {
               reason: 'Backend status should hug the trailing edge of its card',
             );
           }
-          await tester.tap(find.text('Chat').last);
+          await tester.tap(
+            (find
+                    .byKey(const ValueKey('realtime-destination-1'))
+                    .evaluate()
+                    .isNotEmpty
+                ? find.byKey(const ValueKey('realtime-destination-1'))
+                : find.text('Chat').last),
+          );
           await tester.pump(const Duration(milliseconds: 400));
           expect(
             tester.takeException(),
@@ -103,7 +117,14 @@ void main() {
               reason: 'Chat status should be aligned to the profile card right',
             );
           }
-          await tester.tap(find.text('Home').last);
+          await tester.tap(
+            (find
+                    .byKey(const ValueKey('realtime-destination-0'))
+                    .evaluate()
+                    .isNotEmpty
+                ? find.byKey(const ValueKey('realtime-destination-0'))
+                : find.text('Home').last),
+          );
           await tester.pump(const Duration(milliseconds: 400));
         }
       }

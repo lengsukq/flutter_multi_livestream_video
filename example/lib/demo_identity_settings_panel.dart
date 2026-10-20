@@ -30,7 +30,7 @@ class DemoIdentitySettingsPanel extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.badge_outlined, color: style.primary, size: 20),
+              Icon(Icons.badge_outlined, color: style.text, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
