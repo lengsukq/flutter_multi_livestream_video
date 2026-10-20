@@ -301,7 +301,7 @@ void main() {
       final meterSemantics = tester.getSemantics(
         find.byType(RealtimeMicrophoneLevelMeter),
       );
-      expect(meterSemantics.value, '0 of 16');
+      expect(meterSemantics.value, '0 of 9');
 
       await controller.setMicrophoneEnabled(true);
       await tester.pump(const Duration(milliseconds: 200));
@@ -309,14 +309,14 @@ void main() {
       final activeMeterSemantics = tester.getSemantics(
         find.byType(RealtimeMicrophoneLevelMeter),
       );
-      expect(activeMeterSemantics.value, '0 of 16');
+      expect(activeMeterSemantics.value, '0 of 9');
 
       await controller.setMicrophoneEnabled(false);
       await tester.pump();
       final offMeterSemantics = tester.getSemantics(
         find.byType(RealtimeMicrophoneLevelMeter),
       );
-      expect(offMeterSemantics.value, '0 of 16');
+      expect(offMeterSemantics.value, '0 of 9');
     },
   );
 
@@ -343,32 +343,32 @@ void main() {
     await tester.pump();
     expect(
       tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
-      '0 of 16',
+      '0 of 9',
     );
 
     preview.emitLevel(0.20);
     await tester.pump();
     expect(
       tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
-      isNot('0 of 16'),
+      isNot('0 of 9'),
     );
     // Without more capture samples, the visualizer expires the stale peak.
     await tester.pump(const Duration(milliseconds: 700));
     expect(
       tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
-      '0 of 16',
+      '0 of 9',
     );
     preview.emitLevel(0.20);
     await tester.pump();
     expect(
       tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
-      isNot('0 of 16'),
+      isNot('0 of 9'),
     );
     preview.emitLevel(0);
     await tester.pump();
     expect(
       tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
-      '0 of 16',
+      '0 of 9',
     );
 
     preview.emitLevel(0.20);
@@ -377,7 +377,7 @@ void main() {
     await tester.pump();
     expect(
       tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
-      '0 of 16',
+      '0 of 9',
     );
     await preview.closeLevels();
   });

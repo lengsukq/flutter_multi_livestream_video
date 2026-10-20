@@ -628,7 +628,14 @@ class RealtimeMicrophoneLevelMeter extends StatelessWidget {
         final micOn =
             active ?? (controller.preview?.settings.microphoneEnabled ?? false);
         final preview = controller.preview;
-        final levels = micOn && preview is MediaLocalPreviewAudioLevels
+        final levels = !micOn
+            ? null
+            : MacosMicrophoneLevels.isAvailable
+            // Native PCM capture is available even if the selected RTC
+            // provider has no local audio-level API (or its visualizer
+            // does not work on desktop).
+            ? MacosMicrophoneLevels.levels
+            : preview is MediaLocalPreviewAudioLevels
             ? (preview as MediaLocalPreviewAudioLevels).microphoneLevels
             : null;
         return StreamBuilder<double>(
@@ -639,9 +646,27 @@ class RealtimeMicrophoneLevelMeter extends StatelessWidget {
             onTimeout: (sink) => sink.add(0),
           ),
           initialData: 0,
-          builder: (context, snapshot) => _RealtimeMicrophoneLevelMeterVisual(
-            level: levels == null ? 0 : (snapshot.data ?? 0),
-          ),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Tooltip(
+                message: snapshot.error.toString(),
+                child: Semantics(
+                  label: 'Microphone level unavailable',
+                  child: const SizedBox(
+                    height: 22,
+                    child: Icon(
+                      Icons.error_outline_rounded,
+                      size: 15,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ),
+              );
+            }
+            return _RealtimeMicrophoneLevelMeterVisual(
+              level: levels == null ? 0 : (snapshot.data ?? 0),
+            );
+          },
         );
       },
     );
@@ -659,41 +684,62 @@ class _RealtimeMicrophoneLevelMeterVisual extends StatelessWidget {
     // measured levels are compressed to preserve resolution for normal voice.
     final cleanLevel = level.isFinite ? (level - 0.015).clamp(0.0, 1.0) : 0.0;
     final strength = sqrt((cleanLevel / 0.4).clamp(0.0, 1.0));
-    final lit = (strength * 16).round().clamp(0, 16);
+    const barCount = 9;
+    final lit = (strength * barCount).round().clamp(0, barCount);
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     return Semantics(
       label: 'Microphone level',
-      value: '$lit of 16',
+      value: '$lit of $barCount',
       child: SizedBox(
-        height: 20,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        height: 22,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            for (var i = 0; i < 16; i++) ...[
-              if (i > 0) const SizedBox(width: 2),
-              Expanded(
-                child: AnimatedContainer(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 150),
-                  curve: Curves.easeOutCubic,
-                  // Nonuniform *shape*, not simulated audio activity:
-                  // every bar's height scales only with captured amplitude.
-                  height:
-                      3.5 +
-                      16 * strength * (0.42 + 0.58 * sin(i * 0.85 + 0.6).abs()),
-                  decoration: BoxDecoration(
-                    color: lit == 0
-                        ? style.borderStrong.withValues(alpha: 0.55)
-                        : style.speakStrong.withValues(
-                            alpha: 0.5 + 0.5 * strength,
-                          ),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
+            AnimatedOpacity(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 160),
+              opacity: lit == 0 ? 1 : 0,
+              child: Container(
+                height: 2,
+                decoration: BoxDecoration(
+                  color: style.borderStrong.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            ],
+            ),
+            AnimatedOpacity(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 160),
+              opacity: lit == 0 ? 0 : 1,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < barCount; i++) ...[
+                    if (i > 0) const SizedBox(width: 3),
+                    Expanded(
+                      child: AnimatedContainer(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 120),
+                        curve: Curves.easeOutCubic,
+                        height:
+                            3 +
+                            19 *
+                                strength *
+                                (0.35 + 0.65 * sin((i + 1) * 0.64).abs()),
+                        decoration: BoxDecoration(
+                          color: style.speakStrong,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),
