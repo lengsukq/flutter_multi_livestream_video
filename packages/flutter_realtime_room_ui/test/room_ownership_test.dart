@@ -5,6 +5,68 @@ import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'the same failure reaches the host once and only successful commands emit completion',
+    () async {
+      final media = _FakeMediaSession(role: MediaRole.participant);
+      final room = RealtimeRoom(
+        media: MediaRoomSession.direct(
+          roomCode: 'room',
+          participantId: 'self',
+          session: media,
+        ),
+        renderer: const _FakeRenderer(),
+        disposeClients: () {},
+      );
+      await room.initialize();
+      final failures = <RealtimeException>[];
+      final controller = RealtimeRoomUiController(
+        room,
+        onActionError: failures.add,
+      );
+      const failure = RealtimeException(
+        code: RealtimeErrorCode.network,
+        message: 'test.failure',
+      );
+      controller.reportActionError(failure);
+      controller.reportActionError(failure);
+      expect(failures, hasLength(1));
+      final completions = <RealtimeRoomUiAction>[];
+      var sequence = 0;
+      void onCompleted() {
+        final value = controller.lastCompletedAction;
+        if (value != null && value.sequence > sequence) {
+          sequence = value.sequence;
+          completions.add(value.action);
+        }
+      }
+
+      controller.addListener(onCompleted);
+      await controller.execute(
+        RealtimeRoomUiAction.participantManagement,
+        () async {},
+      );
+      await expectLater(
+        controller.execute(
+          RealtimeRoomUiAction.microphone,
+          () async => throw failure,
+        ),
+        throwsA(
+          isA<RealtimeException>().having(
+            (error) => error.code,
+            'code',
+            RealtimeErrorCode.network,
+          ),
+        ),
+      );
+      await pumpEventQueue();
+      expect(completions, [RealtimeRoomUiAction.participantManagement]);
+      controller.removeListener(onCompleted);
+      await controller.close();
+      await room.dispose();
+    },
+  );
+
   testWidgets('remounting a borrowed controller never closes its room', (
     tester,
   ) async {

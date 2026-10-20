@@ -97,10 +97,17 @@ class RealtimeRoomUiController extends ChangeNotifier {
   late MediaSnapshot _snapshot;
   ChatUiController? _chatUi;
   final Set<RealtimeRoomUiAction> _pending = {};
+  int _actionSequence = 0;
+  ({int sequence, RealtimeRoomUiAction action})? _lastCompletedAction;
+
+  /// Presentation-only acknowledgement; never grants room authority.
+  ({int sequence, RealtimeRoomUiAction action})? get lastCompletedAction =>
+      _lastCompletedAction;
   StreamSubscription<MediaSnapshot>? _mediaSubscription;
   StreamSubscription<RealtimeEvent>? _failureSubscription;
   MediaCameraPosition _cameraPosition;
   RealtimeException? _error;
+  Object? _lastReportedError;
   bool _disposed = false;
 
   MediaSnapshot get snapshot => _snapshot;
@@ -187,6 +194,8 @@ class RealtimeRoomUiController extends ChangeNotifier {
   bool get isDisposed => _disposed;
   RealtimeException? get error => _error;
   void reportActionError(Object error) {
+    if (identical(error, _lastReportedError)) return;
+    _lastReportedError = error;
     final failure = normalizeRealtimeException(error, domain: 'room.ui');
     if (!_disposed) {
       _error = failure;
@@ -268,10 +277,14 @@ class RealtimeRoomUiController extends ChangeNotifier {
   ) async {
     if (_disposed || _pending.contains(action)) return;
     _pending.add(action);
+    _lastReportedError = null;
     _error = null;
     notifyListeners();
     try {
       await command();
+      if (!_disposed) {
+        _lastCompletedAction = (sequence: ++_actionSequence, action: action);
+      }
     } catch (error, stack) {
       final failure = normalizeRealtimeException(
         error,
