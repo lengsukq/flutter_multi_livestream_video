@@ -24,7 +24,7 @@ class RealtimeMeetingMemberItem {
   final bool handRaised;
 }
 
-/// Right integrated sidebar with segmented Chat / Participants tabs.
+/// Right integrated sidebar with flat, underlined Chat / Participants tabs.
 class RealtimeMeetingSidebar extends StatefulWidget {
   const RealtimeMeetingSidebar({
     super.key,
@@ -33,6 +33,7 @@ class RealtimeMeetingSidebar extends StatefulWidget {
     this.chatWidget,
     this.membersWidget,
     this.initialTab = 0,
+    this.onTabChanged,
     this.onClose,
   });
 
@@ -41,6 +42,7 @@ class RealtimeMeetingSidebar extends StatefulWidget {
   final Widget? chatWidget;
   final Widget? membersWidget;
   final int initialTab;
+  final ValueChanged<int>? onTabChanged;
   final VoidCallback? onClose;
 
   @override
@@ -56,6 +58,63 @@ class _RealtimeMeetingSidebarState extends State<RealtimeMeetingSidebar> {
   void initState() {
     super.initState();
     _selectedTab = widget.initialTab;
+  }
+
+  Widget _buildTab(
+    BuildContext context,
+    int index,
+    String label, {
+    int? badge,
+  }) {
+    final style = RealtimeStyle.of(context);
+    final selected = _selectedTab == index;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        onTap: () {
+          setState(() => _selectedTab = index);
+          widget.onTabChanged?.call(index);
+        },
+        child: AnimatedContainer(
+          duration: RealtimeUiTokens.animFast,
+          height: 51,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? style.text : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  color: selected ? style.text : style.textMuted,
+                ),
+              ),
+              if (badge != null && badge > 0) ...[
+                const SizedBox(width: 6),
+                RealtimeBadge(
+                  text: '$badge',
+                  fontSize: 10,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -81,23 +140,27 @@ class _RealtimeMeetingSidebarState extends State<RealtimeMeetingSidebar> {
       color: style.surface,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 8, 8),
+          Container(
+            height: 52,
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: style.border)),
+            ),
             child: Row(
               children: [
                 Expanded(
-                  child: RealtimeSegmentedTabs<int>(
-                    height: 38,
-                    selectedValue: _selectedTab,
-                    onChanged: (val) => setState(() => _selectedTab = val),
-                    tabs: [
-                      RealtimeSegmentTab(value: 0, label: strings.chat),
-                      RealtimeSegmentTab(
-                        value: 1,
-                        label: strings.participants,
-                        badge: widget.members.length,
-                      ),
-                    ],
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _buildTab(context, 0, strings.chat),
+                        _buildTab(
+                          context,
+                          1,
+                          strings.participants,
+                          badge: widget.members.length,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 if (widget.onClose != null) ...[
@@ -105,8 +168,14 @@ class _RealtimeMeetingSidebarState extends State<RealtimeMeetingSidebar> {
                   IconButton(
                     tooltip: 'Close Sidebar',
                     onPressed: widget.onClose,
-                    icon: const Icon(Icons.close_rounded, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
+                    icon: const Icon(Icons.close_rounded, size: 18),
                   ),
+                  const SizedBox(width: 4),
                 ],
               ],
             ),

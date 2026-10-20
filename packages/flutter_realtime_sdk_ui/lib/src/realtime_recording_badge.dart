@@ -38,12 +38,15 @@ class RealtimeRecordingBadge extends StatelessWidget {
               .padLeft(2, '0');
           final strings = RealtimeStrings.of(context);
           if (compact) {
+            // The header already shows a separate elapsed-time pill. Keep the
+            // recording capsule to its state and move the duration into the
+            // tooltip, matching the reference "Recording" chip.
             return Tooltip(
               message: strings.isZh
                   ? '云端录制中 · $minutes:$seconds'
                   : 'Cloud recording · $minutes:$seconds',
               child: RealtimeStatusPill(
-                label: '$minutes:$seconds',
+                label: strings.isZh ? '录制中' : 'Recording',
                 tone: RealtimeStatusTone.recording,
                 showDot: true,
                 blink: true,

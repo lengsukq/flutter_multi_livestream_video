@@ -16,6 +16,7 @@ class RealtimeMeetingStage extends StatefulWidget {
     this.showSelfView = false,
     this.participantBuilder,
     this.overlayBuilder,
+    this.whiteboardToolsController,
   });
 
   final double bottomControlsInset;
@@ -29,6 +30,7 @@ class RealtimeMeetingStage extends StatefulWidget {
   final bool showSelfView;
   final MediaParticipantBuilder? participantBuilder;
   final WidgetBuilder? overlayBuilder;
+  final WhiteboardToolsController? whiteboardToolsController;
 
   @override
   State<RealtimeMeetingStage> createState() => _RealtimeMeetingStageState();
@@ -229,6 +231,8 @@ class _RealtimeMeetingStageState extends State<RealtimeMeetingStage> {
                             shared.buildMain(
                               context,
                               withAnnotations: widget.showAnnotations,
+                              whiteboardToolsController:
+                                  widget.whiteboardToolsController,
                             ),
                             if (cameraVisible)
                               Positioned(

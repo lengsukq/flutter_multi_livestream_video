@@ -45,10 +45,12 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
   _LiveSidePanel _sidePanel = _LiveSidePanel.none;
   bool _cleanScreen = false;
   BoxFit? _liveVideoFitOverride;
+  late DateTime _enteredAt;
 
   @override
   void initState() {
     super.initState();
+    _enteredAt = DateTime.now();
     _preparing = _prepare();
     _presets =
         widget.loadImagePresets?.call() ?? Future.value(widget.imagePresets);
@@ -71,6 +73,7 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.room, widget.room) ||
         oldWidget.initialSettings != widget.initialSettings) {
+      _enteredAt = DateTime.now();
       _preparing = _prepare();
       _presets =
           widget.loadImagePresets?.call() ?? Future.value(widget.imagePresets);
@@ -88,16 +91,6 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
         identical(widget.room, room) &&
         identical(widget.initialSettings, settings);
     await prepareRoomPageWithDeadline(room, settings, isCurrent: isCurrent);
-  }
-
-  void _toggle(_LiveSidePanel panel, {required bool isWide}) {
-    if (!isWide) {
-      _openMobileSheet(panel);
-      return;
-    }
-    setState(() {
-      _sidePanel = _sidePanel == panel ? _LiveSidePanel.none : panel;
-    });
   }
 
   Future<bool> _confirmLeave(BuildContext context) async {
@@ -170,18 +163,6 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
     );
   }
 
-  Widget _fitControl() {
-    final strings = RealtimeStrings.of(context);
-    final full = _liveVideoFitOverride == BoxFit.contain;
-    return RealtimeGlassIconButton(
-      icon: full ? Icons.crop_free_rounded : Icons.fit_screen_rounded,
-      tooltip: full ? strings.fillLiveScreen : strings.showFullVideo,
-      onPressed: () => setState(
-        () => _liveVideoFitOverride = full ? BoxFit.cover : BoxFit.contain,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) => FutureBuilder<void>(
     future: _preparing,
@@ -222,9 +203,10 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
               children: [
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final wide =
-                        constraints.maxWidth >= 1000 &&
-                        MediaQuery.textScalerOf(context).scale(17) < 28;
+                    final wide = RealtimeBreakpoints.isWide(
+                      context,
+                      constraints.maxWidth,
+                    );
                     final isHost = RealtimePresentationRole.forLive(
                       widget.room.media.role,
                     ).canShowLiveHostTools;
@@ -287,8 +269,23 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
                               showChat: widget.showChat,
                               showLiveInteractions: widget.showLiveInteractions,
                               videoFit: _liveVideoFitOverride,
+                              startedAt: _enteredAt,
+                              initialTab: _sidePanel == _LiveSidePanel.members
+                                  ? 1
+                                  : 0,
+                              onSelectedTab: (index) => setState(
+                                () => _sidePanel = index == 1
+                                    ? _LiveSidePanel.members
+                                    : _LiveSidePanel.chat,
+                              ),
+                              onToggleVideoFit: () => setState(
+                                () => _liveVideoFitOverride =
+                                    _liveVideoFitOverride == BoxFit.contain
+                                    ? BoxFit.cover
+                                    : BoxFit.contain,
+                              ),
                               exitAction: RealtimeLeaveButton(
-                                iconOnly: true,
+                                iconOnly: false,
                                 onConfirm: (ctx) => _confirmLeave(ctx),
                                 onLeft: () {
                                   if (widget.onLeft != null) {
@@ -301,39 +298,16 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
                               ),
                               onToggleCleanScreen: () =>
                                   setState(() => _cleanScreen = true),
-                              onViewAudience: () =>
-                                  _toggle(_LiveSidePanel.members, isWide: true),
-                              customChatPanel:
-                                  _sidePanel == _LiveSidePanel.members
-                                  ? const RealtimeManagedParticipantList()
+                              onOpenHostTools: isHost
+                                  ? () => _openHostToolsSheet(context)
                                   : null,
+                              onViewAudience: () => setState(
+                                () => _sidePanel = _LiveSidePanel.members,
+                              ),
                               topTrailingActions: [
                                 if (widget.header != null) widget.header!,
                                 if (widget.showProvider)
                                   Text(widget.room.providerId),
-                                _fitControl(),
-                                // Background effects live inside Host Tools so the
-                                // host has one settings surface, not two.
-                                if (isHost) ...[
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.auto_fix_high_rounded,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
-                                    tooltip: strings.isZh
-                                        ? '主播工具'
-                                        : 'Host Tools',
-                                    onPressed: () =>
-                                        _openHostToolsSheet(context),
-                                  ),
-                                  const SizedBox(width: 4),
-                                ],
-                                RealtimeRecordingBadge(
-                                  room: widget.room,
-                                  compact: true,
-                                ),
-                                const SizedBox(width: 4),
                               ],
                             ),
                           ),

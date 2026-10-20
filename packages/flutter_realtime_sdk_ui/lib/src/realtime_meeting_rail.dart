@@ -11,10 +11,15 @@ class RealtimeMeetingRail extends StatelessWidget {
     super.key,
     required this.items,
     this.horizontal = false,
+    this.trailing,
   });
 
   final List<RealtimeMeetingRailItem> items;
   final bool horizontal;
+
+  /// Extra controls occupy the remaining space in the same 60 pt column.
+  /// Meeting navigation stays visible while the tool group scrolls.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +50,11 @@ class RealtimeMeetingRail extends StatelessWidget {
       }
       children.add(_RailButton(item: item, horizontal: horizontal));
     }
+    if (trailing != null && horizontal) {
+      children.add(
+        Padding(padding: const EdgeInsets.only(left: 8), child: trailing!),
+      );
+    }
 
     if (horizontal) {
       return DecoratedBox(
@@ -62,6 +72,34 @@ class RealtimeMeetingRail extends StatelessWidget {
               child: Row(children: children),
             ),
           ),
+        ),
+      );
+    }
+    if (trailing != null) {
+      return Container(
+        width: 60,
+        color: style.surface,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Column(mainAxisSize: MainAxisSize.min, children: children),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: SizedBox(
+                width: 24,
+                height: 1,
+                child: ColoredBox(color: style.border),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: trailing!,
+              ),
+            ),
+          ],
         ),
       );
     }

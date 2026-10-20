@@ -792,8 +792,23 @@ class RealtimeChatComposer extends StatelessWidget {
 
 /// Convenience grouping; consumers may place list and composer separately.
 class RealtimeChatPanel extends StatelessWidget {
-  const RealtimeChatPanel({super.key});
+  const RealtimeChatPanel({
+    super.key,
+    this.showRecipient = true,
+    this.timelineStyle = false,
+  });
+
+  /// Room panels label the audience above the composer like the reference
+  /// chat; standalone chat pages can opt out.
+  final bool showRecipient;
+  final bool timelineStyle;
 
   @override
-  Widget build(BuildContext context) => const ChatPanel();
+  Widget build(BuildContext context) => ChatPanel(
+    recipientLabel: showRecipient ? _recipientLabel(context) : null,
+    timelineStyle: timelineStyle,
+  );
+
+  String _recipientLabel(BuildContext context) =>
+      RealtimeStrings.of(context).isZh ? '发送给所有人' : 'To Everyone';
 }

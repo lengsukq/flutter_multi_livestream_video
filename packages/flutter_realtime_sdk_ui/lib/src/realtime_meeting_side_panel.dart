@@ -128,35 +128,19 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
       );
     }
 
-    final members = controller.snapshot.participants
-        .map(
-          (p) => RealtimeMeetingMemberItem(
-            id: p.id,
-            avatarUrl: p.avatarUrl,
-            name: p.displayName.isNotEmpty ? p.displayName : p.id,
-            roleTitle: p.isLocal ? (strings.isZh ? '我' : 'You') : null,
-            isMuted: p.isMuted,
-            isVideoOff: !p.isVideoEnabled,
-            isSpeaking: p.isSpeaking,
-            handRaised:
-                controller.classroomState?.students
-                    .where((student) => student.handRaised)
-                    .any((student) => student.displayName == p.displayName) ??
-                false,
-          ),
-        )
-        .toList();
-
+    // Plain meetings share the reference's underlined Chat / People tabs.
+    // No classroom tab is rendered unless classroom is actually configured.
     return Container(
       decoration: BoxDecoration(
         color: style.surface,
         border: Border(left: BorderSide(color: style.border)),
       ),
-      child: RealtimeMeetingSidebar(
-        members: members,
+      child: RealtimeClassroomSidePanel(
         initialTab: panel == RealtimeMeetingPanel.participants ? 1 : 0,
-        chatWidget: const RealtimeChatPanel(),
-        membersWidget: const RealtimeManagedParticipantList(),
+        initialTabLabel: panel == RealtimeMeetingPanel.participants
+            ? (strings.isZh ? '成员' : 'People')
+            : strings.chat,
+        pinnedMessage: pinnedMessage,
         onClose: onClose,
       ),
     );

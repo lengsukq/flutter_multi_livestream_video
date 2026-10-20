@@ -131,7 +131,7 @@ class RealtimeRecordingPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    zh ? '录制设置' : 'Recording settings',
+                    zh ? '录制内容' : "What's being recorded",
                     style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
@@ -165,6 +165,11 @@ class RealtimeRecordingPanel extends StatelessWidget {
                         RecordingStreamType.both =>
                           zh ? '音视频' : 'Audio and video',
                       },
+                    ),
+                    _SettingRow(
+                      icon: Icons.cloud_outlined,
+                      label: zh ? '输出' : 'Output',
+                      value: zh ? '云端录制' : 'Cloud recording',
                     ),
                   ] else
                     Text(

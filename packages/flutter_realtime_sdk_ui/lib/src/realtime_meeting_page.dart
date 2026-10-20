@@ -80,7 +80,14 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
   bool _showFilmstrip = true;
   bool _openedInitialPanel = false;
   final _stageKey = GlobalKey();
+  final _whiteboardTools = WhiteboardToolsController();
   late DateTime _enteredAt;
+
+  @override
+  void dispose() {
+    _whiteboardTools.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -313,13 +320,14 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                       showClassroom: widget.showClassroom,
                     );
                     final sharing = sharedContent.active;
-                    // Classroom rooms use the reference teaching workspace:
-                    // the whiteboard owns its own tool rail, panels live in
-                    // Chat/People/Q&A, and the timer reads as a live class.
+                    // Classroom rooms use the teaching workspace with the
+                    // same persistent navigation for chat, people and tools.
                     final classroomWorkspace =
                         widget.showClassroom && widget.room.classroom != null;
+                    // Whiteboard controls join the permanent left navigation
+                    // rail rather than replacing it or creating a second one.
                     final whiteboardWorkspace =
-                        classroomWorkspace &&
+                        sharing &&
                         sharedContent.mode == SharedContentMode.whiteboard;
                     final dockLabels = RealtimeStrings.of(context);
                     final dockShowsLabels =
@@ -338,6 +346,11 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                       showSelfView: true,
                       participantBuilder: widget.participantBuilder,
                       overlayBuilder: widget.stageOverlayBuilder,
+                      // Only the desktop rail hosts the board's tools. Phones
+                      // and tablets keep the board's own pill strip so the
+                      // tools stay reachable without a vertical rail.
+                      whiteboardToolsController:
+                          wide && whiteboardWorkspace ? _whiteboardTools : null,
                       topOverlayInset: 0,
                     );
 
@@ -416,6 +429,39 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                           ),
                         ],
                         collaborationGroup: [
+                          // Phones have no tool rail, so the camera layout
+                          // toggle lives in the dock there. Tablets and desktop
+                          // reach it from the rail.
+                          if (compact && !sharing)
+                            RealtimeDockItem(
+                              icon: _useGrid
+                                  ? Icons.view_agenda_outlined
+                                  : Icons.grid_view_rounded,
+                              label: _useGrid
+                                  ? dockLabels.speakerMode
+                                  : dockLabels.gridMode,
+                              showLabel: false,
+                              onPressed: () =>
+                                  setState(() => _useGrid = !_useGrid),
+                            ),
+                          if (sharing)
+                            // The sharing stage has no separate bar, so the
+                            // thumbnail toggle lives with the always-visible
+                            // dock controls.
+                            RealtimeDockItem(
+                              icon: _showFilmstrip
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              label: dockLabels.isZh
+                                  ? (_showFilmstrip ? '隐藏缩略图' : '显示缩略图')
+                                  : (_showFilmstrip
+                                        ? 'Hide thumbnails'
+                                        : 'Show thumbnails'),
+                              showLabel: dockShowsLabels,
+                              onPressed: () => setState(
+                                () => _showFilmstrip = !_showFilmstrip,
+                              ),
+                            ),
                           RealtimeDockReactionsButton(
                             showLabel: false,
                             onWave: widget.onCustomReaction != null
@@ -509,14 +555,6 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                       participants: participants,
                     );
 
-                    final stageBar = _buildStageBar(
-                      context,
-                      wide: wide,
-                      sharing: sharing,
-                      participantCount: participants.length,
-                      classroomWorkspace: classroomWorkspace,
-                    );
-
                     return Column(
                       children: [
                         if (widget.header != null) widget.header!,
@@ -526,25 +564,47 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                         if (tablet)
                           RealtimeMeetingRail(
                             horizontal: true,
-                            items: _railItems(context, controller, wide: false),
+                            items: _railItems(
+                              context,
+                              controller,
+                              wide: false,
+                              sharing: sharing,
+                            ),
                           ),
                         if (widget.showRtcDataMessages) _rtcDataPanel(),
                         Expanded(
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              if (wide && !whiteboardWorkspace)
+                              if (wide)
                                 RealtimeMeetingRail(
                                   items: _railItems(
                                     context,
                                     controller,
                                     wide: wide,
+                                    sharing: sharing,
                                   ),
+                                  trailing:
+                                      whiteboardWorkspace &&
+                                          widget
+                                                  .room
+                                                  .sharedContent
+                                                  ?.whiteboard
+                                                  .state
+                                                  ?.canEdit ==
+                                              true
+                                      ? WhiteboardToolRail(
+                                          session: widget
+                                              .room
+                                              .sharedContent!
+                                              .whiteboard,
+                                          controller: _whiteboardTools,
+                                        )
+                                      : null,
                                 ),
                               Expanded(
                                 child: Column(
                                   children: [
-                                    stageBar,
                                     Expanded(
                                       child: compact
                                           ? Column(
@@ -560,10 +620,10 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                                               // Dedicated bottom row, like the
                                               // reference dock under the tiles.
                                               reserveControlsSpace: true,
-                                              autoHide:
-                                                  !MediaQuery.accessibleNavigationOf(
-                                                    context,
-                                                  ),
+                                              // Keep the room actions on screen;
+                                              // hiding them made the controls
+                                              // feel unreliable during a class.
+                                              autoHide: false,
                                             ),
                                     ),
                                   ],
@@ -696,46 +756,6 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
     );
   }
 
-  Widget _buildStageBar(
-    BuildContext context, {
-    required bool wide,
-    required bool sharing,
-    required int participantCount,
-    bool classroomWorkspace = false,
-  }) {
-    final strings = RealtimeStrings.of(context);
-    // The whiteboard owns its page tabs; a single "Shared content" tab would
-    // duplicate them in classroom rooms, so only keep camera layout tabs.
-    if (sharing && classroomWorkspace) return const SizedBox.shrink();
-    final tabs = sharing
-        ? <String>[strings.isZh ? '共享内容' : 'Shared content']
-        : <String>[strings.speakerMode, strings.gridMode];
-    final selected = sharing ? 0 : (_useGrid ? 1 : 0);
-    return RealtimeMeetingStageBar(
-      tabs: tabs,
-      selectedTab: selected,
-      onTabSelected: sharing
-          ? null
-          : (int index) => setState(() => _useGrid = index == 1),
-      actions: [
-        if ((sharing && participantCount > 0) ||
-            (!sharing && participantCount > 1 && !_useGrid))
-          IconButton(
-            tooltip: strings.isZh
-                ? (_showFilmstrip ? '隐藏缩略图' : '显示缩略图')
-                : (_showFilmstrip ? 'Hide thumbnails' : 'Show thumbnails'),
-            icon: Icon(
-              _showFilmstrip
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              size: 18,
-            ),
-            onPressed: () => setState(() => _showFilmstrip = !_showFilmstrip),
-          ),
-      ],
-    );
-  }
-
   Widget? _buildMoreAction(
     BuildContext context,
     RealtimeRoomUiController controller, {
@@ -814,11 +834,13 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
     BuildContext context,
     RealtimeRoomUiController controller, {
     required bool wide,
+    required bool sharing,
   }) {
     final strings = RealtimeStrings.of(context);
-    // Panels and the host reaction live here. Action entry points stay
-    // single-sourced: raise hand in the dock, background in the dock/More and
-    // layout in the stage bar.
+    final participantCount = controller.snapshot.participants.length;
+    // Panels, camera layout and the host reaction live here. Action entry
+    // points stay single-sourced: raise hand in the dock, background in the
+    // dock/More.
     return [
       if (widget.showChat && widget.room.chat != null)
         RealtimeMeetingRailItem(
@@ -842,6 +864,29 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
           onPressed: () =>
               _toggle(RealtimeMeetingPanel.classroom, isWide: wide),
         ),
+      // Camera layout is one toggle in the rail instead of a tab bar above the
+      // stage: the icon shows the view a tap switches to.
+      if (!sharing) ...[
+        const RealtimeMeetingRailItem.divider(),
+        RealtimeMeetingRailItem(
+          icon: _useGrid
+              ? Icons.view_agenda_outlined
+              : Icons.grid_view_rounded,
+          tooltip: _useGrid ? strings.speakerMode : strings.gridMode,
+          onPressed: () => setState(() => _useGrid = !_useGrid),
+        ),
+        if (!_useGrid && participantCount > 1)
+          RealtimeMeetingRailItem(
+            icon: _showFilmstrip
+                ? Icons.view_carousel_outlined
+                : Icons.view_carousel_rounded,
+            tooltip: strings.isZh
+                ? (_showFilmstrip ? '隐藏缩略图' : '显示缩略图')
+                : (_showFilmstrip ? 'Hide thumbnails' : 'Show thumbnails'),
+            active: _showFilmstrip,
+            onPressed: () => setState(() => _showFilmstrip = !_showFilmstrip),
+          ),
+      ],
       if (widget.onCustomReaction != null) ...[
         const RealtimeMeetingRailItem.divider(),
         RealtimeMeetingRailItem(

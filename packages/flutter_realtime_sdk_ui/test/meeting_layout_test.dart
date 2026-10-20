@@ -33,15 +33,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('desktop shows the tool rail, stage bar and a 340 pt panel', (
-    tester,
-  ) async {
+  testWidgets('desktop shows the tool rail and a 340 pt panel', (tester) async {
     final fixture = await MeetingSharingFixture.create(withTrack: false);
     addTearDown(fixture.room.dispose);
     await pumpPage(tester, fixture, const Size(1280, 820));
 
     expect(find.byType(RealtimeMeetingRail), findsOneWidget);
-    expect(find.byType(RealtimeMeetingStageBar), findsOneWidget);
     expect(find.byType(RealtimeMeetingTopBar), findsOneWidget);
     expect(find.byType(RealtimeMeetingDock), findsOneWidget);
     expect(find.byType(RealtimeMeetingSidePanel), findsNothing);
@@ -51,11 +48,29 @@ void main() {
     expect(header.height, inInclusiveRange(56, 90));
     expect(header.top, lessThan(2));
 
-    // The rail is a narrow column to the left of the stage.
+    // The rail is a narrow column to the left of the stage, and the stage
+    // starts right below the header: no layout bar reserves a row of its own.
     final rail = tester.getRect(find.byType(RealtimeMeetingRail));
     expect(rail.width, 60);
-    final stageBar = tester.getRect(find.byType(RealtimeMeetingStageBar));
-    expect(stageBar.left, greaterThanOrEqualTo(rail.right));
+    final stage = tester.getRect(find.byType(RealtimeMeetingStage));
+    expect(stage.left, greaterThanOrEqualTo(rail.right));
+    expect(stage.top, closeTo(header.bottom, 1));
+    // Camera layout is a single rail toggle, not a labelled tab row: it names
+    // the view the tap switches to.
+    expect(
+      find.descendant(
+        of: find.byType(RealtimeMeetingRail),
+        matching: find.byTooltip('Grid view'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(RealtimeMeetingRail),
+        matching: find.byTooltip('Speaker view'),
+      ),
+      findsNothing,
+    );
 
     // Opening a panel from the rail adds a fixed-width trailing column.
     await tester.tap(
@@ -68,6 +83,27 @@ void main() {
     final panel = tester.getRect(find.byType(RealtimeMeetingSidePanel));
     expect(panel.width, 340);
     expect(panel.right, closeTo(1280, 1));
+    // The old boxed Chat/People segmented control is replaced by the flat
+    // underline tabs, and the participant tab remains functional.
+    final sidebar = find.byType(RealtimeClassroomSidePanel);
+    expect(sidebar, findsOneWidget);
+    expect(
+      find.descendant(
+        of: sidebar,
+        matching: find.byType(RealtimeSegmentedTabs<int>),
+      ),
+      findsNothing,
+    );
+    // Chat is capability-driven: the fixture has no ChatSession, so the tab
+    // must not appear unless the room actually supplies chat.
+    expect(
+      find.descendant(of: sidebar, matching: find.text('Chat')),
+      fixture.room.chat == null ? findsNothing : findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sidebar, matching: find.text('People')),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -140,7 +176,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('stage bar switches between speaker and grid without overflow', (
+  testWidgets('one layout toggle switches speaker and grid at every width', (
     tester,
   ) async {
     for (final size in const [
@@ -157,22 +193,34 @@ void main() {
         textScale: size.width == 320 ? 2 : 1,
       );
 
-      expect(find.byType(RealtimeMeetingStageBar), findsOneWidget);
-      // Layout tabs must be reachable at every width.
-      final speaker = find.text('Speaker view');
-      final grid = find.text('Grid view');
-      expect(
-        speaker.evaluate().isNotEmpty || grid.evaluate().isNotEmpty,
-        isTrue,
-        reason: 'stage bar tabs missing at $size',
+      // The toggle advertises the other view, so only one control exists.
+      final railToggle = find.byTooltip('Grid view');
+      final dockToggle = find.descendant(
+        of: find.byType(RealtimeMeetingDock),
+        matching: find.byTooltip('Grid view'),
       );
-      if (grid.evaluate().isNotEmpty) {
-        await tester.ensureVisible(grid.first);
-        await tester.pumpAndSettle();
-        await tester.tap(grid.first);
-        await tester.pumpAndSettle();
-        expect(find.byType(RealtimeVideoGrid), findsOneWidget);
-      }
+      expect(
+        railToggle.evaluate().isNotEmpty || dockToggle.evaluate().isNotEmpty,
+        isTrue,
+        reason: 'layout toggle missing at $size',
+      );
+      final toggle = railToggle.evaluate().isNotEmpty
+          ? railToggle.first
+          : dockToggle.first;
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(find.byType(RealtimeVideoGrid), findsOneWidget);
+
+      final back = find.byTooltip('Speaker view');
+      expect(back, findsOneWidget);
+      await tester.ensureVisible(back.first);
+      await tester.pumpAndSettle();
+      await tester.tap(back.first);
+      await tester.pumpAndSettle();
+      expect(find.byType(RealtimeMeetingFilmstripStage), findsOneWidget);
+
       expect(tester.takeException(), isNull, reason: 'at $size');
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.runAsync(fixture.room.dispose);

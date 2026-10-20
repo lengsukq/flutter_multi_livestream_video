@@ -36,7 +36,6 @@ export 'src/realtime_live_page.dart';
 export 'src/realtime_pre_join_page.dart';
 export 'src/realtime_chat_page.dart';
 export 'src/realtime_meeting_stage.dart';
-export 'src/realtime_meeting_stage_bar.dart';
 export 'src/realtime_meeting_rail.dart';
 export 'src/realtime_room_drawer.dart';
 export 'src/realtime_self_view.dart';

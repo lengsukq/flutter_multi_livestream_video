@@ -278,6 +278,125 @@ void main() {
   });
 
   testWidgets(
+    'live page adapts across small, tablet, landscape and desktop sizes',
+    (tester) async {
+      final room = _room(_FakeMediaSession(role: MediaRole.host));
+      addTearDown(room.dispose);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final viewports = const [
+        Size(320, 640),
+        Size(390, 844),
+        Size(600, 850),
+        Size(768, 960),
+        Size(1024, 850),
+        Size(1280, 900),
+        Size(1440, 900),
+        Size(740, 390),
+      ];
+      for (final viewport in viewports) {
+        for (final scale in [1.0, 2.0]) {
+          await tester.binding.setSurfaceSize(viewport);
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: RealtimeUiTheme.light(),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: RealtimeLivePage(room: room),
+            ),
+          );
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+          expect(find.byType(RealtimeLivePage), findsOneWidget);
+          expect(
+            find.byType(RealtimeLiveDesktopStage),
+            viewport.width >= 1000 && scale == 1
+                ? findsOneWidget
+                : findsNothing,
+            reason: 'layout at $viewport with text scale $scale',
+          );
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: 'at $viewport with text scale $scale',
+          );
+        }
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+
+  testWidgets('desktop live shares meeting shell and navigates to members', (
+    tester,
+  ) async {
+    final room = _room(_FakeMediaSession(role: MediaRole.host));
+    addTearDown(room.dispose);
+    await tester.binding.setSurfaceSize(const Size(1280, 820));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: RealtimeUiTheme.light(),
+        home: RealtimeLivePage(room: room),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RealtimeMeetingTopBar), findsOneWidget);
+    expect(find.byType(RealtimeMeetingDock), findsOneWidget);
+    expect(find.byType(RealtimeMeetingRail), findsOneWidget);
+    expect(find.byType(RealtimeMeetingSidebar), findsOneWidget);
+    expect(find.byType(RealtimeLiveVideoStage), findsOneWidget);
+    expect(find.byType(RealtimeLiveMediaControls), findsNothing);
+
+    final rail = find.byType(RealtimeMeetingRail);
+    await tester.tap(
+      find.descendant(of: rail, matching: find.byTooltip('Participants')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RealtimeManagedParticipantList), findsOneWidget);
+    await tester.tap(
+      find.descendant(of: rail, matching: find.byTooltip('Chat')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RealtimeManagedParticipantList), findsNothing);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'large text keeps live host controls reachable from display options',
+    (tester) async {
+      final hostRoom = _room(_FakeMediaSession(role: MediaRole.host));
+      addTearDown(hostRoom.dispose);
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RealtimeUiTheme.light(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(2)),
+            child: child!,
+          ),
+          home: RealtimeLivePage(room: hostRoom),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byTooltip('Display options'), findsOneWidget);
+      await tester.tap(find.byTooltip('Display options'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Turn on microphone'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
     'live discussion remains scrollable with many messages and large text',
     (tester) async {
       final chat = _BufferedChatSession();
@@ -662,6 +781,8 @@ void main() {
       ),
     );
     expect(chat.listeners, 1);
+    // Room chat names the audience above the composer like the reference.
+    expect(find.text('To Everyone'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     expect(chat.listeners, 0);

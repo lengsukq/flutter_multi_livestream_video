@@ -52,7 +52,11 @@ class MeetingSharedContent {
         : '',
   );
 
-  Widget buildMain(BuildContext context, {required bool withAnnotations}) {
+  Widget buildMain(
+    BuildContext context, {
+    required bool withAnnotations,
+    WhiteboardToolsController? whiteboardToolsController,
+  }) {
     final fallback = RealtimeScreenShareStage(
       placeholder: Center(
         child: Text(
@@ -69,6 +73,7 @@ class MeetingSharedContent {
           room,
           snapshot,
           withAnnotations: withAnnotations,
+          whiteboardToolsController: whiteboardToolsController,
           members: fallback,
         ) ??
         fallback;

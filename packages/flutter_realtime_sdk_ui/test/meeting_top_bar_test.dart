@@ -53,4 +53,39 @@ void main() {
       }
     },
   );
+
+  testWidgets('roomy header keeps the 56 pt bar and brand divider', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: RealtimeUiTheme.light(),
+        home: Scaffold(
+          body: Column(
+            children: [
+              RealtimeMeetingTopBar(
+                title: 'Quadratics: finding the roots',
+                subtitle: 'Algebra II',
+                brand: Text(
+                  'Tandem',
+                  key: const ValueKey('brand'),
+                  style: RealtimeUiTheme.light().textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final bar = tester.getRect(find.byType(RealtimeMeetingTopBar));
+    expect(bar.height, inInclusiveRange(56, 90));
+    final brand = tester.getRect(find.byKey(const ValueKey('brand')));
+    final title = tester.getRect(find.text('Quadratics: finding the roots'));
+    expect(title.left, greaterThan(brand.right));
+    expect(tester.takeException(), isNull);
+  });
 }

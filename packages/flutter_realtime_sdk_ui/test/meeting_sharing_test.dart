@@ -34,6 +34,65 @@ void main() {
       await tester.runAsync(fixture.room.dispose);
     },
   );
+  testWidgets(
+    'merged rail changes whiteboard tools and keeps meeting navigation',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final f = await MeetingSharingFixture.create(
+        mode: SharedContentMode.whiteboard,
+        withTrack: false,
+      );
+      addTearDown(f.room.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RealtimeUiTheme.light(),
+          home: RealtimeMeetingPage(room: f.room, showClassroom: false),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final rail = find.byType(RealtimeMeetingRail);
+      expect(rail, findsOneWidget);
+      expect(find.byType(WhiteboardToolRail), findsOneWidget);
+
+      final boardTools = find.byType(WhiteboardToolRail);
+      final highlight = find.descendant(
+        of: boardTools,
+        matching: find.byTooltip('Highlight'),
+      );
+      await tester.ensureVisible(highlight);
+      await tester.tap(highlight);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AnnotationSurface>(find.byType(AnnotationSurface)).tool,
+        AnnotationTool.highlight,
+      );
+      final pen = find.descendant(
+        of: boardTools,
+        matching: find.byTooltip('Pen'),
+      );
+      await tester.tap(pen);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AnnotationSurface>(find.byType(AnnotationSurface)).tool,
+        AnnotationTool.pen,
+      );
+      final participants = find.descendant(
+        of: rail,
+        matching: find.byTooltip('Participants'),
+      );
+      await tester.ensureVisible(participants);
+      await tester.tap(participants);
+      await tester.pumpAndSettle();
+      expect(find.byType(RealtimeMeetingSidePanel), findsOneWidget);
+      expect(find.byType(RealtimeClassroomSidePanel), findsOneWidget);
+      expect(find.text('People'), findsOneWidget);
+      expect(find.byType(RealtimeMeetingRail), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(f.room.dispose);
+    },
+  );
 
   Future<void> mount(
     WidgetTester tester,
@@ -443,6 +502,60 @@ void main() {
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
       }
+    },
+  );
+  testWidgets(
+    'sharing replaces the layout bar and merges whiteboard tools into the meeting rail',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      for (final mode in [
+        SharedContentMode.whiteboard,
+        SharedContentMode.screen,
+      ]) {
+        final f = await MeetingSharingFixture.create(
+          mode: mode,
+          withTrack: mode == SharedContentMode.screen,
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: RealtimeUiTheme.light(),
+            home: RealtimeMeetingPage(room: f.room, showClassroom: false),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Shared content keeps the whole stage height: the camera layout row
+        // only exists as rail toggles and is hidden while sharing.
+        // There must be exactly one left-hand rail. Meeting navigation stays
+        // reachable, and whiteboard controls append within the same scroller.
+        expect(find.byType(RealtimeMeetingRail), findsOneWidget);
+        if (mode == SharedContentMode.whiteboard) {
+          expect(find.byType(WhiteboardToolRail), findsOneWidget);
+          final rail = find.byType(RealtimeMeetingRail);
+          expect(
+            find.descendant(of: rail, matching: find.byTooltip('Participants')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: rail, matching: find.byTooltip('Pen')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(of: find.byType(WhiteboardView), matching: rail),
+            findsNothing,
+          );
+        } else {
+          expect(find.byType(WhiteboardToolRail), findsNothing);
+        }
+        // The thumbnail control stays reachable from the always-visible dock.
+        expect(find.byTooltip('Hide thumbnails'), findsOneWidget);
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(f.room.dispose);
+      }
+      expect(tester.takeException(), isNull);
     },
   );
   testWidgets(

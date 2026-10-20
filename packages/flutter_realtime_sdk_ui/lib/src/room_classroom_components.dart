@@ -17,6 +17,7 @@ Widget? buildRoomSharedContentStage(
   MediaSnapshot snapshot, {
   Widget? members,
   bool withAnnotations = true,
+  WhiteboardToolsController? whiteboardToolsController,
 }) {
   final shared = room.sharedContent;
   final content = shared?.content;
@@ -31,6 +32,7 @@ Widget? buildRoomSharedContentStage(
   return SharedContentStage(
     mode: content.mode,
     whiteboard: shared!.whiteboard,
+    whiteboardToolsController: whiteboardToolsController,
     members: members ?? const SizedBox.shrink(),
     screen: track == null
         ? null
@@ -49,6 +51,8 @@ Widget? buildRoomSharedContentStage(
     screenSharerName: content.screen.participantId.isNotEmpty
         ? content.screen.participantId
         : null,
+    // The room dock owns sharing controls; the stage keeps its full height.
+    showHeader: false,
   );
 }
 

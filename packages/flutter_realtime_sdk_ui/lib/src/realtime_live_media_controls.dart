@@ -21,7 +21,12 @@ class RealtimeLiveMediaControls extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        if (controller.room.media.role == MediaRole.viewer) {
+        if (controller.room.media.role != MediaRole.host) {
+          return const SizedBox.shrink();
+        }
+        final canUseMicrophone = controller.canUseMicrophone;
+        final canUseCamera = controller.canUseCamera;
+        if (!canUseMicrophone && !canUseCamera && onOpenHostTools == null) {
           return const SizedBox.shrink();
         }
         return RealtimeGlassSurface(
@@ -33,13 +38,16 @@ class RealtimeLiveMediaControls extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _mediaAction(context, RealtimeRoomUiAction.microphone),
-              _mediaAction(context, RealtimeRoomUiAction.camera),
+              if (canUseMicrophone)
+                _mediaAction(context, RealtimeRoomUiAction.microphone),
+              if (canUseCamera)
+                _mediaAction(context, RealtimeRoomUiAction.camera),
               if (onOpenHostTools != null) ...[
-                const SizedBox(
-                  height: 22,
-                  child: VerticalDivider(width: 16, color: Colors.white24),
-                ),
+                if (canUseMicrophone || canUseCamera)
+                  const SizedBox(
+                    height: 22,
+                    child: VerticalDivider(width: 16, color: Colors.white24),
+                  ),
                 IconButton(
                   tooltip: strings.isZh ? '主播工具' : 'Host tools',
                   style: IconButton.styleFrom(

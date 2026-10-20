@@ -67,9 +67,17 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, viewport) {
         final narrowHud = viewport.maxWidth < 300;
-        final compactHud =
-            viewport.maxWidth < 390 ||
-            MediaQuery.textScalerOf(context).scale(17) >= 28;
+        final lowHeightHud = viewport.maxHeight < 420;
+        final largeText = RealtimeBreakpoints.textScaleIsLarge(context);
+        final compactHud = viewport.maxWidth < 390 || lowHeightHud || largeText;
+        final availableChatHeight =
+            viewport.maxHeight -
+            MediaQuery.paddingOf(context).vertical -
+            (compactHud ? 196 : 244);
+        final chatHeight = availableChatHeight.clamp(
+          0.0,
+          compactHud ? 104.0 : 180.0,
+        );
 
         return Stack(
           fit: StackFit.expand,
@@ -217,7 +225,8 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
             ),
 
             // 4. Floating Hearts Animation Overlay
-            if (showLiveInteractions &&
+            if (!lowHeightHud &&
+                showLiveInteractions &&
                 controller.room.liveInteractions != null)
               const Positioned(
                 right: 16,
@@ -227,7 +236,8 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                 child: IgnorePointer(child: RealtimeLiveHeartsOverlay()),
               ),
 
-            if (showLiveInteractions &&
+            if (!lowHeightHud &&
+                showLiveInteractions &&
                 controller.room.liveInteractions != null)
               const Positioned(
                 left: 12,
@@ -253,27 +263,24 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Floating Chat Feed
-                    if (showChat)
+                    if (showChat && chatHeight > 0 && !lowHeightHud)
                       ConstrainedBox(
                         constraints: BoxConstraints(
-                          maxWidth: viewport.maxWidth * 0.72,
-                          maxHeight:
-                              (viewport.maxHeight -
-                                      MediaQuery.paddingOf(context).vertical -
-                                      260)
-                                  .clamp(0, 180),
+                          maxWidth:
+                              viewport.maxWidth * (compactHud ? 0.86 : 0.72),
+                          maxHeight: chatHeight,
                         ),
                         child: RealtimeLiveChatFeed(
                           maxMessages: maxChatMessages,
                         ),
                       ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: compactHud ? 4 : 10),
 
                     if (isHost) ...[
                       RealtimeLiveMediaControls(
-                        onOpenHostTools: narrowHud ? null : onOpenHostTools,
+                        onOpenHostTools: compactHud ? null : onOpenHostTools,
                       ),
-                      const SizedBox(height: 8),
+                      if (!compactHud) const SizedBox(height: 8),
                     ],
 
                     // Bottom Action Bar
@@ -357,80 +364,89 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
 
   void _openDisplayOptions(BuildContext context) {
     final strings = RealtimeStrings.of(context);
+    final controller = RealtimeRoomUiScope.of(context);
     unawaited(
       showRealtimeGlassBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         builder: (sheetContext) => SafeArea(
           top: false,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    title: Text(
-                      strings.isZh ? '显示选项' : 'Display options',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  if (onViewAudience != null)
+          child: RealtimeRoomUiScope(
+            room: controller.room,
+            controller: controller,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     ListTile(
-                      leading: const Icon(Icons.people_outline_rounded),
-                      title: Text(strings.participants),
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        onViewAudience!();
-                      },
-                    ),
-                  if (onOpenHostTools != null)
-                    ListTile(
-                      leading: const Icon(Icons.tune_rounded),
-                      title: Text(strings.isZh ? '主播工具' : 'Host tools'),
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        onOpenHostTools!();
-                      },
-                    ),
-                  if (onOpenBackgroundEffects != null)
-                    ListTile(
-                      leading: const Icon(Icons.blur_on_outlined),
-                      title: Text(strings.virtualBackground),
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        onOpenBackgroundEffects!();
-                      },
-                    ),
-                  if (onToggleVideoFit != null)
-                    ListTile(
-                      leading: Icon(
-                        videoFit == BoxFit.contain
-                            ? Icons.crop_free_rounded
-                            : Icons.fit_screen_rounded,
-                      ),
                       title: Text(
-                        videoFit == BoxFit.contain
-                            ? strings.fillLiveScreen
-                            : strings.showFullVideo,
+                        strings.isZh ? '显示选项' : 'Display options',
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        onToggleVideoFit!();
-                      },
                     ),
-                  if (onToggleCleanScreen != null)
-                    ListTile(
-                      leading: const Icon(Icons.fullscreen_rounded),
-                      title: Text(strings.isZh ? '清屏' : 'Hide controls'),
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        onToggleCleanScreen!();
-                      },
-                    ),
-                  if (extraTopActions.isNotEmpty)
-                    Wrap(spacing: 8, runSpacing: 8, children: extraTopActions),
-                ],
+                    if (onViewAudience != null)
+                      ListTile(
+                        leading: const Icon(Icons.people_outline_rounded),
+                        title: Text(strings.participants),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          onViewAudience!();
+                        },
+                      ),
+                    if (onOpenHostTools != null)
+                      ListTile(
+                        leading: const Icon(Icons.tune_rounded),
+                        title: Text(strings.isZh ? '主播工具' : 'Host tools'),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          onOpenHostTools!();
+                        },
+                      ),
+                    if (onOpenBackgroundEffects != null)
+                      ListTile(
+                        leading: const Icon(Icons.blur_on_outlined),
+                        title: Text(strings.virtualBackground),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          onOpenBackgroundEffects!();
+                        },
+                      ),
+                    if (onToggleVideoFit != null)
+                      ListTile(
+                        leading: Icon(
+                          videoFit == BoxFit.contain
+                              ? Icons.crop_free_rounded
+                              : Icons.fit_screen_rounded,
+                        ),
+                        title: Text(
+                          videoFit == BoxFit.contain
+                              ? strings.fillLiveScreen
+                              : strings.showFullVideo,
+                        ),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          onToggleVideoFit!();
+                        },
+                      ),
+                    if (onToggleCleanScreen != null)
+                      ListTile(
+                        leading: const Icon(Icons.fullscreen_rounded),
+                        title: Text(strings.isZh ? '清屏' : 'Hide controls'),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          onToggleCleanScreen!();
+                        },
+                      ),
+                    if (extraTopActions.isNotEmpty)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: extraTopActions,
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

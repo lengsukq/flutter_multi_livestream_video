@@ -70,7 +70,7 @@ class RealtimeMeetingTopBar extends StatelessWidget {
           child: SizedBox(
             // Give accessibility text enough vertical room without making
             // the normal meeting header taller on phones and tablets.
-            height: MediaQuery.textScalerOf(context).scale(17) >= 28 ? 84 : 60,
+            height: MediaQuery.textScalerOf(context).scale(17) >= 28 ? 84 : 56,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final small =
@@ -92,7 +92,9 @@ class RealtimeMeetingTopBar extends StatelessWidget {
                         ),
                       if (!small && brand != null) ...[
                         brand!,
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 14),
+                        Container(width: 1, height: 26, color: style.border),
+                        const SizedBox(width: 14),
                       ],
                       if (constraints.maxWidth >= 600 && brand == null) ...[
                         Container(

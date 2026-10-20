@@ -240,12 +240,24 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(RealtimePreJoinJoinButton), findsOneWidget);
         expect(find.text('Lesson plan', skipOffstage: false), findsOneWidget);
+        expect(find.byType(RealtimePreJoinReadinessCard), findsOneWidget);
         expect(tester.takeException(), isNull);
+        // Devices are collapsed by default; the gear on the preview reveals
+        // them, which keeps the green room balanced next to the join column.
+        expect(
+          find.text('System default', skipOffstage: false),
+          findsNothing,
+        );
+        await captureDesign(tester, 'green-room-${size.width.toInt()}');
+        await tester.tap(find.byTooltip('Device settings'));
+        await tester.pumpAndSettle();
         expect(
           find.text('System default', skipOffstage: false),
           findsNWidgets(3),
         );
-        await captureDesign(tester, 'green-room-${size.width.toInt()}');
+        if (size.width == 1440) {
+          await captureDesign(tester, 'green-room-settings-1440');
+        }
         await tester.ensureVisible(find.byType(RealtimePreJoinJoinButton));
         await tester.tap(find.byType(RealtimePreJoinJoinButton));
         await tester.pumpAndSettle();

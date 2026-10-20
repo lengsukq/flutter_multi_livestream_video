@@ -178,10 +178,18 @@ class _UnderlineTabs extends StatelessWidget {
             ),
           ),
           if (onClose != null)
-            IconButton(
-              tooltip: 'Close Sidebar',
-              onPressed: onClose,
-              icon: const Icon(Icons.close_rounded, size: 20),
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: SizedBox(
+                width: 32,
+                height: 32,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  tooltip: 'Close Sidebar',
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                ),
+              ),
             ),
         ],
       ),
@@ -213,7 +221,7 @@ class _UnderlineTabButton extends StatelessWidget {
         child: AnimatedContainer(
           duration: RealtimeUiTokens.animFast,
           height: 51,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 7),
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
@@ -228,14 +236,21 @@ class _UnderlineTabButton extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                   color: selected ? style.text : style.textMuted,
                 ),
               ),
               if (badge case final badge?) ...[
-                const SizedBox(width: 5),
-                RealtimeBadge(text: '$badge'),
+                const SizedBox(width: 4),
+                RealtimeBadge(
+                  text: '$badge',
+                  fontSize: 10,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 1,
+                  ),
+                ),
               ],
             ],
           ),
@@ -253,7 +268,9 @@ class _ChatTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = RealtimeStyle.of(context);
-    if (pinnedMessage == null) return const RealtimeChatPanel();
+    if (pinnedMessage == null) {
+      return const RealtimeChatPanel(timelineStyle: true);
+    }
     return Column(
       children: [
         Padding(
@@ -299,7 +316,7 @@ class _ChatTab extends StatelessWidget {
             ),
           ),
         ),
-        const Expanded(child: RealtimeChatPanel()),
+        const Expanded(child: RealtimeChatPanel(timelineStyle: true)),
       ],
     );
   }
