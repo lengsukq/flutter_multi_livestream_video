@@ -272,6 +272,7 @@ class RealtimePreJoinController extends ChangeNotifier {
     return MediaPreJoinResult(
       role: result.role,
       providerId: result.providerId,
+      meetingMode: result.meetingMode,
       backgroundCapabilities: result.backgroundCapabilities,
       checks: [
         for (final check in result.checks)

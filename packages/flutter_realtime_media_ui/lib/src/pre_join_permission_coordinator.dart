@@ -75,6 +75,7 @@ class PreJoinPermissionCoordinator {
     );
     return MediaPreJoinResult(
       role: result.role,
+      meetingMode: result.meetingMode,
       providerId: result.providerId,
       backgroundCapabilities: result.backgroundCapabilities,
       checks: [

@@ -73,7 +73,7 @@ class _RoomRtcDataPanelState extends State<RoomRtcDataPanel> {
             padding: const EdgeInsets.only(right: 10),
             child: RealtimePill(
               label: strings.rtcData,
-              foreground: RealtimeUiTokens.primary,
+              foreground: RealtimeUiTokens.text,
               background: RealtimeUiTokens.primarySubtle,
               borderColor: RealtimeUiTokens.primaryBorder,
             ),
@@ -93,10 +93,7 @@ class _RoomRtcDataPanelState extends State<RoomRtcDataPanel> {
           ),
           IconButton(
             onPressed: _sending ? null : _send,
-            icon: const Icon(
-              Icons.send_rounded,
-              color: RealtimeUiTokens.primary,
-            ),
+            icon: const Icon(Icons.send_rounded, color: RealtimeUiTokens.text),
           ),
         ],
       ),

@@ -20,7 +20,8 @@ void main() {
       );
       expect(captured, same(RealtimeStyle.light));
       expect(captured!.primary, RealtimeUiTokens.primary);
-      expect(captured!.background, const Color(0xFFF5F5F7));
+      expect(captured!.primary, const Color(0xFFF5C518));
+      expect(captured!.background, const Color(0xFFE9EDF2));
       expect(find.text('Legacy import'), findsOneWidget);
     },
   );

@@ -204,11 +204,11 @@ class BackgroundEffectSelector extends StatelessWidget {
                               right: 4,
                               child: CircleAvatar(
                                 radius: 8,
-                                backgroundColor: RealtimeUiTokens.iosBlue,
+                                backgroundColor: RealtimeUiTokens.accent,
                                 child: Icon(
                                   Icons.check,
                                   size: 11,
-                                  color: Colors.white,
+                                  color: RealtimeUiTokens.onAccent,
                                 ),
                               ),
                             ),

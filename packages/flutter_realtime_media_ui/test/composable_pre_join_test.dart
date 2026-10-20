@@ -7,6 +7,26 @@ import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'permission refresh preserves the authoritative meeting policy',
+    () async {
+      final controller = RealtimePreJoinController(
+        runCheck: () async => const MediaPreJoinResult(
+          role: MediaRole.participant,
+          meetingMode: MediaMeetingMode.standard,
+          checks: [],
+        ),
+        openPreview: (_, _) async => null,
+        permissionRequester: const _PermissionRequester(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+      expect(controller.result?.meetingMode, MediaMeetingMode.standard);
+      await controller.refreshPermissions();
+      expect(controller.result?.meetingMode, MediaMeetingMode.standard);
+    },
+  );
+
   test('restarted checks ignore the older result', () async {
     final earlier = Completer<MediaPreJoinResult>();
     var calls = 0;
@@ -248,6 +268,130 @@ void main() {
       expect(find.byIcon(Icons.help_outline_rounded), findsNothing);
     },
   );
+
+  testWidgets(
+    'microphone meter stays silent with no real provider audio levels',
+    (tester) async {
+      final controller = RealtimePreJoinController(
+        runCheck: () async => _check(role: MediaRole.participant),
+        openPreview: (_, _) async => _Preview(),
+        permissionRequester: const _PermissionRequester(),
+      );
+      addTearDown(controller.dispose);
+      await controller.initialize();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RealtimePreJoinScope(
+            controller: controller,
+            child: const Scaffold(
+              body: Column(
+                children: [
+                  RealtimeMicrophoneLevelMeter(),
+                  RealtimeSpeakingBars(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.bySemanticsLabel('Microphone level'), findsOneWidget);
+      final meterSemantics = tester.getSemantics(
+        find.byType(RealtimeMicrophoneLevelMeter),
+      );
+      expect(meterSemantics.value, '0 of 16');
+
+      await controller.setMicrophoneEnabled(true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final activeMeterSemantics = tester.getSemantics(
+        find.byType(RealtimeMicrophoneLevelMeter),
+      );
+      expect(activeMeterSemantics.value, '0 of 16');
+
+      await controller.setMicrophoneEnabled(false);
+      await tester.pump();
+      final offMeterSemantics = tester.getSemantics(
+        find.byType(RealtimeMicrophoneLevelMeter),
+      );
+      expect(offMeterSemantics.value, '0 of 16');
+    },
+  );
+
+  testWidgets('meter follows actual samples and clears on mute', (
+    tester,
+  ) async {
+    final preview = _PreviewWithLevels();
+    final controller = RealtimePreJoinController(
+      runCheck: () async => _check(role: MediaRole.participant),
+      openPreview: (_, _) async => preview,
+      permissionRequester: const _PermissionRequester(),
+    );
+    addTearDown(controller.dispose);
+    await controller.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RealtimePreJoinScope(
+          controller: controller,
+          child: const Scaffold(body: RealtimeMicrophoneLevelMeter()),
+        ),
+      ),
+    );
+    await controller.setMicrophoneEnabled(true);
+    await tester.pump();
+    expect(
+      tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
+      '0 of 16',
+    );
+
+    preview.emitLevel(0.20);
+    await tester.pump();
+    expect(
+      tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
+      isNot('0 of 16'),
+    );
+    // Without more capture samples, the visualizer expires the stale peak.
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(
+      tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
+      '0 of 16',
+    );
+    preview.emitLevel(0.20);
+    await tester.pump();
+    expect(
+      tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
+      isNot('0 of 16'),
+    );
+    preview.emitLevel(0);
+    await tester.pump();
+    expect(
+      tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
+      '0 of 16',
+    );
+
+    preview.emitLevel(0.20);
+    await tester.pump();
+    await controller.setMicrophoneEnabled(false);
+    await tester.pump();
+    expect(
+      tester.getSemantics(find.byType(RealtimeMicrophoneLevelMeter)).value,
+      '0 of 16',
+    );
+    await preview.closeLevels();
+  });
+}
+
+class _PreviewWithLevels extends _Preview
+    implements MediaLocalPreviewAudioLevels {
+  final _samples = StreamController<double>.broadcast(sync: true);
+
+  @override
+  Stream<double> get microphoneLevels => _samples.stream;
+
+  void emitLevel(double value) => _samples.add(value);
+  Future<void> closeLevels() => _samples.close();
 }
 
 class _GrantOnRequest implements MediaPermissionRequester {

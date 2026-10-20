@@ -31,6 +31,9 @@ class MediaParticipantTile extends StatelessWidget {
         ? strings.participant
         : participant.displayName;
     final speaking = participant.isSpeaking;
+    final radius = borderless
+        ? 0.0
+        : RealtimeUiThemeExtension.of(context).stageRadius;
 
     Widget tile = AnimatedContainer(
       duration: RealtimeUiTokens.animNormal,
@@ -38,30 +41,19 @@ class MediaParticipantTile extends StatelessWidget {
       decoration: borderless
           ? null
           : BoxDecoration(
-              gradient: style.glassGradient,
-              borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+              color: style.tile,
+              borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color: speaking
-                    ? const Color(0xFF10B981)
+                    ? style.speak
                     : isFocused
-                    ? style.primary
+                    ? style.accent
                     : style.border,
-                width: speaking || isFocused ? 2.2 : 1.1,
+                width: speaking || isFocused ? 2 : 1,
               ),
-              boxShadow: speaking
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.22),
-                        blurRadius: 20,
-                        offset: const Offset(0, 6),
-                      ),
-                    ]
-                  : style.cardShadow,
             ),
       child: ClipRRect(
-        borderRadius: borderless
-            ? BorderRadius.zero
-            : BorderRadius.circular(RealtimeUiTokens.cardRadius - 2),
+        borderRadius: BorderRadius.circular(radius),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -78,27 +70,26 @@ class MediaParticipantTile extends StatelessWidget {
                 ),
               )
             else
-              Container(
-                color: style.surfaceSubtle,
-                alignment: Alignment.center,
-                child: AnimatedContainer(
-                  duration: RealtimeUiTokens.animNormal,
-                  padding: EdgeInsets.all(speaking ? 8 : 0),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: speaking
-                        ? Border.all(
-                            color: const Color(
-                              0xFF10B981,
-                            ).withValues(alpha: 0.45),
-                            width: 2.5,
-                          )
-                        : null,
-                  ),
-                  child: RealtimeAvatar(
-                    name: name,
-                    avatarUrl: participant.avatarUrl,
-                    size: borderless ? 88 : 64,
+              ColoredBox(
+                color: style.tile,
+                child: Center(
+                  child: AnimatedContainer(
+                    duration: RealtimeUiTokens.animNormal,
+                    padding: EdgeInsets.all(speaking ? 8 : 0),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: speaking
+                          ? Border.all(
+                              color: style.speak.withValues(alpha: 0.55),
+                              width: 2.5,
+                            )
+                          : null,
+                    ),
+                    child: RealtimeAvatar(
+                      name: name,
+                      avatarUrl: participant.avatarUrl,
+                      size: borderless ? 88 : 64,
+                    ),
                   ),
                 ),
               ),
@@ -112,93 +103,62 @@ class MediaParticipantTile extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: style.surface.withValues(
-                      alpha: style.isDark ? 0.85 : 0.92,
-                    ),
-                    borderRadius: BorderRadius.circular(
-                      RealtimeUiTokens.pillRadius,
-                    ),
+                    color: style.surface.withValues(alpha: 0.94),
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: style.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: style.isDark ? 0.25 : 0.08,
-                        ),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                    boxShadow: style.cardShadow,
                   ),
                   child: Icon(
                     isFocused
                         ? Icons.grid_view_rounded
                         : Icons.open_in_full_rounded,
                     size: 13,
-                    color: style.textMuted,
+                    color: style.textSecondary,
                   ),
                 ),
               ),
             if (showNameTag)
               Positioned(
-                left: 10,
-                bottom: 10,
+                left: 8,
+                bottom: 8,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 240),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      RealtimeUiTokens.pillRadius,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
                     ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.65),
-                        borderRadius: BorderRadius.circular(
-                          RealtimeUiTokens.pillRadius,
-                        ),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          width: 0.6,
-                        ),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              '$name${participant.isLocal ? strings.youSuffix : ''}',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                                letterSpacing: -0.2,
-                              ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0C121C).withValues(alpha: 0.62),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '$name${participant.isLocal ? strings.youSuffix : ''}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              letterSpacing: -0.1,
                             ),
                           ),
-                          const SizedBox(width: 4),
+                        ),
+                        const SizedBox(width: 4),
+                        if (speaking)
+                          _SpeakingBars(color: style.speak)
+                        else
                           Icon(
                             participant.isMuted
                                 ? Icons.mic_off_rounded
                                 : Icons.mic_rounded,
-                            size: 13,
-                            color: participant.isMuted
-                                ? const Color(0xFFFF453A)
-                                : speaking
-                                ? const Color(0xFF30D158)
-                                : Colors.white70,
+                            size: 12,
+                            color: Colors.white.withValues(alpha: 0.8),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
                 ),
@@ -212,10 +172,84 @@ class MediaParticipantTile extends StatelessWidget {
       tile = RealtimeGlassPressable(
         onTap: onTap,
         pressedScale: 0.985,
-        borderRadius: RealtimeUiTokens.cardRadius,
+        borderRadius: radius,
         child: tile,
       );
     }
     return tile;
+  }
+}
+
+/// Three animated bars shown next to a speaking participant.
+class _SpeakingBars extends StatefulWidget {
+  const _SpeakingBars({required this.color});
+  final Color color;
+
+  @override
+  State<_SpeakingBars> createState() => _SpeakingBarsState();
+}
+
+class _SpeakingBarsState extends State<_SpeakingBars>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return SizedBox(
+        width: 14,
+        height: 12,
+        child: Row(
+          children: [
+            for (var i = 0; i < 3; i++)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: i == 2 ? 0 : 2),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: widget.color,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+    return SizedBox(
+      width: 14,
+      height: 12,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var i = 0; i < 3; i++)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: i == 2 ? 0 : 2),
+                  child: Container(
+                    height: 4 + 8 * ((i * 0.27 + _controller.value) % 1),
+                    decoration: BoxDecoration(
+                      color: widget.color,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_core/flutter_realtime_media_core.dart';
@@ -27,6 +28,12 @@ class RealtimePreJoinScope extends InheritedWidget {
       'A RealtimePreJoinScope is required above this component',
     );
     return scope!.controller;
+  }
+
+  static RealtimePreJoinController? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<RealtimePreJoinScope>()
+        ?.controller;
   }
 
   @override
@@ -358,7 +365,26 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             RealtimeCupertinoSwitchRow(
-              title: Text(strings.microphone),
+              title: LayoutBuilder(
+                builder: (context, constraints) => constraints.maxWidth < 116
+                    ? Text(strings.microphone)
+                    : Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              strings.microphone,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const SizedBox(
+                            width: 84,
+                            child: RealtimeMicrophoneLevelMeter(),
+                          ),
+                        ],
+                      ),
+              ),
               subtitle: !micHasPermission
                   ? Text(
                       micBlocked
@@ -376,7 +402,7 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
                 child: Icon(
                   Icons.mic_rounded,
                   size: 16,
-                  color: RealtimeUiTokens.iosBlue,
+                  color: RealtimeUiTokens.text,
                 ),
               ),
               statusWidget: _permissionIndicator(
@@ -462,13 +488,19 @@ class RealtimePreJoinMediaControls extends StatelessWidget {
 }
 
 class RealtimePreJoinDevicePicker extends StatelessWidget {
-  const RealtimePreJoinDevicePicker({super.key, required this.kind});
+  const RealtimePreJoinDevicePicker({
+    super.key,
+    required this.kind,
+    this.footer,
+  });
   final MediaDeviceKind kind;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
     final controller = RealtimePreJoinScope.of(context);
     final strings = RealtimeStrings.of(context);
+    final style = RealtimeStyle.of(context);
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
@@ -476,7 +508,7 @@ class RealtimePreJoinDevicePicker extends StatelessWidget {
         final devices = controller.devices
             .where((device) => device.kind == kind)
             .toList();
-        if (preview == null || devices.isEmpty) return const SizedBox.shrink();
+        if (preview == null) return const SizedBox.shrink();
         final selected = switch (kind) {
           MediaDeviceKind.microphone => preview.settings.microphone,
           MediaDeviceKind.camera => preview.settings.camera,
@@ -492,38 +524,290 @@ class RealtimePreJoinDevicePicker extends StatelessWidget {
           MediaDeviceKind.audioOutput => strings.speaker,
         };
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          child: DropdownButtonFormField<MediaDevice>(
-            key: ValueKey((kind, initial?.id)),
-            initialValue: initial,
-            decoration: InputDecoration(
-              isDense: true,
-              labelText: label,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
+        // Reference green-room field: a small label above a 40 pt filled
+        // select, not a floating-label form field.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 2, bottom: 6),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: style.textMuted,
+                ),
               ),
             ),
-            items: [
-              for (final device in devices)
-                DropdownMenuItem(value: device, child: Text(device.label)),
-            ],
-            onChanged: controller.busy
-                ? null
-                : (device) {
-                    if (device != null) {
-                      unawaited(controller.selectDevice(device));
-                    }
-                  },
+            Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: style.surfaceSubtle,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: style.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<MediaDevice>(
+                  key: ValueKey((kind, initial?.id)),
+                  value: initial,
+                  hint: Text(
+                    selected?.label ??
+                        (strings.isZh ? '系统默认' : 'System default'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: RealtimeFonts.bodyOf(context),
+                      fontSize: 13,
+                      color: initial != null ? style.text : style.textMuted,
+                    ),
+                  ),
+                  isExpanded: true,
+                  isDense: true,
+                  borderRadius: BorderRadius.circular(12),
+                  icon: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: style.textMuted,
+                  ),
+                  style: TextStyle(
+                    fontFamily: RealtimeFonts.bodyOf(context),
+                    fontSize: 13,
+                    color: style.text,
+                  ),
+                  items: [
+                    for (final device in devices)
+                      DropdownMenuItem(
+                        value: device,
+                        child: Text(
+                          device.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: controller.busy || devices.isEmpty
+                      ? null
+                      : (device) {
+                          if (device != null) {
+                            unawaited(controller.selectDevice(device));
+                          }
+                        },
+                ),
+              ),
+            ),
+            if (footer != null) ...[const SizedBox(height: 8), footer!],
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Real input-level meter. An enabled microphone is not evidence of sound.
+class RealtimeMicrophoneLevelMeter extends StatelessWidget {
+  const RealtimeMicrophoneLevelMeter({super.key, this.active});
+
+  /// Optional override for whether the microphone is active. If omitted,
+  /// reads `controller.preview?.settings.microphoneEnabled` from [RealtimePreJoinScope].
+  final bool? active;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = RealtimePreJoinScope.maybeOf(context);
+    if (controller == null) {
+      return const _RealtimeMicrophoneLevelMeterVisual(level: 0);
+    }
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) {
+        final micOn =
+            active ?? (controller.preview?.settings.microphoneEnabled ?? false);
+        final preview = controller.preview;
+        final levels = micOn && preview is MediaLocalPreviewAudioLevels
+            ? (preview as MediaLocalPreviewAudioLevels).microphoneLevels
+            : null;
+        return StreamBuilder<double>(
+          // Some native visualizers stop reporting during silence. Expire the
+          // last peak rather than leave the microphone visibly speaking.
+          stream: levels?.timeout(
+            const Duration(milliseconds: 600),
+            onTimeout: (sink) => sink.add(0),
+          ),
+          initialData: 0,
+          builder: (context, snapshot) => _RealtimeMicrophoneLevelMeterVisual(
+            level: levels == null ? 0 : (snapshot.data ?? 0),
           ),
         );
       },
     );
   }
+}
+
+class _RealtimeMicrophoneLevelMeterVisual extends StatelessWidget {
+  const _RealtimeMicrophoneLevelMeterVisual({required this.level});
+  final double level;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    // Only real input moves the waveform. The noise floor stays flat and
+    // measured levels are compressed to preserve resolution for normal voice.
+    final cleanLevel = level.isFinite ? (level - 0.015).clamp(0.0, 1.0) : 0.0;
+    final strength = sqrt((cleanLevel / 0.4).clamp(0.0, 1.0));
+    final lit = (strength * 16).round().clamp(0, 16);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+
+    return Semantics(
+      label: 'Microphone level',
+      value: '$lit of 16',
+      child: SizedBox(
+        height: 20,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            for (var i = 0; i < 16; i++) ...[
+              if (i > 0) const SizedBox(width: 2),
+              Expanded(
+                child: AnimatedContainer(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 150),
+                  curve: Curves.easeOutCubic,
+                  // Nonuniform *shape*, not simulated audio activity:
+                  // every bar's height scales only with captured amplitude.
+                  height:
+                      3.5 +
+                      16 * strength * (0.42 + 0.58 * sin(i * 0.85 + 0.6).abs()),
+                  decoration: BoxDecoration(
+                    color: lit == 0
+                        ? style.borderStrong.withValues(alpha: 0.55)
+                        : style.speakStrong.withValues(
+                            alpha: 0.5 + 0.5 * strength,
+                          ),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Animated 3-bar equalizer widget directly matching the Tandem `.bars` speaking indicator.
+class RealtimeSpeakingBars extends StatefulWidget {
+  const RealtimeSpeakingBars({super.key, this.color, this.height = 12});
+
+  final Color? color;
+  final double height;
+
+  @override
+  State<RealtimeSpeakingBars> createState() => _RealtimeSpeakingBarsState();
+}
+
+class _RealtimeSpeakingBarsState extends State<RealtimeSpeakingBars>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    final barColor = widget.color ?? style.speak;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    if (reduceMotion) {
+      return SizedBox(
+        height: widget.height,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _buildBar(widget.height * 0.4, barColor),
+            const SizedBox(width: 2),
+            _buildBar(widget.height * 0.8, barColor),
+            const SizedBox(width: 2),
+            _buildBar(widget.height * 0.5, barColor),
+          ],
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        final h1 = _computeHeight(t, 0.0);
+        final h2 = _computeHeight(t, 0.167);
+        final h3 = _computeHeight(t, 0.333);
+        return SizedBox(
+          height: widget.height,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _buildBar(h1, barColor),
+              const SizedBox(width: 2),
+              _buildBar(h2, barColor),
+              const SizedBox(width: 2),
+              _buildBar(h3, barColor),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  double _computeHeight(double progress, double offset) {
+    final phase = (progress - offset) % 1.0;
+    final sine = sin(phase * pi);
+    final minH = widget.height * (4.0 / 12.0);
+    final maxH = widget.height;
+    return minH + (maxH - minH) * sine.abs();
+  }
+
+  Widget _buildBar(double height, Color color) {
+    return Container(
+      width: 3,
+      height: height.clamp(2.0, widget.height),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+  }
+}
+
+/// Retained only for source compatibility with existing UI integrations.
+/// The four non-functional preparation toggles have been removed.
+@Deprecated('Removed pre-join toggles; use explicit media and effect controls.')
+class RealtimePreJoinToggles extends StatelessWidget {
+  const RealtimePreJoinToggles({super.key});
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class RealtimePreJoinBackgroundSelector extends StatelessWidget {
@@ -629,24 +913,47 @@ class RealtimePreJoinJoinButton extends StatelessWidget {
     final controller = RealtimePreJoinScope.of(context);
     return ListenableBuilder(
       listenable: controller,
-      builder: (context, _) => FilledButton.icon(
-        onPressed: controller.canEnter
+      builder: (context, _) {
+        final resolvedLabel =
+            label ??
+            (controller.joining
+                ? RealtimeStrings.of(context).enteringRoom
+                : RealtimeStrings.of(context).join);
+        final onPressed = controller.canEnter
             ? () => unawaited(controller.enter(onEnter))
-            : null,
-        icon: controller.joining
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : const Icon(Icons.login_rounded),
-        label: Text(
-          label ??
-              (controller.joining
-                  ? RealtimeStrings.of(context).enteringRoom
-                  : RealtimeStrings.of(context).join),
-        ),
-      ),
+            : null;
+        // FilledButton.icon lays its child out in a non-flexible Row, so a
+        // long localized label overflows in a 320 pt column at 200% text.
+        // Compose the same appearance with a Flexible caption instead.
+        return FilledButton(
+          onPressed: onPressed,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (controller.joining)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                const Icon(Icons.login_rounded, size: 18),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  resolvedLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
