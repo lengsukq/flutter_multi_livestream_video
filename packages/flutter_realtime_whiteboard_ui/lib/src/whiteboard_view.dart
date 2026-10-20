@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
@@ -11,10 +12,49 @@ import 'whiteboard_strings.dart';
 /// Reference classroom shape: a 60 pt vertical teaching-tool rail on the left,
 /// a page-tab bar across the top and a 16:9 board with zoom controls. The rail
 /// only exposes tools the whiteboard core can actually execute.
+/// Share drawing selections with a host-provided toolbar without duplicating
+/// the whiteboard's state or coupling it to the room UI.
+class WhiteboardToolsController extends ChangeNotifier {
+  AnnotationTool _tool = AnnotationTool.pen;
+  int _color = 0xff1f2a3c;
+  bool _drawingEnabled = true;
+
+  AnnotationTool get tool => _tool;
+  int get color => _color;
+  bool get drawingEnabled => _drawingEnabled;
+
+  void selectTool(AnnotationTool tool) {
+    _tool = tool;
+    _drawingEnabled = true;
+    notifyListeners();
+  }
+
+  void selectColor(int color) {
+    if (_color == color) return;
+    _color = color;
+    notifyListeners();
+  }
+
+  void toggleDrawing() {
+    _drawingEnabled = !_drawingEnabled;
+    notifyListeners();
+  }
+}
+
 class WhiteboardView extends StatefulWidget {
-  const WhiteboardView({super.key, required this.session, this.onStop});
+  const WhiteboardView({
+    super.key,
+    required this.session,
+    this.onStop,
+    this.toolsController,
+    this.showToolRail = true,
+  });
   final WhiteboardSession session;
   final VoidCallback? onStop;
+
+  /// Supplying a controller lets the room's leading rail own these controls.
+  final WhiteboardToolsController? toolsController;
+  final bool showToolRail;
   @override
   State<WhiteboardView> createState() => _WhiteboardViewState();
 }
@@ -22,11 +62,11 @@ class WhiteboardView extends StatefulWidget {
 class _WhiteboardViewState extends State<WhiteboardView> {
   Object? _error;
   bool _busy = false;
-  AnnotationTool _tool = AnnotationTool.pen;
-  int _selectedColor = 0xff1f2a3c;
-  bool _drawingEnabled = true;
+  final _localTools = WhiteboardToolsController();
+  WhiteboardToolsController get _tools => widget.toolsController ?? _localTools;
   int _zoomPercent = 100;
   final _transform = TransformationController();
+  final _viewportKey = GlobalKey();
 
   static const _penColors = <int>[
     0xff1f2a3c,
@@ -52,6 +92,7 @@ class _WhiteboardViewState extends State<WhiteboardView> {
   @override
   void dispose() {
     _transform.dispose();
+    _localTools.dispose();
     super.dispose();
   }
 
@@ -75,116 +116,124 @@ class _WhiteboardViewState extends State<WhiteboardView> {
     final next = scale.clamp(1.0, 3.0);
     final size = _viewportSize;
     if (size == null) return;
-    // Zoom around the viewport center so the visible region stays put.
+    // Keep the scene point under the viewport center fixed while zooming.
+    // A Matrix4 applies its rightmost operations first: scaling before
+    // translating also scales the center offset, drifting the board on every
+    // zoom step and eventually moving strokes out of the visible viewport.
     final center = Offset(size.width / 2, size.height / 2);
     final scene = _transform.toScene(center);
-    final matrix = Matrix4.identity()
-      ..scaleByDouble(next, next, 1, 1)
-      ..translateByDouble(-scene.dx, -scene.dy, 0, 1)
-      ..translateByDouble(center.dx, center.dy, 0, 1);
-    _transform.value = matrix;
+    if (next == 1) {
+      _transform.value = Matrix4.identity();
+    } else {
+      final translation = center - scene * next;
+      _transform.value = Matrix4.identity()
+        ..translateByDouble(translation.dx, translation.dy, 0, 1)
+        ..scaleByDouble(next, next, 1, 1);
+    }
     setState(() => _zoomPercent = (next * 100).round());
   }
 
   Size? _viewportSize;
 
   @override
-  Widget build(BuildContext context) => StreamBuilder<WhiteboardState>(
-    stream: widget.session.states,
-    initialData: widget.session.state,
-    builder: (context, snapshot) {
-      final state = snapshot.data;
-      final s = WhiteboardStrings.of(context);
-      if (state == null) {
-        return Center(
-          child: _error == null
-              ? const CircularProgressIndicator()
-              : Text('$_error'),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _tools,
+    builder: (context, _) => StreamBuilder<WhiteboardState>(
+      stream: widget.session.states,
+      initialData: widget.session.state,
+      builder: (context, snapshot) {
+        final state = snapshot.data;
+        final s = WhiteboardStrings.of(context);
+        if (state == null) {
+          return Center(
+            child: _error == null
+                ? const CircularProgressIndicator()
+                : Text('$_error'),
+          );
+        }
+        final activeIndex = state.pages.indexWhere(
+          (p) => p.id == state.activePageId,
         );
-      }
-      final activeIndex = state.pages.indexWhere(
-        (p) => p.id == state.activePageId,
-      );
-      final style = RealtimeStyle.of(context);
-      final rail = state.canEdit ? _buildToolRail(context, state) : null;
-
-      return Material(
-        color: style.surface,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final wide =
-                RealtimeBreakpoints.isWide(
-                  context,
-                  MediaQuery.sizeOf(context).width,
-                ) &&
-                constraints.maxWidth >= 600 &&
-                constraints.maxHeight >= 420;
-            final body = Column(
-              children: [
-                _buildPageBar(context, state, activeIndex, s),
-                if (!wide && state.canEdit)
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                    child: _buildHorizontalToolbar(context, state),
-                  ),
-                if (_error != null)
-                  Text(
-                    '$_error',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      wide ? 8 : 12,
-                      8,
-                      wide ? 8 : 12,
-                      12,
-                    ),
-                    child: Center(
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: RealtimeBoardSurface(
-                          radius: RealtimeUiThemeExtension.of(
-                            context,
-                          ).stageRadius,
-                          child: LayoutBuilder(
-                            builder: (context, board) {
-                              _viewportSize = board.biggest;
-                              return AnnotationSurface(
-                                key: ValueKey(state.canvas.canvasId),
-                                session: widget.session,
-                                tool: _tool,
-                                selectedColor: _selectedColor,
-                                drawingEnabled: _drawingEnabled,
-                                toolbarPlacement:
-                                    AnnotationToolbarPlacement.none,
-                                transformationController: _transform,
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
+        final style = RealtimeStyle.of(context);
+        final rail = state.canEdit && widget.showToolRail
+            ? Container(
+                width: 60,
+                color: style.surface,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: WhiteboardToolRail(
+                    session: widget.session,
+                    controller: _tools,
                   ),
                 ),
-              ],
-            );
-            if (rail == null) return body;
-            if (!wide) return body;
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                rail,
-                Expanded(child: body),
-              ],
-            );
-          },
-        ),
-      );
-    },
+              )
+            : null;
+
+        return Material(
+          color: style.background,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide =
+                  RealtimeBreakpoints.isWide(
+                    context,
+                    MediaQuery.sizeOf(context).width,
+                  ) &&
+                  constraints.maxWidth >= 600 &&
+                  constraints.maxHeight >= 420;
+              final body = Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildPageBar(context, state, activeIndex, s),
+                  // A narrow stage inside a wide meeting still has the
+                  // permanent outer rail. Do not add a second toolbar merely
+                  // because its available content width became small.
+                  if (!wide &&
+                      state.canEdit &&
+                      (widget.toolsController == null ||
+                          !RealtimeBreakpoints.isWide(
+                            context,
+                            MediaQuery.sizeOf(context).width,
+                          )))
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                      child: _buildHorizontalToolbar(context, state),
+                    ),
+                  if (_error != null)
+                    Text(
+                      '$_error',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  Expanded(
+                    child: _BoardCanvas(
+                      viewportKey: _viewportKey,
+                      transformationController: _transform,
+                      session: widget.session,
+                      state: state,
+                      tool: _tools.tool,
+                      selectedColor: _tools.color,
+                      drawingEnabled: _tools.drawingEnabled,
+                      onViewportSize: (size) => _viewportSize = size,
+                    ),
+                  ),
+                ],
+              );
+              if (rail == null) return body;
+              if (!wide) return body;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  rail,
+                  Expanded(child: body),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    ),
   );
 
   Widget _buildPageBar(
@@ -278,16 +327,9 @@ class _WhiteboardViewState extends State<WhiteboardView> {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Below the tablet breakpoint the fixed trailing controls cannot
-          // share a row with the page tabs, so the whole bar scrolls.
-          if (constraints.maxWidth < 640) {
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [...pageTabs, const SizedBox(width: 8), ...trailing],
-              ),
-            );
-          }
+          // Narrow bars keep the page tabs scrollable and pin the trailing
+          // actions, so stop sharing never gets clipped off-screen.
+          final narrow = constraints.maxWidth < 640;
           return Row(
             children: [
               Expanded(
@@ -296,72 +338,33 @@ class _WhiteboardViewState extends State<WhiteboardView> {
                   child: Row(children: pageTabs),
                 ),
               ),
-              const SizedBox(width: 8),
-              ...trailing,
+              if (narrow)
+                _CompactPageActions(
+                  onZoomOut: _zoomPercent <= 100
+                      ? null
+                      : () => _setZoom(_zoomPercent / 100 - .25),
+                  onZoomIn: _zoomPercent >= 300
+                      ? null
+                      : () => _setZoom(_zoomPercent / 100 + .25),
+                  onDelete: !state.canEdit
+                      ? null
+                      : (_busy || state.pages.length <= 1
+                            ? null
+                            : () => _run(
+                                () => widget.session.deletePage(
+                                  state.activePageId,
+                                ),
+                              )),
+                  onStop: widget.onStop,
+                  stopTooltip: s.t('stopSharing'),
+                )
+              else ...[
+                const SizedBox(width: 8),
+                ...trailing,
+              ],
             ],
           );
         },
-      ),
-    );
-  }
-
-  /// Vertical rails mirror the reference teaching tools. Only implemented
-  /// tools appear; the rail has no decorative dead buttons.
-  Widget _buildToolRail(BuildContext context, WhiteboardState state) {
-    final style = RealtimeStyle.of(context);
-    final s = WhiteboardStrings.of(context);
-    return Container(
-      width: 60,
-      color: style.surface,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Column(
-          children: [
-            _RailTool(
-              icon: _drawingEnabled
-                  ? Icons.pan_tool_outlined
-                  : Icons.near_me_outlined,
-              tooltip: s.t('annotate'),
-              selected: !_drawingEnabled,
-              onTap: () => setState(() => _drawingEnabled = !_drawingEnabled),
-            ),
-            const _RailDivider(),
-            for (final entry in const <(AnnotationTool, IconData, String)>[
-              (AnnotationTool.pen, Icons.edit_rounded, 'pen'),
-              (AnnotationTool.highlight, Icons.brush_rounded, 'highlight'),
-              (AnnotationTool.circle, Icons.circle_outlined, 'circle'),
-              (AnnotationTool.arrow, Icons.arrow_outward_rounded, 'arrow'),
-              (AnnotationTool.text, Icons.title_rounded, 'label'),
-            ])
-              _RailTool(
-                icon: entry.$2,
-                tooltip: s.t(entry.$3),
-                selected: _tool == entry.$1,
-                onTap: () => setState(() {
-                  _tool = entry.$1;
-                  _drawingEnabled = true;
-                }),
-              ),
-            const _RailDivider(),
-            for (final color in _penColors)
-              _ColorDot(
-                color: Color(color),
-                selected: _selectedColor == color,
-                onTap: () => setState(() => _selectedColor = color),
-              ),
-            const _RailDivider(),
-            _RailTool(
-              icon: Icons.undo_rounded,
-              tooltip: s.t('undo'),
-              onTap: _busy ? null : () => _run(widget.session.undo),
-            ),
-            _RailTool(
-              icon: Icons.delete_sweep_outlined,
-              tooltip: s.t('clear'),
-              onTap: _busy ? null : () => _run(widget.session.clear),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -390,18 +393,15 @@ class _WhiteboardViewState extends State<WhiteboardView> {
             _RailTool(
               icon: entry.$2,
               tooltip: s.t(entry.$3),
-              selected: _tool == entry.$1,
+              selected: _tools.tool == entry.$1,
               compact: true,
-              onTap: () => setState(() {
-                _tool = entry.$1;
-                _drawingEnabled = true;
-              }),
+              onTap: () => _tools.selectTool(entry.$1),
             ),
           for (final color in _penColors)
             _ColorDot(
               color: Color(color),
-              selected: _selectedColor == color,
-              onTap: () => setState(() => _selectedColor = color),
+              selected: _tools.color == color,
+              onTap: () => _tools.selectColor(color),
             ),
           _RailTool(
             icon: Icons.undo_rounded,
@@ -419,6 +419,203 @@ class _WhiteboardViewState extends State<WhiteboardView> {
       ),
     );
   }
+}
+
+/// Tool controls without a second sidebar. A room can append this inside its
+/// primary navigation rail; standalone whiteboards use it in their own rail.
+/// [horizontal] lays the same tools out in one row for the tablet rail.
+class WhiteboardToolRail extends StatefulWidget {
+  const WhiteboardToolRail({
+    super.key,
+    required this.session,
+    required this.controller,
+    this.horizontal = false,
+  });
+
+  final WhiteboardSession session;
+  final WhiteboardToolsController controller;
+  final bool horizontal;
+
+  @override
+  State<WhiteboardToolRail> createState() => _WhiteboardToolRailState();
+}
+
+class _WhiteboardToolRailState extends State<WhiteboardToolRail> {
+  bool _busy = false;
+  Object? _error;
+
+  Future<void> _run(Future<void> Function() operation) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await operation();
+    } catch (error) {
+      if (mounted) setState(() => _error = error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.controller,
+    builder: (context, _) => StreamBuilder<WhiteboardState>(
+      stream: widget.session.states,
+      initialData: widget.session.state,
+      builder: (context, snapshot) {
+        if (snapshot.data?.canEdit != true) return const SizedBox.shrink();
+        final s = WhiteboardStrings.of(context);
+        final tools = widget.controller;
+        final horizontal = widget.horizontal;
+        final divider = horizontal
+            ? const SizedBox(width: 8)
+            : const _RailDivider();
+        final items = <Widget>[
+          _RailTool(
+            icon: tools.drawingEnabled
+                ? Icons.pan_tool_outlined
+                : Icons.near_me_outlined,
+            tooltip: s.t('annotate'),
+            selected: !tools.drawingEnabled,
+            compact: horizontal,
+            onTap: tools.toggleDrawing,
+          ),
+          divider,
+          for (final entry in const <(AnnotationTool, IconData, String)>[
+            (AnnotationTool.pen, Icons.edit_rounded, 'pen'),
+            (AnnotationTool.highlight, Icons.brush_rounded, 'highlight'),
+            (AnnotationTool.circle, Icons.circle_outlined, 'circle'),
+            (AnnotationTool.arrow, Icons.arrow_outward_rounded, 'arrow'),
+            (AnnotationTool.text, Icons.title_rounded, 'label'),
+          ])
+            _RailTool(
+              icon: entry.$2,
+              tooltip: s.t(entry.$3),
+              selected: tools.tool == entry.$1,
+              compact: horizontal,
+              onTap: () => tools.selectTool(entry.$1),
+            ),
+          divider,
+          for (final color in const <int>[
+            0xff1f2a3c,
+            0xff2563eb,
+            0xffd93a3f,
+            0xfff5c518,
+          ])
+            _ColorDot(
+              color: Color(color),
+              selected: tools.color == color,
+              onTap: () => tools.selectColor(color),
+            ),
+          divider,
+          _RailTool(
+            icon: Icons.undo_rounded,
+            tooltip: s.t('undo'),
+            compact: horizontal,
+            onTap: _busy ? null : () => _run(widget.session.undo),
+          ),
+          _RailTool(
+            icon: Icons.delete_sweep_outlined,
+            tooltip: s.t('clear'),
+            compact: horizontal,
+            onTap: _busy ? null : () => _run(widget.session.clear),
+          ),
+          if (_error != null)
+            Tooltip(
+              message: '$_error',
+              child: Icon(
+                Icons.error_outline_rounded,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+        ];
+        return horizontal
+            ? Row(mainAxisSize: MainAxisSize.min, children: items)
+            : Column(mainAxisSize: MainAxisSize.min, children: items);
+      },
+    ),
+  );
+}
+
+/// Fit the drawing area to both available dimensions without overflowing the
+/// stage on short windows. The zoom viewport and annotation coordinates share
+/// the same dimensions, including after responsive layout changes.
+class _BoardCanvas extends StatelessWidget {
+  const _BoardCanvas({
+    required this.viewportKey,
+    required this.transformationController,
+    required this.session,
+    required this.state,
+    required this.tool,
+    required this.selectedColor,
+    required this.drawingEnabled,
+    required this.onViewportSize,
+  });
+
+  final GlobalKey viewportKey;
+  final TransformationController transformationController;
+  final WhiteboardSession session;
+  final WhiteboardState state;
+  final AnnotationTool tool;
+  final int selectedColor;
+  final bool drawingEnabled;
+  final ValueChanged<Size> onViewportSize;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const horizontalPadding = 8.0;
+      const verticalPadding = 8.0;
+      final width = math.max(
+        0.0,
+        math.min(
+          1100.0,
+          math.min(
+            constraints.maxWidth - horizontalPadding * 2,
+            (constraints.maxHeight - verticalPadding * 2) * 16 / 9,
+          ),
+        ),
+      );
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: width,
+            height: width * 9 / 16,
+            child: RealtimeBoardSurface(
+              radius: RealtimeUiThemeExtension.of(context).stageRadius,
+              // Pure white paper: the grid gave no drawing guidance and
+              // competed with ink, so the board reads as a blank sheet.
+              color: Colors.white,
+              showGrid: false,
+              child: LayoutBuilder(
+                key: viewportKey,
+                builder: (context, board) {
+                  onViewportSize(board.biggest);
+                  return AnnotationSurface(
+                    key: ValueKey(state.canvas.canvasId),
+                    session: session,
+                    tool: tool,
+                    selectedColor: selectedColor,
+                    drawingEnabled: drawingEnabled,
+                    toolbarPlacement: AnnotationToolbarPlacement.none,
+                    transformationController: transformationController,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _PageTab extends StatelessWidget {
@@ -460,6 +657,74 @@ class _PageTab extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Narrow page bar tail: zoom, delete and stop stay pinned while the page
+/// tabs scroll, so every action keeps a stable hit target.
+class _CompactPageActions extends StatelessWidget {
+  const _CompactPageActions({
+    required this.onZoomOut,
+    required this.onZoomIn,
+    required this.onDelete,
+    required this.onStop,
+    required this.stopTooltip,
+  });
+  final VoidCallback? onZoomOut;
+  final VoidCallback? onZoomIn;
+  final VoidCallback? onDelete;
+  final VoidCallback? onStop;
+  final String stopTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'Zoom out',
+          iconSize: 16,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          padding: EdgeInsets.zero,
+          onPressed: onZoomOut,
+          icon: const Icon(Icons.remove_rounded),
+        ),
+        IconButton(
+          tooltip: 'Zoom in',
+          iconSize: 16,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          padding: EdgeInsets.zero,
+          onPressed: onZoomIn,
+          icon: const Icon(Icons.add_rounded),
+        ),
+        if (onDelete != null)
+          IconButton(
+            tooltip: 'Delete page',
+            iconSize: 17,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.zero,
+            onPressed: onDelete,
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
+        if (onStop != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 2),
+            child: IconButton(
+              tooltip: stopTooltip,
+              iconSize: 17,
+              style: IconButton.styleFrom(
+                backgroundColor: style.speakStrong,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(32, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              onPressed: onStop,
+              icon: const Icon(Icons.stop_rounded),
+            ),
+          ),
+      ],
     );
   }
 }

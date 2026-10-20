@@ -201,7 +201,11 @@ void main() {
       expect(find.byTooltip('Add page'), findsNothing);
       expect(find.byTooltip('Delete current page'), findsNothing);
       final size = tester.getSize(find.byType(AnnotationSurface));
-      expect(size.width / size.height, closeTo(16 / 9, .005));
+      expect(
+        size.width / size.height,
+        closeTo(16 / 9, .005),
+        reason: 'Unexpected board surface dimensions: $size',
+      );
       await tester.drag(find.byType(AnnotationSurface), const Offset(40, 20));
       await tester.pumpAndSettle();
       expect(session.canvas.shapes, isEmpty);
@@ -236,4 +240,55 @@ void main() {
       await tester.runAsync(session.dispose);
     },
   );
+
+  testWidgets('zoom controls keep the board centered and drawing aligned', (
+    tester,
+  ) async {
+    final session = WhiteboardSession.local();
+    await session.start();
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: WhiteboardView(session: session)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rect = tester.getRect(find.byType(AnnotationSurface));
+    final center = Offset(rect.width / 2, rect.height / 2);
+    final viewer = tester.widget<InteractiveViewer>(
+      find.byType(InteractiveViewer),
+    );
+    final transform = viewer.transformationController!;
+
+    for (final percent in [125, 150, 175, 200, 225, 250, 275, 300]) {
+      await tester.tap(find.byTooltip('Zoom in'));
+      await tester.pumpAndSettle();
+      expect(find.text('$percent%'), findsOneWidget);
+      expect(transform.toScene(center).dx, closeTo(center.dx, .01));
+      expect(transform.toScene(center).dy, closeTo(center.dy, .01));
+    }
+
+    await tester.dragFrom(rect.center, const Offset(32, 24));
+    await tester.pumpAndSettle();
+    expect(session.canvas.shapes, hasLength(1));
+    final points = session.canvas.shapes.single.points;
+    expect(points.first.x, closeTo(.5, .01));
+    expect(points.first.y, closeTo(.5, .01));
+    expect(points.last.x, closeTo(.5 + 32 / rect.width / 3, .01));
+    expect(points.last.y, closeTo(.5 + 24 / rect.height / 3, .01));
+
+    for (final percent in [275, 250, 225, 200, 175, 150, 125, 100]) {
+      await tester.tap(find.byTooltip('Zoom out'));
+      await tester.pumpAndSettle();
+      expect(find.text('$percent%'), findsOneWidget);
+      expect(transform.toScene(center).dx, closeTo(center.dx, .01));
+      expect(transform.toScene(center).dy, closeTo(center.dy, .01));
+    }
+    await tester.dragFrom(rect.center, const Offset(32, 24));
+    await tester.pumpAndSettle();
+    expect(session.canvas.shapes, hasLength(2));
+    expect(session.canvas.shapes.last.points.first.x, closeTo(.5, .01));
+    expect(session.canvas.shapes.last.points.first.y, closeTo(.5, .01));
+  });
 }

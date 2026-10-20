@@ -175,11 +175,24 @@ class SharedContentStageBar extends StatelessWidget {
                   child: TextButton.icon(
                     onPressed: onStop,
                     style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor: Colors.white.withValues(alpha: .14),
+                      // Reference bar: a white pill with teal ink, not a
+                      // translucent ghost button.
+                      foregroundColor: style.speakStrong,
+                      backgroundColor: Colors.white,
+                      minimumSize: const Size(0, 34),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
                     ),
-                    icon: const Icon(Icons.square_rounded, size: 13),
-                    label: Text(stopTooltip ?? strings.t('stopSharing')),
+                    icon: const Icon(Icons.square_rounded, size: 12),
+                    label: Text(
+                      stopTooltip ?? strings.t('stopSharing'),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
             ],

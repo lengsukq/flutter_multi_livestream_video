@@ -19,6 +19,8 @@ class SharedContentStage extends StatelessWidget {
     this.canAnnotateScreen = false,
     this.onStopSharing,
     this.screenSharerName,
+    this.showHeader = true,
+    this.whiteboardToolsController,
   });
   final SharedContentMode mode;
   final WhiteboardSession whiteboard;
@@ -30,6 +32,11 @@ class SharedContentStage extends StatelessWidget {
   final VoidCallback? onStopSharing;
   final String? screenSharerName;
 
+  /// Room workspaces already carry stop/share controls in the dock, so they
+  /// hide this header to give the shared content the full stage height.
+  final bool showHeader;
+  final WhiteboardToolsController? whiteboardToolsController;
+
   @override
   Widget build(BuildContext context) {
     final s = WhiteboardStrings.of(context);
@@ -39,6 +46,8 @@ class SharedContentStage extends StatelessWidget {
       SharedContentMode.whiteboard => WhiteboardView(
         session: whiteboard,
         onStop: onStopSharing,
+        toolsController: whiteboardToolsController,
+        showToolRail: whiteboardToolsController == null,
       ),
       SharedContentMode.screen =>
         screen == null
@@ -46,7 +55,7 @@ class SharedContentStage extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (onStopSharing != null)
+                    if (onStopSharing != null && showHeader)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: SharedContentStageBar(
@@ -64,22 +73,28 @@ class SharedContentStage extends StatelessWidget {
               )
             : Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-                    child: SharedContentStageBar(
-                      title: s.t('screenShare'),
-                      badgeIcon: Icons.screen_share_outlined,
-                      subtitle: screenSharerName != null
-                          ? '${s.zh ? '共享者' : 'Sharer'}: $screenSharerName'
-                          : null,
-                      canAnnotate:
-                          canAnnotateScreen && screenAnnotations != null,
-                      onStop: onStopSharing,
+                  if (showHeader)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+                      child: SharedContentStageBar(
+                        title: s.t('screenShare'),
+                        badgeIcon: Icons.screen_share_outlined,
+                        subtitle: screenSharerName != null
+                            ? '${s.zh ? '共享者' : 'Sharer'}: $screenSharerName'
+                            : null,
+                        canAnnotate:
+                            canAnnotateScreen && screenAnnotations != null,
+                        onStop: onStopSharing,
+                      ),
                     ),
-                  ),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+                      padding: EdgeInsets.fromLTRB(
+                        12,
+                        showHeader ? 4 : 8,
+                        12,
+                        12,
+                      ),
                       child: Center(
                         child: AspectRatio(
                           aspectRatio: screenAspectRatio,
