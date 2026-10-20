@@ -8,7 +8,7 @@
 
 | 版本/形态 | 状态 | 如何接入 |
 | --- | --- | --- |
-| [`flutter_realtime_sdk 0.1.0-dev.9`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.9) | **已发布预览版（2026-10-19）** | 修复 Web 入会与生命周期、限制页面准备时长、呈现异步错误并校验桥协议版本 |
+| [`flutter_realtime_sdk 0.1.0-dev.10`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.10) | **已发布预览版（2026-10-20）** | 新增会议模式、组合式预览与仓库驱动的内容共享，更新会议/直播/聊天/课堂/白板 UI、内置字体和 macOS 麦克风电平表 |
 | 源码仓库 | 开发用 | Facade + 选定的 Provider/UI 内部包 |
 
 **不要混淆两种使用方式：** pub.dev 发布物把 44 个内部模块组装为**一个公开 SDK 包**；本仓库开发时仍然是多模块源码，依赖配置不同。支持列表不代表每个供应商和设备都完成实机验收，Windows/Linux、部分平台组合和第三方许可审查仍有待完成。
@@ -19,7 +19,7 @@
 
 ~~~yaml
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.9
+  flutter_realtime_sdk: ^0.1.0-dev.10
 ~~~
 
 已发布的单包 SDK **只需要一个 Dart import**：
@@ -49,10 +49,10 @@ UI 可以选择 `RealtimeRoomView`、组合式按钮/网格，或全部自己实
 
 ### Headless 摄像头及虚拟背景
 
-已发布的 **`0.1.0-dev.9`** 提供 `room.setCameraEnabled(bool)`，并且从**同一个公开 import** 导出 `DefaultRealtimeVideoEffects`。该版本还包含 Web 入会错误分类、页面准备超时保护及 UI 错误呈现。
+已发布的 **`0.1.0-dev.10`** 保留 `room.setCameraEnabled(bool)` 和 `DefaultRealtimeVideoEffects` 导出，并新增会议模式、组合式预览、仓库驱动的内容共享、更新后的会议/直播/聊天/课堂/白板 UI、内置字体和 macOS 入会前麦克风电平表。电平表读取系统默认输入设备，不代表远端实际收到音频。
 
 ~~~dart
-// 当前已发布的 dev.9 包含此接口：
+// 当前已发布的 dev.10 包含此接口：
 final realtime = Realtime(
   backendUrl: 'https://your-backend.example',
   providers: [createLivekitProvider()],

@@ -8,7 +8,7 @@ A provider-neutral Flutter SDK for **meetings, live streaming, chat, classroom i
 
 | Distribution | Status | How to integrate |
 | --- | --- | --- |
-| [`flutter_realtime_sdk 0.1.0-dev.9`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.9) | **Published** preview (2026-10-19) | Web join/lifecycle fixes, bounded room preparation, surfaced UI failures, and bridge-version validation |
+| [`flutter_realtime_sdk 0.1.0-dev.10`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.10) | **Published** preview (2026-10-20) | Meeting modes and composed previews, repository-backed shared content, refreshed SDK workspaces, bundled fonts, and a native macOS microphone meter |
 | Monorepo source packages | Development only | Facade plus selected Provider/UI modules |
 
 The hosted preview bundles 44 internal modules into **one pub.dev package**. This repository still has separate source modules, with different dependency instructions. Windows/Linux, some native vendor/device combinations, and third-party license verification remain release acceptance work.
@@ -19,7 +19,7 @@ Requires Flutter ≥ 3.47 and Dart ≥ 3.12. The combined native package require
 
 ~~~yaml
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.9
+  flutter_realtime_sdk: ^0.1.0-dev.10
 ~~~
 
 ~~~dart
@@ -45,10 +45,10 @@ Register providers explicitly. Use a **trusted backend** for short-lived credent
 
 ### Virtual-background update for Headless apps
 
-Published **`0.1.0-dev.9`** includes `room.setCameraEnabled(bool)` and exports `DefaultRealtimeVideoEffects` from the single-package import. It also includes Web join failure classification, bounded room preparation, and typed UI failure reporting:
+Published **`0.1.0-dev.10`** retains `room.setCameraEnabled(bool)` and the `DefaultRealtimeVideoEffects` export, with meeting-mode selection, composed previews, repository-backed shared content, refreshed Meeting/Live/Chat/classroom/whiteboard UI, bundled design fonts, and a native macOS pre-join microphone meter. The meter reads the system default input and does not prove remote audio delivery:
 
 ~~~dart
-// Available in the published dev.9 preview.
+// Available in the published dev.10 preview.
 final realtime = Realtime(
   backendUrl: 'https://your-backend.example',
   providers: [createLivekitProvider()],

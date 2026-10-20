@@ -133,6 +133,13 @@ only lights the level bars for samples received while the microphone is on;
 when capture is disabled or the provider does not support metering, the bars
 remain idle. The LiveKit local preview uses the already-open microphone track
 for this measurement and releases the visualizer when muted or disposed.
+On macOS, the SDK pre-join meter uses the native CoreAudio/AVAudioEngine input
+capture stream instead of relying on RTC provider visualizers (which may not
+be implemented). The stream starts only when the microphone is explicitly on,
+stops on mute/navigation, and reports capture/permission errors to the UI.
+It measures the macOS default input device, which can differ from a
+provider-selected non-default device; this is a pre-join diagnostic, not proof
+that a remote participant receives audio.
 When processed-camera effects are enabled, the runtime composes that
 video-only preview with the provider's local audio preview. This keeps camera
 effects, microphone capture, audio input/output selection and lifetime cleanup

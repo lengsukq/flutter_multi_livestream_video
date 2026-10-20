@@ -1,15 +1,15 @@
 # Flutter Realtime SDK — pub.dev 单包发布清单
 
 > **当前发布形态（2026-10-20）：** 对外唯一发布物是聚合包
-> [`flutter_realtime_sdk 0.1.0-dev.9`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.9)，
-> 该版本于 2026-10-19 发布。44 个内部源码模块与根目录 tooling workspace
-> 均保持 `publish_to: none`，不逐个发布。dev.9 包含 Web 入会/生命周期修复、
-> 页面准备超时保护、房间 UI 异步错误呈现和 Web bridge 协议版本校验。
+> [`flutter_realtime_sdk 0.1.0-dev.10`](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.10)，
+> 该版本于 2026-10-20 发布。44 个内部源码模块与根目录 tooling workspace
+> 均保持 `publish_to: none`，不逐个发布。dev.10 包含会议模式、组合式预览、仓库驱动的内容共享、
+> 更新后的 SDK 工作区 UI、内置字体和原生 macOS 入会前麦克风电平表。
 > Windows/Linux、真实设备/供应商 E2E 和第三方许可审查仍是独立验收项。
 >
-> 以下 dev.4–dev.8 条目是按时间保留的历史记录，不是当前发布状态；
+> 以下 dev.4–dev.9 条目是按时间保留的历史记录，不是当前发布状态；
 > 不要对已发布版本目录重新发布。下一个版本必须使用新的显式版本号，
-> 并由维护者审查后手动发布。本指南不执行发布或上传。
+> 并由维护者审查后手动发布。本指南记录流程，不执行发布或上传。
 >
 > **历史快照提醒：** 下文候选目录、待发布标记和旧版本命令只还原当时状态，
 > 不代表这些版本现在仍未发布，也不能当作当前版本或重新发布指引。
@@ -18,7 +18,7 @@
 
 ```yaml
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.9
+  flutter_realtime_sdk: ^0.1.0-dev.10
 ```
 
 只需导入 `package:flutter_realtime_sdk/flutter_realtime_sdk.dart`。
@@ -70,8 +70,7 @@ python3 scripts/verify_single_sdk_web_assets.py \
   --web-build build/single_sdk_web_smoke/build/web
 ```
 
-第三方 Flutter Web 宿主应直接依赖 **`flutter_realtime_sdk: ^0.1.0-dev.9`**；**无需**在宿主 `pubspec.yaml` 额外声明/复制 SDK
-内部的 `web/models`、`web/wasm`。仍需配置
+dev.6 Web 资源修复允许第三方宿主不再复制 SDK 内部的 `web/models`、`web/wasm`；当前接入请使用 **`flutter_realtime_sdk: ^0.1.0-dev.10`**。仍需配置
 `RealtimeRoomServices(videoEffectsFactory: DefaultRealtimeVideoEffects.new)`
 及摄像头权限、HTTPS 或 localhost。此修复仅修改单包的资源组装方式，
 并不改变内部源码包的模型路径。
@@ -96,7 +95,7 @@ python3 scripts/verify_single_sdk_web_assets.py \
 ```yaml
 # 当前已发布预览版
 dependencies:
-  flutter_realtime_sdk: ^0.1.0-dev.9
+  flutter_realtime_sdk: ^0.1.0-dev.10
 ```
 
 对外只需要 `package:flutter_realtime_sdk/flutter_realtime_sdk.dart`。
@@ -147,8 +146,8 @@ Windows/Linux 尚需各自在目标 OS 编译；需要双设备实际音视频�
 
 ```sh
 # 新版本候选示例（版本号必须未使用，已发布版本不可重建）
-python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.10
-# 目录：build/pub_release/0.1.0-dev.10/flutter_realtime_sdk/
+python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.11
+# 目录：build/pub_release/0.1.0-dev.11/flutter_realtime_sdk/
 ```
 
 ### README 中英文独立维护
@@ -168,13 +167,13 @@ python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.10
 可以执行仅更新 README 与文件校验清单的安全操作：
 
 ```sh
-python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.10 --refresh-readmes
-cd build/pub_release/0.1.0-dev.10/flutter_realtime_sdk
+python3 scripts/prepare_single_sdk_release.py --version 0.1.0-dev.11 --refresh-readmes
+cd build/pub_release/0.1.0-dev.11/flutter_realtime_sdk
 flutter pub publish --dry-run
 ```
 
 发版前在 dry-run 的文件树中确认中文文件已被包含，并以完整独立宿主进行
-音视频验证。以上是当时针对 dev.5 的历史记录；当前接入请使用顶部所列的已发布 dev.9。
+音视频验证。以上是当时针对 dev.5 的历史记录；当前接入请使用顶部所列的已发布 dev.10。
 
 ## 3. 正式单包发版验收门槛
 
@@ -242,7 +241,7 @@ Flutter SDK **只持有短期凭据和控制合同**，不能把录制后台服�
 
 ## 6. 当前结论
 
-**当前已发布的聚合单包预览版为 `0.1.0-dev.9`；稳定版的全面验收尚未完成。**
+**当前已发布的聚合单包预览版为 `0.1.0-dev.10`；稳定版的全面验收尚未完成。**
 内部 44 包的 `publish_to: none` 保持不变；独立分发准备器仅支持
 `0.1.0-dev.N`，生成真实接入 README、CHANGELOG、文件哈希清单，并排除
 iOS 厂商框架和本地缓存。实际上传使用经过 dry-run 的同一目录，由维护者

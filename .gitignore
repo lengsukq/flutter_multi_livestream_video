@@ -62,6 +62,9 @@ coverage/
 # pid/log files. Safe to delete at any time; never committed.
 .local/
 
+# Local agent tooling state (plans, sessions, generated metadata)
+.zcode/
+
 # Agent prompts & skills (local only, never commit)
 # AGENTS.md 是项目级提示词注入，保持跟踪，不在这里忽略
 prompts/
