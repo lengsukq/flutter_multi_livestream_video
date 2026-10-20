@@ -242,6 +242,7 @@ class _ClassroomRaisedHandsPanelState extends State<ClassroomRaisedHandsPanel> {
                   FilledButton(
                     style: FilledButton.styleFrom(
                       backgroundColor: RealtimeUiTokens.primary,
+                      foregroundColor: RealtimeUiTokens.onAccent,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(
                           RealtimeUiTokens.compactRadius,

@@ -1,3 +1,4 @@
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter/material.dart';
 import 'chat_ui_scope.dart';
 import 'chat_member_list.dart';
@@ -18,7 +19,7 @@ class ChatManagementButton extends StatelessWidget {
         try {
           await controller.refreshMembers();
           if (!context.mounted) return;
-          await showModalBottomSheet<void>(
+          await showRealtimeGlassBottomSheet<void>(
             context: context,
             isScrollControlled: true,
             builder: (_) => ChatUiScope(
@@ -27,7 +28,7 @@ class ChatManagementButton extends StatelessWidget {
               moderation: controller.moderation,
               child: SafeArea(
                 child: SizedBox(
-                  height: 420,
+                  height: MediaQuery.sizeOf(context).height * .65,
                   child: Column(
                     children: [
                       ListTile(title: Text(zh ? '聊天室管理' : 'Chat management')),
@@ -38,8 +39,9 @@ class ChatManagementButton extends StatelessWidget {
                             final confirmed = await showDialog<bool>(
                               context: context,
                               useRootNavigator: true,
-                              builder: (dialogContext) => AlertDialog(
+                              builder: (dialogContext) => RealtimeGlassDialog(
                                 title: Text(zh ? '关闭聊天室？' : 'Close chat room?'),
+                                content: const SizedBox.shrink(),
                                 actions: [
                                   TextButton(
                                     onPressed: () =>

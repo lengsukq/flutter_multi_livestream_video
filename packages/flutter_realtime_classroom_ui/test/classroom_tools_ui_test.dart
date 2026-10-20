@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_classroom_core/flutter_realtime_classroom_core.dart';
 import 'package:flutter_realtime_classroom_ui/flutter_realtime_classroom_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -173,7 +174,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(repo.calls.single.$2['options'], options);
         expect(repo.calls.single.$2['correctOption'], count - 1);
-        expect(find.byType(AlertDialog), findsNothing);
+        expect(find.byType(RealtimeGlassDialog), findsNothing);
         await tester.pumpWidget(const SizedBox.shrink());
         await session.dispose();
       },
@@ -230,7 +231,7 @@ void main() {
       await tester.tap(find.text('Publish'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Publish failed'), findsOneWidget);
-      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.byType(RealtimeGlassDialog), findsOneWidget);
       expect(
         tester.widget<TextField>(find.byType(TextField).at(0)).controller!.text,
         'Keep this question',
@@ -242,7 +243,7 @@ void main() {
       repo.fail = false;
       await tester.tap(find.text('Publish'));
       await tester.pumpAndSettle();
-      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.byType(RealtimeGlassDialog), findsNothing);
       expect(repo.calls.last.$2['correctOption'], 1);
       await tester.pumpWidget(const SizedBox.shrink());
       await session.dispose();

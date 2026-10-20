@@ -108,7 +108,7 @@ class ClassroomFeedbackBubble {
                           Text(
                             strings.t('feedbackView'),
                             style: TextStyle(
-                              color: style.primary,
+                              color: style.text,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                             ),

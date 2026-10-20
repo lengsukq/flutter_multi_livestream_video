@@ -29,7 +29,7 @@ class ClassroomAttendancePanel extends StatelessWidget {
             const SizedBox(width: 6),
             RealtimePill(
               label: '${state.attendance.length}',
-              foreground: style.primary,
+              foreground: style.text,
               background: style.primarySubtle,
               borderColor: style.primaryBorder,
             ),

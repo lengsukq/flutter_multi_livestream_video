@@ -68,7 +68,7 @@ class ClassroomMaterialCard extends StatelessWidget {
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: style.primary,
+                  foregroundColor: style.text,
                   side: BorderSide(color: style.primaryBorder),
                   backgroundColor: style.primarySubtle,
                   padding: const EdgeInsets.symmetric(

@@ -9,14 +9,12 @@ class ChatPanel extends StatelessWidget {
     children: [
       const Expanded(child: ChatMessageList()),
       Container(
-        padding: const EdgeInsets.fromLTRB(14, 11, 14, 14),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           border: Border(
             top: BorderSide(
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+              color: Theme.of(context).colorScheme.outlineVariant,
             ),
           ),
         ),

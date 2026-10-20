@@ -65,7 +65,7 @@ class ChatMemberList extends StatelessWidget {
                             final approved = await showDialog<bool>(
                               context: context,
                               useRootNavigator: true,
-                              builder: (dialogContext) => AlertDialog(
+                              builder: (dialogContext) => RealtimeGlassDialog(
                                 title: Text(zh ? '移除成员？' : 'Remove member?'),
                                 content: Text(
                                   member.displayName.isEmpty

@@ -246,6 +246,7 @@ class _ClassroomQuestionsPanelState extends State<ClassroomQuestionsPanel> {
                 IconButton.filled(
                   style: IconButton.styleFrom(
                     backgroundColor: RealtimeUiTokens.primary,
+                    foregroundColor: RealtimeUiTokens.onAccent,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(
                         RealtimeUiTokens.compactRadius,
@@ -391,7 +392,7 @@ class _ClassroomQuestionsPanelState extends State<ClassroomQuestionsPanel> {
                                   icon: const Icon(
                                     Icons.reply_rounded,
                                     size: 20,
-                                    color: RealtimeUiTokens.primary,
+                                    color: RealtimeUiTokens.text,
                                   ),
                                   onPressed: _busy ? null : () => _answer(q),
                                 ),
@@ -449,7 +450,7 @@ class _ClassroomQuestionsPanelState extends State<ClassroomQuestionsPanel> {
                                   const Icon(
                                     Icons.school_rounded,
                                     size: 16,
-                                    color: RealtimeUiTokens.primary,
+                                    color: RealtimeUiTokens.text,
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
@@ -462,7 +463,7 @@ class _ClassroomQuestionsPanelState extends State<ClassroomQuestionsPanel> {
                                           style: const TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w700,
-                                            color: RealtimeUiTokens.primary,
+                                            color: RealtimeUiTokens.text,
                                           ),
                                         ),
                                         const SizedBox(height: 2),

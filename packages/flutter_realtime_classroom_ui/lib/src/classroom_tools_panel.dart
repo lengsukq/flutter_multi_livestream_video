@@ -114,7 +114,7 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                     ),
                     child: Icon(
                       Icons.widgets_outlined,
-                      color: style.primary,
+                      color: style.text,
                       size: 18,
                     ),
                   ),
@@ -214,13 +214,15 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                           color: style.textMuted,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          s.t('quickTools'),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: style.textMuted,
-                            letterSpacing: 0.2,
+                        Expanded(
+                          child: Text(
+                            s.t('quickTools'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: style.textMuted,
+                              letterSpacing: 0.2,
+                            ),
                           ),
                         ),
                       ],
@@ -234,37 +236,37 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                         (
                           ClassroomToolKind.announcement,
                           Icons.campaign_outlined,
-                          RealtimeUiTokens.iosBlue,
+                          RealtimeUiTokens.text,
                         ),
                         (
                           ClassroomToolKind.focus,
                           Icons.center_focus_strong,
-                          RealtimeUiTokens.iosIndigo,
+                          RealtimeUiTokens.text,
                         ),
                         (
                           ClassroomToolKind.homework,
                           Icons.assignment_outlined,
-                          RealtimeUiTokens.iosGreen,
+                          RealtimeUiTokens.text,
                         ),
                         (
                           ClassroomToolKind.materials,
                           Icons.attach_file,
-                          RealtimeUiTokens.iosTeal,
+                          RealtimeUiTokens.text,
                         ),
                         (
                           ClassroomToolKind.timer,
                           Icons.timer_outlined,
-                          RealtimeUiTokens.iosOrange,
+                          RealtimeUiTokens.text,
                         ),
                         (
                           ClassroomToolKind.quiz,
                           Icons.quiz_outlined,
-                          const Color(0xFF6366F1),
+                          RealtimeUiTokens.text,
                         ),
                         (
                           ClassroomToolKind.poll,
                           Icons.poll_outlined,
-                          const Color(0xFFEC4899),
+                          RealtimeUiTokens.text,
                         ),
                       ])
                         _buildToolChip(item.$1, item.$2, item.$3, s, style),
@@ -317,7 +319,7 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
                       icon: Icons.widgets_outlined,
                       title: s.t('emptyTools'),
                       subtitle: s.t('emptyToolsDesc'),
-                      iconColor: style.primary,
+                      iconColor: style.text,
                     ),
                   ),
                 if (state.attendance.isNotEmpty)
@@ -346,13 +348,6 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
           color: style.surface,
           borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
           border: Border.all(color: style.border),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: style.isDark ? 0.20 : 0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -367,12 +362,14 @@ class _ClassroomToolsPanelState extends State<ClassroomToolsPanel> {
               child: Icon(icon, size: 13, color: color),
             ),
             const SizedBox(width: 7),
-            Text(
-              s.t(kind.name),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: style.text,
+            Flexible(
+              child: Text(
+                s.t(kind.name),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: style.text,
+                ),
               ),
             ),
           ],

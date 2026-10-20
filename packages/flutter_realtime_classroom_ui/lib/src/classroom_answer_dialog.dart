@@ -56,6 +56,7 @@ class ClassroomAnswerDialogState extends State<ClassroomAnswerDialog> {
       FilledButton(
         style: FilledButton.styleFrom(
           backgroundColor: RealtimeUiTokens.primary,
+          foregroundColor: RealtimeUiTokens.onAccent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(RealtimeUiTokens.controlRadius),
           ),

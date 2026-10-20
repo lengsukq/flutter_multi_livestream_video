@@ -78,38 +78,9 @@ class ClassroomPublishToolDialogState
 
     final style = RealtimeStyle.of(context);
 
-    return AlertDialog(
-      backgroundColor: style.surface,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-        side: BorderSide(color: style.border),
-      ),
-      title: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: style.primarySubtle,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: style.primaryBorder),
-            ),
-            child: Icon(iconData, size: 20, color: style.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              strings.t(kind),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: style.text,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return RealtimeGlassDialog(
+      icon: iconData,
+      title: Text(strings.t(kind)),
       content: SizedBox(
         width: 440,
         child: SingleChildScrollView(
@@ -322,7 +293,7 @@ class ClassroomPublishToolDialogState
                 Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: LinearProgressIndicator(
-                    color: style.primary,
+                    color: style.text,
                     backgroundColor: style.primarySubtle,
                   ),
                 ),
@@ -376,6 +347,7 @@ class ClassroomPublishToolDialogState
         FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: style.primary,
+            foregroundColor: style.onAccent,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(
                 RealtimeUiTokens.controlRadius,

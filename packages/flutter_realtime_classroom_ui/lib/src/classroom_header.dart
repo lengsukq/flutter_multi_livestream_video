@@ -21,6 +21,7 @@ class ClassroomHeader extends StatelessWidget {
     ClassroomStrings strings,
   ) {
     final canClose = showCloseButton;
+    final style = RealtimeStyle.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -32,32 +33,32 @@ class ClassroomHeader extends StatelessWidget {
               width: 38,
               height: 4,
               decoration: BoxDecoration(
-                color: RealtimeUiTokens.borderStrong.withValues(alpha: 0.55),
+                color: style.borderStrong.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
+          padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
           child: Row(
             children: [
               Container(
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: RealtimeUiTokens.primarySubtle,
+                  color: style.surfaceSubtle,
                   borderRadius: BorderRadius.circular(
                     RealtimeUiTokens.compactRadius,
                   ),
-                  border: Border.all(color: RealtimeUiTokens.primaryBorder),
+                  border: Border.all(color: style.border),
                 ),
-                child: const Icon(
-                  Icons.school_rounded,
-                  color: RealtimeUiTokens.primary,
+                child: Icon(
+                  Icons.school_outlined,
+                  color: style.textSecondary,
                   size: 18,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -65,29 +66,26 @@ class ClassroomHeader extends StatelessWidget {
                     Flexible(
                       child: Text(
                         strings.t('classroomTitle'),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: RealtimeUiTokens.text,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: style.text,
                           letterSpacing: -0.2,
                         ),
                       ),
                     ),
                     const SizedBox(width: 6),
-                    RealtimePill(
-                      label: strings.t(
-                        s.isTeacher ? 'teacherRole' : 'studentRole',
+                    Flexible(
+                      child: RealtimePill(
+                        label: strings.t(
+                          s.isTeacher ? 'teacherRole' : 'studentRole',
+                        ),
+                        foreground: style.textSecondary,
+                        background: style.surfaceSubtle,
+                        borderColor: style.border,
                       ),
-                      foreground: s.isTeacher
-                          ? RealtimeUiTokens.primary
-                          : RealtimeUiTokens.textMuted,
-                      background: s.isTeacher
-                          ? RealtimeUiTokens.primarySubtle
-                          : RealtimeUiTokens.surfaceSubtle,
-                      borderColor: s.isTeacher
-                          ? RealtimeUiTokens.primaryBorder
-                          : RealtimeUiTokens.border,
                     ),
                   ],
                 ),
@@ -96,21 +94,21 @@ class ClassroomHeader extends StatelessWidget {
               // Compact Online count pill: green dot + count
               RealtimePill(
                 label: '${s.stats.onlineCount}',
-                leadingDotColor: RealtimeUiTokens.success,
-                foreground: RealtimeUiTokens.success,
-                background: RealtimeUiTokens.successSubtle,
-                borderColor: RealtimeUiTokens.successBorder,
+                leadingDotColor: style.speak,
+                foreground: style.speakStrong,
+                background: style.successSubtle,
+                borderColor: style.successBorder,
               ),
               if (canClose) ...[
-                const SizedBox(width: 4),
+                const SizedBox(width: 2),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, size: 18),
-                  color: RealtimeUiTokens.textMuted,
-                  splashRadius: 18,
+                  color: style.textMuted,
+                  tooltip: strings.t('close'),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(
-                    minWidth: 28,
-                    minHeight: 28,
+                    minWidth: 40,
+                    minHeight: 40,
                   ),
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),

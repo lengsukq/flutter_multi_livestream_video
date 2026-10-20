@@ -2,9 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_realtime_chat_core/flutter_realtime_chat_core.dart';
+import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'chat_ui_scope.dart';
 import 'chat_components_chat_avatar.dart';
 
+/// Flat, avatar-led message stream.
+///
+/// Messages read like the reference room chat: avatar, name, time, optional
+/// role tag and body text. The local user's messages align end and use a subtle
+/// surface instead of a saturated bubble, so the stream stays calm.
 class ChatMessageList extends StatelessWidget {
   const ChatMessageList({super.key, this.onMessageTap});
   final ValueChanged<ChatMessage>? onMessageTap;
@@ -13,7 +19,6 @@ class ChatMessageList extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = ChatUiScope.of(context);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final zh = Localizations.localeOf(context).languageCode == 'zh';
 
     return ListenableBuilder(
@@ -37,25 +42,23 @@ class ChatMessageList extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 64,
-                      height: 64,
+                      width: 56,
+                      height: 56,
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(
-                          alpha: 0.09,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
+                        color: theme.colorScheme.surfaceContainer,
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Icon(
                         Icons.forum_outlined,
-                        size: 30,
-                        color: theme.colorScheme.primary,
+                        size: 26,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     Text(
                       zh ? '开始一段对话' : 'Your conversation starts here',
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -65,9 +68,7 @@ class ChatMessageList extends StatelessWidget {
                           ? '发送消息，或者邀请其他人加入聊天室'
                           : 'Send a message or invite someone to join this room',
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                      style: theme.textTheme.bodySmall,
                     ),
                   ],
                 ),
@@ -77,7 +78,7 @@ class ChatMessageList extends StatelessWidget {
         }
         return ListView.builder(
           reverse: true,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           itemCount: messages.length,
           itemBuilder: (context, index) {
             final message = messages[messages.length - index - 1];
@@ -95,154 +96,97 @@ class ChatMessageList extends StatelessWidget {
                 ? message.displayName
                 : message.userId;
 
-            // Action popover
             void showActions() {
               unawaited(
-                showModalBottomSheet<void>(
+                showRealtimeGlassBottomSheet<void>(
                   context: context,
-                  backgroundColor: Colors.transparent,
-                  builder: (sheetContext) => SafeArea(
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E1E22) : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : Colors.black.withValues(alpha: 0.08),
-                          width: 0.8,
+                  isScrollControlled: true,
+                  builder: (sheetContext) => SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.reply_rounded, size: 20),
+                          title: Text(zh ? '回复消息' : 'Reply'),
+                          dense: true,
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            controller.selectReply(message);
+                          },
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(
-                              alpha: isDark ? 0.35 : 0.08,
-                            ),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(height: 10),
-                          Center(
-                            child: Container(
-                              width: 36,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.2)
-                                    : Colors.black.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(2),
+                        ListTile(
+                          leading: const Icon(Icons.copy_rounded, size: 20),
+                          title: Text(zh ? '复制内容' : 'Copy'),
+                          dense: true,
+                          onTap: () {
+                            Navigator.pop(sheetContext);
+                            unawaited(
+                              Clipboard.setData(
+                                ClipboardData(text: message.message),
                               ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
+                            );
+                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                              SnackBar(
+                                content: Text(zh ? '已复制消息' : 'Message copied'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                        ),
+                        if (canDelete)
                           ListTile(
-                            leading: const Icon(Icons.reply_rounded, size: 20),
+                            leading: Icon(
+                              Icons.delete_outline_rounded,
+                              size: 20,
+                              color: theme.colorScheme.error,
+                            ),
                             title: Text(
-                              zh ? '回复消息' : 'Reply',
-                              style: const TextStyle(fontSize: 14),
+                              zh ? '删除消息' : 'Delete',
+                              style: TextStyle(color: theme.colorScheme.error),
                             ),
                             dense: true,
                             onTap: () {
                               Navigator.pop(sheetContext);
-                              controller.selectReply(message);
+                              unawaited(controller.deleteMessage(message));
                             },
                           ),
+                        if (canRemove)
                           ListTile(
-                            leading: const Icon(Icons.copy_rounded, size: 20),
+                            leading: Icon(
+                              Icons.person_remove_outlined,
+                              size: 20,
+                              color: theme.colorScheme.error,
+                            ),
                             title: Text(
-                              zh ? '复制内容' : 'Copy',
-                              style: const TextStyle(fontSize: 14),
+                              zh ? '移出成员' : 'Remove user',
+                              style: TextStyle(color: theme.colorScheme.error),
                             ),
                             dense: true,
                             onTap: () {
                               Navigator.pop(sheetContext);
                               unawaited(
-                                Clipboard.setData(
-                                  ClipboardData(text: message.message),
-                                ),
-                              );
-                              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    zh ? '已复制消息' : 'Message copied',
-                                  ),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
+                                controller.removeMember(message.userId),
                               );
                             },
                           ),
-                          if (canDelete)
-                            ListTile(
-                              leading: Icon(
-                                Icons.delete_outline_rounded,
-                                size: 20,
-                                color: theme.colorScheme.error,
-                              ),
-                              title: Text(
-                                zh ? '删除消息' : 'Delete',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: theme.colorScheme.error,
-                                ),
-                              ),
-                              dense: true,
-                              onTap: () {
-                                Navigator.pop(sheetContext);
-                                unawaited(controller.deleteMessage(message));
-                              },
-                            ),
-                          if (canRemove)
-                            ListTile(
-                              leading: Icon(
-                                Icons.person_remove_outlined,
-                                size: 20,
-                                color: theme.colorScheme.error,
-                              ),
-                              title: Text(
-                                zh ? '移出成员' : 'Remove user',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: theme.colorScheme.error,
-                                ),
-                              ),
-                              dense: true,
-                              onTap: () {
-                                Navigator.pop(sheetContext);
-                                unawaited(
-                                  controller.removeMember(message.userId),
-                                );
-                              },
-                            ),
-                          const SizedBox(height: 8),
-                        ],
-                      ),
+                      ],
                     ),
                   ),
                 ),
               );
             }
 
-            final bubbleBgColor = own
-                ? theme.colorScheme.primary
-                : (isDark ? const Color(0xFF262629) : const Color(0xFFF5F5F7));
-            final bubbleTextColor = own
-                ? Colors.white
-                : (isDark ? Colors.white : const Color(0xFF1D1D1F));
             final timeStr =
                 '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}';
 
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: 5),
               child: Row(
                 mainAxisAlignment: own
                     ? MainAxisAlignment.end
                     : MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (!own) ...[
                     ChatComponentsChatAvatar(
@@ -250,7 +194,7 @@ class ChatMessageList extends StatelessWidget {
                       avatarUrl: message.avatarUrl,
                       size: 30,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                   ],
                   Flexible(
                     child: Column(
@@ -258,96 +202,61 @@ class ChatMessageList extends StatelessWidget {
                           ? CrossAxisAlignment.end
                           : CrossAxisAlignment.start,
                       children: [
-                        if (!own)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 4, bottom: 2),
-                            child: Text(
-                              senderName,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: theme.colorScheme.onSurfaceVariant,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (own) ...[
+                              Text(
+                                zh ? '你' : 'You',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurface,
+                                ),
                               ),
-                            ),
-                          ),
+                              const SizedBox(width: 6),
+                            ] else ...[
+                              Flexible(
+                                child: Text(
+                                  senderName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Text(timeStr, style: theme.textTheme.labelSmall),
+                          ],
+                        ),
+                        const SizedBox(height: 3),
                         InkWell(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(10),
                           onTap: onMessageTap == null
                               ? () => controller.selectReply(message)
                               : () => onMessageTap!(message),
                           onLongPress: showActions,
                           child: Container(
-                            constraints: const BoxConstraints(maxWidth: 420),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 9,
-                            ),
+                            constraints: const BoxConstraints(maxWidth: 460),
+                            padding: own
+                                ? const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  )
+                                : const EdgeInsets.only(top: 2, bottom: 6),
                             decoration: BoxDecoration(
-                              gradient: own
-                                  ? LinearGradient(
-                                      colors: [
-                                        theme.colorScheme.primary,
-                                        theme.colorScheme.primary.withValues(
-                                          alpha: 0.88,
-                                        ),
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    )
-                                  : null,
-                              color: own ? null : bubbleBgColor,
-                              borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(18),
-                                topRight: const Radius.circular(18),
-                                bottomLeft: Radius.circular(own ? 18 : 4),
-                                bottomRight: Radius.circular(own ? 4 : 18),
-                              ),
-                              border: Border.all(
-                                color: own
-                                    ? Colors.white.withValues(alpha: 0.12)
-                                    : (isDark
-                                          ? Colors.white.withValues(alpha: 0.08)
-                                          : Colors.black.withValues(
-                                              alpha: 0.05,
-                                            )),
-                                width: 0.8,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(
-                                    alpha: isDark ? 0.25 : 0.04,
-                                  ),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
+                              color: own
+                                  ? theme.colorScheme.surfaceContainer
+                                  : theme.colorScheme.surface,
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Column(
-                              crossAxisAlignment: own
-                                  ? CrossAxisAlignment.end
-                                  : CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  message.message,
-                                  style: TextStyle(
-                                    color: bubbleTextColor,
-                                    fontSize: 14,
-                                    height: 1.35,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  timeStr,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w400,
-                                    color: own
-                                        ? Colors.white.withValues(alpha: 0.72)
-                                        : theme.colorScheme.onSurfaceVariant
-                                              .withValues(alpha: 0.65),
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              message.message,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                height: 1.4,
+                              ),
                             ),
                           ),
                         ),
@@ -355,7 +264,7 @@ class ChatMessageList extends StatelessWidget {
                     ),
                   ),
                   if (own) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     ChatComponentsChatAvatar(
                       name: senderName,
                       avatarUrl: message.avatarUrl,

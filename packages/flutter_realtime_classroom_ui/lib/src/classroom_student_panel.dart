@@ -272,7 +272,7 @@ class _ClassroomStudentPanelState extends State<ClassroomStudentPanel> {
               const Icon(
                 Icons.thumb_up_alt_outlined,
                 size: 16,
-                color: RealtimeUiTokens.primary,
+                color: RealtimeUiTokens.text,
               ),
               const SizedBox(width: 6),
               Text(
@@ -390,7 +390,7 @@ class _ClassroomStudentPanelState extends State<ClassroomStudentPanel> {
               ),
               child: const Icon(
                 Icons.timer_outlined,
-                color: RealtimeUiTokens.primary,
+                color: RealtimeUiTokens.text,
                 size: 20,
               ),
             ),
@@ -404,7 +404,7 @@ class _ClassroomStudentPanelState extends State<ClassroomStudentPanel> {
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: RealtimeUiTokens.primary,
+                      color: RealtimeUiTokens.text,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -424,7 +424,7 @@ class _ClassroomStudentPanelState extends State<ClassroomStudentPanel> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: RealtimeUiTokens.primary,
+                color: RealtimeUiTokens.text,
               ),
             ),
           ],
@@ -446,7 +446,7 @@ class _ClassroomStudentPanelState extends State<ClassroomStudentPanel> {
           children: [
             const Icon(
               Icons.campaign_outlined,
-              color: RealtimeUiTokens.primary,
+              color: RealtimeUiTokens.text,
               size: 22,
             ),
             const SizedBox(width: 10),
@@ -459,7 +459,7 @@ class _ClassroomStudentPanelState extends State<ClassroomStudentPanel> {
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: RealtimeUiTokens.primary,
+                      color: RealtimeUiTokens.text,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -527,14 +527,14 @@ class _ClassroomStudentPanelState extends State<ClassroomStudentPanel> {
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
-                        color: RealtimeUiTokens.primary,
+                        color: RealtimeUiTokens.text,
                       ),
                     ),
                     const SizedBox(width: 2),
                     const Icon(
                       Icons.arrow_forward_ios_rounded,
                       size: 10,
-                      color: RealtimeUiTokens.primary,
+                      color: RealtimeUiTokens.text,
                     ),
                   ],
                 ),

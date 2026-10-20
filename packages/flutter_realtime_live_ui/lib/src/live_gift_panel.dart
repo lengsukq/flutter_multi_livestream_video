@@ -153,7 +153,7 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
                     ),
                     child: Icon(
                       Icons.card_giftcard_rounded,
-                      color: style.primary,
+                      color: style.text,
                       size: 18,
                     ),
                   ),
@@ -185,7 +185,7 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
           if (_busy)
             LinearProgressIndicator(
               minHeight: 2,
-              color: style.primary,
+              color: style.text,
               backgroundColor: style.primarySubtle,
             ),
           Expanded(
@@ -522,7 +522,7 @@ class _LiveGiftPanelState extends State<LiveGiftPanel> {
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     fontWeight: FontWeight.w800,
-                                    color: style.primary,
+                                    color: style.text,
                                   ),
                                 ),
                               ),
@@ -804,7 +804,7 @@ class _LiveGiftOverlayState extends State<LiveGiftOverlay> {
               const Icon(
                 Icons.card_giftcard,
                 size: 20,
-                color: RealtimeUiTokens.primary,
+                color: RealtimeUiTokens.text,
               ),
               const SizedBox(width: 8),
               Text(
@@ -1000,7 +1000,7 @@ class _LiveGiftBannerState extends State<LiveGiftBanner> {
                 const Icon(
                   Icons.celebration,
                   size: 16,
-                  color: RealtimeUiTokens.primary,
+                  color: RealtimeUiTokens.text,
                 ),
                 const SizedBox(width: 6),
                 Text(
@@ -1008,7 +1008,7 @@ class _LiveGiftBannerState extends State<LiveGiftBanner> {
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: RealtimeUiTokens.primary,
+                    color: RealtimeUiTokens.text,
                   ),
                 ),
               ],

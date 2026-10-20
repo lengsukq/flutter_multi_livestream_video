@@ -125,19 +125,12 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                       dividerColor: Colors.transparent,
                       indicatorSize: TabBarIndicatorSize.tab,
                       indicator: BoxDecoration(
-                        color: RealtimeUiTokens.surface,
+                        color: RealtimeUiTokens.accent,
                         borderRadius: BorderRadius.circular(
                           RealtimeUiTokens.pillRadius,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
-                      labelColor: RealtimeUiTokens.primary,
+                      labelColor: RealtimeUiTokens.onAccent,
                       unselectedLabelColor: RealtimeUiTokens.textMuted,
                       labelStyle: const TextStyle(
                         fontWeight: FontWeight.w700,
@@ -191,8 +184,8 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                                 const SizedBox(width: 6),
                                 RealtimeBadge(
                                   text: '${s.stats.pendingQuestions}',
-                                  backgroundColor: RealtimeUiTokens.primary,
-                                  color: Colors.white,
+                                  backgroundColor: RealtimeUiTokens.accent,
+                                  color: RealtimeUiTokens.onAccent,
                                 ),
                               ],
                             ],
@@ -228,8 +221,8 @@ class _ClassroomPanelState extends State<ClassroomPanel> {
                                   const SizedBox(width: 6),
                                   RealtimeBadge(
                                     text: '${s.feedback.length}',
-                                    backgroundColor: RealtimeUiTokens.primary,
-                                    color: Colors.white,
+                                    backgroundColor: RealtimeUiTokens.accent,
+                                    color: RealtimeUiTokens.onAccent,
                                   ),
                                 ],
                               ],
@@ -414,23 +407,17 @@ class _ClassroomControlButtonState extends State<ClassroomControlButton> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: _panelOpen
-                          ? style.primarySubtle
-                          : style.surfaceSubtle,
+                      color: _panelOpen ? style.accent : style.surfaceSubtle,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: _panelOpen
-                            ? style.primary
-                            : (style.isDark
-                                  ? Colors.white.withValues(alpha: 0.16)
-                                  : Colors.transparent),
+                        color: _panelOpen ? style.primaryBorder : style.border,
                         width: 1,
                       ),
                     ),
                     child: Icon(
                       Icons.school_outlined,
                       size: 20,
-                      color: _panelOpen ? style.primary : style.text,
+                      color: _panelOpen ? style.onAccent : style.text,
                     ),
                   ),
                   if (_unread > 0)
@@ -469,7 +456,7 @@ class _ClassroomControlButtonState extends State<ClassroomControlButton> {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: _panelOpen ? style.primary : style.text,
+                  color: _panelOpen ? style.text : style.textMuted,
                 ),
               ),
             ],

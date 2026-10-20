@@ -201,7 +201,7 @@ class ClassroomActivityCard extends StatelessWidget {
                               ),
                               RealtimePill(
                                 label: activity.options[answer.value],
-                                foreground: style.primary,
+                                foreground: style.text,
                                 background: style.primarySubtle,
                                 borderColor: style.primaryBorder,
                               ),
@@ -336,7 +336,7 @@ class ClassroomActivityCard extends StatelessWidget {
                     else if (isSelf)
                       Icon(
                         Icons.radio_button_checked,
-                        color: style.primary,
+                        color: style.text,
                         size: 18,
                       )
                     else
