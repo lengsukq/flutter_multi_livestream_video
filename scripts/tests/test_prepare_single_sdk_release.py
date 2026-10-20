@@ -81,6 +81,42 @@ class ReleasePreparationTest(unittest.TestCase):
                 len(revised),
             )
 
+    def test_dev10_changelog_describes_the_sdk_preview_changes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            candidate = root / "build/single_sdk_candidate"
+            files = {
+                "pubspec.yaml": "name: flutter_realtime_sdk\nversion: 0.1.0\npublish_to: none\n",
+                "ios/vendor_frameworks.json": '{"frameworks": []}',
+                "ios/vendor_frameworks.rb": "# resolver",
+                "ios/podfile.rb": "# integration",
+                "ios/flutter_realtime_sdk.podspec": "s.version = '0.1.0'",
+                "macos/flutter_realtime_sdk.podspec": "s.version = '0.1.0'",
+                "LICENSE": "MIT",
+                "lib/flutter_realtime_sdk.dart": "// entry",
+            }
+            for name, contents in files.items():
+                path = candidate / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(contents)
+            template = root / "scripts/templates/single_sdk_README.md"
+            template.parent.mkdir(parents=True)
+            template.write_text("Preview @VERSION@")
+            template_zh = root / "scripts/templates/single_sdk_README.zh-CN.md"
+            template_zh.write_text("预览版 @VERSION@")
+
+            release = prepare("0.1.0-dev.10", root)
+            changelog = (release / "CHANGELOG.md").read_text()
+
+            self.assertIn("## 0.1.0-dev.10", changelog)
+            self.assertIn("meeting-mode selection", changelog)
+            self.assertIn("repository-backed shared-content sessions", changelog)
+            self.assertIn("native macOS pre-join microphone meter", changelog)
+            self.assertNotIn("Headless apps", changelog)
+            metadata = json.loads((release.parent / "PREPARATION.json").read_text())
+            self.assertEqual(metadata["version"], "0.1.0-dev.10")
+            self.assertFalse(metadata["published"])
+
     def test_stable_release_requires_a_separate_acceptance_decision(self):
         with self.assertRaises(ValueError):
             prepare("0.1.0")

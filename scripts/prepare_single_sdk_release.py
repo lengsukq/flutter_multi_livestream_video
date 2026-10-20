@@ -146,6 +146,16 @@ def prepare(version: str, root: Path = ROOT) -> Path:
             "- Validate media/effects Web bridge protocol versions before use while retaining legacy string video attachment compatibility.\n"
             "- Add fault-injection, lifecycle, UI retry and browser regressions; actual provider/network acceptance remains separate.\n"
         )
+    elif version == "0.1.0-dev.10":
+        notes = (
+            "- Add meeting-mode selection and composed local previews while keeping media/session ownership in the SDK.\n"
+            "- Add repository-backed shared-content sessions and typed repository/command contracts for shared-content workflows.\n"
+            "- Refresh the built-in Meeting, Live, Chat, classroom and whiteboard workspaces with reusable responsive UI, room controls and participant layouts.\n"
+            "- Bundle Onest and Bricolage Grotesque fonts in the single-package SDK so the refreshed design system renders consistently for hosted-package consumers.\n"
+            "- Add a native macOS pre-join microphone meter using CoreAudio/AVAudioEngine; capture starts only after explicit microphone enablement and stops on mute or navigation.\n"
+            "- Surface macOS meter permission/capture errors; the meter reads the system default input and does not prove remote audio delivery.\n"
+            "- Add regression coverage for meeting workspaces, pre-join lifecycle, shared-content sessions, local previews and room ownership.\n"
+        )
     else:
         notes = (
             "- Fix camera-off background selection followed by camera-on in external Headless apps.\n"
