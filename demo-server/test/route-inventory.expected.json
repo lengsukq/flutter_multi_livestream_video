@@ -9,10 +9,6 @@
   ],
   [
     "DELETE",
-    "/meetings/:id"
-  ],
-  [
-    "DELETE",
     "/rooms/:code"
   ],
   [
@@ -38,10 +34,6 @@
   [
     "GET",
     "/health"
-  ],
-  [
-    "GET",
-    "/meetings/:id"
   ],
   [
     "GET",
@@ -90,18 +82,6 @@
   [
     "POST",
     "/chat/rooms/:code/members"
-  ],
-  [
-    "POST",
-    "/join"
-  ],
-  [
-    "POST",
-    "/meetings"
-  ],
-  [
-    "POST",
-    "/meetings/:id/join"
   ],
   [
     "POST",

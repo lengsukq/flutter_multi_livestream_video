@@ -9,7 +9,7 @@ import {
 import type {
   ChimeAttendee,
   ChimeMeeting,
-  ChimeProviderAdapter,
+  ProviderAdapter,
   ChimeRoomEntry,
   CreateRoomResult,
   MediaRole,
@@ -64,7 +64,7 @@ export function createChimeProvider({
   env = process.env,
   contractVersion,
   normalizeUserId,
-}: ProviderFactoryContext & { normalizeUserId: NormalizeName }): ChimeProviderAdapter {
+}: ProviderFactoryContext & { normalizeUserId: NormalizeName }): ProviderAdapter {
   const controlRegion = env.AWS_REGION ?? 'us-east-1';
   const mediaRegion = env.CHIME_MEDIA_REGION ?? 'ap-southeast-1';
   const client = new ChimeSDKMeetingsClient({ region: controlRegion });
@@ -123,7 +123,7 @@ export function createChimeProvider({
     };
   }
 
-  const adapter: ChimeProviderAdapter = {
+  const adapter: ProviderAdapter = {
     id: 'chime',
     displayName: 'AWS Chime',
     label: 'AWS Chime SDK',
@@ -215,21 +215,6 @@ export function createChimeProvider({
       } catch {
         return null;
       }
-    },
-    async createLegacyMeeting({ roomCode, externalMeetingId }) {
-      return createRoom({ roomCode, role: 'participant', externalMeetingId });
-    },
-    async joinLegacy(entry, rawName) {
-      const room = entry as ChimeRoomEntry;
-      const attendee = await addAttendee(room, rawName);
-      return { roomCode: room.roomCode, meeting: room.meeting, attendee };
-    },
-    async getLegacyMeeting(meetingId) {
-      const got = await client.send(new GetMeetingCommand({ MeetingId: meetingId }));
-      return pickMeeting(got.Meeting);
-    },
-    async deleteLegacyMeeting(meetingId) {
-      await client.send(new DeleteMeetingCommand({ MeetingId: meetingId }));
     },
   };
 

@@ -43,7 +43,6 @@ import { IvsCloudRecording } from './recording/ivs-cloud-recording.ts';
 import { TrtcCloudRecording } from './recording/trtc-cloud-recording.ts';
 import type { CloudRecordingExecutor } from './recording/cloud-recording-executor.ts';
 import { registerChatRoutes } from './routes/chat-routes.ts';
-import { registerLegacyChimeRoutes } from './routes/legacy-chime-routes.ts';
 import { registerDashboardRoutes, type DashboardSelectionState } from './routes/dashboard-routes.ts';
 import { requireRoomManager } from './room-access.ts';
 import { RoomOperationQueue } from './classroom/room-operation-queue.ts';
@@ -76,7 +75,6 @@ import { localizeDemoMessage, resolveDemoLanguage } from './i18n.ts';
 import type {
   ChatProviderAdapter,
   ChatRoomEntry,
-  ChimeRoomEntry,
   MediaRole,
   ProviderAdapter,
   RoomAttendee,
@@ -87,7 +85,7 @@ import type {
 } from './types.ts';
 
 export async function createDemoApplication(env: NodeJS.ProcessEnv = process.env) {
-const {CONTROL_REGION, MEDIA_REGION, CONTRACT_VERSION, MEDIA_CONTRACT_HEADER, CHAT_CONTRACT_HEADER, LEGACY_CHIME_CONTRACT_HEADER, DEMO_BEARER_TOKEN, MEDIA_ADMIN_PASSWORD, ADMIN_SESSION_COOKIE, ADMIN_SESSION_TTL_SECONDS, IS_VERCEL, MEDIA_CONNECTIONS_ENABLED, INITIAL_PROVIDER, INITIAL_CHAT_PROVIDER, STARTED_AT, EMPTY_CLOSE_AFTER_MS, PARTICIPANT_STALE_AFTER_MS, SWEEP_INTERVAL_MS} = readDemoConfiguration(env);
+const {CONTROL_REGION, MEDIA_REGION, CONTRACT_VERSION, MEDIA_CONTRACT_HEADER, CHAT_CONTRACT_HEADER, DEMO_BEARER_TOKEN, MEDIA_ADMIN_PASSWORD, ADMIN_SESSION_COOKIE, ADMIN_SESSION_TTL_SECONDS, IS_VERCEL, MEDIA_CONNECTIONS_ENABLED, INITIAL_PROVIDER, INITIAL_CHAT_PROVIDER, STARTED_AT, EMPTY_CLOSE_AFTER_MS, PARTICIPANT_STALE_AFTER_MS, SWEEP_INTERVAL_MS} = readDemoConfiguration(env);
 const roomOperations = new RoomOperationQueue();
 const liveInteractionDirectory = new LiveInteractionDirectory();
 const classroomStateDir = env.CLASSROOM_STATE_DIR?.trim();
@@ -188,22 +186,6 @@ function requireConnectionsEnabled(_req: Request, res: Response, next: NextFunct
   return contractError(res, 503, 'service-paused', 'The media connection service is paused.');
 }
 
-function requireLegacyConnectionAccess(req: Request, res: Response, next: NextFunction): Response | void {
-  // Keep administrator cleanup available while the public connection API is paused.
-  if (req.method === 'DELETE' && /^\/[^/]+$/.test(req.path)) return next();
-  if (!MEDIA_CONNECTIONS_ENABLED) {
-    return contractError(res, 503, 'service-paused', 'The media connection service is paused.');
-  }
-  if (
-    DEMO_BEARER_TOKEN &&
-    req.get('Authorization') !== `Bearer ${DEMO_BEARER_TOKEN}` &&
-    !hasAdminSession(req)
-  ) {
-    return contractError(res, 401, 'unauthorized', 'A valid demo bearer token is required.');
-  }
-  next();
-}
-
 const chimeProvider = createChimeProvider({
   env: env,
   contractVersion: CONTRACT_VERSION,
@@ -285,8 +267,8 @@ const chatRoomDirectory = new ChatRoomDirectory();
 const agoraCloudRecorder = new AgoraCloudRecording(env);
 
 const {
-  generateRoomCode, registerRoom, assertRole, resolveRoom, resolveChimeRoom,
-} = createRoomRegistryService({ roomDirectory, providerRegistry, chimeProvider });
+  generateRoomCode, registerRoom, assertRole, resolveRoom,
+} = createRoomRegistryService({ roomDirectory, providerRegistry });
 
 const closeRoomUnlocked = createRoomClosure({
   providerRegistry, chatProviderRegistry, roomDirectory,
@@ -381,7 +363,7 @@ function requireRoomContract(req: Request, res: Response, next: NextFunction): R
   const requestedVersion =
     req.get(MEDIA_CONTRACT_HEADER) ??
     req.get(CHAT_CONTRACT_HEADER) ??
-    req.get(LEGACY_CHIME_CONTRACT_HEADER);
+    req.get('X-Chime-Backend-Contract');
   if (requestedVersion && requestedVersion !== String(CONTRACT_VERSION)) {
     return contractError(
       res,
@@ -414,8 +396,6 @@ app.use('/rooms', (req, res, next) => {
   }
   return requireConnectionsEnabled(req, res, () => requireRoomContract(req, res, next));
 });
-app.use(['/meetings', '/join'], requireLegacyConnectionAccess);
-
 const { loadPersistedProvider, loadPersistedChatProvider, persistActiveProviders } =
   createProviderSelection({
     providerRegistry, chatProviderRegistry,
@@ -475,7 +455,6 @@ registerInteractionRoutes(app, {
   assertRoomOpen,
   isRoomPartiallyClosed,
   pruneStaleAttendees,
-  contractError,
   sendProviderError,
   classroomDirectory,
   liveInteractionDirectory,
@@ -493,12 +472,6 @@ registerRoomRoutes(app, {
   publicProviderId, exposeVendorResponse, registerRoom, assertRole,
   closeRoom, closeRoomUnlocked, contractError, sendProviderError,
   mediaManagementCapabilities, chatManagementCapabilities, logEvent,
-  requireSameOrigin, requireAdmin,
-});
-
-registerLegacyChimeRoutes(app, {
-  chimeProvider, roomDirectory, classroomDirectory, liveInteractionDirectory,
-  generateRoomCode, registerRoom, resolveChimeRoom, logEvent, withRoomOperation,
   requireSameOrigin, requireAdmin,
 });
 

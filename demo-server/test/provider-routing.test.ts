@@ -42,6 +42,8 @@ interface ApiBody {
   role?: string;
   roomMode?: string;
   meetingMode?: string;
+  meeting?: { MeetingId?: string };
+  attendee?: { AttendeeId?: string };
   speakEnforcement?: string;
   livekit?: { token: string };
   revision?: number;

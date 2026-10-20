@@ -6,12 +6,11 @@ import type { RoomDirectory } from '../providers/room-directory.ts';
 export interface RoomRegistryDependencies {
   roomDirectory: RoomDirectory;
   providerRegistry: ProviderRegistry;
-  chimeProvider: ProviderAdapter;
 }
 
 /** Provider-neutral room code allocation, room lookup and alias registration. */
 export function createRoomRegistryService({
-  roomDirectory, providerRegistry, chimeProvider,
+  roomDirectory, providerRegistry,
 }: RoomRegistryDependencies) {
 function generateRoomCode(): string {
   for (let i = 0; i < 50; i++) {
@@ -55,16 +54,7 @@ async function resolveRoom(ref: unknown): Promise<RoomEntry | null> {
   return null;
 }
 
-async function resolveChimeRoom(ref: unknown): Promise<RoomEntry | null> {
-  const local = roomDirectory.get(ref);
-  if (local?.provider === 'chime') return local;
-  const entry = await chimeProvider.resolveExternalRoom!(String(ref ?? '').trim(), {
-    allocateRoomCode: generateRoomCode,
-  });
-  return entry ? registerRoom(chimeProvider, entry) : null;
-}
-
 return {
-  generateRoomCode, registerRoom, assertRole, resolveRoom, resolveChimeRoom,
+  generateRoomCode, registerRoom, assertRole, resolveRoom,
 };
 }

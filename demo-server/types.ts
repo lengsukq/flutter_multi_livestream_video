@@ -298,26 +298,6 @@ export interface ProviderAdapter {
   ): Promise<RoomEntry | null>;
 }
 
-export interface LegacyChimeJoinResponse {
-  roomCode: string;
-  meeting: ChimeMeeting;
-  attendee: ChimeAttendee;
-}
-
-export interface ChimeProviderAdapter extends ProviderAdapter {
-  resolveExternalRoom(
-    ref: string,
-    context: { allocateRoomCode: () => string },
-  ): Promise<RoomEntry | null>;
-  createLegacyMeeting(input: {
-    roomCode: string;
-    externalMeetingId: string;
-  }): Promise<CreateRoomResult>;
-  joinLegacy(entry: RoomEntry, rawName: unknown): Promise<LegacyChimeJoinResponse>;
-  getLegacyMeeting(meetingId: string): Promise<ChimeMeeting>;
-  deleteLegacyMeeting(meetingId: string): Promise<void>;
-}
-
 export interface ProviderFactoryContext {
   env?: NodeJS.ProcessEnv;
   contractVersion: number;

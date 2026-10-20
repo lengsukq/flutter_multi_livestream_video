@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 
 /** Regression guard for all intentional public HTTP endpoints. */
-test('typed router extraction retains every baseline HTTP verb and path', () => {
+test('typed router inventory contains only provider-neutral room and recording APIs', () => {
   const expected = JSON.parse(
     readFileSync(new URL('./route-inventory.expected.json', import.meta.url), 'utf8'),
   ) as [string, string][];
@@ -29,5 +29,5 @@ test('typed router extraction retains every baseline HTTP verb and path', () => 
   const baseline = [...expected].sort(([verbA, pathA], [verbB, pathB]) =>
     verbA.localeCompare(verbB) || pathA.localeCompare(pathB));
   assert.deepEqual(sorted, baseline);
-  assert.equal(sorted.length, 49);
+  assert.equal(sorted.length, 44);
 });
