@@ -19,6 +19,56 @@ void main() {
     ],
   );
 
+  testWidgets('wide Pre-Join intro spans the page and aligns both cards', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    for (final viewport in const [
+      Size(1440, 900),
+      Size(1280, 700),
+      Size(390, 844),
+    ]) {
+      await tester.binding.setSurfaceSize(viewport);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RealtimeUiTheme.light(),
+          locale: const Locale('zh', 'CN'),
+          supportedLocales: RealtimeStrings.supportedLocales,
+          localizationsDelegates: RealtimeStrings.localizationsDelegates,
+          home: RealtimePreJoinPage(
+            permissionRequester: const _Permissions(),
+            roomLabel: '735606',
+            displayName: 'Teacher',
+            runCheck: readyResult,
+            openPreview: (_, _) async => null,
+            onEnter: (_, _) async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final intro = tester.getRect(
+        find.byKey(const ValueKey('prejoin-intro-header')),
+      );
+      final preview = tester.getRect(
+        find.byKey(const ValueKey('prejoin-preview-card')),
+      );
+      final session = tester.getRect(
+        find.byKey(const ValueKey('prejoin-session-card')),
+      );
+      expect(find.text('加入前检查设备'), findsOneWidget);
+      expect(intro.bottom, lessThan(preview.top));
+      if (viewport.width >= 1000) {
+        expect(preview.top, closeTo(session.top, 1));
+        expect(intro.left, closeTo(preview.left, 1));
+        expect(intro.right, closeTo(session.right, 1));
+      } else {
+        expect(preview.bottom, lessThan(session.top));
+      }
+      expect(tester.takeException(), isNull, reason: '$viewport');
+    }
+  });
+
   testWidgets('pre-join renders host waiting room, agenda and materials', (
     tester,
   ) async {
@@ -93,7 +143,7 @@ void main() {
   });
 
   testWidgets(
-    'pre-join restores preview shortcuts and shows mic meter inline without fake toggles',
+    'pre-join reveals device settings from the preview gear and shows mic meter inline',
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(900, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -115,8 +165,42 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // Devices are a secondary surface: the preview owns the gear that
+      // reveals them, and the join column owns the readiness summary.
+      expect(find.byType(RealtimePreJoinDevicePicker), findsNothing);
+      expect(find.byType(RealtimePreJoinMediaControls), findsNothing);
+      expect(find.byType(RealtimePreJoinReadinessCard), findsOneWidget);
+      expect(find.byTooltip('设备设置'), findsOneWidget);
+      expect(find.byTooltip('打开麦克风'), findsOneWidget);
+      expect(find.byTooltip('打开摄像头'), findsOneWidget);
+      expect(find.byTooltip('虚化背景'), findsOneWidget);
+      expect(find.text('Play test sound'), findsNothing);
+
+      // Settings must be the fourth control in the centered preview group,
+      // not a detached floating button at the bottom-right of the preview.
+      final mic = tester.getCenter(find.byTooltip('打开麦克风'));
+      final camera = tester.getCenter(find.byTooltip('打开摄像头'));
+      final blur = tester.getCenter(find.byTooltip('虚化背景'));
+      final settings = tester.getCenter(find.byTooltip('设备设置'));
+      expect(mic.dx, lessThan(camera.dx));
+      expect(camera.dx, lessThan(blur.dx));
+      expect(blur.dx, lessThan(settings.dx));
+      expect(settings.dy, closeTo(blur.dy, 1));
+      expect(settings.dx - blur.dx, closeTo(blur.dx - camera.dx, 1));
+
+      await tester.tap(find.byTooltip('设备设置'));
+      await tester.pumpAndSettle();
+
       expect(find.byType(RealtimePreJoinDevicePicker), findsNWidgets(3));
       expect(find.byType(RealtimePreJoinMediaControls), findsOneWidget);
+      // A muted microphone has no level control: the meter only appears once
+      // the switch (or the preview control) turns capture on.
+      expect(find.byType(RealtimeMicrophoneLevelMeter), findsNothing);
+      final controller = RealtimePreJoinScope.of(
+        tester.element(find.byType(RealtimePreJoinMediaControls)),
+      );
+      await controller.setMicrophoneEnabled(true);
+      await tester.pump();
       expect(find.byType(RealtimeMicrophoneLevelMeter), findsOneWidget);
       expect(
         find.descendant(
@@ -135,13 +219,11 @@ void main() {
       for (final label in const ['环境降噪', '虚化背景', '自动录制', '实时字幕']) {
         expect(find.text(label), findsNothing);
       }
-      expect(find.byTooltip('更多设置'), findsOneWidget);
-      expect(find.byTooltip('打开麦克风'), findsOneWidget);
-      expect(find.byTooltip('打开摄像头'), findsOneWidget);
-      expect(find.byTooltip('虚化背景'), findsOneWidget);
-      expect(find.text('Play test sound'), findsNothing);
-      await tester.tap(find.byTooltip('更多设置'));
+      expect(find.byTooltip('收起设备设置'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('收起设备设置'));
       await tester.pumpAndSettle();
+      expect(find.byType(RealtimePreJoinDevicePicker), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -269,6 +351,7 @@ void main() {
 }
 
 class _DevicesPreview extends Fake implements MediaLocalPreviewSession {
+  MediaLocalPreviewSettings _settings = const MediaLocalPreviewSettings();
   @override
   MediaTrackRenderer get renderer => const _NullRenderer();
   @override
@@ -278,9 +361,19 @@ class _DevicesPreview extends Fake implements MediaLocalPreviewSession {
   @override
   MediaCapabilities get capabilities => const MediaCapabilities.meeting();
   @override
-  MediaLocalPreviewSettings get settings => const MediaLocalPreviewSettings();
+  MediaLocalPreviewSettings get settings => _settings;
   @override
   MediaVideoTrack? get cameraTrack => null;
+  @override
+  Future<void> setMicrophoneEnabled(bool enabled) async {
+    _settings = _settings.copyWith(microphoneEnabled: enabled);
+  }
+
+  @override
+  Future<void> setCameraEnabled(bool enabled) async {
+    _settings = _settings.copyWith(cameraEnabled: enabled);
+  }
+
   @override
   Future<List<MediaDevice>> listMediaDevices({
     Set<MediaDeviceKind>? kinds,

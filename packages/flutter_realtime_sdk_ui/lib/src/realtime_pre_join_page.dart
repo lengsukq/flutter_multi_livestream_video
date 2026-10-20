@@ -6,10 +6,11 @@ import '../flutter_realtime_sdk_ui.dart';
 
 /// Ready-to-use Pre-Join page shared by applications and the Demo.
 ///
-/// Layout follows the reference green room: a large camera preview, device
-/// panel and effects on the left, a dark session card with the primary action
-/// plus the host-provided waiting room, lesson plan and materials on the right.
-/// Phones and tablets use a single scrolling column with a sticky action bar.
+/// Layout follows the reference green room: a large camera preview on the
+/// left with a collapsible device sheet behind its gear, and a dark session
+/// card with the primary action, the readiness summary and the host-provided
+/// waiting room, lesson plan and materials on the right. Phones and tablets
+/// use a single scrolling column with a sticky action bar.
 ///
 /// Waiting-room guests, agenda, countdown and materials have no authoritative
 /// SDK state. They are optional host slots; when omitted those cards are not
@@ -83,14 +84,54 @@ class _RealtimePreJoinPageState extends State<RealtimePreJoinPage>
   late final RealtimePreJoinController controller;
   final _deviceSettingsKey = GlobalKey();
 
+  /// Devices are a secondary concern before joining: the preview stays the
+  /// hero and the settings surface is revealed from the gear on the preview.
+  bool _settingsExpanded = false;
+
+  void _toggleSettings() {
+    final expanding = !_settingsExpanded;
+    setState(() => _settingsExpanded = expanding);
+    if (expanding) _showDeviceSettings();
+  }
+
   void _showDeviceSettings() {
-    final target = _deviceSettingsKey.currentContext;
-    if (target == null) return;
-    Scrollable.ensureVisible(
-      target,
-      duration: const Duration(milliseconds: 320),
+    // The settings surface is only mounted after the expand frame, so wait for
+    // it before asking the enclosing scroll view to reveal it.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final target = _deviceSettingsKey.currentContext;
+      if (target == null) return;
+      Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        alignment: 0.12,
+      );
+    });
+  }
+
+  /// Collapsible device sheet shared by the wide and narrow layouts.
+  Widget _deviceSettingsPanel(BuildContext context, RealtimeStrings strings) {
+    if (controller.result?.role == MediaRole.viewer) {
+      return const SizedBox.shrink();
+    }
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return AnimatedSize(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
-      alignment: 0.12,
+      alignment: Alignment.topCenter,
+      child: _settingsExpanded
+          ? Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: _SettingsCard(
+                key: _deviceSettingsKey,
+                strings: strings,
+                imagePresets: widget.imagePresets,
+              ),
+            )
+          : const SizedBox(width: double.infinity),
     );
   }
 
@@ -293,64 +334,77 @@ class _RealtimePreJoinPageState extends State<RealtimePreJoinPage>
     RealtimeStrings strings, {
     required bool viewer,
   }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          flex: 135,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _PreviewColumn(
-                  strings: strings,
-                  displayName: widget.displayName,
-                  avatarUrl: widget.avatarUrl,
-                  imagePresets: widget.imagePresets,
-                  onMoreSettings: _showDeviceSettings,
-                  classroom: _meetingMode == MediaMeetingMode.classroom,
-                ),
-                const SizedBox(height: 14),
-                if (!viewer) ...[
-                  _DeviceCard(key: _deviceSettingsKey, strings: strings),
-                  const SizedBox(height: 14),
-                  _EffectsCard(
-                    strings: strings,
-                    imagePresets: widget.imagePresets,
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                RealtimePreJoinReadinessCard(),
-              ],
-            ),
-          ),
+        _PreJoinIntroHeader(
+          strings: strings,
+          classroom: _meetingMode == MediaMeetingMode.classroom,
         ),
-        const SizedBox(width: 24),
+        const SizedBox(height: 16),
         Expanded(
-          flex: 100,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _SessionColumn(
-                  strings: strings,
-                  roomLabel: widget.roomLabel,
-                  title:
-                      (controller.result?.meetingMode ?? widget.meetingMode)
-                          ?.label(isZh: strings.isZh) ??
-                      widget.title,
-                  displayName: widget.displayName,
-                  sessionInfo: widget.sessionInfo,
-                  meetingMode: _meetingMode,
-                  onEnter: (settings) => _enter(settings),
-                  onEnterIntent: _enterWithIntent,
-                  joining: controller.joining,
-                  showJoinButton: true,
-                  showSecondaryActions: !viewer,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 135,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _PreviewColumn(
+                        strings: strings,
+                        displayName: widget.displayName,
+                        avatarUrl: widget.avatarUrl,
+                        imagePresets: widget.imagePresets,
+                        onToggleSettings: _toggleSettings,
+                        settingsExpanded: _settingsExpanded,
+                        classroom: _meetingMode == MediaMeetingMode.classroom,
+                        showHeading: false,
+                      ),
+                      _deviceSettingsPanel(context, strings),
+                      if (viewer) ...[
+                        const SizedBox(height: 14),
+                        RealtimePreJoinReadinessCard(),
+                      ],
+                    ],
+                  ),
                 ),
-                ..._hostSections(strings),
-              ],
-            ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                flex: 100,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _SessionColumn(
+                        strings: strings,
+                        roomLabel: widget.roomLabel,
+                        title:
+                            (controller.result?.meetingMode ??
+                                    widget.meetingMode)
+                                ?.label(isZh: strings.isZh) ??
+                            widget.title,
+                        displayName: widget.displayName,
+                        sessionInfo: widget.sessionInfo,
+                        meetingMode: _meetingMode,
+                        onEnter: (settings) => _enter(settings),
+                        onEnterIntent: _enterWithIntent,
+                        joining: controller.joining,
+                        showJoinButton: true,
+                        showSecondaryActions: !viewer,
+                      ),
+                      if (!viewer) ...[
+                        const SizedBox(height: 14),
+                        RealtimePreJoinReadinessCard(),
+                      ],
+                      ..._hostSections(strings),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -367,16 +421,27 @@ class _RealtimePreJoinPageState extends State<RealtimePreJoinPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _PreJoinIntroHeader(
+            strings: strings,
+            classroom: _meetingMode == MediaMeetingMode.classroom,
+            compact: compact,
+          ),
+          const SizedBox(height: 14),
           _PreviewColumn(
             strings: strings,
             displayName: widget.displayName,
             avatarUrl: widget.avatarUrl,
             imagePresets: widget.imagePresets,
-            onMoreSettings: _showDeviceSettings,
+            onToggleSettings: _toggleSettings,
+            settingsExpanded: _settingsExpanded,
             classroom: _meetingMode == MediaMeetingMode.classroom,
             compact: compact,
+            showHeading: false,
           ),
+          _deviceSettingsPanel(context, strings),
           const SizedBox(height: 14),
+          // The dark session card follows the preview on phones so the join
+          // action and readiness stay one short scroll away.
           _SessionColumn(
             strings: strings,
             roomLabel: widget.roomLabel,
@@ -395,13 +460,7 @@ class _RealtimePreJoinPageState extends State<RealtimePreJoinPage>
             showJoinButton: false,
             showSecondaryActions: !viewer,
           ),
-          if (!viewer) ...[
-            const SizedBox(height: 14),
-            _DeviceCard(key: _deviceSettingsKey, strings: strings),
-            const SizedBox(height: 14),
-            _EffectsCard(strings: strings, imagePresets: widget.imagePresets),
-            const SizedBox(height: 14),
-          ],
+          const SizedBox(height: 14),
           RealtimePreJoinReadinessCard(),
           ..._hostSections(strings),
           const SizedBox(height: 12),
@@ -534,21 +593,9 @@ class _Header extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                if (actions.isEmpty) ...[
-                  IconButton(
-                    icon: const Icon(Icons.wb_sunny_outlined, size: 20),
-                    tooltip: strings.isZh ? '切换主题' : 'Toggle theme',
-                    onPressed: () {},
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.help_outline_rounded, size: 20),
-                    tooltip: strings.isZh ? '帮助' : 'Help',
-                    onPressed: () {},
-                  ),
-                ] else
-                  ...actions,
-                if (displayName.trim().isNotEmpty) ...[
-                  const SizedBox(width: 4),
+                ...actions,
+                if (actions.isEmpty && displayName.trim().isNotEmpty) ...[
+                  const SizedBox(width: 8),
                   RealtimeAvatar(
                     name: displayName,
                     avatarUrl: avatarUrl,
@@ -613,15 +660,101 @@ class _DefaultTandemBrand extends StatelessWidget {
   }
 }
 
+/// A single page-level heading spans the camera and join columns so their
+/// cards can start on exactly the same baseline in wide windows.
+class _PreJoinIntroHeader extends StatelessWidget {
+  const _PreJoinIntroHeader({
+    required this.strings,
+    required this.classroom,
+    this.compact = false,
+  });
+
+  final RealtimeStrings strings;
+  final bool classroom;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    return Container(
+      key: const ValueKey('prejoin-intro-header'),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 16 : 24,
+        vertical: compact ? 14 : 20,
+      ),
+      decoration: BoxDecoration(
+        color: style.surface,
+        border: Border.all(color: style.border),
+        borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
+        boxShadow: style.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: compact ? 42 : 48,
+            height: compact ? 42 : 48,
+            decoration: BoxDecoration(
+              color: style.accentSoft,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.video_settings_outlined,
+              size: compact ? 21 : 23,
+              color: style.text,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  classroom
+                      ? (strings.isZh
+                            ? '上课前检查设备'
+                            : 'Check your setup before class')
+                      : (strings.isZh
+                            ? '加入前检查设备'
+                            : 'Check your setup before joining'),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: compact ? 19 : 25,
+                    color: style.text,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  strings.isZh
+                      ? '预览仅自己可见，麦克风与摄像头默认关闭。'
+                      : 'Only you can see this preview. Your microphone and camera start off.',
+                  style: TextStyle(
+                    fontSize: compact ? 12 : 13,
+                    color: style.textMuted,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PreviewColumn extends StatelessWidget {
   const _PreviewColumn({
     required this.strings,
     required this.displayName,
     required this.avatarUrl,
     required this.imagePresets,
-    required this.onMoreSettings,
+    required this.onToggleSettings,
+    required this.settingsExpanded,
     this.compact = false,
     this.classroom = false,
+    this.showHeading = true,
   });
 
   final bool classroom;
@@ -629,8 +762,10 @@ class _PreviewColumn extends StatelessWidget {
   final String displayName;
   final String? avatarUrl;
   final List<MediaBackgroundImagePreset> imagePresets;
-  final VoidCallback onMoreSettings;
+  final VoidCallback onToggleSettings;
+  final bool settingsExpanded;
   final bool compact;
+  final bool showHeading;
 
   @override
   Widget build(BuildContext context) {
@@ -638,28 +773,33 @@ class _PreviewColumn extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          classroom
-              ? (strings.isZh ? '上课前检查设备' : 'Check your setup before class')
-              : (strings.isZh ? '加入前检查设备' : 'Check your setup before joining'),
-          style: Theme.of(
-            context,
-          ).textTheme.displaySmall?.copyWith(fontSize: compact ? 27 : 38),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          strings.isZh
-              ? '预览仅自己可见，麦克风与摄像头默认关闭。'
-              : 'Only you can see this preview. Your microphone and camera start off.',
-          style: TextStyle(fontSize: 13, color: style.textMuted),
-        ),
-        const SizedBox(height: 16),
+        if (showHeading) ...[
+          Text(
+            classroom
+                ? (strings.isZh ? '上课前检查设备' : 'Check your setup before class')
+                : (strings.isZh
+                      ? '加入前检查设备'
+                      : 'Check your setup before joining'),
+            style: Theme.of(
+              context,
+            ).textTheme.displaySmall?.copyWith(fontSize: compact ? 27 : 38),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            strings.isZh
+                ? '预览仅自己可见，麦克风与摄像头默认关闭。'
+                : 'Only you can see this preview. Your microphone and camera start off.',
+            style: TextStyle(fontSize: 13, color: style.textMuted),
+          ),
+          const SizedBox(height: 16),
+        ],
         _PreviewCard(
           strings: strings,
           displayName: displayName,
           avatarUrl: avatarUrl,
           imagePresets: imagePresets,
-          onMoreSettings: onMoreSettings,
+          onToggleSettings: onToggleSettings,
+          settingsExpanded: settingsExpanded,
         ),
       ],
     );
@@ -672,13 +812,15 @@ class _PreviewCard extends StatelessWidget {
     required this.displayName,
     required this.avatarUrl,
     required this.imagePresets,
-    required this.onMoreSettings,
+    required this.onToggleSettings,
+    required this.settingsExpanded,
   });
   final RealtimeStrings strings;
   final String displayName;
   final String? avatarUrl;
   final List<MediaBackgroundImagePreset> imagePresets;
-  final VoidCallback onMoreSettings;
+  final VoidCallback onToggleSettings;
+  final bool settingsExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -693,6 +835,7 @@ class _PreviewCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
+          key: const ValueKey('prejoin-preview-card'),
           decoration: BoxDecoration(
             color: style.tile,
             borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
@@ -794,11 +937,14 @@ class _PreviewCard extends StatelessWidget {
                                 },
                         ),
                         const SizedBox(width: 10),
-                        _RoundControl(
-                          icon: Icons.tune_rounded,
-                          active: true,
-                          tooltip: strings.isZh ? '更多设置' : 'More settings',
-                          onPressed: onMoreSettings,
+                        _DeviceSettingsButton(
+                          expanded: settingsExpanded,
+                          tooltip: settingsExpanded
+                              ? (strings.isZh
+                                    ? '收起设备设置'
+                                    : 'Hide device settings')
+                              : (strings.isZh ? '设备设置' : 'Device settings'),
+                          onPressed: onToggleSettings,
                         ),
                       ],
                     ),
@@ -947,8 +1093,58 @@ class _RoundControl extends StatelessWidget {
   }
 }
 
-class _EffectsCard extends StatelessWidget {
-  const _EffectsCard({required this.strings, required this.imagePresets});
+/// The final button in the centered preview control group. Devices are
+/// optional before joining, so their panel stays collapsed until pressed.
+class _DeviceSettingsButton extends StatelessWidget {
+  const _DeviceSettingsButton({
+    required this.expanded,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final bool expanded;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    final foreground = expanded ? style.onAccent : Colors.white;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        toggled: expanded,
+        child: Material(
+          color: expanded
+              ? style.accent
+              : const Color(0xFF0C121C).withValues(alpha: 0.55),
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: SizedBox(
+              width: 46,
+              height: 46,
+              child: Icon(Icons.tune_rounded, size: 20, color: foreground),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Collapsible device sheet: device pickers, real mic/camera switches,
+/// background effects and a rerun action. It stays closed until the gear on
+/// the preview is pressed, so devices never compete with the camera preview.
+class _SettingsCard extends StatelessWidget {
+  const _SettingsCard({
+    super.key,
+    required this.strings,
+    required this.imagePresets,
+  });
   final RealtimeStrings strings;
   final List<MediaBackgroundImagePreset> imagePresets;
 
@@ -956,54 +1152,11 @@ class _EffectsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = RealtimeStyle.of(context);
     final controller = RealtimePreJoinScope.of(context);
-    if (controller.result?.backgroundCapabilities.isSupported != true) {
+    if (controller.preview == null) {
       return const SizedBox.shrink();
     }
-    return RealtimeCardSurface(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.auto_fix_high_outlined,
-                size: 18,
-                color: style.textSecondary,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  strings.isZh ? '画面效果' : 'Video effects',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: style.text,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          RealtimePreJoinBackgroundSelector(imagePresets: imagePresets),
-        ],
-      ),
-    );
-  }
-}
-
-class _DeviceCard extends StatelessWidget {
-  const _DeviceCard({super.key, required this.strings});
-  final RealtimeStrings strings;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = RealtimeStyle.of(context);
-    if (RealtimePreJoinScope.of(context).preview == null) {
-      return const SizedBox.shrink();
-    }
+    final effectsSupported =
+        controller.result?.backgroundCapabilities.isSupported == true;
     return RealtimeCardSurface(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
       child: Column(
@@ -1064,6 +1217,53 @@ class _DeviceCard extends StatelessWidget {
           const SizedBox(height: 8),
           Divider(height: 1, color: style.border),
           const RealtimePreJoinMediaControls(),
+          if (effectsSupported) ...[
+            Divider(height: 1, color: style.border),
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.auto_fix_high_outlined,
+                    size: 18,
+                    color: style.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      strings.isZh ? '画面效果' : 'Video effects',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: style.text,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            RealtimePreJoinBackgroundSelector(imagePresets: imagePresets),
+            const SizedBox(height: 10),
+          ],
+          Divider(height: 1, color: style.border),
+          const SizedBox(height: 4),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: controller.busy
+                  ? null
+                  : () => unawaited(controller.initialize()),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: Text(strings.runAgain),
+              style: TextButton.styleFrom(
+                foregroundColor: style.textSecondary,
+                minimumSize: const Size(44, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1111,7 +1311,6 @@ class _SessionColumn extends StatelessWidget {
       MediaRole.participant => strings.isZh ? '参与者' : 'Participant',
       null => strings.isZh ? '参与者' : 'Participant',
     };
-    final providerId = controller.result?.providerId;
     final info = sessionInfo;
     // Without host session details this stays a generic join page; the
     // classroom wording only appears when the host supplied a class.
@@ -1126,6 +1325,7 @@ class _SessionColumn extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
+          key: const ValueKey('prejoin-session-card'),
           padding: const EdgeInsets.all(22),
           decoration: BoxDecoration(
             color: style.text,
@@ -1213,21 +1413,18 @@ class _SessionColumn extends StatelessWidget {
                           : '$enrolled enrolled',
                       color: style.surface.withValues(alpha: .72),
                     ),
-                  if (info == null || info.scheduleLabel == null)
+                  // Without host schedule data the card still has to say who
+                  // is joining and as what.
+                  if (info == null)
                     _SessionMeta(
                       icon: Icons.person_outline_rounded,
                       label: roleLabel,
                       color: style.surface.withValues(alpha: .72),
                     ),
-                  _SessionMeta(
-                    icon: Icons.badge_outlined,
-                    label: displayName,
-                    color: style.surface.withValues(alpha: .72),
-                  ),
-                  if (providerId != null && providerId.isNotEmpty)
+                  if (info == null && displayName.trim().isNotEmpty)
                     _SessionMeta(
-                      icon: Icons.cloud_outlined,
-                      label: providerId,
+                      icon: Icons.badge_outlined,
+                      label: displayName,
                       color: style.surface.withValues(alpha: .72),
                     ),
                 ],
@@ -1265,36 +1462,6 @@ class _SessionColumn extends StatelessWidget {
                   foreground: style.surface,
                 ),
               ],
-              if (showJoinButton) const SizedBox(height: 4),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  // TextButton.icon uses a non-flexible Row internally and
-                  // overflows at 200% text in a narrow session card.
-                  TextButton(
-                    onPressed: controller.busy
-                        ? null
-                        : () => unawaited(controller.initialize()),
-                    style: TextButton.styleFrom(foregroundColor: style.surface),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.refresh, size: 17),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            strings.runAgain,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ),

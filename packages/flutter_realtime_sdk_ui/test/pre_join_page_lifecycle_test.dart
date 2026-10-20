@@ -307,6 +307,9 @@ void main() {
 
     await tester.tap(find.text('Open preparation'));
     await tester.pumpAndSettle();
+    // Devices and effects live behind the preview gear by default.
+    await tester.tap(find.byTooltip('Device settings'));
+    await tester.pumpAndSettle();
     expect(find.text('Background blur'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Background blur'));
@@ -350,6 +353,9 @@ void main() {
       ),
     );
     await tester.tap(find.text('Open preparation'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Device settings'));
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.byType(CupertinoSwitch).first);
