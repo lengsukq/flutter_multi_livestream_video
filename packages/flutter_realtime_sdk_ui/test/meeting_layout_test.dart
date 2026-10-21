@@ -233,6 +233,64 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('narrow meeting rail arrows are aligned and never cover tools', (
+    tester,
+  ) async {
+    final fixture = await MeetingSharingFixture.create(withTrack: false);
+    addTearDown(fixture.room.dispose);
+    await pumpPage(tester, fixture, const Size(390, 844));
+
+    final rail = find.byType(RealtimeMeetingRail);
+    final strip = find.descendant(
+      of: rail,
+      matching: find.byKey(const ValueKey('room-secondary-tools-scroll')),
+    );
+    final scrollView = find.descendant(
+      of: strip,
+      matching: find.byType(SingleChildScrollView),
+    );
+    final rightArrow = find.descendant(
+      of: strip,
+      matching: find.byTooltip('Scroll dock right'),
+    );
+    expect(rightArrow, findsOneWidget);
+    final railRect = tester.getRect(rail);
+    final viewport = tester.getRect(scrollView);
+    final right = tester.getRect(rightArrow);
+    expect(right.left, greaterThanOrEqualTo(viewport.right));
+    expect(right.center.dy, closeTo(railRect.center.dy, 1));
+
+    await tester.tap(rightArrow);
+    await tester.pumpAndSettle();
+    final leftArrow = find.descendant(
+      of: strip,
+      matching: find.byTooltip('Scroll dock left'),
+    );
+    expect(leftArrow, findsOneWidget);
+    final left = tester.getRect(leftArrow);
+    expect(left.right, lessThanOrEqualTo(tester.getRect(scrollView).left));
+    expect(left.center.dy, closeTo(railRect.center.dy, 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('local camera appears only in the participant strip', (
+    tester,
+  ) async {
+    for (final sharing in [false, true]) {
+      final fixture = await MeetingSharingFixture.create(
+        mode: sharing ? SharedContentMode.screen : SharedContentMode.members,
+        withTrack: sharing,
+      );
+      await pumpPage(tester, fixture, const Size(1280, 820));
+      expect(find.byType(RealtimeSelfView), findsNothing);
+      expect(find.byKey(const ValueKey('render-camera-self')), findsOneWidget);
+      expect(find.byType(RealtimeMeetingParticipantStrip), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(fixture.room.dispose);
+    }
+  });
+
   testWidgets('one layout toggle switches speaker and grid at every width', (
     tester,
   ) async {

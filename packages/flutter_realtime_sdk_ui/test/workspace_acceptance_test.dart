@@ -117,7 +117,8 @@ void main() {
             expect(dock.bottom, lessThanOrEqualTo(size.height));
             if (size.width >= 1000 && scale == 1) {
               expect(find.byType(RealtimeClassroomSidePanel), findsOneWidget);
-              expect(find.byType(RealtimeSelfView), findsOneWidget);
+              // Participant strip already contains the local camera.
+              expect(find.byType(RealtimeSelfView), findsNothing);
               expect(
                 tester.getSize(find.byType(RealtimeMeetingSidePanel)).width,
                 340,
@@ -253,10 +254,7 @@ void main() {
         expect(tester.takeException(), isNull);
         // Devices are collapsed by default; the gear on the preview reveals
         // them, which keeps the green room balanced next to the join column.
-        expect(
-          find.text('System default', skipOffstage: false),
-          findsNothing,
-        );
+        expect(find.text('System default', skipOffstage: false), findsNothing);
         await captureDesign(tester, 'green-room-${size.width.toInt()}');
         await tester.tap(find.byTooltip('Device settings'));
         await tester.pumpAndSettle();

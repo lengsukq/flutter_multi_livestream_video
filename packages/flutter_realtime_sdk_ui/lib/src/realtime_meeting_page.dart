@@ -356,7 +356,10 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                         showFilmstrip: _showFilmstrip,
                         showClassroom: widget.showClassroom,
                         showAnnotations: widget.showAnnotations,
-                        showSelfView: true,
+                        // The local camera is already in the participant strip
+                        // (or the grid). Do not render it a second time as an
+                        // overlay in the top-right corner of the stage.
+                        showSelfView: false,
                         participantBuilder: widget.participantBuilder,
                         overlayBuilder: widget.stageOverlayBuilder,
                         // Only the desktop rail hosts the board's tools. Phones

@@ -209,36 +209,61 @@ class _RealtimeDockScrollableStripState
             ? position.pixels > 1
             : position.pixels < position.maxScrollExtent - 1);
 
-    Widget arrow({required bool left}) => Positioned(
-      top: 0,
-      bottom: 0,
-      left: left ? 0 : null,
-      right: left ? null : 0,
-      child: Center(
-        child: IconButton(
-          tooltip: left ? 'Scroll dock left' : 'Scroll dock right',
-          icon: Icon(
-            left ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
-          ),
-          iconSize: 20,
-          constraints: const BoxConstraints.tightFor(width: 30, height: 36),
-          padding: EdgeInsets.zero,
-          style: IconButton.styleFrom(
-            backgroundColor: widget.dark
-                ? RealtimeUiTokens.canvasDarkElevated
-                : style.surface,
-            foregroundColor: widget.dark ? Colors.white : style.text,
-            side: BorderSide(
-              color: widget.dark
-                  ? Colors.white.withValues(alpha: .24)
-                  : style.border,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(11),
-            ),
-          ),
-          onPressed: () => _move(left ? -1 : 1),
+    Widget arrow({required bool left}) => Center(
+      child: IconButton(
+        tooltip: left ? 'Scroll dock left' : 'Scroll dock right',
+        icon: Icon(
+          left ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
         ),
+        iconSize: 20,
+        constraints: const BoxConstraints.tightFor(width: 30, height: 36),
+        padding: EdgeInsets.zero,
+        style: IconButton.styleFrom(
+          backgroundColor: widget.dark
+              ? RealtimeUiTokens.canvasDarkElevated
+              : style.surface,
+          foregroundColor: widget.dark ? Colors.white : style.text,
+          side: BorderSide(
+            color: widget.dark
+                ? Colors.white.withValues(alpha: .24)
+                : style.border,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(11),
+          ),
+        ),
+        onPressed: () => _move(left ? -1 : 1),
+      ),
+    );
+
+    final overflowing =
+        position != null &&
+        position.maxScrollExtent - position.minScrollExtent > 1;
+
+    // Keep both ends of the rail the same width, even when the first/last
+    // arrow is not actionable. Overlaying arrows on the scroll view caused
+    // them to cover the first/last tool and look off-centre at small widths.
+    Widget arrowSlot(bool left) => SizedBox(
+      width: 34,
+      height: 36,
+      child: (left ? canLeft : canRight) ? arrow(left: left) : null,
+    );
+
+    final scrollView = ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        dragDevices: {
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.touch,
+          PointerDeviceKind.trackpad,
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.invertedStylus,
+        },
+      ),
+      child: SingleChildScrollView(
+        controller: _controller,
+        scrollDirection: Axis.horizontal,
+        reverse: widget.reverse,
+        child: Row(mainAxisSize: MainAxisSize.min, children: widget.children),
       ),
     );
 
@@ -251,32 +276,18 @@ class _RealtimeDockScrollableStripState
       },
       child: Listener(
         onPointerSignal: _scrollWheel,
-        child: Stack(
-          children: [
-            ScrollConfiguration(
-              behavior: ScrollConfiguration.of(context).copyWith(
-                dragDevices: {
-                  PointerDeviceKind.mouse,
-                  PointerDeviceKind.touch,
-                  PointerDeviceKind.trackpad,
-                  PointerDeviceKind.stylus,
-                  PointerDeviceKind.invertedStylus,
-                },
-              ),
-              child: SingleChildScrollView(
-                controller: _controller,
-                scrollDirection: Axis.horizontal,
-                reverse: widget.reverse,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: widget.children,
-                ),
-              ),
-            ),
-            if (canLeft) arrow(left: true),
-            if (canRight) arrow(left: false),
-          ],
-        ),
+        child: overflowing
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  arrowSlot(true),
+                  const SizedBox(width: 4),
+                  Expanded(child: scrollView),
+                  const SizedBox(width: 4),
+                  arrowSlot(false),
+                ],
+              )
+            : scrollView,
       ),
     );
   }
