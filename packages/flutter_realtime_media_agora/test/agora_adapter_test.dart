@@ -145,6 +145,24 @@ void main() {
       await viewer.dispose();
     });
 
+    test('iOS publisher accepts a native Vision processed-video source', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final host = factory.createSession(joinInfo(MediaRole.host));
+      const source = ProcessedVideoSource(
+        id: 'ios-vision',
+        platform: ProcessedVideoPlatform.ios,
+        kind: ProcessedVideoSourceKind.nativeFrameHub,
+        width: 720,
+        height: 1280,
+        frameRate: 24,
+      );
+      expect(host.capabilities.canBlurBackground, isTrue);
+      expect(host.capabilities.canReplaceBackgroundImage, isTrue);
+      expect(host.capabilities.canSelectCamera, isTrue);
+      expect((host as ProcessedVideoSink).supportsProcessedVideoSource(source), isTrue);
+      await host.dispose();
+    });
+
     test('supports participant, host, and viewer roles', () {
       expect(
         factory.supportedRoles,

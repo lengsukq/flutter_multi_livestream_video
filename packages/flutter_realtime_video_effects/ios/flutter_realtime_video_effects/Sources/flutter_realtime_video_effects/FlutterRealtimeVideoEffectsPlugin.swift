@@ -242,7 +242,15 @@ private final class IOSVideoEffectsSource: NSObject,
 
   private func selectedCamera() -> AVCaptureDevice? {
     let devices = FlutterRealtimeVideoEffectsPlugin.availableCameras()
-    if let cameraDeviceId { return devices.first(where: { $0.uniqueID == cameraDeviceId }) }
+    if cameraDeviceId == "front" {
+      return devices.first(where: { $0.position == .front })
+    }
+    if cameraDeviceId == "back" {
+      return devices.first(where: { $0.position == .back })
+    }
+    if let cameraDeviceId {
+      return devices.first(where: { $0.uniqueID == cameraDeviceId })
+    }
     return devices.first(where: { $0.position == .front }) ?? devices.first
   }
 
@@ -301,7 +309,14 @@ private final class IOSVideoEffectsSource: NSObject,
             ]
           )
         } else {
-          processed = background
+          // A missing segmentation mask is a processing failure. Do not send
+          // an unsegmented or all-background frame to a remote publisher.
+          enabled = false
+          processingFailed = true
+          clearPreviewFrame()
+          captureQueue.async { [weak self] in self?.session.stopRunning() }
+          onFailure?(VideoEffectsError.processingFailed)
+          return
         }
       } catch {
         enabled = false

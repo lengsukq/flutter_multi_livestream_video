@@ -18,6 +18,8 @@ class _TrtcPublishing {
       source.platform ==
           (defaultTargetPlatform == TargetPlatform.android
               ? ProcessedVideoPlatform.android
+              : defaultTargetPlatform == TargetPlatform.iOS
+                  ? ProcessedVideoPlatform.ios
               : defaultTargetPlatform == TargetPlatform.windows
                   ? ProcessedVideoPlatform.windows
                   : ProcessedVideoPlatform.macos);

@@ -35,4 +35,20 @@ void main() {
       isFalse,
     );
   });
+  test('iOS supports a native Vision frame hub video track', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final meeting = LiveKitInteractiveSession();
+    addTearDown(meeting.dispose);
+    const source = ProcessedVideoSource(
+      id: 'ios-vision',
+      platform: ProcessedVideoPlatform.ios,
+      kind: ProcessedVideoSourceKind.nativeFrameHub,
+      width: 720,
+      height: 1280,
+      frameRate: 24,
+    );
+    expect(meeting.capabilities.canBlurBackground, isTrue);
+    expect(meeting.capabilities.canReplaceBackgroundImage, isTrue);
+    expect(meeting.supportsProcessedVideoSource(source), isTrue);
+  });
 }

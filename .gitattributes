@@ -2,3 +2,6 @@
 # Treat them as binary even when the byte stream contains no NUL in Git's
 # detection window, to avoid line-ending conversion and bogus whitespace diffs.
 *.onnx binary
+# Original Agora C++ headers are copied verbatim from the vendored SDK.
+# Do not rewrite upstream text or reject source releases for upstream spacing.
+packages/flutter_realtime_media_agora/ios/**/agora/*.h -whitespace
