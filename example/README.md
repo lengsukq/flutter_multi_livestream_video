@@ -84,9 +84,19 @@ media provider supports bidirectional data; LiveKit supports this on Web.
 
 ### Run on macOS
 
-Run `flutter run -d macos`. The Agora Chat adapter requires macOS 12 or later. It
+Run `./run_macos_debug.command` from the repository root to use CocoaPods
+(normal `flutter run -d macos` uses the app-wide SwiftPM flag).
+The Agora Chat adapter requires macOS 12 or later. It
 uses the same backend-issued short-lived user token as other platforms; the
 Agora App Certificate stays on the server.
+
+### Run on iOS
+
+The Demo enables SwiftPM in `pubspec.yaml`, so from the `example/` directory
+run `flutter run -d iPhone`. For first-time local SwiftPM framework shim setup,
+run `python3 scripts/flutter_ios.py run -d iPhone` from the repository root.
+Flutter does not support different SwiftPM flags for iOS and macOS inside one
+app manifest; use the macOS CocoaPods wrapper above for desktop development.
 
 For a terminal launch, run `flutter run -d web-server` from this directory and
 open the printed URL in a supported browser.
@@ -106,9 +116,10 @@ switched. The app UI does not expose or require provider selection.
 
 Use Flutter 3.47+, Dart 3.12+, Java 17, Android API 28+ with compile SDK 37,
 iOS 15+, macOS 12+, Windows 10+, and a secure browser context for Web media.
-This local monorepo example disables Flutter Swift Package Manager and uses CocoaPods on
-iOS to avoid local path package-identity ambiguity; the SDK packages themselves
-do not require applications to disable SwiftPM.
+This local monorepo example enables Swift Package Manager for iOS (IVS Media/Chat
+require it) while macOS uses a CocoaPods-specific development wrapper. SDK
+consumers can choose SwiftPM and Flutter's CocoaPods fallback according to their
+own plugin dependencies.
 
 Agora's optional real-service device E2E flow is documented in
 [`../doc/AGORA_E2E.md`](../doc/AGORA_E2E.md).

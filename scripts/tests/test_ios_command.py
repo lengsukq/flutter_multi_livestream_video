@@ -21,7 +21,7 @@ class IosCommandTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.project = Path(self.temp.name)
         self.manifest = self.project / 'pubspec.yaml'
-        self.original = 'name: demo\nflutter:\n  config:\n    enable-swift-package-manager: false\n'
+        self.original = 'name: demo\nflutter:\n  config:\n    enable-swift-package-manager: true\n'
         self.manifest.write_text(self.original)
         self.commands = []
 
@@ -31,7 +31,7 @@ class IosCommandTest(unittest.TestCase):
         self.commands.append(command)
         return subprocess.CompletedProcess(command, 0)
 
-    def test_ios_build_resolves_plugins_with_swiftpm_then_restores_macos_default(self):
+    def test_ios_build_resolves_plugins_without_changing_manifest(self):
         args = ['build', 'ios', '--release', '--no-pub']
         self.assertEqual(helper.run_ios(self.project, args, self.run_command), 0)
         self.assertEqual(self.commands, [['flutter', 'pub', 'get', '--offline'], ['flutter', *args]])
@@ -88,6 +88,26 @@ class IosCommandTest(unittest.TestCase):
         self.assertEqual(self.commands, [])
         self.assertEqual(self.manifest.read_text(), self.original)
 
-    def test_demo_default_keeps_macos_ide_runs_on_cocoapods(self):
+    def test_demo_defaults_to_swiftpm_for_ios(self):
         manifest = (scripts.parent / 'example/pubspec.yaml').read_text()
-        self.assertIn('enable-swift-package-manager: false', manifest)
+        self.assertIn('enable-swift-package-manager: true', manifest)
+
+    def test_ios_rejects_disabled_swiftpm_before_running_flutter(self):
+        self.manifest.write_text(self.original.replace(': true', ': false'))
+        with self.assertRaisesRegex(ValueError, 'iOS requires'):
+            helper.run_ios(self.project, ['build', 'ios'], self.run_command)
+        self.assertEqual(self.commands, [])
+
+    def test_macos_wrapper_uses_cocoapods_then_restores_ios_default(self):
+        from build_flutter_macos import with_cocoapods
+        commands = []
+
+        def run(command, cwd):
+            self.assertEqual(cwd, self.project)
+            self.assertIn('enable-swift-package-manager: false', self.manifest.read_text())
+            commands.append(command)
+            return subprocess.CompletedProcess(command, 0)
+
+        self.assertEqual(with_cocoapods(self.project, ['flutter', 'run', '-d', 'macos'], run), 0)
+        self.assertEqual(commands, [['flutter', 'run', '-d', 'macos']])
+        self.assertEqual(self.manifest.read_text(), self.original)

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Run the Demo's iOS build/debug command with project-local SwiftPM enabled."""
+"""Build/debug the iOS Demo, preparing native SwiftPM FlutterFramework shims.
+
+SwiftPM is the Demo default. Do not modify pubspec.yaml here: temporarily
+rewriting it races standard iOS commands and macOS development sessions.
+"""
 import re
 import signal
 import subprocess
@@ -62,33 +66,23 @@ def run_ios(project: Path, args: list[str], run=subprocess.run) -> int:
     if not args or (args[0] != 'run' and args[:2] != ['build', 'ios']):
         raise ValueError('Use build ios [options] or run -d <iOS device> [options].')
     manifest = project / 'pubspec.yaml'
-    original = manifest.read_text()
-    modified, count = re.subn(
-        r'(?m)^([ \t]+enable-swift-package-manager:)[ \t]*(?:true|false)[ \t]*$',
-        r'\1 true', original, count=1,
-    )
-    if count != 1:
-        raise ValueError('Expected the Demo SwiftPM setting; refusing an unknown manifest.')
-    backup = project / 'build/ios/pubspec-before-swiftpm.yaml'
-    backup.parent.mkdir(parents=True, exist_ok=True)
-    backup.write_text(original)
+    if not re.search(r'(?m)^[ \t]+enable-swift-package-manager:[ \t]*true[ \t]*$', manifest.read_text()):
+        raise ValueError('iOS requires enable-swift-package-manager: true in the Demo pubspec.yaml.')
     try:
-        manifest.write_text(modified)
         resolved = run(['flutter', 'pub', 'get', '--offline'], cwd=project)
         if resolved.returncode != 0:
             return resolved.returncode
         ensure_flutter_framework_dependencies(project)
         return run(['flutter', *args], cwd=project).returncode
     finally:
-        if manifest.read_text() == modified:
-            manifest.write_text(original)
-            # iOS pub get also wires SwiftPM into macOS Runner. Remove only
-            # Flutter's generated macOS dependency before the next IDE run.
-            runner = project / 'macos/Runner.xcodeproj/project.pbxproj'
-            if runner.is_file():
-                runner.write_text(without_generated_swiftpm_dependency(runner.read_text()))
-        else:
-            print(f'Manifest changed during the command; newer edits preserved. Backup: {backup}', file=sys.stderr)
+        # Flutter pub get may wire SwiftPM into macOS Runner too. Keep its
+        # CocoaPods-only Xcode project clean without touching pubspec.yaml.
+        runner = project / 'macos/Runner.xcodeproj/project.pbxproj'
+        if runner.is_file():
+            original = runner.read_text()
+            cleaned = without_generated_swiftpm_dependency(original)
+            if cleaned != original:
+                runner.write_text(cleaned)
 
 
 def stop(_signal, _frame):

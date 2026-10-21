@@ -2,6 +2,14 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Flutter iOS (SwiftPM)",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/example",
+      "program": "${workspaceFolder}/example/lib/main.dart",
+      "deviceId": "iPhone"
+    },
+    {
       "name": "Flutter Web (Edge)",
       "type": "dart",
       "request": "launch",

@@ -38,19 +38,27 @@ The plugin supports both:
 Both dependency managers compile the same Swift source tree under
 `ios/flutter_aws_chime/Sources/flutter_aws_chime`.
 
-The full Demo defaults to CocoaPods so normal macOS IDE debug runs work.
-Its iOS IVS Media/Chat plugins require SwiftPM. From the repository root, use:
+The full Demo enables SwiftPM by default so the iOS IVS Media/Chat plugins work
+with a standard iOS Flutter command. From the `example` directory, use:
+
+```sh
+flutter run -d iPhone
+flutter build ios --release --no-codesign
+```
+
+For a first checkout that needs local `FlutterFramework` SwiftPM shims, the
+repository also provides a bootstrap helper (run from the repository root):
 
 ```sh
 python3 scripts/flutter_ios.py build ios --release --no-codesign
 python3 scripts/flutter_ios.py run -d <ios-device-id>
 ```
 
-This helper enables SwiftPM only for the command, resolves Dart dependencies
-from the local cache, then restores the Demo configuration and removes generated
-macOS SwiftPM references. It does not change global Flutter settings. Use this
-entry point for full Demo iOS builds/debugging; a direct iOS run with the default
-configuration cannot register the SwiftPM-only IVS plugins. Run Apple platform
+This helper resolves Dart dependencies from the local cache, prepares missing
+SwiftPM Flutter framework shims and removes generated macOS SwiftPM project
+references after the build. It never rewrites `pubspec.yaml` or global Flutter
+settings. Flutter's SwiftPM flag is application-wide, not platform-specific;
+macOS continues to use CocoaPods through the wrappers below. Run Apple platform
 commands one at a time because they share generated plugin files.
 
 ## Real-device media verification
@@ -59,11 +67,12 @@ See [`DEVICE_E2E.md`](DEVICE_E2E.md) for the opt-in physical-device workflow.
 
 ## macOS validation
 
-The full Demo uses CocoaPods by default, including normal IDE debug runs:
+The full Demo uses CocoaPods for macOS, using the debug wrapper from the
+repository root (a direct `flutter run -d macos` would inherit the iOS SwiftPM
+setting and can link duplicate native plugins):
 
 ```sh
-cd example
-flutter run -d macos
+./run_macos_debug.command
 ```
 
 If Flutter previously generated SwiftPM macOS Runner references, or if you want
@@ -137,10 +146,10 @@ was removed from `example/macos/Runner.xcodeproj`, avoiding Xcode 27 errors
 resolving `iris_method_channel_objc` and `RealtimeNativeFrameSinks` when the
 same plugins are provided by CocoaPods. The helper also removes those generated
 Runner references again if Flutter recreates them after dependency changes.
-The project-level `enable-swift-package-manager: false` setting in
-`example/pubspec.yaml` also covers direct macOS build/debug commands. For iOS
-IVS Media/Chat, use `scripts/flutter_ios.py` as described above; it temporarily
-enables SwiftPM and restores the default afterwards.
+The project-level `enable-swift-package-manager: true` setting in
+`example/pubspec.yaml` allows standard iOS commands. The macOS wrappers
+temporarily disable SwiftPM, then restore the iOS default afterwards. Do not
+use a direct macOS command for the CocoaPods-only build.
 The DMG contains the `.app` and an `Applications` shortcut for drag-and-drop.
 The default `.command` invocation copies the `.app` into `/Applications` and
 replaces existing installations of the same application. Replacement is refused for a
