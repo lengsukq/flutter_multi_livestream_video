@@ -107,6 +107,13 @@ class DemoStrings {
   String get optionalRoomCode => isZh ? '房间码（可选）' : 'Room code (optional)';
   String get roomCodeHelp => isZh ? '4–12 位字母或数字' : '4–12 letters or digits';
   String get joinRoom => isZh ? '加入房间' : 'Join room';
+  String get quickJoin => isZh ? '快速加入' : 'QUICK JOIN';
+  String get configureMeeting => isZh ? '配置并创建' : 'Set up meeting';
+  String get configureLive => isZh ? '配置并开播' : 'Set up live';
+  String get serviceReadiness => isZh ? '服务连接状态' : 'Service readiness';
+  String get joinRoomDescription => isZh
+      ? '输入房间码，以参会者或观众身份进入。'
+      : 'Enter a room code to join as a participant or viewer.';
   String get back => isZh ? '返回' : 'Back';
   String get conversation => isZh ? '聊天消息' : 'Conversation';
   String get preJoinTitle => isZh ? '入会前准备' : 'Ready to join';

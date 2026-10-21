@@ -6,6 +6,110 @@ import 'package:flutter_realtime_media_example/main.dart';
 import 'package:flutter_realtime_media_example/demo_strings.dart';
 
 void main() {
+  testWidgets('Home creation cards align heights and button bottoms', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(const ChimeExampleApp());
+
+    for (final viewport in [const Size(760, 900), const Size(1280, 900)]) {
+      tester.view.physicalSize = viewport;
+      await tester.pump(const Duration(milliseconds: 400));
+      final meeting = find.byKey(const ValueKey('demo-create-meeting'));
+      final live = find.byKey(const ValueKey('demo-start-live'));
+      final meetingRect = tester.getRect(meeting);
+      final liveRect = tester.getRect(live);
+      expect(
+        meetingRect.top,
+        closeTo(liveRect.top, 1),
+        reason: 'Card tops differ at $viewport',
+      );
+      expect(
+        meetingRect.bottom,
+        closeTo(liveRect.bottom, 1),
+        reason: 'Card bottoms differ at $viewport',
+      );
+      final meetingAction = find.descendant(
+        of: meeting,
+        matching: find.byType(OutlinedButton),
+      );
+      final liveAction = find.descendant(
+        of: live,
+        matching: find.byType(OutlinedButton),
+      );
+      expect(meetingAction, findsOneWidget);
+      expect(liveAction, findsOneWidget);
+      expect(
+        tester.getRect(meetingAction).bottom,
+        closeTo(tester.getRect(liveAction).bottom, 1),
+        reason: 'Creation buttons do not align at $viewport',
+      );
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('header language control switches English and Chinese on tap', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const ChimeExampleApp());
+    await tester.pump(const Duration(milliseconds: 400));
+    final languageToggle = find.byKey(const ValueKey('demo-toggle-language'));
+    expect(languageToggle, findsOneWidget);
+    expect(find.text('EN'), findsOneWidget);
+    expect(find.text('QUICK JOIN'), findsOneWidget);
+    expect(find.byType(PopupMenuButton<Locale>), findsNothing);
+
+    await tester.tap(languageToggle);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('中'), findsOneWidget);
+    expect(find.text('快速加入'), findsOneWidget);
+
+    await tester.tap(languageToggle);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('EN'), findsOneWidget);
+    expect(find.text('QUICK JOIN'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Home has no duplicate create actions inside the join card', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 900);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(const ChimeExampleApp());
+    await tester.pump(const Duration(milliseconds: 450));
+
+    final joinCard = find.byKey(const ValueKey('demo-join-card'));
+    expect(joinCard, findsOneWidget);
+    expect(find.byKey(const ValueKey('demo-create-meeting')), findsOneWidget);
+    expect(find.byKey(const ValueKey('demo-start-live')), findsOneWidget);
+    expect(
+      find.descendant(of: joinCard, matching: find.text('Create meeting')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: joinCard, matching: find.text('Start live')),
+      findsNothing,
+    );
+    expect(find.text('Create meeting'), findsOneWidget);
+    expect(find.text('Start live'), findsOneWidget);
+    expect(find.text('QUICK JOIN'), findsOneWidget);
+    expect(find.text('Tandem'), findsNothing);
+    expect(find.text('Realtime Media'), findsOneWidget);
+
+    final header = tester.getRect(
+      find.byKey(const ValueKey('demo-main-header')),
+    );
+    final hero = tester.getRect(find.byKey(const ValueKey('demo-home-hero')));
+    expect(header.height, inInclusiveRange(60, 90));
+    expect(hero.top, greaterThanOrEqualTo(header.bottom));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Home keeps joining and creation reachable at every width', (
     tester,
   ) async {

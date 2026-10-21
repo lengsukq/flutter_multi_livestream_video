@@ -489,59 +489,37 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
         width < 520 || MediaQuery.textScalerOf(context).scale(14) >= 20;
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 56),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      key: const ValueKey('demo-main-header'),
+      constraints: const BoxConstraints(minHeight: 60),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
       decoration: BoxDecoration(
         color: style.surface,
         border: Border(bottom: BorderSide(color: style.border)),
       ),
       child: Row(
         children: [
-          // Tandem brand squircle mark
+          // One product identity for the Demo and SDK. Avoid displaying the
+          // reference template's Tandem branding as a second product name.
           Container(
-            width: 26,
-            height: 26,
+            width: 34,
+            height: 34,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: style.accent,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(8),
-                topRight: Radius.circular(8),
-                bottomRight: Radius.circular(8),
-                bottomLeft: Radius.circular(2),
-              ),
+              borderRadius: BorderRadius.circular(11),
             ),
             child: Text(
-              't',
+              'r',
               style: TextStyle(
                 fontFamily: displayFamily,
-                fontSize: 16,
+                fontSize: 21,
                 fontWeight: FontWeight.w800,
                 color: style.onAccent,
                 height: 1.0,
               ),
             ),
           ),
-          if (!isCompact) ...[
-            const SizedBox(width: 8),
-            Text(
-              'Tandem',
-              style: TextStyle(
-                fontFamily: displayFamily,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
-                color: style.text,
-              ),
-            ),
-            Container(
-              height: 20,
-              margin: const EdgeInsets.symmetric(horizontal: 14),
-              width: 1,
-              color: style.border,
-            ),
-          ] else
-            const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -554,27 +532,27 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: displayFamily,
-                    fontSize: isCompact ? 13.5 : 14.5,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.2,
+                    fontSize: isCompact ? 15 : 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.35,
                     color: style.text,
                   ),
                 ),
                 if (!isCompact)
                   Text(
-                    strings.workspaceEyebrow,
+                    strings.appSubtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontFamily: bodyFamily,
-                      fontSize: 11,
+                      fontSize: 11.5,
                       color: style.textMuted,
                     ),
                   ),
               ],
             ),
           ),
-          _buildLanguageMenu(),
+          _buildLanguageToggle(),
           const SizedBox(width: 6),
           IconButton(
             tooltip: strings.settings,
@@ -590,36 +568,31 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildLanguageMenu() {
-    final strings = RealtimeStrings.of(context);
+  Widget _buildLanguageToggle() {
+    final isZh = DemoStrings.of(context).isZh;
     final style = RealtimeStyle.of(context);
-    return RealtimeGlassSurface(
-      radius: RealtimeUiTokens.pillRadius,
-      opacity: 0.80,
-      shadow: false,
-      child: PopupMenuButton<Locale>(
-        tooltip: strings.language,
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-        color: style.surface.withValues(alpha: 0.96),
-        surfaceTintColor: Colors.transparent,
-        elevation: 6,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(RealtimeUiTokens.cardRadius),
-          side: BorderSide(color: style.border),
+    return Tooltip(
+      message: isZh ? 'Switch to English' : '切换为中文',
+      child: RealtimeGlassSurface(
+        radius: RealtimeUiTokens.pillRadius,
+        opacity: 0.80,
+        shadow: false,
+        child: TextButton.icon(
+          key: const ValueKey('demo-toggle-language'),
+          onPressed: () => widget.onLocaleChanged(
+            isZh ? const Locale('en') : const Locale('zh', 'CN'),
+          ),
+          icon: const Icon(Icons.language_rounded, size: 18),
+          label: Text(isZh ? '中' : 'EN'),
+          style: TextButton.styleFrom(
+            foregroundColor: style.text,
+            minimumSize: const Size(70, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(RealtimeUiTokens.pillRadius),
+            ),
+          ),
         ),
-        icon: Icon(Icons.language_rounded, size: 18, color: style.text),
-        onSelected: widget.onLocaleChanged,
-        itemBuilder: (_) => [
-          PopupMenuItem(
-            value: const Locale('en'),
-            child: Text(strings.english, style: TextStyle(color: style.text)),
-          ),
-          PopupMenuItem(
-            value: const Locale('zh', 'CN'),
-            child: Text(strings.chinese, style: TextStyle(color: style.text)),
-          ),
-        ],
       ),
     );
   }
@@ -662,7 +635,9 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
       builder: (context, constraints) {
         final stack = constraints.maxWidth < 460;
         final meetingCard = _QuickActionTile(
+          key: const ValueKey('demo-create-meeting'),
           title: strings.createMeeting,
+          actionLabel: strings.configureMeeting,
           description: strings.meetingDescription,
           icon: Icons.videocam_rounded,
           accentColor: style.text,
@@ -670,10 +645,13 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           buttonIcon: Icons.add_rounded,
           isLive: false,
           busy: _busy,
+          fillAvailableHeight: !stack,
           onPressed: () => _showCreateForm(false),
         );
         final liveCard = _QuickActionTile(
+          key: const ValueKey('demo-start-live'),
           title: strings.startLive,
+          actionLabel: strings.configureLive,
           description: strings.liveDescription,
           icon: Icons.sensors_rounded,
           accentColor: style.live,
@@ -681,24 +659,29 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           buttonIcon: Icons.sensors_rounded,
           isLive: true,
           busy: _busy,
+          fillAvailableHeight: !stack,
           onPressed: () => _showCreateForm(true),
         );
         return stack
             ? Column(
                 children: [meetingCard, const SizedBox(height: 12), liveCard],
               )
-            : Row(
-                children: [
-                  Expanded(child: meetingCard),
-                  const SizedBox(width: 14),
-                  Expanded(child: liveCard),
-                ],
+            : IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: meetingCard),
+                    const SizedBox(width: 14),
+                    Expanded(child: liveCard),
+                  ],
+                ),
               );
       },
     );
 
     // Tandem Highlight Dark Card (.class-card)
     final joinCard = Container(
+      key: const ValueKey('demo-join-card'),
       decoration: BoxDecoration(
         color: const Color(0xFF18202E),
         borderRadius: BorderRadius.circular(22),
@@ -734,7 +717,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'DIRECT ENTRY',
+                      strings.quickJoin,
                       style: TextStyle(
                         fontFamily: bodyFamily,
                         fontSize: 11,
@@ -761,7 +744,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
           ),
           const SizedBox(height: 4),
           Text(
-            strings.startHere,
+            strings.joinRoomDescription,
             style: TextStyle(
               fontFamily: bodyFamily,
               fontSize: 13,
@@ -801,63 +784,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             action: _joinRoom,
             isCreate: false,
             isDarkCard: true,
-          ),
-          const SizedBox(height: 12),
-          // Secondary actions (.alt)
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.22),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                  ),
-                  onPressed: _busy ? null : () => _showCreateForm(false),
-                  icon: const Icon(Icons.videocam_outlined, size: 15),
-                  label: Text(
-                    strings.createMeeting,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(
-                      color: Colors.white.withValues(alpha: 0.22),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                  ),
-                  onPressed: _busy ? null : () => _showCreateForm(true),
-                  icon: const Icon(Icons.sensors_rounded, size: 15),
-                  label: Text(
-                    strings.startLive,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -945,7 +871,7 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             children: [
               Expanded(
                 child: Text(
-                  'Service readiness',
+                  strings.serviceReadiness,
                   style: TextStyle(
                     fontFamily: displayFamily,
                     fontSize: 15,
@@ -1041,31 +967,6 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
             style: style,
             bodyFamily: bodyFamily,
             truncate: true,
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            height: 36,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: style.textSecondary,
-                side: BorderSide(color: style.border),
-                backgroundColor: style.surfaceSubtle,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: () => _selectDestination(2),
-              icon: const Icon(Icons.tune_rounded, size: 15),
-              label: Text(
-                strings.settings,
-                style: TextStyle(
-                  fontFamily: bodyFamily,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12.5,
-                ),
-              ),
-            ),
           ),
         ],
       ),
@@ -1428,7 +1329,9 @@ class _JoinScreenState extends State<JoinScreen> with TickerProviderStateMixin {
 
 class _QuickActionTile extends StatelessWidget {
   const _QuickActionTile({
+    super.key,
     required this.title,
+    required this.actionLabel,
     required this.description,
     required this.icon,
     required this.accentColor,
@@ -1436,10 +1339,12 @@ class _QuickActionTile extends StatelessWidget {
     required this.buttonIcon,
     required this.isLive,
     required this.busy,
+    required this.fillAvailableHeight,
     required this.onPressed,
   });
 
   final String title;
+  final String actionLabel;
   final String description;
   final IconData icon;
   final Color accentColor;
@@ -1447,6 +1352,7 @@ class _QuickActionTile extends StatelessWidget {
   final IconData buttonIcon;
   final bool isLive;
   final bool busy;
+  final bool fillAvailableHeight;
   final VoidCallback onPressed;
 
   @override
@@ -1515,6 +1421,7 @@ class _QuickActionTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          if (fillAvailableHeight) const Spacer(),
           SizedBox(
             width: double.infinity,
             height: 38,
@@ -1535,7 +1442,7 @@ class _QuickActionTile extends StatelessWidget {
               onPressed: busy ? null : onPressed,
               icon: Icon(buttonIcon, size: 16),
               label: Text(
-                title,
+                actionLabel,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(

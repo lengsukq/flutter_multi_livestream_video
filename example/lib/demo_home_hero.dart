@@ -42,107 +42,67 @@ class DemoHomeHero extends StatelessWidget {
     final bodyFamily = RealtimeFonts.bodyOf(context);
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(0, compact ? 4 : 8, 0, compact ? 12 : 18),
+      key: const ValueKey('demo-home-hero'),
+      padding: EdgeInsets.fromLTRB(0, compact ? 4 : 10, 0, compact ? 10 : 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Tandem status pill
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              if (!compact)
-                Container(
-                  height: 26,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: style.surface,
-                    borderRadius: BorderRadius.circular(99),
-                    border: Border.all(color: style.border),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: style.accent,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        strings.workspaceEyebrow,
-                        style: TextStyle(
-                          fontFamily: bodyFamily,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.2,
-                          color: style.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              _OnlineDot(online: online, testingServer: testingServer),
-            ],
-          ),
-          SizedBox(height: compact ? 10 : 14),
-          // Tandem h1: font: 700 clamp(26px,3.2vw,38px)/1.1 "Bricolage Grotesque"
-          Text(
-            strings.workspaceTitle,
-            style: TextStyle(
-              fontFamily: displayFamily,
-              fontSize: compact ? 26 : 36,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.8,
-              height: 1.12,
-              color: style.text,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Tandem lede: color: var(--muted); font: 400 14px/1.45 "Onest"
-          Text(
-            strings.workspaceDescription,
-            maxLines: compact ? 2 : 3,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: bodyFamily,
-              fontSize: compact ? 13 : 14,
-              fontWeight: FontWeight.w400,
-              height: 1.45,
-              color: style.textMuted,
-            ),
-          ),
-          const SizedBox(height: 12),
-          // Metadata status line with cloud icon
           Row(
             children: [
-              Icon(
-                Icons.cloud_done_rounded,
-                size: 15,
-                color: style.textMuted,
-                semanticLabel: 'Server status',
+              Container(
+                width: 3,
+                height: 15,
+                decoration: BoxDecoration(
+                  color: style.accent,
+                  borderRadius: BorderRadius.circular(3),
+                ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  statusText,
+                  strings.workspaceEyebrow,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: bodyFamily,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: style.textMuted,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: .6,
+                    color: style.textSecondary,
                   ),
                 ),
               ),
+              Tooltip(
+                message: statusText,
+                child: _OnlineDot(online: online, testingServer: testingServer),
+              ),
             ],
+          ),
+          SizedBox(height: compact ? 8 : 10),
+          Text(
+            strings.workspaceTitle,
+            style: TextStyle(
+              fontFamily: displayFamily,
+              fontSize: compact ? 25 : 31,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.65,
+              height: 1.16,
+              color: style.text,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            strings.workspaceDescription,
+            maxLines: compact ? 3 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: bodyFamily,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w400,
+              height: 1.45,
+              color: style.textMuted,
+            ),
           ),
         ],
       ),
