@@ -56,6 +56,61 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
         widget.loadImagePresets?.call() ?? Future.value(widget.imagePresets);
   }
 
+  void _openDisplayOptions(BuildContext context) {
+    final strings = RealtimeStrings.of(context);
+    final isHost = widget.room.media.role == MediaRole.host;
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isHost)
+                  ListTile(
+                    leading: const Icon(Icons.tune_rounded),
+                    title: Text(strings.isZh ? '主播工具' : 'Host tools'),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _openHostToolsSheet(context);
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.fit_screen_rounded),
+                  title: Text(
+                    _liveVideoFitOverride == BoxFit.contain
+                        ? strings.fillLiveScreen
+                        : strings.showFullVideo,
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    setState(
+                      () => _liveVideoFitOverride =
+                          _liveVideoFitOverride == BoxFit.contain
+                          ? BoxFit.cover
+                          : BoxFit.contain,
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.fullscreen_rounded),
+                  title: Text(strings.isZh ? '清屏' : 'Hide controls'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    setState(() => _cleanScreen = true);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showActionError(RealtimeException error) {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -196,7 +251,7 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
         room: widget.room,
         onActionError: _showActionError,
         child: Scaffold(
-          backgroundColor: Colors.transparent,
+          backgroundColor: RealtimeUiTokens.background,
           body: RealtimeAmbientBackground(
             child: Stack(
               fit: StackFit.expand,
@@ -213,7 +268,6 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
                     final strings = RealtimeStrings.of(context);
                     final isDark =
                         Theme.of(context).brightness == Brightness.dark;
-                    final controller = RealtimeRoomUiScope.of(context);
 
                     if (_cleanScreen) {
                       return GestureDetector(
@@ -261,134 +315,51 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
                       );
                     }
 
-                    if (wide) {
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: RealtimeLiveDesktopStage(
-                              showChat: widget.showChat,
-                              showLiveInteractions: widget.showLiveInteractions,
-                              videoFit: _liveVideoFitOverride,
-                              startedAt: _enteredAt,
-                              initialTab: _sidePanel == _LiveSidePanel.members
-                                  ? 1
-                                  : 0,
-                              onSelectedTab: (index) => setState(
-                                () => _sidePanel = index == 1
-                                    ? _LiveSidePanel.members
-                                    : _LiveSidePanel.chat,
-                              ),
-                              onToggleVideoFit: () => setState(
-                                () => _liveVideoFitOverride =
-                                    _liveVideoFitOverride == BoxFit.contain
-                                    ? BoxFit.cover
-                                    : BoxFit.contain,
-                              ),
-                              exitAction: RealtimeLeaveButton(
-                                iconOnly: false,
-                                onConfirm: (ctx) => _confirmLeave(ctx),
-                                onLeft: () {
-                                  if (widget.onLeft != null) {
-                                    widget.onLeft!();
-                                  } else if (context.mounted &&
-                                      Navigator.canPop(context)) {
-                                    Navigator.pop(context);
-                                  }
-                                },
-                              ),
-                              onToggleCleanScreen: () =>
-                                  setState(() => _cleanScreen = true),
-                              onOpenHostTools: isHost
-                                  ? () => _openHostToolsSheet(context)
-                                  : null,
-                              onViewAudience: () => setState(
-                                () => _sidePanel = _LiveSidePanel.members,
-                              ),
-                              topTrailingActions: [
-                                if (widget.header != null) widget.header!,
-                                if (widget.showProvider)
-                                  Text(widget.room.providerId),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    }
-
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: !widget.showLiveInteractions
-                              ? null
-                              : () => unawaited(
-                                  controller.sendLiveLike().catchError(
-                                    controller.reportActionError,
-                                  ),
-                                ),
-                          onDoubleTap: !widget.showLiveInteractions
-                              ? null
-                              : () {
-                                  unawaited(
-                                    controller.sendLiveLike().catchError(
-                                      controller.reportActionError,
-                                    ),
-                                  );
-                                  unawaited(
-                                    controller.sendLiveLike().catchError(
-                                      controller.reportActionError,
-                                    ),
-                                  );
-                                },
-                          child: RealtimeLiveVideoStage(
-                            fit: _liveVideoFitOverride,
-                          ),
-                        ),
-                        RealtimeLiveMobileOverlay(
-                          showChat: widget.showChat,
-                          showLiveInteractions: widget.showLiveInteractions,
-                          exitAction: RealtimeLeaveButton(
-                            iconOnly: true,
-                            onConfirm: (ctx) => _confirmLeave(ctx),
-                            onLeft: () {
-                              if (widget.onLeft != null) {
-                                widget.onLeft!();
-                              } else if (context.mounted &&
-                                  Navigator.canPop(context)) {
-                                Navigator.pop(context);
-                              }
-                            },
-                          ),
-                          onViewAudience: () =>
-                              _openMobileSheet(_LiveSidePanel.members),
-                          onOpenHostTools: isHost
-                              ? () => _openHostToolsSheet(context)
-                              : null,
-                          // Background effects are reached through Host Tools on
-                          // every width; the overlay keeps the slot for hosts that
-                          // compose it directly.
-                          videoFit: _liveVideoFitOverride,
-                          onToggleVideoFit: () => setState(
-                            () => _liveVideoFitOverride =
-                                _liveVideoFitOverride == BoxFit.contain
-                                ? BoxFit.cover
-                                : BoxFit.contain,
-                          ),
-                          onToggleCleanScreen: () =>
-                              setState(() => _cleanScreen = true),
-                          extraTopActions: [
-                            if (widget.header != null) widget.header!,
-                            if (widget.showProvider)
-                              Text(widget.room.providerId),
-                          ],
-                          extraBottomActions: [
-                            RealtimeRecordingBadge(
-                              room: widget.room,
-                              compact: true,
-                            ),
-                          ],
-                        ),
+                    return RealtimeLiveDesktopStage(
+                      showChat: widget.showChat,
+                      showLiveInteractions: widget.showLiveInteractions,
+                      videoFit: _liveVideoFitOverride,
+                      startedAt: _enteredAt,
+                      initialTab: _sidePanel == _LiveSidePanel.members ? 1 : 0,
+                      onSelectedTab: (index) => setState(
+                        () => _sidePanel = index == 1
+                            ? _LiveSidePanel.members
+                            : _LiveSidePanel.chat,
+                      ),
+                      onOpenChat: () => _openMobileSheet(_LiveSidePanel.chat),
+                      onOpenDisplayOptions: () => _openDisplayOptions(context),
+                      onViewAudience: wide
+                          ? () => setState(
+                              () => _sidePanel = _LiveSidePanel.members,
+                            )
+                          : () => _openMobileSheet(_LiveSidePanel.members),
+                      onToggleVideoFit: () => setState(
+                        () => _liveVideoFitOverride =
+                            _liveVideoFitOverride == BoxFit.contain
+                            ? BoxFit.cover
+                            : BoxFit.contain,
+                      ),
+                      exitAction: RealtimeLeaveButton(
+                        iconOnly: !wide,
+                        onConfirm: (ctx) => _confirmLeave(ctx),
+                        onLeft: () {
+                          if (widget.onLeft != null) {
+                            widget.onLeft!();
+                          } else if (context.mounted &&
+                              Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                      onToggleCleanScreen: () =>
+                          setState(() => _cleanScreen = true),
+                      onOpenHostTools: isHost
+                          ? () => _openHostToolsSheet(context)
+                          : null,
+                      topTrailingActions: [
+                        if (widget.header != null) widget.header!,
+                        if (widget.showProvider && wide)
+                          Text(widget.room.providerId),
                       ],
                     );
                   },

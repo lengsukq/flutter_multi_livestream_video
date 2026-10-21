@@ -314,11 +314,13 @@ void main() {
           expect(find.byType(RealtimeLivePage), findsOneWidget);
           expect(
             find.byType(RealtimeLiveDesktopStage),
-            viewport.width >= 1000 && scale == 1
-                ? findsOneWidget
-                : findsNothing,
+            findsOneWidget,
             reason: 'layout at $viewport with text scale $scale',
           );
+          expect(find.byType(RealtimeRoomShell), findsOneWidget);
+          expect(find.byType(RealtimeMeetingTopBar), findsOneWidget);
+          expect(find.byType(RealtimeMeetingDock), findsOneWidget);
+          expect(find.byType(RealtimeLiveMobileOverlay), findsNothing);
           expect(
             tester.takeException(),
             isNull,
@@ -366,6 +368,61 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('tablet live uses the meeting horizontal rail', (tester) async {
+    final room = _room(_FakeMediaSession(role: MediaRole.host));
+    addTearDown(room.dispose);
+    await tester.binding.setSurfaceSize(const Size(720, 850));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: RealtimeUiTheme.light(),
+        home: RealtimeLivePage(room: room),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final rail = find.byType(RealtimeMeetingRail);
+    expect(rail, findsOneWidget);
+    expect(tester.widget<RealtimeMeetingRail>(rail).horizontal, isTrue);
+    expect(find.byType(RealtimeMeetingSidebar), findsNothing);
+    final header = tester.getRect(find.byType(RealtimeMeetingTopBar));
+    final navigation = tester.getRect(rail);
+    expect(navigation.top, closeTo(header.bottom, 1));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('mobile viewer has a meeting-style dock without host tools', (
+    tester,
+  ) async {
+    final room = _room(_FakeMediaSession(role: MediaRole.viewer));
+    addTearDown(room.dispose);
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: RealtimeUiTheme.light(),
+        home: RealtimeLivePage(room: room),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RealtimeRoomShell), findsOneWidget);
+    expect(find.byType(RealtimeMeetingRail), findsNothing);
+    expect(find.byType(RealtimeMeetingSidebar), findsNothing);
+    expect(find.byType(RealtimeDockMicrophoneButton), findsNothing);
+    expect(find.byType(RealtimeDockCameraButton), findsNothing);
+    expect(find.byTooltip('Host tools'), findsNothing);
+    final people = find.descendant(
+      of: find.byType(RealtimeMeetingDock),
+      matching: find.byTooltip('Participants'),
+    );
+    await tester.ensureVisible(people);
+    await tester.tap(people);
+    await tester.pumpAndSettle();
+    expect(find.byType(RealtimeManagedParticipantList), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets(
     'large text keeps live host controls reachable from display options',
     (tester) async {
@@ -388,10 +445,16 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.byTooltip('Display options'), findsOneWidget);
-      await tester.tap(find.byTooltip('Display options'));
+      final more = find.byTooltip('Display options');
+      expect(more, findsOneWidget);
+      await tester.ensureVisible(more);
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Turn on microphone'), findsOneWidget);
+      await tester.tap(more);
+      await tester.pumpAndSettle();
+      expect(find.text('Host tools'), findsOneWidget);
+      await tester.tap(find.text('Host tools'));
+      await tester.pumpAndSettle();
+      expect(find.byType(RealtimeHostToolsPanel), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

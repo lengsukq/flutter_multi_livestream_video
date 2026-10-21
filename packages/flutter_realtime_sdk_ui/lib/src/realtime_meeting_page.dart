@@ -349,8 +349,9 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                       // Only the desktop rail hosts the board's tools. Phones
                       // and tablets keep the board's own pill strip so the
                       // tools stay reachable without a vertical rail.
-                      whiteboardToolsController:
-                          wide && whiteboardWorkspace ? _whiteboardTools : null,
+                      whiteboardToolsController: wide && whiteboardWorkspace
+                          ? _whiteboardTools
+                          : null,
                       topOverlayInset: 0,
                     );
 
@@ -555,91 +556,59 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
                       participants: participants,
                     );
 
-                    return Column(
-                      children: [
-                        if (widget.header != null) widget.header!,
-                        header,
-                        // Keep tablet navigation attached to the header rather
-                        // than floating over the media stage.
-                        if (tablet)
-                          RealtimeMeetingRail(
-                            horizontal: true,
-                            items: _railItems(
-                              context,
-                              controller,
-                              wide: false,
-                              sharing: sharing,
-                            ),
-                          ),
-                        if (widget.showRtcDataMessages) _rtcDataPanel(),
-                        Expanded(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (wide)
-                                RealtimeMeetingRail(
-                                  items: _railItems(
-                                    context,
-                                    controller,
-                                    wide: wide,
-                                    sharing: sharing,
-                                  ),
-                                  trailing:
-                                      whiteboardWorkspace &&
-                                          widget
-                                                  .room
-                                                  .sharedContent
-                                                  ?.whiteboard
-                                                  .state
-                                                  ?.canEdit ==
-                                              true
-                                      ? WhiteboardToolRail(
-                                          session: widget
-                                              .room
-                                              .sharedContent!
-                                              .whiteboard,
-                                          controller: _whiteboardTools,
-                                        )
-                                      : null,
-                                ),
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    Expanded(
-                                      child: compact
-                                          ? Column(
-                                              children: [
-                                                Expanded(child: stage),
-                                                dock,
-                                              ],
-                                            )
-                                          : RealtimeIdleControls(
-                                              child: stage,
-                                              controls: dock,
-                                              controlsMaxWidth: 1100,
-                                              // Dedicated bottom row, like the
-                                              // reference dock under the tiles.
-                                              reserveControlsSpace: true,
-                                              // Keep the room actions on screen;
-                                              // hiding them made the controls
-                                              // feel unreliable during a class.
-                                              autoHide: false,
-                                            ),
-                                    ),
-                                  ],
-                                ),
+                    return RealtimeRoomShell(
+                      compact: compact,
+                      header: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.header != null) widget.header!,
+                          header,
+                        ],
+                      ),
+                      tabletRail: tablet
+                          ? RealtimeMeetingRail(
+                              horizontal: true,
+                              items: _railItems(
+                                context,
+                                controller,
+                                wide: false,
+                                sharing: sharing,
                               ),
-                              if (wide && _panel != RealtimeMeetingPanel.closed)
-                                SizedBox(
-                                  width: 340,
-                                  child: _sidePanel(
-                                    workspaceMode: classroomWorkspace,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
+                            )
+                          : null,
+                      topContent: widget.showRtcDataMessages
+                          ? _rtcDataPanel()
+                          : null,
+                      desktopRail: wide
+                          ? RealtimeMeetingRail(
+                              items: _railItems(
+                                context,
+                                controller,
+                                wide: wide,
+                                sharing: sharing,
+                              ),
+                              trailing:
+                                  whiteboardWorkspace &&
+                                      widget
+                                              .room
+                                              .sharedContent
+                                              ?.whiteboard
+                                              .state
+                                              ?.canEdit ==
+                                          true
+                                  ? WhiteboardToolRail(
+                                      session:
+                                          widget.room.sharedContent!.whiteboard,
+                                      controller: _whiteboardTools,
+                                    )
+                                  : null,
+                            )
+                          : null,
+                      stage: stage,
+                      dock: dock,
+                      sidebar: wide && _panel != RealtimeMeetingPanel.closed
+                          ? _sidePanel(workspaceMode: classroomWorkspace)
+                          : null,
                     );
                   },
                 ),
@@ -869,9 +838,7 @@ class _RealtimeMeetingPageState extends State<RealtimeMeetingPage> {
       if (!sharing) ...[
         const RealtimeMeetingRailItem.divider(),
         RealtimeMeetingRailItem(
-          icon: _useGrid
-              ? Icons.view_agenda_outlined
-              : Icons.grid_view_rounded,
+          icon: _useGrid ? Icons.view_agenda_outlined : Icons.grid_view_rounded,
           tooltip: _useGrid ? strings.speakerMode : strings.gridMode,
           onPressed: () => setState(() => _useGrid = !_useGrid),
         ),
