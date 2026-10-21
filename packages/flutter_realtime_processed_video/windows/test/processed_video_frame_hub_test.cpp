@@ -16,7 +16,8 @@ struct Receiver final : FrameSink {
 int main() {
   FrameHub hub;
   auto receiver = std::make_shared<Receiver>();
-  auto bytes = std::make_shared<const std::vector<std::uint8_t>>(32, 0);
+  auto bytes = std::make_shared<const std::vector<std::uint8_t>>(
+      32, std::uint8_t{0});
   const Frame raw{"camera", bytes, 2, 4, 8, 123, false};
   const Frame protected_frame{"camera", bytes, 2, 4, 8, 124, true};
   assert(hub.Activate("camera", true));
