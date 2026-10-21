@@ -2,4 +2,5 @@ analyzer:
   exclude:
     - android/**
     - macos/**
+    - ios/**
 include: ../../analysis_options.sdk.yaml

@@ -27,7 +27,9 @@ class NativeProcessedVideoSink {
   bool supports(ProcessedVideoSource value) =>
       value.kind == ProcessedVideoSourceKind.nativeFrameHub &&
       (value.platform == ProcessedVideoPlatform.android ||
-          value.platform == ProcessedVideoPlatform.macos);
+          value.platform == ProcessedVideoPlatform.macos ||
+          value.platform == ProcessedVideoPlatform.ios ||
+          value.platform == ProcessedVideoPlatform.windows);
   Future<void> _invoke(String operation, Map<String, Object?> arguments) async {
     try {
       await MethodChannel(channelName).invokeMethod<void>(operation, arguments);

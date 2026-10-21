@@ -47,6 +47,10 @@ flutter:
         pluginClass: FlutterRealtimeVideoEffectsPlugin
       macos:
         pluginClass: FlutterRealtimeVideoEffectsPlugin
+      ios:
+        pluginClass: FlutterRealtimeVideoEffectsPlugin
+      windows:
+        pluginClass: FlutterRealtimeVideoEffectsPluginCApi
       web:
         pluginClass: FlutterRealtimeVideoEffectsWeb
         fileName: flutter_realtime_video_effects_web.dart
@@ -56,6 +60,7 @@ flutter:
     - assets/web/
     - assets/web/wasm/
     - assets/web/models/
+    - assets/windows/
   #
   # For details regarding assets in packages, see
   # https://flutter.dev/to/asset-from-package

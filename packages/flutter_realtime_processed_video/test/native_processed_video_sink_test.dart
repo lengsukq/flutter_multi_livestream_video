@@ -15,6 +15,42 @@ void main() {
     height: 480,
     frameRate: 24,
   );
+  test('native sink accepts iOS and Windows descriptors, not Web tracks', () {
+    final sink = NativeProcessedVideoSink(providerId: 'test');
+    for (final platform in [
+      ProcessedVideoPlatform.android,
+      ProcessedVideoPlatform.ios,
+      ProcessedVideoPlatform.macos,
+      ProcessedVideoPlatform.windows,
+    ]) {
+      expect(
+        sink.supports(
+          ProcessedVideoSource(
+            id: 'native',
+            platform: platform,
+            kind: ProcessedVideoSourceKind.nativeFrameHub,
+            width: 640,
+            height: 480,
+            frameRate: 24,
+          ),
+        ),
+        isTrue,
+      );
+    }
+    expect(
+      sink.supports(
+        const ProcessedVideoSource(
+          id: 'web',
+          platform: ProcessedVideoPlatform.web,
+          kind: ProcessedVideoSourceKind.mediaStreamTrack,
+          width: 640,
+          height: 480,
+          frameRate: 24,
+        ),
+      ),
+      isFalse,
+    );
+  });
   const second = ProcessedVideoSource(
     id: 'second',
     platform: ProcessedVideoPlatform.android,

@@ -21,6 +21,8 @@ flutter:
         pluginClass: FlutterRealtimeProcessedVideoPlugin
       macos:
         pluginClass: FlutterRealtimeProcessedVideoPlugin
+      ios:
+        pluginClass: FlutterRealtimeProcessedVideoPlugin
 
 dev_dependencies:
   flutter_test:

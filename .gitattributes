@@ -1,0 +1,4 @@
+# Video segmentation model weights are protobuf binary assets.
+# Treat them as binary even when the byte stream contains no NUL in Git's
+# detection window, to avoid line-ending conversion and bogus whitespace diffs.
+*.onnx binary
