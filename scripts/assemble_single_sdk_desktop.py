@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bundle the Web registrar and Linux/Windows annotation plugin into one SDK."""
+"""Bundle Web registrar and desktop native plugins into one SDK."""
 
 import json
 import shutil
@@ -9,6 +9,11 @@ from audit_single_pub_package import ROOT
 
 OUT = ROOT / "build" / "single_sdk_candidate"
 ANNOTATION = ROOT / "packages" / "flutter_realtime_screen_annotation"
+VIDEO_EFFECTS = ROOT / "packages" / "flutter_realtime_video_effects"
+PROCESSED_VIDEO = ROOT / "packages" / "flutter_realtime_processed_video"
+LIVEKIT = ROOT / "packages" / "flutter_realtime_media_livekit"
+AGORA = ROOT / "packages" / "flutter_realtime_media_agora"
+TRTC = ROOT / "packages" / "flutter_realtime_media_trtc"
 
 
 def enable_platform(name: str, config: str) -> None:
@@ -33,6 +38,16 @@ def copy_platform(platform: str) -> Path:
 
 def windows() -> None:
     dst = copy_platform("windows")
+    # The public SDK merges plugin registration into one DLL, but the
+    # effects source and its vendor-independent frame hub stay in separate
+    # source subdirectories to preserve local include paths.
+    shutil.copytree(VIDEO_EFFECTS / "windows", dst / "effects",
+                    ignore=shutil.ignore_patterns("test", "*.md", "*.py"))
+    shutil.copytree(PROCESSED_VIDEO / "windows" / "include",
+                    dst / "processed_video" / "include")
+    for package, folder in ((LIVEKIT, "livekit"), (AGORA, "agora"),
+                            (TRTC, "trtc")):
+        shutil.copytree(package / "windows", dst / folder)
     api = dst / "include" / "flutter_realtime_sdk"
     api.mkdir(parents=True, exist_ok=True)
     (api / "flutter_realtime_sdk_plugin_c_api.h").write_text("""#ifndef FLUTTER_REALTIME_SDK_PLUGIN_C_API_H_
@@ -55,8 +70,16 @@ FLUTTER_SDK_EXPORT void FlutterRealtimeSdkPluginCApiRegisterWithRegistrar(
 """)
     (dst / "sdk_plugin_c_api.cpp").write_text("""#include "include/flutter_realtime_sdk/flutter_realtime_sdk_plugin_c_api.h"
 #include "include/flutter_realtime_screen_annotation/flutter_realtime_screen_annotation_plugin_c_api.h"
+#include "effects/include/flutter_realtime_video_effects/flutter_realtime_video_effects_plugin_c_api.h"
+#include "livekit/include/flutter_realtime_media_livekit/flutter_realtime_media_livekit_plugin_c_api.h"
+#include "agora/include/flutter_realtime_media_agora/flutter_realtime_media_agora_plugin_c_api.h"
+#include "trtc/include/flutter_realtime_media_trtc/flutter_realtime_media_trtc_plugin_c_api.h"
 void FlutterRealtimeSdkPluginCApiRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar) {
   FlutterRealtimeScreenAnnotationPluginCApiRegisterWithRegistrar(registrar);
+  FlutterRealtimeVideoEffectsPluginCApiRegisterWithRegistrar(registrar);
+  FlutterRealtimeMediaLivekitPluginCApiRegisterWithRegistrar(registrar);
+  FlutterRealtimeMediaAgoraPluginCApiRegisterWithRegistrar(registrar);
+  FlutterRealtimeMediaTrtcPluginCApiRegisterWithRegistrar(registrar);
 }
 """)
     cmake = (dst / "CMakeLists.txt")
@@ -65,10 +88,50 @@ void FlutterRealtimeSdkPluginCApiRegisterWithRegistrar(FlutterDesktopPluginRegis
         'set(PROJECT_NAME "flutter_realtime_sdk")'
     ).replace(
         'SHARED "screen_annotation_plugin.cpp"',
-        'SHARED "screen_annotation_plugin.cpp" "sdk_plugin_c_api.cpp"'
+        'SHARED "screen_annotation_plugin.cpp" "sdk_plugin_c_api.cpp" '
+        '"effects/flutter_realtime_video_effects_plugin.cpp" '
+        '"livekit/livekit_processed_video_plugin.cpp" '
+        '"agora/agora_processed_video_plugin.cpp" '
+        '"trtc/trtc_processed_video_plugin.cpp"'
     ).replace(
         'set(flutter_realtime_screen_annotation_bundled_libraries',
         'set(flutter_realtime_sdk_bundled_libraries'
+    )
+    # The aggregated effects plugin uses the same optional ONNX Runtime ABI
+    # as the standalone source plugin; absent ORT it must compile but report
+    # effects unsupported rather than publish a raw camera stream.
+    source_cmake = (VIDEO_EFFECTS / "windows" / "CMakeLists.txt").read_text()
+    onnx_section = source_cmake[source_cmake.index("# Optional pinned ONNX Runtime distribution."):]
+    onnx_section = onnx_section.replace(
+        'set(flutter_realtime_video_effects_bundled_libraries',
+        'set(flutter_realtime_sdk_bundled_libraries'
+    )
+    source += (
+        '\ntarget_include_directories(${PLUGIN_NAME} PRIVATE\n'
+        '  "${CMAKE_CURRENT_SOURCE_DIR}/effects"\n'
+        '  "${CMAKE_CURRENT_SOURCE_DIR}/livekit"\n'
+        '  "${CMAKE_CURRENT_SOURCE_DIR}/agora"\n'
+        '  "${CMAKE_CURRENT_SOURCE_DIR}/trtc"\n'
+        '  "${CMAKE_CURRENT_SOURCE_DIR}/processed_video/include"\n'
+        ')\n'
+        'target_link_libraries(${PLUGIN_NAME} PRIVATE '
+        'mfplat mfreadwrite mf mfuuid windowscodecs ole32)\n'
+        # The Agora Windows Flutter plugin downloads pinned native SDK
+        # headers during its CMake configure step; this module compiles only
+        # after that dependency has been added.
+        'set(AGORA_WINDOWS "${CMAKE_SOURCE_DIR}/flutter/ephemeral/.plugin_symlinks/agora_rtc_engine/windows")\n'
+        'file(GLOB_RECURSE AGORA_SDK_HEADERS "${AGORA_WINDOWS}/third_party/native/lib/*/sdk/high_level_api/include/IAgoraRtcEngine.h")\n'
+        'if(NOT AGORA_SDK_HEADERS)\n'
+        '  message(FATAL_ERROR "Agora native Windows SDK headers missing")\n'
+        'endif()\n'
+        'list(GET AGORA_SDK_HEADERS 0 AGORA_HEADER)\n'
+        'get_filename_component(AGORA_NATIVE_INCLUDE "${AGORA_HEADER}" DIRECTORY)\n'
+        'set(TRTC_WINDOWS "${CMAKE_SOURCE_DIR}/flutter/ephemeral/.plugin_symlinks/tencent_rtc_sdk/windows")\n'
+        'if(NOT EXISTS "${TRTC_WINDOWS}/include/TRTC/ITRTCCloud.h")\n'
+        '  message(FATAL_ERROR "Tencent TRTC Windows SDK headers missing")\n'
+        'endif()\n'
+        'target_include_directories(${PLUGIN_NAME} PRIVATE "${AGORA_NATIVE_INCLUDE}" "${TRTC_WINDOWS}/include")\n'
+        + onnx_section
     )
     cmake.write_text(source)
     enable_platform("windows", "        pluginClass: FlutterRealtimeSdkPluginCApi\n")

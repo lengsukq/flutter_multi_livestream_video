@@ -53,7 +53,10 @@ def run() -> dict:
                 r"s\.dependency\s+['\"]([^'\"]+)['\"](?:\s*,\s*['\"]([^'\"]+)['\"])?",
                 podspec.read_text(),
             ):
-                dependencies[module] = constraint or None
+                # Internal source modules are folded into the single public
+                # plugin. They are not separately available on CocoaPods.
+                if module not in names:
+                    dependencies[module] = constraint or None
         for item in original.rglob("*"):
             if not item.is_file() or item.name == "Package.swift":
                 continue
@@ -63,7 +66,16 @@ def run() -> dict:
                     continue
                 target = classes / name / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(item, target)
+                if item.suffix == ".swift":
+                    source = item.read_text()
+                    # The frame hub's Swift types live in this same module
+                    # after aggregation, not in a separate dependency.
+                    source = source.replace(
+                        "import flutter_realtime_processed_video\n", ""
+                    )
+                    target.write_text(source)
+                else:
+                    shutil.copy2(item, target)
                 files += 1
             elif item.suffix in (".xcprivacy", ".png", ".jpg", ".jpeg", ".json"):
                 target = resources / name / item.name

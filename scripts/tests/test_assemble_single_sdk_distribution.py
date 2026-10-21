@@ -167,7 +167,9 @@ class SingleSdkDistributionTest(unittest.TestCase):
         pubspec = (self.root / "pubspec.yaml").read_text()
         self.assertEqual(self.report["native"]["android"]["registrations"], 10)
         self.assertEqual(self.report["native"]["macos"]["registrations"], 10)
-        self.assertEqual(self.report["native"]["ios"]["registrations"], 4)
+        # iOS effects, processed frame hub and LiveKit publisher add three
+        # native entrypoints to the original four.
+        self.assertEqual(self.report["native"]["ios"]["registrations"], 7)
         for platform in ("android", "ios", "macos", "windows", "linux", "web"):
             self.assertIn(f"      {platform}:", pubspec)
         self.assertIn(
@@ -191,11 +193,48 @@ class SingleSdkDistributionTest(unittest.TestCase):
 
     def test_apple_and_desktop_registration_bridges(self):
         ios = (self.root / "ios/Classes/FlutterRealtimeSdkPlugin.swift").read_text()
-        self.assertEqual(ios.count(".register(with: registrar)"), 4)
+        self.assertEqual(ios.count(".register(with: registrar)"), 7)
         mac = (self.root / "macos/Classes/FlutterRealtimeSdkPlugin.m").read_text()
         self.assertEqual(mac.count('@"FlutterRealtime'), 10)
         self.assertIn("FlutterRealtimeMediaAwsDesktopPlugin", mac)
         self.assertTrue((self.root / "windows/sdk_plugin_c_api.cpp").exists())
+        windows_registrar = (
+            self.root / "windows/sdk_plugin_c_api.cpp"
+        ).read_text()
+        self.assertIn(
+            "FlutterRealtimeVideoEffectsPluginCApiRegisterWithRegistrar",
+            windows_registrar,
+        )
+        for module, source in (
+            ("livekit", "livekit_processed_video_plugin.cpp"),
+            ("agora", "agora_processed_video_plugin.cpp"),
+            ("trtc", "trtc_processed_video_plugin.cpp"),
+        ):
+            self.assertTrue((self.root / "windows" / module / source).is_file())
+            self.assertIn(
+                f"FlutterRealtimeMedia{module.title()}PluginCApiRegisterWithRegistrar",
+                windows_registrar,
+            )
+        self.assertTrue(
+            (self.root / "windows/effects/flutter_realtime_video_effects_plugin.cpp").exists()
+        )
+        self.assertTrue(
+            (self.root / "windows/processed_video/include/processed_video_frame_hub.h").exists()
+        )
+        windows_cmake = (self.root / "windows/CMakeLists.txt").read_text()
+        self.assertIn("effects/flutter_realtime_video_effects_plugin.cpp", windows_cmake)
+        self.assertIn("REALTIME_ONNXRUNTIME_ROOT", windows_cmake)
+        self.assertIn("livekit/livekit_processed_video_plugin.cpp", windows_cmake)
+        self.assertIn("agora/agora_processed_video_plugin.cpp", windows_cmake)
+        self.assertIn("trtc/trtc_processed_video_plugin.cpp", windows_cmake)
+        self.assertIn("AGORA_NATIVE_INCLUDE", windows_cmake)
+        self.assertIn("TRTC_WINDOWS", windows_cmake)
+        self.assertTrue(
+            (self.root / "assets/bundled/flutter_realtime_video_effects/windows/pphumanseg.onnx").exists()
+        )
+        self.assertTrue(
+            (self.root / "assets/bundled/flutter_realtime_video_effects/windows/PPHUMANSEG_LICENSE.txt").exists()
+        )
         self.assertTrue((self.root / "linux/sdk_plugin.cc").exists())
 
     def test_known_generated_vendor_false_positive_is_precisely_scoped(self):

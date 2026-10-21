@@ -5,7 +5,11 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   agora_rtc_engine
   connectivity_plus
+  flutter_realtime_media_agora
+  flutter_realtime_media_livekit
+  flutter_realtime_media_trtc
   flutter_realtime_screen_annotation
+  flutter_realtime_video_effects
   flutter_webrtc
   iris_method_channel
   livekit_client
