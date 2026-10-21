@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
@@ -65,19 +66,14 @@ class RealtimeMeetingDock extends StatelessWidget {
           if (narrow) {
             return Row(
               children: [
-                group(mediaGroup.take(2).toList(growable: false)),
+                if (mediaGroup.isNotEmpty)
+                  group(mediaGroup.take(2).toList(growable: false)),
                 if (narrowSecondary.isNotEmpty) ...[
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: narrowSecondary,
-                        ),
-                      ),
+                    child: RealtimeDockScrollableStrip(
+                      key: const ValueKey('meeting-dock-secondary-scroll'),
+                      children: narrowSecondary,
                     ),
                   ),
                 ] else
@@ -90,37 +86,197 @@ class RealtimeMeetingDock extends StatelessWidget {
             );
           }
 
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (leadingStatus != null) ...[
-                  leadingStatus!,
-                  const SizedBox(width: 8),
-                ],
-                group(mediaGroup),
-                if (collaborationGroup.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  group(collaborationGroup),
-                ],
-                if (panelsGroup.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  group(panelsGroup),
-                ],
-                if (moreAction != null) ...[
-                  const SizedBox(width: 8),
-                  group([moreAction!]),
-                ],
-                if (exitAction != null) ...[
-                  const SizedBox(width: 8),
-                  group([exitAction!]),
-                ],
+          return RealtimeDockScrollableStrip(
+            key: const ValueKey('meeting-dock-main-scroll'),
+            children: [
+              if (leadingStatus != null) ...[
+                leadingStatus!,
+                const SizedBox(width: 8),
               ],
-            ),
+              if (mediaGroup.isNotEmpty) group(mediaGroup),
+              if (collaborationGroup.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                group(collaborationGroup),
+              ],
+              if (panelsGroup.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                group(panelsGroup),
+              ],
+              if (moreAction != null) ...[
+                const SizedBox(width: 8),
+                group([moreAction!]),
+              ],
+              if (exitAction != null) ...[
+                const SizedBox(width: 8),
+                group([exitAction!]),
+              ],
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Horizontal room actions must also work with a mouse in a narrow macOS /
+/// Windows window. The default desktop scroll behavior doesn't allow mouse
+/// dragging, and a vertical mouse wheel doesn't scroll a horizontal list.
+/// Arrows provide an obvious discoverable way to reach the hidden controls.
+class RealtimeDockScrollableStrip extends StatefulWidget {
+  const RealtimeDockScrollableStrip({
+    super.key,
+    required this.children,
+    this.reverse = false,
+    this.dark = false,
+  });
+
+  final List<Widget> children;
+  final bool reverse;
+  final bool dark;
+
+  @override
+  State<RealtimeDockScrollableStrip> createState() =>
+      _RealtimeDockScrollableStripState();
+}
+
+class _RealtimeDockScrollableStripState
+    extends State<RealtimeDockScrollableStrip> {
+  final _controller = ScrollController();
+
+  bool get _hasMetrics =>
+      _controller.hasClients && _controller.position.hasContentDimensions;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  void _scrollWheel(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !_hasMetrics) return;
+    // Horizontal trackpad scrolling is already handled by Scrollable itself.
+    // Translate vertical mouse-wheel input, including on macOS desktop.
+    if (event.scrollDelta.dx.abs() > event.scrollDelta.dy.abs()) return;
+    final delta = event.scrollDelta.dy;
+    if (delta == 0) return;
+    final position = _controller.position;
+    _controller.jumpTo(
+      (_controller.offset + delta).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+    );
+  }
+
+  void _move(int direction) {
+    if (!_hasMetrics) return;
+    final position = _controller.position;
+    final distance = position.viewportDimension * .7;
+    final next =
+        (_controller.offset +
+                direction * (widget.reverse ? -distance : distance))
+            .clamp(position.minScrollExtent, position.maxScrollExtent);
+    _controller.animateTo(
+      next,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_refresh);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = RealtimeStyle.of(context);
+    final position = _hasMetrics ? _controller.position : null;
+    final canLeft =
+        position != null &&
+        (widget.reverse
+            ? position.pixels < position.maxScrollExtent - 1
+            : position.pixels > 1);
+    final canRight =
+        position != null &&
+        (widget.reverse
+            ? position.pixels > 1
+            : position.pixels < position.maxScrollExtent - 1);
+
+    Widget arrow({required bool left}) => Positioned(
+      top: 0,
+      bottom: 0,
+      left: left ? 0 : null,
+      right: left ? null : 0,
+      child: Center(
+        child: IconButton(
+          tooltip: left ? 'Scroll dock left' : 'Scroll dock right',
+          icon: Icon(
+            left ? Icons.chevron_left_rounded : Icons.chevron_right_rounded,
+          ),
+          iconSize: 20,
+          constraints: const BoxConstraints.tightFor(width: 30, height: 36),
+          padding: EdgeInsets.zero,
+          style: IconButton.styleFrom(
+            backgroundColor: widget.dark
+                ? RealtimeUiTokens.canvasDarkElevated
+                : style.surface,
+            foregroundColor: widget.dark ? Colors.white : style.text,
+            side: BorderSide(
+              color: widget.dark
+                  ? Colors.white.withValues(alpha: .24)
+                  : style.border,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(11),
+            ),
+          ),
+          onPressed: () => _move(left ? -1 : 1),
+        ),
+      ),
+    );
+
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: (_) {
+        // The very first metrics arrive after build; then viewport changes
+        // (e.g. resizing the floating meeting window) may add/remove arrows.
+        WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+        return false;
+      },
+      child: Listener(
+        onPointerSignal: _scrollWheel,
+        child: Stack(
+          children: [
+            ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                dragDevices: {
+                  PointerDeviceKind.mouse,
+                  PointerDeviceKind.touch,
+                  PointerDeviceKind.trackpad,
+                  PointerDeviceKind.stylus,
+                  PointerDeviceKind.invertedStylus,
+                },
+              ),
+              child: SingleChildScrollView(
+                controller: _controller,
+                scrollDirection: Axis.horizontal,
+                reverse: widget.reverse,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: widget.children,
+                ),
+              ),
+            ),
+            if (canLeft) arrow(left: true),
+            if (canRight) arrow(left: false),
+          ],
+        ),
       ),
     );
   }

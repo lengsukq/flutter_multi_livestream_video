@@ -489,6 +489,8 @@ void main() {
           find.byKey(const ValueKey('meeting-return-to-content')),
           findsOneWidget,
         );
+        await tester.ensureVisible(find.byTooltip('隐藏缩略图'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('隐藏缩略图'));
         await tester.pumpAndSettle();
         expect(strip, findsNothing);
@@ -498,6 +500,8 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(rendered('screen'), findsOneWidget);
+        await tester.ensureVisible(find.byTooltip('显示缩略图'));
+        await tester.pumpAndSettle();
         await tester.tap(find.byTooltip('显示缩略图'));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);

@@ -153,12 +153,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Hand requests: 1'));
+    final handRequests = find.byTooltip('Hand requests: 1');
+    await tester.ensureVisible(handRequests);
+    await tester.pumpAndSettle();
+    await tester.tap(handRequests);
     await tester.pumpAndSettle();
 
     expect(find.byType(RealtimeMeetingSidePanel), findsOneWidget);
     expect(find.byType(RealtimeClassroomSidePanel), findsOneWidget);
     // The queue content, not Q&A or People, must be the visible tab.
+    expect(find.byType(RealtimeClassroomHandQueue), findsOneWidget);
+    expect(find.text('Student'), findsOneWidget);
     expect(find.text('Allow'), findsOneWidget);
   });
 }

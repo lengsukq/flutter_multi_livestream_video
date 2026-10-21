@@ -12,6 +12,7 @@ import 'realtime_live_like_button.dart';
 import 'realtime_live_gift_banner.dart';
 import 'realtime_role_presentation.dart';
 import 'realtime_live_media_controls.dart';
+import 'realtime_meeting_dock.dart';
 import 'room_ui_controller.dart';
 import 'room_chat_components.dart';
 
@@ -288,32 +289,29 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final actions = SingleChildScrollView(
+                          final actions = RealtimeDockScrollableStrip(
+                            key: const ValueKey('live-mobile-actions-scroll'),
                             reverse: true,
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (showLiveInteractions &&
-                                    onOpenGiftSheet != null) ...[
-                                  _CircleIconButton(
-                                    icon: Icons.card_giftcard_rounded,
-                                    color: RealtimeUiTokens.live,
-                                    onPressed: onOpenGiftSheet!,
-                                  ),
-                                  const SizedBox(width: 8),
-                                ] else if (showLiveInteractions &&
-                                    controller.room.liveInteractions !=
-                                        null) ...[
-                                  const RealtimeLiveGiftButton(),
-                                  const SizedBox(width: 8),
-                                ],
-                                if (showLiveInteractions &&
-                                    controller.room.liveInteractions != null)
-                                  RealtimeLiveLikeButton(iconOnly: compactHud),
-                                ...?extraBottomActions,
+                            dark: true,
+                            children: [
+                              if (showLiveInteractions &&
+                                  onOpenGiftSheet != null) ...[
+                                _CircleIconButton(
+                                  icon: Icons.card_giftcard_rounded,
+                                  color: RealtimeUiTokens.live,
+                                  onPressed: onOpenGiftSheet!,
+                                ),
+                                const SizedBox(width: 8),
+                              ] else if (showLiveInteractions &&
+                                  controller.room.liveInteractions != null) ...[
+                                const RealtimeLiveGiftButton(),
+                                const SizedBox(width: 8),
                               ],
-                            ),
+                              if (showLiveInteractions &&
+                                  controller.room.liveInteractions != null)
+                                RealtimeLiveLikeButton(iconOnly: compactHud),
+                              ...?extraBottomActions,
+                            ],
                           );
                           if (!showChat || controller.room.chat == null) {
                             return actions;
