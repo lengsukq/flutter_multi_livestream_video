@@ -44,6 +44,25 @@ test('teacher plus two students follow pages, modes and every annotation tool; l
   f.mode('whiteboard'); f.board('page.delete',{pageId:second});
   assert.throws(()=>f.board('page.delete'),/at least one/);
 });
+test('teacher erases a selected mark, students see deletion, undo restores it',()=>{
+  const f=fixture(); f.mode('whiteboard');
+  for (const id of ['first','middle','last']) f.board('begin', {
+    id,tool:'pen',color:0xff1f2a3c,width:3,points:[{x:.2,y:.4},{x:.5,y:.4}],
+  });
+  const before = f.snap().tools.content.whiteboard;
+  f.board('erase',{id:'middle'});
+  assert.deepEqual(f.snap(false,'alice').tools.content.whiteboard.canvas.shapes.map((s:{id:string})=>s.id),['first','last']);
+  assert.throws(()=>f.act('whiteboard.erase',{
+    id:'first',expectedRevision:before.revision,pageId:before.activePageId,canvasId:before.canvas.canvasId,
+  },undefined,true),/Teacher permission/);
+  assert.throws(()=>f.board('erase',{id:'nonexistent'}),/Shape not found/);
+  f.board('undo');
+  assert.deepEqual(f.snap(false,'bob').tools.content.whiteboard.canvas.shapes.map((s:{id:string})=>s.id),['first','middle','last']);
+  f.board('erase',{id:'last'});
+  f.board('begin',{id:'new',tool:'pen',color:1,width:3,points:[{x:.1,y:.3}]});
+  f.board('undo');
+  assert.deepEqual(f.snap().tools.content.whiteboard.canvas.shapes.map((s:{id:string})=>s.id),['first','middle']);
+});
 
 test('whiteboard persists marks outside the original page; screen annotation stays bounded',()=>{
   const f=fixture();

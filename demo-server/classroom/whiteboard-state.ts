@@ -38,7 +38,7 @@ export function applyWhiteboard(board: Whiteboard, operation: string, data: Reco
       }
       break;
     }
-    case 'begin': case 'append': case 'undo': case 'clear':
+    case 'begin': case 'append': case 'erase': case 'undo': case 'clear':
       if (data.pageId !== board.activePageId || data.canvasId !== current.canvas.canvasId) conflict('Canvas or active page changed');
       if (!applyAnnotation(current.canvas, operation, data, true)) return false;
       break;

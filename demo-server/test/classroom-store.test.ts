@@ -35,6 +35,10 @@ test('classroom state and idempotency survive directory recreation', () => {
       eventId: 'ask-q-123',
     });
     first.act(room, teacher, true, { action: 'speak.grant', userId: 'student' });
+    first.act(room, teacher, true, {
+      action: 'note.add', kind: 'chapter', text: 'Find roots',
+      eventId: 'chapter-file-001',
+    });
     const persistedRevision = first.snapshot(room, true, 'teacher').revision;
     const files = readdirSync(dir);
     assert.equal(files.length, 1);
@@ -50,6 +54,8 @@ test('classroom state and idempotency survive directory recreation', () => {
     assert.equal(snapshot.stats.speakGrants, 1);
     assert.equal(snapshot.students.find(s => s.userId === 'student')?.canSpeak, true);
     assert.equal(snapshot.stats.handRaisesTotal, 1);
+    assert.equal(snapshot.notesPersistence, 'file');
+    assert.equal(snapshot.notes![0]?.text, 'Find roots');
     assert.equal(snapshot.revision, persistedRevision);
     const replay = afterRestart.act(restartedRoom, student, false, {
       action: 'question.ask', text: 'Persistent question',

@@ -46,6 +46,57 @@ test('classroom supports hand raise, Q&A and speaker grants with role enforcemen
   assert.equal(s.students.find(p => p.userId === 'student')?.canSpeak, false);
 });
 
+test('teacher notes and chapter markers are authorized, timecoded and idempotent', () => {
+  const directory = new ClassroomStateDirectory();
+  const room: RoomEntry = {
+    ...entry,
+    createdAt: new Date(Date.now() - 75_000).toISOString(),
+    attendees: entry.attendees.map(a => ({...a})),
+  };
+  const teacher = room.attendees[0]!;
+  const student = room.attendees[1]!;
+  assert.equal(directory.snapshot(room, false, 'student').notes, undefined);
+  assert.throws(() => directory.act(room, student, false, {
+    action: 'note.add', text: 'student intrusion',
+  }), /Teacher permission required/);
+  let s = directory.act(room, teacher, true, {
+    action: 'note.add', text: 'Quadratics practice', kind: 'chapter',
+    eventId: 'chapter-idem-001',
+  });
+  assert.equal(s.notes!.length, 1);
+  assert.equal(s.notes![0]?.kind, 'chapter');
+  assert.ok(s.notes![0]!.elapsedSeconds >= 74);
+  assert.ok(s.notes![0]!.elapsedSeconds <= 78);
+  assert.equal(s.notesPersistence, 'session');
+  s = directory.act(room, teacher, true, {
+    action: 'note.add', text: 'Quadratics practice', kind: 'chapter',
+    eventId: 'chapter-idem-001',
+  });
+  assert.equal(s.notes!.length, 1);
+  assert.throws(() => directory.act(room, teacher, true, {
+    action: 'note.add', text: 'Edited payload', kind: 'chapter',
+    eventId: 'chapter-idem-001',
+  }), /Reused eventId/);
+  const id = s.notes![0]!.id;
+  s = directory.act(room, teacher, true, {
+    action: 'note.update', noteId: id, text: 'Factoring roots',
+  });
+  assert.equal(s.notes![0]!.text, 'Factoring roots');
+  assert.throws(() => directory.act(room, student, false, {
+    action: 'note.delete', noteId: id,
+  }), /Teacher permission required/);
+  assert.throws(() => directory.act(room, teacher, true, {
+    action: 'note.add', text: 'x'.repeat(141), kind: 'chapter',
+  }), /Chapter title too long/);
+  assert.throws(() => directory.act(room, teacher, true, {
+    action: 'note.add', text: 'x'.repeat(2001), kind: 'note',
+  }), /1-2000 characters/);
+  s = directory.act(room, teacher, true, {
+    action: 'note.delete', noteId: id,
+  });
+  assert.deepEqual(s.notes, []);
+});
+
 test('raised hands form a stable first-requested FIFO queue', () => {
   const room: RoomEntry = {
     ...entry,

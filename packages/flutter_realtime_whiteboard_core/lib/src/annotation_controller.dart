@@ -14,5 +14,8 @@ abstract interface class AnnotationController {
     required String canvasId,
   });
   Future<void> undo();
+
+  /// Remove a specific persisted vector shape from the active canvas.
+  Future<void> erase(String shapeId, {required String canvasId});
   Future<void> clear();
 }

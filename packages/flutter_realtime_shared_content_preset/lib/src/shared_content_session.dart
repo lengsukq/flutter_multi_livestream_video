@@ -160,6 +160,13 @@ class SharedContentSession implements AnnotationController {
     }),
   );
   @override
+  Future<void> erase(String shapeId, {required String canvasId}) => execute(
+    SharedContentCommand(SharedContentAction.erase, {
+      'canvasId': canvasId,
+      'id': shapeId,
+    }),
+  );
+  @override
   Future<void> undo() => execute(
     SharedContentCommand(SharedContentAction.undo, {
       'canvasId': canvas.canvasId,

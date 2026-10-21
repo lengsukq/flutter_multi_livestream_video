@@ -168,6 +168,9 @@ class WhiteboardSession implements AnnotationController {
     'points': points.map((p) => p.toJson()).toList(),
   });
   @override
+  Future<void> erase(String shapeId, {required String canvasId}) =>
+      _act(WhiteboardAction.erase, {..._target(canvasId), 'id': shapeId});
+  @override
   Future<void> undo() => _act(WhiteboardAction.undo, _target(canvas.canvasId));
   @override
   Future<void> clear() =>

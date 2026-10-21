@@ -23,6 +23,9 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
   final _states = StreamController<WhiteboardState>.broadcast();
   final _pages = <WhiteboardPage>[];
   final _canvases = <String, AnnotationCanvas>{};
+  // Per-canvas reverse history for consecutive erases. Non-erase writes
+  // invalidate it; no eraser strokes are persisted or shared as paint.
+  final _erased = <String, List<({int index, AnnotationShape shape})>>{};
   final _handled = <String, String>{};
   int _revision = 0, _sequence = 0;
   String _active = '';
@@ -156,6 +159,7 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
         }
       case 'begin':
       case 'append':
+      case 'erase':
       case 'undo':
       case 'clear':
         if (data['pageId'] != _active || data['canvasId'] != canvas.canvasId) {
@@ -166,8 +170,28 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
         }
         if (action == 'clear') {
           shapes.clear();
+          _erased.remove(canvas.canvasId);
         } else if (action == 'undo') {
-          if (shapes.isNotEmpty) shapes.removeLast();
+          final erased = _erased[canvas.canvasId];
+          if (erased != null && erased.isNotEmpty) {
+            final record = erased.removeLast();
+            shapes.insert(min(record.index, shapes.length), record.shape);
+          } else if (shapes.isNotEmpty) {
+            shapes.removeLast();
+          }
+        } else if (action == 'erase') {
+          final id = JsonReader(data).required<String>('id');
+          final index = shapes.indexWhere((s) => s.id == id);
+          if (index < 0) {
+            throw RealtimeException(
+              code: RealtimeErrorCode.invalidState,
+              message: 'Shape not found',
+            );
+          }
+          _erased.putIfAbsent(canvas.canvasId, () => []).add((
+            index: index,
+            shape: shapes.removeAt(index),
+          ));
         } else {
           final points = (data['points'] as List)
               .map(
@@ -211,6 +235,12 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
             final shape = AnnotationShape.fromJson(
               Map<String, dynamic>.from(data),
             );
+            if (shape.tool == AnnotationTool.eraser) {
+              throw RealtimeException(
+                code: RealtimeErrorCode.invalidArgument,
+                message: 'Eraser is not a drawable shape',
+              );
+            }
             if (shape.color < 0 ||
                 shape.color > 0xffffffff ||
                 shape.width < 1 ||
@@ -222,6 +252,7 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
                 message: 'Invalid annotation style',
               );
             }
+            _erased.remove(canvas.canvasId);
             shapes.add(shape);
           } else {
             final index = shapes.indexWhere((s) => s.id == id);
@@ -247,6 +278,7 @@ class MemoryWhiteboardRepository implements WhiteboardRepository {
                 message: 'Stroke point limit reached',
               );
             }
+            _erased.remove(canvas.canvasId);
             shapes[index] = AnnotationShape(
               id: old.id,
               tool: old.tool,

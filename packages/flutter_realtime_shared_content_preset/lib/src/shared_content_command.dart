@@ -6,6 +6,7 @@ enum SharedContentAction {
   presentation('annotation.presentation'),
   begin('annotation.begin'),
   append('annotation.append'),
+  erase('annotation.erase'),
   undo('annotation.undo'),
   clear('annotation.clear');
 

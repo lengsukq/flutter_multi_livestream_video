@@ -99,6 +99,11 @@ test('annotation validates coordinates, source epochs and teacher-only operation
     ...shape, id: tool, tool, text: tool === 'text' ? 'Hello' : '',
   });
   assert.equal(old.tools.annotation.shapes.length, 1);
+  state = act('annotation.erase', {canvasId,id:'circle'});
+  assert.equal(state.tools.annotation.shapes.some((s:{id:string})=>s.id==='circle'),false);
+  assert.throws(()=>act('annotation.erase',{canvasId,id:'pen'},true),/Teacher permission/);
+  state = act('annotation.undo',{canvasId});
+  assert.equal(state.tools.annotation.shapes.some((s:{id:string})=>s.id==='circle'),true);
   state = act('annotation.undo', { canvasId }); assert.equal(state.tools.annotation.shapes.length, 4);
   state = act('annotation.clear', { canvasId }); assert.equal(state.tools.annotation.shapes.length, 0);
   const next = act('annotation.source', { sourceKey: 'share-2' });

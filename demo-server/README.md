@@ -39,6 +39,23 @@ When `DEMO_BEARER_TOKEN` is set, room connection endpoints require
 `Authorization: Bearer <token>`. This is only a reference hook for exercising
 `MediaClient.tokenProvider`; it is not a production identity system.
 
+### Classroom notes and lesson chapter markers
+
+Teachers may create, update and delete notes (up to 500 per room, maximum
+2000 characters each) and manually mark 140-character lesson chapters. These
+use the authenticated Classroom action endpoint and are included **only in
+teacher snapshots**. The timestamps are measured from room creation and are
+not mapped to a cloud recording seek time.
+
+Without `CLASSROOM_STATE_DIR`, classroom notes remain **in memory only**.
+For single-instance demo deployments set `CLASSROOM_STATE_DIR` to a writable
+private folder: `FileClassroomStore` saves notes in per-room 0600 files,
+including action idempotency and classroom revision. This is not shared
+multi-node storage and is not durable on ephemeral/serverless filesystems.
+**Room closure deletes that classroom state**; export lesson minutes from the
+teacher's Notes sidebar before closing. Implement a separate authenticated
+archive with its own retention rules for long-term post-class access.
+
 Health check:
 
 ```bash

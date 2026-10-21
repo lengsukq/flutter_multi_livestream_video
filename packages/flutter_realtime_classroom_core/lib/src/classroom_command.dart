@@ -9,6 +9,9 @@ enum ClassroomAction {
   questionAsk('question.ask'),
   questionAnswer('question.answer'),
   questionResolve('question.resolve'),
+  noteAdd('note.add'),
+  noteUpdate('note.update'),
+  noteDelete('note.delete'),
   feedbackSend('feedback.send');
 
   const ClassroomAction(this.wireName);
@@ -28,6 +31,7 @@ enum ClassroomToolAction {
   annotationPresentation('annotation.presentation'),
   annotationBegin('annotation.begin'),
   annotationAppend('annotation.append'),
+  annotationErase('annotation.erase'),
   annotationUndo('annotation.undo'),
   annotationClear('annotation.clear'),
   contentMode('content.mode');

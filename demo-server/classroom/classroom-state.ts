@@ -42,6 +42,7 @@ type State = {
   speakGrants: number;
   feedback: NonNullable<ClassroomStoredState['feedback']>;
   feedbackTimes: Map<string, number[]>;
+  notes: NonNullable<ClassroomStoredState['notes']>;
 };
 
 const fail = (message: string, code = 'invalid-argument', status = 400): never => {
@@ -123,6 +124,7 @@ export class ClassroomStateDirectory {
       speakGrants: state.speakGrants,
       feedback: state.feedback,
       feedbackTimes: [...state.feedbackTimes],
+      notes: state.notes,
     });
   }
 
@@ -147,6 +149,7 @@ export class ClassroomStateDirectory {
       speakGrants: saved.speakGrants,
       feedback: (saved.feedback ?? []).slice(-200),
       feedbackTimes: new Map(saved.feedbackTimes ?? []),
+      notes: (saved.notes ?? []).slice(-500),
     };
   }
 
@@ -159,7 +162,7 @@ export class ClassroomStateDirectory {
         raised: new Map(), grants: new Set(), grantParticipants: new Map(),
         questions: new Map(), handledIds: new Map(),
         questionTimes: new Map(), seenStudents: new Map(), speakGrants: 0,
-        feedback: [], feedbackTimes: new Map(),
+        feedback: [], feedbackTimes: new Map(), notes: [],
       };
       this.rooms.set(entry, state);
     }
@@ -244,6 +247,10 @@ export class ClassroomStateDirectory {
       students, questions,
       feedbackSupported: true,
       feedback: state.feedback.filter(item => isTeacher || item.userId === selfUserId),
+      ...(isTeacher ? {
+        notes: state.notes,
+        notesPersistence: this.store ? 'file' : 'session',
+      } : {}),
       tools: this.toolsSnapshot(entry, isTeacher, selfUserId),
       attendance: [...state.seenStudents.values()]
         .filter(person => person.userId !== entry.classroomTeacherUserId && (isTeacher || person.userId === selfUserId))
@@ -287,7 +294,7 @@ export class ClassroomStateDirectory {
     const action = String(raw.action ?? '');
     if (entry.meetingMode === 'standard' && !action.startsWith('tool.content.') && !action.startsWith('tool.annotation.') && !action.startsWith('tool.whiteboard.')) fail('Teaching is disabled in standard meetings', 'unsupported-feature', 400);
     if ((isTeacher || userId === entry.classroomTeacherUserId) && ['hand.raise', 'hand.lower', 'question.ask'].includes(action)) fail('Only students can perform this action', 'forbidden', 403);
-    const teacherOnly = new Set(['speak.grant', 'speak.revoke', 'question.answer', 'question.resolve']);
+    const teacherOnly = new Set(['speak.grant', 'speak.revoke', 'question.answer', 'question.resolve', 'note.add', 'note.update', 'note.delete']);
     if (teacherOnly.has(action) && !isTeacher) fail('Teacher permission required', 'forbidden', 403);
 
     const idempotency = String(raw.eventId ?? '').trim();
@@ -296,12 +303,16 @@ export class ClassroomStateDirectory {
     }
     const target = String(raw.userId ?? '').trim();
     const questionId = String(raw.questionId ?? '').trim();
+    const noteId = String(raw.noteId ?? '').trim();
+    const noteKind = String(raw.kind ?? 'note');
     const text = String(raw.text ?? '').trim();
     const feedbackKind = String(raw.kind ?? '');
     const operationKey = JSON.stringify(action === 'feedback.send'
       ? [userId, action, feedbackKind]
       : action.startsWith('tool.')
       ? [userId, action, target, questionId, text, raw.payload ?? '']
+      : action.startsWith('note.')
+      ? [userId, action, text, noteId, noteKind]
       : [userId, action, target, questionId, text]);
     if (idempotency) {
       const previous = state.handledIds.get(idempotency);
@@ -312,6 +323,39 @@ export class ClassroomStateDirectory {
     }
     let changed = false;
     switch (action) {
+      case 'note.add': {
+        if (!text || text.length > 2000) fail('Note must contain 1-2000 characters');
+        if (noteKind !== 'note' && noteKind !== 'chapter') fail('Invalid note kind');
+        if (noteKind === 'chapter' && text.length > 140) fail('Chapter title too long');
+        if (state.notes.length >= 500) fail('Classroom note limit reached', 'resource-limit', 429);
+        state.notes.push({
+          id: crypto.randomUUID(), text, kind: noteKind as 'note' | 'chapter',
+          authorUserId: userId,
+          createdAt: new Date().toISOString(),
+          elapsedSeconds: Math.max(0, Math.floor(
+            (Date.now() - Date.parse(entry.createdAt)) / 1000,
+          )),
+        });
+        changed = true;
+        break;
+      }
+      case 'note.update': {
+        if (!noteId) fail('noteId is required');
+        const note = state.notes.find(item => item.id === noteId);
+        if (!note) fail('Note does not exist', 'note-not-found', 404);
+        if (!text || text.length > (note!.kind === 'chapter' ? 140 : 2000)) {
+          fail('Note text is missing or too long');
+        }
+        if (note!.text !== text) { note!.text = text; changed = true; }
+        break;
+      }
+      case 'note.delete': {
+        const index = state.notes.findIndex(item => item.id === noteId);
+        if (index < 0) fail('Note does not exist', 'note-not-found', 404);
+        state.notes.splice(index, 1);
+        changed = true;
+        break;
+      }
       case 'feedback.send': {
         if (isTeacher || userId === entry.classroomTeacherUserId) {
           fail('Only students can send classroom feedback', 'forbidden', 403);

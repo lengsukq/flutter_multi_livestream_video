@@ -40,6 +40,12 @@ class AnnotationSession implements AnnotationController {
     'points': points.map((p) => p.toJson()).toList(),
   });
   @override
+  Future<void> erase(String shapeId, {required String canvasId}) =>
+      classroom.toolAction(ClassroomToolAction.annotationErase, {
+        'canvasId': canvasId,
+        'id': shapeId,
+      });
+  @override
   Future<void> undo() => classroom.toolAction(
     ClassroomToolAction.annotationUndo,
     {'canvasId': canvas.canvasId},

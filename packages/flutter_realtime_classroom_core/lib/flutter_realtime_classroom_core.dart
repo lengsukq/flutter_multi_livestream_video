@@ -26,6 +26,7 @@ export 'src/classroom_state_event_kind.dart';
 export 'src/classroom_state_event.dart';
 export 'src/classroom_capabilities.dart';
 export 'src/classroom_question.dart';
+export 'src/classroom_note.dart';
 export 'src/classroom_revision_transport.dart';
 export 'src/classroom_student.dart';
 export 'src/classroom_stats.dart';

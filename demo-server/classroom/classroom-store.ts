@@ -32,6 +32,10 @@ export interface ClassroomStoredState {
     createdAt: string;
   }>;
   feedbackTimes?: Array<[string, number[]]>;
+  notes?: Array<{
+    id: string; text: string; kind: 'note' | 'chapter';
+    authorUserId: string; createdAt: string; elapsedSeconds: number;
+  }>;
 }
 
 /** Replaceable state adapter. For multiple app instances use a shared

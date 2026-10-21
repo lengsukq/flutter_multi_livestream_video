@@ -6,6 +6,7 @@ enum WhiteboardAction {
   pageDelete('page.delete'),
   begin('begin'),
   append('append'),
+  erase('erase'),
   undo('undo'),
   clear('clear');
 

@@ -204,6 +204,39 @@ class ClassroomSession {
     ClassroomCommand(ClassroomAction.questionResolve, {'questionId': id}),
   );
 
+  /// Teacher-only notes. The repository enforces ownership and persists
+  /// changes where configured; no local optimistic notes are fabricated.
+  Future<void> _noteAction(ClassroomCommand command) async {
+    if (_state == null) await start();
+    if (_state?.isTeacher != true) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.forbidden,
+        message: 'Only teachers may edit classroom notes.',
+      );
+    }
+    if (_state?.notes == null) {
+      throw const RealtimeException(
+        code: RealtimeErrorCode.unsupportedFeature,
+        message: 'Classroom notes are not supported by this repository.',
+      );
+    }
+    await _act(command);
+  }
+
+  Future<void> addNote(String text, {bool chapter = false}) => _noteAction(
+    ClassroomCommand(ClassroomAction.noteAdd, {
+      'text': text,
+      'kind': chapter ? 'chapter' : 'note',
+    }),
+  );
+
+  Future<void> updateNote(String id, String text) => _noteAction(
+    ClassroomCommand(ClassroomAction.noteUpdate, {'noteId': id, 'text': text}),
+  );
+
+  Future<void> deleteNote(String id) =>
+      _noteAction(ClassroomCommand(ClassroomAction.noteDelete, {'noteId': id}));
+
   /// Typed tool commands preserve the backend wire contract at the repository boundary.
   Future<void> toolAction(
     ClassroomToolAction action,

@@ -2,6 +2,7 @@ import 'package:flutter_realtime_foundation/flutter_realtime_foundation.dart';
 import 'classroom_attendance.dart';
 import 'classroom_capabilities.dart';
 import 'classroom_feedback.dart';
+import 'classroom_note.dart';
 import 'classroom_question.dart';
 import 'classroom_role.dart';
 import 'classroom_stats.dart';
@@ -22,10 +23,13 @@ class ClassroomState {
     this.feedbackSupported = true,
     List<ClassroomFeedback> feedback = const [],
     List<ClassroomAttendance> attendance = const [],
+    List<ClassroomNote>? notes,
+    this.notesPersistence,
   }) : students = List.unmodifiable(students),
        questions = List.unmodifiable(questions),
        attendance = List.unmodifiable(attendance),
-       feedback = List.unmodifiable(feedback);
+       feedback = List.unmodifiable(feedback),
+       notes = notes == null ? null : List.unmodifiable(notes);
   final String roomCode;
   final String selfUserId;
   final ClassroomRole role;
@@ -35,6 +39,13 @@ class ClassroomState {
   final ClassroomStats stats;
   final ClassroomToolsState? tools;
   final List<ClassroomAttendance> attendance;
+
+  /// Null indicates an old backend without lesson-notes support.
+  /// For security, only teacher snapshots contain this collection.
+  final List<ClassroomNote>? notes;
+
+  /// "file" persists until room closure; "session" is volatile.
+  final String? notesPersistence;
   final bool feedbackSupported;
 
   /// Recent feedback, bounded by the repository. Students only see their own.
@@ -78,6 +89,8 @@ class ClassroomState {
     speakEnforcement: speakEnforcement,
     tools: tools,
     attendance: attendance,
+    notes: notes,
+    notesPersistence: notesPersistence,
     feedbackSupported: feedbackSupported,
     feedback: feedback,
   );
@@ -92,6 +105,8 @@ class ClassroomState {
     speakEnforcement: speakEnforcement,
     tools: tools,
     attendance: attendance,
+    notes: notes,
+    notesPersistence: notesPersistence,
     feedbackSupported: feedbackSupported,
     feedback: feedback,
   );
@@ -109,6 +124,16 @@ class ClassroomState {
                 ClassroomStudent.fromJson(Map<String, dynamic>.from(e as Map)),
           ),
         ),
+        notes: data['notes'] is List
+            ? List.unmodifiable(
+                (data['notes'] as List).map(
+                  (item) => ClassroomNote.fromJson(
+                    Map<String, dynamic>.from(item as Map),
+                  ),
+                ),
+              )
+            : null,
+        notesPersistence: JsonReader(data).optional<String>('notesPersistence'),
         questions: List.unmodifiable(
           (data['questions'] as List<dynamic>? ?? const []).map(
             (e) =>

@@ -13,7 +13,9 @@ void main() {
     () async {
       final board = WhiteboardSession.local();
       await board.start();
-      for (final tool in AnnotationTool.values) {
+      for (final tool in AnnotationTool.values.where(
+        (tool) => tool != AnnotationTool.eraser,
+      )) {
         await board.begin(
           shape(tool.name, tool),
           canvasId: board.canvas.canvasId,
@@ -28,6 +30,38 @@ void main() {
       expect(board.canvas.shapes.length, 4);
       await board.clear();
       expect(board.canvas.shapes, isEmpty);
+      await board.dispose();
+    },
+  );
+  test(
+    'eraser removes a specific shape and undo restores its original order',
+    () async {
+      final board = WhiteboardSession.local();
+      await board.start();
+      final canvasId = board.canvas.canvasId;
+      for (final id in ['left', 'middle', 'right']) {
+        await board.begin(shape(id, AnnotationTool.pen), canvasId: canvasId);
+      }
+      await board.erase('middle', canvasId: canvasId);
+      expect(board.canvas.shapes.map((s) => s.id), ['left', 'right']);
+      await board.erase('right', canvasId: canvasId);
+      expect(board.canvas.shapes.map((s) => s.id), ['left']);
+      await board.undo();
+      await board.undo();
+      expect(board.canvas.shapes.map((s) => s.id), ['left', 'middle', 'right']);
+      await expectLater(
+        board.erase('missing', canvasId: canvasId),
+        throwsA(isA<RealtimeException>()),
+      );
+      await expectLater(
+        board.begin(shape('wrong', AnnotationTool.eraser), canvasId: canvasId),
+        throwsA(isA<RealtimeException>()),
+      );
+      await board.addPage();
+      await expectLater(
+        board.erase('left', canvasId: canvasId),
+        throwsA(isA<RealtimeException>()),
+      );
       await board.dispose();
     },
   );

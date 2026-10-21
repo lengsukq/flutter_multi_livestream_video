@@ -154,6 +154,7 @@ export function applyClassroomTool(
     }
     case 'tool.annotation.begin':
     case 'tool.annotation.append':
+    case 'tool.annotation.erase':
     case 'tool.annotation.undo':
     case 'tool.annotation.clear': {
       const canvas = tools.annotation;

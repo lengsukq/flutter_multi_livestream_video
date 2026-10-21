@@ -19,6 +19,76 @@ The Demo explicitly registers `ClassroomPreset` and displays the standard SDK
 meeting page. It contains no duplicate classroom
 business logic; hosts may omit the preset and use a plain meeting.
 
+## Built-in classroom workspace sidebar
+
+`RealtimeMeetingPage` uses `RealtimeClassroomSidePanel` with stable
+`RealtimeWorkspaceTab` identities (Chat, People, Classroom, Recording and
+optional Notes). The Classroom tab shows a real-time overview backed by
+`ClassroomState`, plus teacher-only hand requests, Q&A and provider-backed
+poll/quiz activities. Student-facing controls honor the classroom capabilities.
+The existing standalone `RealtimeClassroomPanel` remains available for
+applications that assemble their own UI.
+
+`RealtimeClassroomNotesPanel` is shown automatically **only for an authenticated
+teacher** whose backend sends the `notes` collection in `ClassroomState`.
+It supports adding, editing and deleting teacher notes and placing manual
+chapter markers on the **room-creation time axis**. All changes go through
+`ClassroomSession.addNote/updateNote/deleteNote` and authenticated HTTP
+classroom actions; SDK consumers never need Demo-specific room methods.
+`RealtimeMeetingPage(classroomNotesPanel: myNotesWidget)` can override this
+view with a host-owned implementation, which must enforce its own access rules.
+Older backends lacking the `notes` field do not show a broken tab.
+
+The **Copy lesson minutes** action builds a Markdown document from the real
+teacher notes, actual classroom questions/answers, and published poll/quiz
+activity counts, and copies it to the clipboard. It is a manually exported
+record, not an AI-generated summary or a cloud history service. Chapter
+markers are not mapped onto recording playback yet: provider capture can
+start after the room.
+
+The recording sidebar now supports **Add lesson chapter** when the teacher's
+classroom snapshot exposes the notes capability. Saving the chapter calls the
+same authenticated `ClassroomSession.addNote(chapter: true)` API as the Notes
+tab; a subscription to `classroom.states` refreshes the chapter list live,
+independently of the cloud recorder's status stream. Markers are room-relative
+and **are not seek links to a recording**.
+
+Teachers can also create real classroom polls and quizzes from the Classroom
+Activities tab. The form validates 2–8 distinct options (and one correct quiz
+answer) and submits via `RealtimeRoomUiController.publishClassroomActivity`
+to `ClassroomSession.publishActivity`. Students cannot access this control.
+Student submissions, close actions, and totals remain backed by the existing
+classroom-tool commands. The backend currently keeps interactive classroom
+tools in room session state; exporting lesson minutes is not a permanent
+archive.
+
+The reference backend optionally persists notes with `CLASSROOM_STATE_DIR`
+using a single-node file store and restricted file permissions. Without that
+configuration, notes live only in the server process. Even with it configured,
+**closing a room deletes classroom state**. Always export the minutes before
+closing. This is not a production multi-instance or permanent archive; long-term
+post-class retrieval requires a separate persistent database / archive API.
+Teacher notes are never included in student snapshots.
+
+Transcripts, automatic subtitles, AI summaries, recording seek links and cloud
+quota are not generated or simulated by the SDK. The Recording tab uses the
+real `RealtimeRecordingPanel` only when the recorder is configured and the
+current user has the recording-management role.
+
+The desktop sidebar is 340pt wide and mobile/tablet presentations use a right
+drawer. The side panel does not own duplicate classroom state or provider RTC
+logic; actions route through `RealtimeRoomUiController`.
+
+Typed headless example:
+
+~~~dart
+final classroom = room.classroom;
+// Check classroom.state?.notes != null and isTeacher before editing.
+await classroom?.addNote('Review factoring before the next lesson');
+await classroom?.addNote('Completing the square', chapter: true);
+// Room-relative elapsed seconds are supplied by the backend.
+~~~
+
 ## Raise-hand flow in the Demo
 
 The meeting dock provides a dedicated `RealtimeDockRaiseHandButton` for
