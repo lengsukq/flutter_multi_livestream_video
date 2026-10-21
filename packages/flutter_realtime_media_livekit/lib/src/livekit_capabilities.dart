@@ -16,12 +16,16 @@ MediaCapabilities _capabilitiesForRole(MediaRole role) {
         !isViewer &&
         (kIsWeb ||
             defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.macOS),
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.windows),
     canReplaceBackgroundImage:
         !isViewer &&
         (kIsWeb ||
             defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.macOS),
+            defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.iOS ||
+            defaultTargetPlatform == TargetPlatform.windows),
     canSwitchCamera:
         !isViewer &&
         (kIsWeb ||

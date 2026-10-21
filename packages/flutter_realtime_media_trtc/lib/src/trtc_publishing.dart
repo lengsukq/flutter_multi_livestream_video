@@ -18,7 +18,9 @@ class _TrtcPublishing {
       source.platform ==
           (defaultTargetPlatform == TargetPlatform.android
               ? ProcessedVideoPlatform.android
-              : ProcessedVideoPlatform.macos);
+              : defaultTargetPlatform == TargetPlatform.windows
+                  ? ProcessedVideoPlatform.windows
+                  : ProcessedVideoPlatform.macos);
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _session._requireConnected();
     if (!supportsProcessedVideoSource(source)) {

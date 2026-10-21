@@ -23,7 +23,11 @@ class _LiveKitPublishing {
                 ((defaultTargetPlatform == TargetPlatform.android &&
                         source.platform == ProcessedVideoPlatform.android) ||
                     (defaultTargetPlatform == TargetPlatform.macOS &&
-                        source.platform == ProcessedVideoPlatform.macos)));
+                        source.platform == ProcessedVideoPlatform.macos) ||
+                    (defaultTargetPlatform == TargetPlatform.iOS &&
+                        source.platform == ProcessedVideoPlatform.ios) ||
+                    (defaultTargetPlatform == TargetPlatform.windows &&
+                        source.platform == ProcessedVideoPlatform.windows)));
 
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _session._ensureActive();

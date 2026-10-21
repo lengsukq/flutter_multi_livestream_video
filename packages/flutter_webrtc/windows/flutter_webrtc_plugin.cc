@@ -7,6 +7,7 @@
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter_messenger.h>
 #include <flutter_plugin_registrar.h>
+#include <cstring>
 
 const char* kChannelName = "FlutterWebRTC.Method";
 static flutter_webrtc_plugin::FlutterWebRTC* g_shared_instance = nullptr;
@@ -34,7 +35,9 @@ class FlutterWebRTCPluginImpl : public FlutterWebRTCPlugin {
     registrar->AddPlugin(std::move(plugin));
   }
 
-  virtual ~FlutterWebRTCPluginImpl() {}
+  virtual ~FlutterWebRTCPluginImpl() {
+    g_shared_instance = nullptr;
+  }
 
   BinaryMessenger* messenger() { return messenger_; }
 
@@ -89,4 +92,34 @@ void FlutterWebRTCPluginRegisterWithRegistrar(
 
 flutter_webrtc_plugin::FlutterWebRTC* FlutterWebRTCPluginSharedInstance() {
   return g_shared_instance;
-} 
+}
+
+bool FlutterWebRTCPluginCreateProcessedVideoStream(
+    char* stream_id, size_t stream_capacity,
+    char* track_id, size_t track_capacity) {
+  if (!g_shared_instance || !stream_id || !track_id ||
+      stream_capacity < 128 || track_capacity < 128) return false;
+  std::string stream, track;
+  if (!g_shared_instance->CreateProcessedVideoStream(&stream, &track))
+    return false;
+  if (stream.size() >= stream_capacity || track.size() >= track_capacity) {
+    g_shared_instance->DisposeProcessedVideoStream(track);
+    return false;
+  }
+  std::memcpy(stream_id, stream.c_str(), stream.size() + 1);
+  std::memcpy(track_id, track.c_str(), track.size() + 1);
+  return true;
+}
+
+bool FlutterWebRTCPluginPushProcessedVideoFrame(
+    const char* track_id, const uint8_t* y, const uint8_t* u,
+    const uint8_t* v, int width, int height) {
+  return g_shared_instance && track_id &&
+      g_shared_instance->PushProcessedVideoFrame(track_id, y, u, v,
+                                                 width, height);
+}
+
+void FlutterWebRTCPluginDisposeProcessedVideoStream(const char* track_id) {
+  if (g_shared_instance && track_id)
+    g_shared_instance->DisposeProcessedVideoStream(track_id);
+}

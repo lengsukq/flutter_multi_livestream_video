@@ -33,3 +33,7 @@ flutter:
         pluginClass: FlutterRealtimeMediaLivekitPlugin
       macos:
         pluginClass: FlutterRealtimeMediaLivekitPlugin
+      ios:
+        pluginClass: FlutterRealtimeMediaLivekitPlugin
+      windows:
+        pluginClass: FlutterRealtimeMediaLivekitPluginCApi

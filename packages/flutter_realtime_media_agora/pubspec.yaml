@@ -29,3 +29,5 @@ flutter:
         pluginClass: FlutterRealtimeMediaAgoraPlugin
       macos:
         pluginClass: FlutterRealtimeMediaAgoraPlugin
+      windows:
+        pluginClass: FlutterRealtimeMediaAgoraPluginCApi

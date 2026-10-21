@@ -21,6 +21,73 @@ FlutterWebRTC::FlutterWebRTC(FlutterWebRTCPlugin* plugin)
 
 FlutterWebRTC::~FlutterWebRTC() {}
 
+#if defined(_WIN32)
+bool FlutterWebRTC::CreateProcessedVideoStream(
+    std::string* stream_id, std::string* track_id) {
+  if (!stream_id || !track_id) return false;
+  EnsureWebRTCInitialized();
+  auto source = factory_->CreateCustomVideoSource(
+      "flutter_realtime_processed_video", RTCMediaConstraints::Create());
+  if (!source) return false;
+  const auto id = GenerateUUID();
+  const auto stream_key = GenerateUUID();
+  auto track = factory_->CreateVideoTrack(source, id.c_str());
+  auto stream = factory_->CreateStream(stream_key.c_str());
+  if (!track || !stream) return false;
+  stream->AddTrack(track);
+  {
+    std::lock_guard<std::mutex> guard(processed_mutex_);
+    processed_sources_[id] = source;
+    processed_stream_ids_[id] = stream_key;
+    local_tracks_[id] = track;
+    local_streams_[stream_key] = stream;
+  }
+  *track_id = id;
+  *stream_id = stream_key;
+  return true;
+}
+
+bool FlutterWebRTC::PushProcessedVideoFrame(
+    const std::string& track_id, const std::uint8_t* y,
+    const std::uint8_t* u, const std::uint8_t* v,
+    int width, int height) {
+  if (!y || !u || !v || width <= 0 || height <= 0 ||
+      width > 4096 || height > 4096 || (width & 1) || (height & 1))
+    return false;
+  scoped_refptr<RTCVideoSource> source;
+  {
+    std::lock_guard<std::mutex> guard(processed_mutex_);
+    auto it = processed_sources_.find(track_id);
+    if (it == processed_sources_.end()) return false;
+    source = it->second;
+  }
+  auto frame = RTCVideoFrame::Create(width, height, y, width, u, width / 2,
+                                     v, width / 2);
+  if (!frame) return false;
+  source->OnCapturedFrame(frame);
+  return true;
+}
+
+void FlutterWebRTC::DisposeProcessedVideoStream(const std::string& track_id) {
+  std::lock_guard<std::mutex> guard(processed_mutex_);
+  const auto found = processed_stream_ids_.find(track_id);
+  if (found == processed_stream_ids_.end()) return;
+  auto stream = local_streams_.find(found->second);
+  auto track = local_tracks_.find(track_id);
+  if (stream != local_streams_.end() && track != local_tracks_.end()) {
+    auto video_track = stream->second->FindVideoTrack(track_id);
+    if (video_track) stream->second->RemoveTrack(video_track);
+  }
+  if (track != local_tracks_.end()) {
+    track->second->set_enabled(false);
+    local_tracks_.erase(track);
+  }
+  if (stream != local_streams_.end()) local_streams_.erase(stream);
+  processed_sources_.erase(track_id);
+  processed_stream_ids_.erase(found);
+}
+#endif
+
 void FlutterWebRTC::HandleMethodCall(
     const MethodCallProxy& method_call,
     std::unique_ptr<MethodResultProxy> result) {

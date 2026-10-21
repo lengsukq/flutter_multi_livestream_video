@@ -25,7 +25,9 @@ class _AgoraPublishing {
       source.platform ==
           (defaultTargetPlatform == TargetPlatform.android
               ? ProcessedVideoPlatform.android
-              : ProcessedVideoPlatform.macos);
+              : defaultTargetPlatform == TargetPlatform.windows
+                  ? ProcessedVideoPlatform.windows
+                  : ProcessedVideoPlatform.macos);
   Future<void> attachProcessedVideoSource(ProcessedVideoSource source) async {
     _ensurePublisherActive('processed video');
     if (!supportsProcessedVideoSource(source)) {

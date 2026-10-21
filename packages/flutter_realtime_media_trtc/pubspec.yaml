@@ -29,3 +29,5 @@ flutter:
         pluginClass: FlutterRealtimeMediaTrtcPlugin
       macos:
         pluginClass: FlutterRealtimeMediaTrtcPlugin
+      windows:
+        pluginClass: FlutterRealtimeMediaTrtcPluginCApi

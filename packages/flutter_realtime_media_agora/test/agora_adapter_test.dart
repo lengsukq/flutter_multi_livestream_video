@@ -125,6 +125,26 @@ void main() {
       uid: 123,
     );
 
+    test('Windows exposes native processed-video sink for host only', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      final host = factory.createSession(joinInfo(MediaRole.host));
+      final viewer = factory.createSession(joinInfo(MediaRole.viewer));
+      const source = ProcessedVideoSource(
+        id: 'windows',
+        platform: ProcessedVideoPlatform.windows,
+        kind: ProcessedVideoSourceKind.nativeFrameHub,
+        width: 640,
+        height: 360,
+        frameRate: 24,
+      );
+      expect(host.capabilities.canBlurBackground, isTrue);
+      expect(host.capabilities.canReplaceBackgroundImage, isTrue);
+      expect((host as ProcessedVideoSink).supportsProcessedVideoSource(source), isTrue);
+      expect(viewer.capabilities.canBlurBackground, isFalse);
+      await host.dispose();
+      await viewer.dispose();
+    });
+
     test('supports participant, host, and viewer roles', () {
       expect(
         factory.supportedRoles,

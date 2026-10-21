@@ -80,6 +80,24 @@ void main() {
   });
 
   group('role surfaces and capabilities', () {
+    test('Windows host can attach native-frame provider only', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      final host = factory.createSession(
+        TrtcJoinInfo.fromJson(joinPayload(role: 'host')),
+      );
+      const source = ProcessedVideoSource(
+        id: 'windows',
+        platform: ProcessedVideoPlatform.windows,
+        kind: ProcessedVideoSourceKind.nativeFrameHub,
+        width: 640,
+        height: 360,
+        frameRate: 24,
+      );
+      expect(host.capabilities.canBlurBackground, isTrue);
+      expect(host.capabilities.canReplaceBackgroundImage, isTrue);
+      expect((host as ProcessedVideoSink).supportsProcessedVideoSource(source), isTrue);
+      await host.dispose();
+    });
     test(
       'screen capture capability follows native desktop and mobile hosts only',
       () async {
