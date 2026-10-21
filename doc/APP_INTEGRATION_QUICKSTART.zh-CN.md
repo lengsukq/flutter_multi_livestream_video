@@ -14,7 +14,7 @@ Flutter、Dart、Java 和各平台最低版本详见 [能力矩阵](SDK_CAPABILI
 
 ## 1. 源码开发版选择依赖
 
-假设 `my_app/` 与 `flutter_multi_livestream_video/` 在同一父目录，
+假设 `my_app/` 与 `multi-video/` 在同一父目录，
 宿主 `pubspec.yaml` 使用：
 
 ```yaml
@@ -22,9 +22,9 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_realtime_sdk:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk
+    path: ../multi-video/packages/flutter_realtime_sdk
   flutter_realtime_provider_livekit:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_provider_livekit
+    path: ../multi-video/packages/flutter_realtime_provider_livekit
 ```
 
 然后在宿主目录执行 `flutter pub get`。上述路径需根据实际 checkout 修改。

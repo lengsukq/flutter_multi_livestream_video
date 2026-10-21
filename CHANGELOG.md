@@ -5,7 +5,7 @@
 * Add backend contract and integration guides, align the demo server with contract v1, and simplify the example to consume the public SDK client.
 * Migrate Android plugin/example builds to AGP 9 built-in Kotlin and keep the Java/Kotlin target at JVM 17.
 * Add Swift Package Manager support alongside CocoaPods for iOS and add release CI/device-E2E coverage.
-* Update package metadata to the current `lengsukq/flutter_multi_livestream_video` repository.
+* Update package metadata to the current `lengsukq/multi-video` repository.
 
 ## 3.0.0
 

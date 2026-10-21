@@ -2,7 +2,7 @@
 
 Optional, **headless** classroom feature plugin for Flutter Realtime SDK: hand raising, permission requests, Q&A, classroom notifications, homework, polls and authoritative session snapshots. The host may use its own UI; the package does not provide a mandatory page layout.
 
-> **Unpublished monorepo package.** Uses `publish_to: none` and local dependencies until the [release process](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md) is completed.
+> **Unpublished monorepo package.** Uses `publish_to: none` and local dependencies until the [release process](https://github.com/lengsukq/multi-video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md) is completed.
 
 ```dart
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
@@ -28,4 +28,4 @@ The typed `classroom` room extension is provided by **this package**, not by the
 
 The classroom service is **server authoritative**: revision messages (RTC Data / Chat system hints) only request a refresh. Events can be coalesced within a poll; they are not an immutable replay log. `ClassroomPreset(repositoryFactory: ...)` allows a host-owned trusted implementation. Never decide teacher powers from display-only Flutter state.
 
-For visuals import `flutter_realtime_sdk_ui` separately, or build your own UI using `ClassroomSession`. See [Classroom SDK](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/CLASSROOM_SDK.md), [headless/preset guide](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/INTERACTION_PRESET_GUIDE.zh-CN.md) and [acceptance](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/INTERACTION_ACCEPTANCE.md).
+For visuals import `flutter_realtime_sdk_ui` separately, or build your own UI using `ClassroomSession`. See [Classroom SDK](https://github.com/lengsukq/multi-video/blob/main/doc/CLASSROOM_SDK.md), [headless/preset guide](https://github.com/lengsukq/multi-video/blob/main/doc/INTERACTION_PRESET_GUIDE.zh-CN.md) and [acceptance](https://github.com/lengsukq/multi-video/blob/main/doc/INTERACTION_ACCEPTANCE.md).

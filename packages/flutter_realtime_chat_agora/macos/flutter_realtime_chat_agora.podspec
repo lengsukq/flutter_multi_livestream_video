@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version          = '0.1.0'
   s.summary           = 'Agora Chat adapter for Flutter, including macOS WebKit transport.'
   s.description       = 'Agora Chat provider adapter with native mobile and WebKit-backed macOS support.'
-  s.homepage          = 'https://github.com/lengsukq/flutter_multi_livestream_video'
+  s.homepage          = 'https://github.com/lengsukq/multi-video'
   s.license           = { :type => 'Proprietary', :text => 'Not published.' }
   s.author            = { 'Project' => 'N/A' }
   s.source            = { :path => '.' }

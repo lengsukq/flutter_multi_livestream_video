@@ -59,7 +59,7 @@ operation、suggestedAction；私有诊断日志保留 cause、details、stackTr
 ```yaml
 dependency_overrides:
   flutter_realtime_sdk:
-    path: /Users/leo/Documents/code/flutter_multi_livestream_video/build/pub_release/0.1.0-dev.8/flutter_realtime_sdk
+    path: /Users/leo/Documents/code/multi-video/build/pub_release/0.1.0-dev.8/flutter_realtime_sdk
 ```
 
 正式接入请使用当前已发布的 `flutter_realtime_sdk: ^0.1.0-dev.9`；不应修改系统 pub-cache 中的旧版本。

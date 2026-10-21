@@ -59,7 +59,7 @@ class _ChimeExampleAppState extends State<ChimeExampleApp> {
       ),
     );
     return MaterialApp(
-      title: 'Realtime Media',
+      title: 'multi-video',
       debugShowCheckedModeBanner: false,
       locale: _locale,
       supportedLocales: RealtimeStrings.supportedLocales,

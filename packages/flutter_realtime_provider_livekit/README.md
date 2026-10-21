@@ -1,8 +1,8 @@
 # flutter_realtime_provider_livekit
 
-Optional LiveKit media Provider for [Flutter Realtime SDK](https://github.com/lengsukq/flutter_multi_livestream_video). The package bundles platform-selected adapters and the pinned local Web runtime; Flutter applications do not need to inject a LiveKit script URL or maintain a CDN reference.
+Optional LiveKit media Provider for [Flutter Realtime SDK](https://github.com/lengsukq/multi-video). The package bundles platform-selected adapters and the pinned local Web runtime; Flutter applications do not need to inject a LiveKit script URL or maintain a CDN reference.
 
-> **Not published to pub.dev yet.** This package uses `publish_to: none` and monorepo path dependencies; see the [release guide](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md).
+> **Not published to pub.dev yet.** This package uses `publish_to: none` and monorepo path dependencies; see the [release guide](https://github.com/lengsukq/multi-video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md).
 
 ## Installation in the development monorepo
 
@@ -11,9 +11,9 @@ Add the lightweight facade and this package to your host app:
 ```yaml
 dependencies:
   flutter_realtime_sdk:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk
+    path: ../multi-video/packages/flutter_realtime_sdk
   flutter_realtime_provider_livekit:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_provider_livekit
+    path: ../multi-video/packages/flutter_realtime_provider_livekit
 ```
 
 ```dart
@@ -37,6 +37,6 @@ final connection = await realtime.open(
 
 `createLivekitProvider({maxMessages: 500})` accepts a positive local chat-history limit. Do not pass a long-lived LiveKit API Secret from the client. The backend generates short-lived room tokens and owns any cloud recording jobs, storage and download endpoints.
 
-Meeting vs broadcast publishing permissions, screen sharing, network statistics and Web/mobile capabilities differ by platform. Check the [capability matrix](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md) and [integration guide](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) rather than assuming all UI actions are supported.
+Meeting vs broadcast publishing permissions, screen sharing, network statistics and Web/mobile capabilities differ by platform. Check the [capability matrix](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md) and [integration guide](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) rather than assuming all UI actions are supported.
 
-The Demo at [example/](https://github.com/lengsukq/flutter_multi_livestream_video/tree/main/example) registers this bundle explicitly; it is not a transitive dependency of `flutter_realtime_sdk`.
+The Demo at [example/](https://github.com/lengsukq/multi-video/tree/main/example) registers this bundle explicitly; it is not a transitive dependency of `flutter_realtime_sdk`.

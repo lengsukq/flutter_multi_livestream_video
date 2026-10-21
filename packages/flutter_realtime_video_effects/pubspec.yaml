@@ -2,7 +2,7 @@ name: flutter_realtime_video_effects
 description: Provider-neutral local video effects and processed-video bridge.
 version: 0.1.0
 publish_to: 'none'
-repository: https://github.com/lengsukq/flutter_multi_livestream_video
+repository: https://github.com/lengsukq/multi-video
 
 environment:
   sdk: ^3.12.0

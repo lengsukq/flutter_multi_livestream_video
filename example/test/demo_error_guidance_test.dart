@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_realtime_media_example/demo_strings.dart';
+import 'package:multi_video/demo_strings.dart';
 
 void main() {
   testWidgets('a duplicate room code gives actionable retry guidance', (

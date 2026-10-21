@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version          = '0.1.0'
   s.summary          = 'Provider-neutral macOS media permission bridge.'
   s.description      = 'Queries and requests macOS camera/microphone privacy permission for Flutter realtime SDK.'
-  s.homepage         = 'https://github.com/lengsukq/flutter_multi_livestream_video'
+  s.homepage         = 'https://github.com/lengsukq/multi-video'
   s.license          = { :type => 'MIT' }
   s.author           = { 'Flutter Realtime SDK' => 'developers@example.com' }
   s.source           = { :path => '.' }

@@ -120,7 +120,7 @@ def run() -> dict:
   s.version = '0.1.0'
   s.summary = 'Realtime media, chat and classroom SDK'
   s.description = s.summary
-  s.homepage = 'https://github.com/lengsukq/flutter_multi_livestream_video'
+  s.homepage = 'https://github.com/lengsukq/multi-video'
   s.license = { :file => '../LICENSE' }
   s.author = { 'OnePlusDream' => 'developers@oneplusdream.com' }
   s.source = { :path => '.' }

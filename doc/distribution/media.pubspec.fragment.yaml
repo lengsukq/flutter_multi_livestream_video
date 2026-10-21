@@ -4,17 +4,17 @@ dependencies:
     sdk: flutter
   flutter_realtime_sdk:
     git:
-      url: https://github.com/lengsukq/flutter_multi_livestream_video.git
+      url: https://github.com/lengsukq/multi-video.git
       ref: REPLACE_WITH_40_CHARACTER_RELEASE_COMMIT_SHA
       path: packages/flutter_realtime_sdk
   flutter_realtime_provider_livekit:
     git:
-      url: https://github.com/lengsukq/flutter_multi_livestream_video.git
+      url: https://github.com/lengsukq/multi-video.git
       ref: REPLACE_WITH_40_CHARACTER_RELEASE_COMMIT_SHA
       path: packages/flutter_realtime_provider_livekit
 dependency_overrides:
   flutter_webrtc:
     git:
-      url: https://github.com/lengsukq/flutter_multi_livestream_video.git
+      url: https://github.com/lengsukq/multi-video.git
       ref: REPLACE_WITH_40_CHARACTER_RELEASE_COMMIT_SHA
       path: packages/flutter_webrtc

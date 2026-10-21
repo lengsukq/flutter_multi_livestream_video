@@ -4,7 +4,7 @@
 
 `flutter_realtime_sdk` 是**一个公开的 Flutter SDK 包**，整合会议、直播、聊天、可选的组合式 UI、课堂和直播互动预设。所有 API 使用**同一个 Dart import**，但仍需显式注册要使用的 Provider。
 
-**当前版本：`@VERSION@`（预览版）。** Android、iOS、macOS、Web 等平台注册能力不代表每一家供应商均完成真机验证。Windows/Linux、长期稳定性和跨供应商共存的部分验收尚未完成。请参阅 [供应商/平台能力矩阵](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md)。
+**当前版本：`@VERSION@`（预览版）。** Android、iOS、macOS、Web 等平台注册能力不代表每一家供应商均完成真机验证。Windows/Linux、长期稳定性和跨供应商共存的部分验收尚未完成。请参阅 [供应商/平台能力矩阵](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md)。
 
 ## 一、安装
 
@@ -170,8 +170,8 @@ end
 ## 七、相关文档
 
 [英文说明](README.md) ·
-[仓库中文首页](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/README.zh-CN.md) ·
-[首次完整接入](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/APP_INTEGRATION_QUICKSTART.zh-CN.md) ·
-[Headless / Runtime](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) ·
-[能力矩阵](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md) ·
-[云录制](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/CLOUD_RECORDING.md)
+[仓库中文首页](https://github.com/lengsukq/multi-video/blob/main/README.zh-CN.md) ·
+[首次完整接入](https://github.com/lengsukq/multi-video/blob/main/doc/APP_INTEGRATION_QUICKSTART.zh-CN.md) ·
+[Headless / Runtime](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) ·
+[能力矩阵](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md) ·
+[云录制](https://github.com/lengsukq/multi-video/blob/main/doc/CLOUD_RECORDING.md)

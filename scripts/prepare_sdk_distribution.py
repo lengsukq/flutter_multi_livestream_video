@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / 'scripts/sdk_packages.json'
 DEFAULT_OUTPUT = ROOT / 'doc/distribution'
-REPOSITORY = 'https://github.com/lengsukq/flutter_multi_livestream_video.git'
+REPOSITORY = 'https://github.com/lengsukq/multi-video.git'
 CANDIDATE = 'REPLACE_WITH_40_CHARACTER_RELEASE_COMMIT_SHA'
 COMBINATIONS = {
     'media': ['flutter_realtime_sdk', 'flutter_realtime_provider_livekit'],

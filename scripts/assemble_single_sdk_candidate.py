@@ -284,7 +284,7 @@ def assemble(root: Path, destination: Path) -> dict:
         "description: Prototype of a single public Flutter Realtime SDK artifact.\n"
         "version: 0.1.0\n"
         "publish_to: none\n"
-        "repository: https://github.com/lengsukq/flutter_multi_livestream_video\n"
+        "repository: https://github.com/lengsukq/multi-video\n"
         "environment:\n  sdk: ^3.12.0\n  flutter: '>=3.47.0'\n"
         f"dependencies:\n{dependencies}\n"
         # Vendor-generated minified audio-processing JavaScript contains a

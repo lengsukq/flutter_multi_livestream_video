@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
 Native macOS camera, person-segmentation and processed-video frame bridge.
                        DESC
-  s.homepage         = 'https://github.com/lengsukq/flutter_multi_livestream_video'
+  s.homepage         = 'https://github.com/lengsukq/multi-video'
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'OnePlusDream' => 'developers@oneplusdream.com' }
 

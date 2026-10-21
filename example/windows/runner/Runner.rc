@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.oneplusdream" "\0"
-            VALUE "FileDescription", "flutter_aws_chime_example" "\0"
+            VALUE "FileDescription", "multi-video" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "flutter_aws_chime_example" "\0"
+            VALUE "InternalName", "multi-video" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2023 com.oneplusdream. All rights reserved." "\0"
-            VALUE "OriginalFilename", "flutter_aws_chime_example.exe" "\0"
-            VALUE "ProductName", "flutter_aws_chime_example" "\0"
+            VALUE "OriginalFilename", "multi-video.exe" "\0"
+            VALUE "ProductName", "multi-video" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

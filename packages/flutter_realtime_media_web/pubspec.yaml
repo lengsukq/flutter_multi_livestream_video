@@ -2,7 +2,7 @@ name: flutter_realtime_media_web
 description: Browser JavaScript SDK adapters for the realtime media providers.
 version: 0.1.0
 publish_to: 'none'
-repository: https://github.com/lengsukq/flutter_multi_livestream_video
+repository: https://github.com/lengsukq/multi-video
 
 environment:
   sdk: ^3.12.0

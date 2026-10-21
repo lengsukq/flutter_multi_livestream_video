@@ -140,7 +140,7 @@ class _DemoBrandMark extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Text(
-          'Realtime Media',
+          'multi-video',
           style: TextStyle(
             fontFamily: RealtimeFonts.displayOf(context),
             fontSize: 18,

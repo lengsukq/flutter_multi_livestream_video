@@ -1,4 +1,4 @@
-package com.oneplusdream.flutter_aws_chime_example
+package com.oneplusdream.multi_video
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,8 +1,8 @@
-# Flutter Realtime SDK
+# multi-video
 
 [English](README.md) · **简体中文**
 
-这是一个**跨供应商 Flutter 实时音视频 SDK**，提供会议、直播、聊天、课堂互动、内容共享和可选 UI 组件。SDK 负责媒体、聊天、房间状态与生命周期；宿主应用可以自由编排 UI，也可以完全使用 Headless 接口。
+**multi-video** 是跨平台 Flutter 实时音视频 Demo 和 SDK 源码仓库，提供会议、直播、聊天、课堂互动、内容共享和可选 UI 组件。公开 SDK 包仍然叫 `flutter_realtime_sdk`，本次更名不改 SDK 包名或公开 API；宿主应用可以自由编排 UI，也可以使用 Headless 接口。
 
 ## 版本与发布状态
 
@@ -75,12 +75,12 @@ await room.setCameraEnabled(true); // 不直接调用 media.session.setVideoEnab
 ~~~yaml
 dependencies:
   flutter_realtime_sdk:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk
+    path: ../multi-video/packages/flutter_realtime_sdk
   flutter_realtime_provider_livekit:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_provider_livekit
+    path: ../multi-video/packages/flutter_realtime_provider_livekit
   # 可选 UI：
   flutter_realtime_sdk_ui:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk_ui
+    path: ../multi-video/packages/flutter_realtime_sdk_ui
 ~~~
 
 源码版 Facade 仅导出 Runtime，不会自动依赖或注册供应商与 UI。**不要把上面的多包路径方式与 pub.dev 单包安装方式混用。**

@@ -417,7 +417,7 @@ class CloudRecordingBlueprints {
       },
       payload: basePayload,
       documentationUrl:
-          'https://github.com/lengsukq/flutter_multi_livestream_video',
+          'https://github.com/lengsukq/multi-video',
       description: 'Generic Realtime Cloud Recording Proxy Descriptor',
     );
   }

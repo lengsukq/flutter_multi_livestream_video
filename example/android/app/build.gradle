@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace "com.oneplusdream.flutter_aws_chime_example"
+    namespace "com.oneplusdream.multi_video"
     compileSdk 37
     ndkVersion flutter.ndkVersion
 
@@ -25,7 +25,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId "com.oneplusdream.flutter_aws_chime_example"
+        applicationId "com.oneplusdream.multi_video"
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         // The all-provider example includes Amazon IVS Real-Time, whose Android

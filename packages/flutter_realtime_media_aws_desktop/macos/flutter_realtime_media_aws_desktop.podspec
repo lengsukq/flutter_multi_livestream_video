@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version          = '0.1.0'
   s.summary          = 'Internal AWS realtime media transport for Flutter macOS.'
   s.description      = 'WebKit-backed Amazon Chime, IVS media, and IVS Chat transport used by flutter_realtime_sdk.'
-  s.homepage         = 'https://github.com/lengsukq/flutter_multi_livestream_video'
+  s.homepage         = 'https://github.com/lengsukq/multi-video'
   s.license          = { :type => 'MIT' }
   s.author           = { 'OnePlusDream' => 'developers@oneplusdream.com' }
   s.source           = { :path => '.' }

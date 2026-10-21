@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version          = '0.1.0'
   s.summary          = 'Provider-neutral Flutter adapter for Alibaba Cloud ARTC on macOS.'
   s.description      = 'ARTC macOS bridge with runtime discovery of the official Alibaba Cloud framework.'
-  s.homepage         = 'https://github.com/lengsukq/flutter_multi_livestream_video'
+  s.homepage         = 'https://github.com/lengsukq/multi-video'
   s.license          = { :type => 'MIT' }
   s.author           = { 'OnePlusDream' => 'developers@oneplusdream.com' }
   s.source           = { :path => '.' }

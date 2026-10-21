@@ -4,10 +4,10 @@ import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:flutter_realtime_media_example/demo_backend_diagnostics.dart';
-import 'package:flutter_realtime_media_example/demo_identity_store.dart';
-import 'package:flutter_realtime_media_example/demo_room_directory.dart';
-import 'package:flutter_realtime_media_example/demo_room_flow.dart';
+import 'package:multi_video/demo_backend_diagnostics.dart';
+import 'package:multi_video/demo_identity_store.dart';
+import 'package:multi_video/demo_room_directory.dart';
+import 'package:multi_video/demo_room_flow.dart';
 
 void main() {
   test(

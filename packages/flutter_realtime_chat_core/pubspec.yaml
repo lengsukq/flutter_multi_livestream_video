@@ -2,7 +2,7 @@ name: flutter_realtime_chat_core
 description: Provider-neutral chat core for realtime room messaging and moderation.
 version: 0.1.0
 publish_to: 'none'
-repository: https://github.com/lengsukq/flutter_multi_livestream_video
+repository: https://github.com/lengsukq/multi-video
 
 environment:
   sdk: ^3.12.0

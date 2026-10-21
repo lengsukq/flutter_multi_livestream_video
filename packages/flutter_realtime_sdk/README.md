@@ -9,7 +9,7 @@ distribution includes provider factories, optional UI and presets behind
 this **same public import**. Only runtime registration and widget composition
 remain optional; all shipped vendor SDK dependencies may still enter the app.
 
-[Single-package release architecture and current blockers](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SINGLE_PACKAGE_RELEASE.zh-CN.md).
+[Single-package release architecture and current blockers](https://github.com/lengsukq/multi-video/blob/main/doc/SINGLE_PACKAGE_RELEASE.zh-CN.md).
 
 The hosted single-package preview `0.1.0-dev.10` is currently published on
 [pub.dev](https://pub.dev/packages/flutter_realtime_sdk/versions/0.1.0-dev.10).
@@ -21,7 +21,7 @@ Unlike the hosted package, this
 development module has `publish_to: none` and is not published independently.
 
 **First integration into your own app:** follow the
-[Chinese end-to-end quickstart](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/APP_INTEGRATION_QUICKSTART.zh-CN.md)
+[Chinese end-to-end quickstart](https://github.com/lengsukq/multi-video/blob/main/doc/APP_INTEGRATION_QUICKSTART.zh-CN.md)
 before choosing individual features. The guide covers local path dependencies,
 backend/token setup, creator vs guest roles, Headless/UI, and platform checks.
 
@@ -40,9 +40,9 @@ backend/token setup, creator vs guest roles, Headless/UI, and platform checks.
 ```yaml
 dependencies:
   flutter_realtime_sdk:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk
+    path: ../multi-video/packages/flutter_realtime_sdk
   flutter_realtime_provider_livekit:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_provider_livekit
+    path: ../multi-video/packages/flutter_realtime_provider_livekit
 ```
 
 These paths assume the host Flutter project and the SDK checkout are sibling folders. Replace them with the real relative paths in your workspace. For the published preview, use `flutter pub add flutter_realtime_sdk:0.1.0-dev.10` instead and follow the published package's README.
@@ -126,8 +126,8 @@ Backend-issued provider identifiers must resolve to a bundle registered by the h
 ## Security, recording and support
 
 - App ID may be public where the vendor allows it; **App Certificate, Customer Secret, cloud access keys and user signing keys belong server-side only**.
-- Cloud recording starts/stops in the trusted backend, not in this package; storage, MP4 conversion and billable recording lifecycle depend on the actual vendor. See [cloud recording](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/CLOUD_RECORDING.md).
+- Cloud recording starts/stops in the trusted backend, not in this package; storage, MP4 conversion and billable recording lifecycle depend on the actual vendor. See [cloud recording](https://github.com/lengsukq/multi-video/blob/main/doc/CLOUD_RECORDING.md).
 - Web media requires HTTPS or localhost for permissions; configure native camera/microphone permissions in the host app.
-- [SDK integration (Chinese)](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) · [Platform capability matrix](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md) · [Full Demo](https://github.com/lengsukq/flutter_multi_livestream_video/tree/main/example).
+- [SDK integration (Chinese)](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_RUNTIME_INTEGRATION.zh-CN.md) · [Platform capability matrix](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md) · [Full Demo](https://github.com/lengsukq/multi-video/tree/main/example).
 
 Platform support in the capability matrix describes implemented drivers, **not an assurance of end-to-end real-device testing for every provider/platform combination**.

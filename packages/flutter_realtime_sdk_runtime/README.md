@@ -2,7 +2,7 @@
 
 Provider-neutral room, event and SDK orchestration contracts for Flutter. This is the runtime under `flutter_realtime_sdk`; use it directly only when you need advanced provider composition or internal session integration.
 
-> **Not yet published.** This package currently uses `publish_to: none` and local path dependencies. Read the [release guide](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md) before attempting a hosted release.
+> **Not yet published.** This package currently uses `publish_to: none` and local path dependencies. Read the [release guide](https://github.com/lengsukq/multi-video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md) before attempting a hosted release.
 
 ## What it owns
 
@@ -47,4 +47,4 @@ The trusted backend decides the provider and signs short-lived join credentials.
 
 `RealtimeConnection.dispose()` is called once on **explicit room leave**; rebuilding or unmounting a widget must not stop a live room. Async cleanup may report multiple failures, and the host should surface those failures instead of silently assuming the cloud recorder stopped.
 
-See [integration guide](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_RUNTIME_INTEGRATION.zh-CN.md), [architecture](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/LIGHTWEIGHT_SDK.md), and [capability matrix](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md).
+See [integration guide](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_RUNTIME_INTEGRATION.zh-CN.md), [architecture](https://github.com/lengsukq/multi-video/blob/main/doc/LIGHTWEIGHT_SDK.md), and [capability matrix](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md).

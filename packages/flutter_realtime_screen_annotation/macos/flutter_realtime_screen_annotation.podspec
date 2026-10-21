@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version = '0.1.0'
   s.summary = 'SDK system annotation panels.'
   s.description = 'Provider-neutral system drawing windows for shared displays.'
-  s.homepage = 'https://github.com/lengsukq/flutter_multi_livestream_video'
+  s.homepage = 'https://github.com/lengsukq/multi-video'
   s.license = { :type => 'MIT' }
   s.author = { 'Realtime SDK' => 'sdk@example.invalid' }
   s.source = { :path => '.' }

@@ -1,5 +1,5 @@
-name: flutter_realtime_media_example
-description: Demonstrates the provider-neutral Flutter Realtime Media SDK.
+name: multi_video
+description: multi-video, a cross-platform multi-provider meeting, livestream and chat demo.
 version: 1.0.0+1
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.

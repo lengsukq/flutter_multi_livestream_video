@@ -1,4 +1,4 @@
-# AGENTS.md — flutter_multi_livestream_video
+# AGENTS.md — multi-video
 
 > 随 git 跟踪的项目级提示词。本地私有 prompts / skills 不进 git（见 `.gitignore`）。
 

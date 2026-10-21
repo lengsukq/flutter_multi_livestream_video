@@ -52,7 +52,7 @@ def main() -> int:
     parser.add_argument('--configuration', choices=('Debug', 'Release'), default='Release')
     args = parser.parse_args()
     app = (ROOT / 'example/build/macos/Build/Products' / args.configuration /
-           'flutter_aws_chime_example.app')
+           'multi-video.app')
     try:
         verify_assets(app)
     except RuntimeError as error:

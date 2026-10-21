@@ -1,4 +1,4 @@
-# Realtime Media example
+# multi-video Demo
 
 This is the repository's single Flutter demo app and a usage sample for the
 public `flutter_realtime_sdk` package. It constructs

@@ -1,11 +1,11 @@
 {
-    "name": "flutter_aws_chime_example",
-    "short_name": "flutter_aws_chime_example",
+    "name": "multi-video",
+    "short_name": "multi-video",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#070B48",
     "theme_color": "#070B48",
-    "description": "Demonstrates how to use the flutter_aws_chime plugin.",
+    "description": "Multi-provider meetings, live streaming and chat powered by Flutter Realtime SDK.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

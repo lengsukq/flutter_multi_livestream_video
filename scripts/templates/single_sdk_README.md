@@ -9,7 +9,7 @@ can be selected independently through explicit runtime registration.
 **Release: `@VERSION@` (preview).** Windows/Linux builds, physical-device vendor
 calls, long-running sessions, and cross-vendor coexistence are not yet fully
 verified. Platform registration does not imply every provider supports that
-platform. See the [capability matrix](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md).
+platform. See the [capability matrix](https://github.com/lengsukq/multi-video/blob/main/doc/SDK_CAPABILITY_MATRIX.zh-CN.md).
 
 ## Installation
 
@@ -178,6 +178,6 @@ can require additional host configuration.
 - Third-party components retain their own licenses and service terms; the
   package's MIT license covers the project's own code.
 
-[Source and documentation](https://github.com/lengsukq/flutter_multi_livestream_video) ·
+[Source and documentation](https://github.com/lengsukq/multi-video) ·
 [中文说明](README.zh-CN.md) ·
-[Full Chinese integration guide](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/APP_INTEGRATION_QUICKSTART.zh-CN.md)
+[Full Chinese integration guide](https://github.com/lengsukq/multi-video/blob/main/doc/APP_INTEGRATION_QUICKSTART.zh-CN.md)

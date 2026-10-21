@@ -16,17 +16,17 @@ class PackageMacosArm64Test(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.app = self.root / 'flutter_aws_chime_example.app'
-        self.bundle_id = 'com.oneplusdream.flutterAwsChimeExample'
+        self.app = self.root / 'multi-video.app'
+        self.bundle_id = 'com.oneplusdream.multi-video'
         self.create_app(self.app, self.bundle_id)
 
     def create_app(self, location: Path, bundle_id: str):
         (location / 'Contents/MacOS').mkdir(parents=True)
-        (location / 'Contents/MacOS/flutter_aws_chime_example').write_bytes(b'fake-mach-o')
+        (location / 'Contents/MacOS/multi-video').write_bytes(b'fake-mach-o')
         with (location / 'Contents/Info.plist').open('wb') as destination:
             plistlib.dump({
                 'CFBundleIdentifier': bundle_id,
-                'CFBundleExecutable': 'flutter_aws_chime_example',
+                'CFBundleExecutable': 'multi-video',
                 'CFBundleShortVersionString': '1.2.3',
             }, destination)
 

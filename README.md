@@ -1,8 +1,8 @@
-# Flutter Realtime SDK
+# multi-video
 
 **English** · [简体中文](README.zh-CN.md)
 
-A provider-neutral Flutter SDK for **meetings, live streaming, chat, classroom interaction, shared content, and optional UI**. Use the same built-in pages shown in the Demo, compose UI components, or build a headless application.
+**multi-video** is the cross-platform demo and source repository for the provider-neutral **Flutter Realtime SDK**, supporting **meetings, live streaming, chat, classroom interaction, shared content, and optional UI**. The public SDK remains named `flutter_realtime_sdk`; this branding change does not rename SDK packages or APIs.
 
 ## Release status
 
@@ -70,12 +70,12 @@ For SDK contributors editing this checkout, use **path dependencies**, not the c
 ~~~yaml
 dependencies:
   flutter_realtime_sdk:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk
+    path: ../multi-video/packages/flutter_realtime_sdk
   flutter_realtime_provider_livekit:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_provider_livekit
+    path: ../multi-video/packages/flutter_realtime_provider_livekit
   # Optional UI:
   flutter_realtime_sdk_ui:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk_ui
+    path: ../multi-video/packages/flutter_realtime_sdk_ui
 ~~~
 
 The source facade exports only Runtime. Register the selected provider and optional UI/presets explicitly; **do not mix this with the one-package installation above**.

@@ -20,12 +20,12 @@
 ~~~yaml
 dependencies:
   flutter_realtime_sdk:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk
+    path: ../multi-video/packages/flutter_realtime_sdk
   flutter_realtime_provider_livekit:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_provider_livekit
+    path: ../multi-video/packages/flutter_realtime_provider_livekit
   # 自由选择可选 UI：
   flutter_realtime_sdk_ui:
-    path: ../flutter_multi_livestream_video/packages/flutter_realtime_sdk_ui
+    path: ../multi-video/packages/flutter_realtime_sdk_ui
 ~~~
 
 上面的路径假设宿主 App 和 SDK Checkout 位于同一级目录，请按实际路径调整。

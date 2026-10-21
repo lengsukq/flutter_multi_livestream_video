@@ -3,7 +3,7 @@
 > **Development package, not yet on pub.dev.** This standalone design package
 > has no provider dependencies and can be tested independently, but its
 > `publish_to: none` remains in effect until the
-> [release checklist](https://github.com/lengsukq/flutter_multi_livestream_video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md)
+> [release checklist](https://github.com/lengsukq/multi-video/blob/main/doc/PUB_DEV_RELEASE_GUIDE.zh-CN.md)
 > is completed.
 
 An optional, provider-independent Flutter visual system: cool-gray surfaces,

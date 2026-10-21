@@ -1,7 +1,7 @@
 import 'support/design_capture.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_realtime_media_example/demo_composable_meeting_page.dart';
-import 'package:flutter_realtime_media_example/demo_meeting_room_page.dart';
+import 'package:multi_video/demo_composable_meeting_page.dart';
+import 'package:multi_video/demo_meeting_room_page.dart';
 import 'package:flutter_realtime_sdk/flutter_realtime_sdk.dart';
 import 'package:flutter_realtime_sdk_ui/flutter_realtime_sdk_ui.dart';
 import 'package:flutter_test/flutter_test.dart';

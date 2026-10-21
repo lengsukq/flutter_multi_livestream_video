@@ -16,6 +16,9 @@
 # Flutter's local SwiftPM shim links to the installed SDK and is not portable.
 /packages/flutter_realtime_chat_ivs/ios/FlutterFramework/Flutter.xcframework
 /packages/flutter_realtime_media_ivs/ios/FlutterFramework/Flutter.xcframework
+# The iOS launch helper creates additional FlutterFramework shim directories
+# with machine-specific Flutter.xcframework symlinks. Do not commit them.
+/packages/*/ios/FlutterFramework/
 .atom/
 .buildlog/
 .history

@@ -3,7 +3,7 @@
 ## Repository checkout name on iOS
 
 The pub package is named `flutter_aws_chime`, while this GitHub repository is
-named `flutter_multi_livestream_video`. Flutter 3.47.x has a Swift Package
+named `multi-video`. Flutter 3.47.x has a Swift Package
 Manager issue for local path plugins when the plugin checkout directory name
 differs from the Dart package name. Flutter merged the upstream fix on
 August 14, 2026, but that change landed after the Flutter 3.47 branch cutoff
@@ -13,7 +13,7 @@ For local iOS SwiftPM development, clone the repository into a directory named
 `flutter_aws_chime`:
 
 ```bash
-git clone https://github.com/lengsukq/flutter_multi_livestream_video.git flutter_aws_chime
+git clone https://github.com/lengsukq/multi-video.git flutter_aws_chime
 cd flutter_aws_chime
 ```
 
