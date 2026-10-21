@@ -13,6 +13,7 @@ import 'realtime_live_gift_banner.dart';
 import 'realtime_role_presentation.dart';
 import 'realtime_live_media_controls.dart';
 import 'realtime_meeting_dock.dart';
+import 'realtime_dock_compact_menu.dart';
 import 'room_ui_controller.dart';
 import 'room_chat_components.dart';
 
@@ -178,21 +179,11 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
                                 onOpenHostTools != null ||
                                 onToggleVideoFit != null ||
                                 onToggleCleanScreen != null ||
-                                narrowHud ||
+                                (narrowHud && onViewAudience != null) ||
                                 extraTopActions.isNotEmpty)
-                              IconButton(
-                                tooltip: RealtimeStrings.of(context).isZh
-                                    ? '显示选项'
-                                    : 'Display options',
-                                style: IconButton.styleFrom(
-                                  foregroundColor: Colors.white,
-                                  minimumSize: const Size(48, 48),
-                                ),
-                                onPressed: () => _openDisplayOptions(context),
-                                icon: const Icon(
-                                  Icons.more_horiz_rounded,
-                                  size: 22,
-                                ),
+                              _buildDisplayOptionsMenu(
+                                context,
+                                narrowHud: narrowHud,
                               ),
                           ],
                         ),
@@ -357,6 +348,69 @@ class RealtimeLiveMobileOverlay extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildDisplayOptionsMenu(
+    BuildContext context, {
+    required bool narrowHud,
+  }) {
+    final strings = RealtimeStrings.of(context);
+    Widget button(VoidCallback toggle) => IconButton(
+      tooltip: strings.isZh ? '显示选项' : 'Display options',
+      style: IconButton.styleFrom(
+        foregroundColor: Colors.white,
+        minimumSize: const Size(48, 48),
+      ),
+      onPressed: toggle,
+      icon: const Icon(Icons.more_horiz_rounded, size: 22),
+    );
+
+    // Hosts embedding rich third-party widgets still need the full panel.
+    // Default live actions are simple toggles and should not cover the video.
+    if (extraTopActions.isNotEmpty) {
+      return button(() => _openDisplayOptions(context));
+    }
+    return RealtimeDockCompactMenu(
+      actions: [
+        if (narrowHud && onViewAudience != null)
+          RealtimeCompactMenuAction(
+            icon: const Icon(Icons.people_outline_rounded),
+            label: strings.participants,
+            onSelected: onViewAudience!,
+          ),
+        if (onOpenHostTools != null)
+          RealtimeCompactMenuAction(
+            icon: const Icon(Icons.tune_rounded),
+            label: strings.isZh ? '主播工具' : 'Host tools',
+            onSelected: onOpenHostTools!,
+          ),
+        if (onOpenBackgroundEffects != null)
+          RealtimeCompactMenuAction(
+            icon: const Icon(Icons.blur_on_outlined),
+            label: strings.virtualBackground,
+            onSelected: onOpenBackgroundEffects!,
+          ),
+        if (onToggleVideoFit != null)
+          RealtimeCompactMenuAction(
+            icon: Icon(
+              videoFit == BoxFit.contain
+                  ? Icons.crop_free_rounded
+                  : Icons.fit_screen_rounded,
+            ),
+            label: videoFit == BoxFit.contain
+                ? strings.fillLiveScreen
+                : strings.showFullVideo,
+            onSelected: onToggleVideoFit!,
+          ),
+        if (onToggleCleanScreen != null)
+          RealtimeCompactMenuAction(
+            icon: const Icon(Icons.fullscreen_rounded),
+            label: strings.isZh ? '清屏' : 'Hide controls',
+            onSelected: onToggleCleanScreen!,
+          ),
+      ],
+      triggerBuilder: button,
     );
   }
 

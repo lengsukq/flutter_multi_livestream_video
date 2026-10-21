@@ -145,10 +145,19 @@ void main() {
               );
               // The teacher panel now also lists the hand queue, so the tab
               // row scrolls at 340 pt.
+              final nextTabs = find.descendant(
+                of: find.byType(RealtimeClassroomSidePanel),
+                matching: find.byTooltip('Next sidebar tabs'),
+              );
+              if (nextTabs.evaluate().isNotEmpty) {
+                await tester.tap(nextTabs);
+                await tester.pumpAndSettle();
+              }
               await tester.ensureVisible(tab);
               await tester.pumpAndSettle();
               await tester.tap(tab);
               await tester.pumpAndSettle();
+              expect(find.byType(RealtimeRecordingPanel), findsOneWidget);
               expect(find.text('Recording to cloud'), findsOneWidget);
               expect(find.text('Pause'), findsNothing);
               await captureDesign(tester, 'classroom-recording-1440');

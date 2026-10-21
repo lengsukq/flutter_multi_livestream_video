@@ -9,6 +9,7 @@ import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
 import 'meeting_dock.dart';
 import 'room_ui_controller.dart';
+import 'classroom_sidebar_visuals.dart';
 
 /// Student hand-raise action that can live in any toolbar.
 class RealtimeRaiseHandButton extends StatelessWidget {
@@ -134,9 +135,9 @@ class RealtimeClassroomHandQueue extends StatelessWidget {
                 : strings.handRaisedStatus;
             return Container(
               margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
-                color: style.surfaceSubtle,
+                color: style.surface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: style.border),
               ),
@@ -161,26 +162,12 @@ class RealtimeClassroomHandQueue extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: statusColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              statusText,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: style.textMuted,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                        ClassroomSidebarStatus(
+                          label: statusText,
+                          color: statusColor,
+                          icon: student.canSpeak
+                              ? Icons.mic_rounded
+                              : Icons.pan_tool_alt_outlined,
                         ),
                       ],
                     ),
@@ -409,7 +396,7 @@ class RealtimeClassroomQuestions extends StatelessWidget {
               margin: const EdgeInsets.symmetric(vertical: 4),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: style.surfaceSubtle,
+                color: style.surface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: style.border),
               ),

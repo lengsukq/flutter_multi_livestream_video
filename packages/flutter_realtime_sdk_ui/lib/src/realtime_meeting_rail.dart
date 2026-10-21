@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
+import 'realtime_meeting_dock.dart';
 
 /// Vertical teaching-tool rail used by the desktop meeting workspace.
 ///
@@ -64,26 +65,31 @@ class RealtimeMeetingRail extends StatelessWidget {
         ),
         child: SizedBox(
           height: 52,
-          child: Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(children: children),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: RealtimeDockScrollableStrip(
+              key: const ValueKey('room-secondary-tools-scroll'),
+              children: children,
             ),
           ),
         ),
       );
     }
     if (trailing != null) {
+      // The whiteboard is the active workspace: give its drawing tools the
+      // first and larger section. Ordinary meeting actions remain accessible
+      // below in their own independent scrolling section.
       return Container(
         width: 60,
         color: style.surface,
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Column(mainAxisSize: MainAxisSize.min, children: children),
+            Expanded(
+              flex: 2,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(top: 8),
+                child: trailing!,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
@@ -94,9 +100,13 @@ class RealtimeMeetingRail extends StatelessWidget {
               ),
             ),
             Expanded(
+              flex: 1,
               child: SingleChildScrollView(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: trailing!,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: children,
+                ),
               ),
             ),
           ],

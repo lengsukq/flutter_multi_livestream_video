@@ -5,6 +5,7 @@ import 'realtime_dock_item.dart';
 import 'realtime_dock_more_item.dart';
 import 'meeting_dock_more_action_grid_item.dart';
 import 'meeting_dock_meeting_dock_modal_sheet.dart';
+import 'realtime_dock_compact_menu.dart';
 
 class RealtimeDockMoreButton extends StatelessWidget {
   const RealtimeDockMoreButton({
@@ -90,6 +91,30 @@ class RealtimeDockMoreButton extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      );
+    }
+
+    if (children.isEmpty && items.length <= 3 && items.isNotEmpty) {
+      return RealtimeDockCompactMenu(
+        actions: [
+          for (final item in items)
+            RealtimeCompactMenuAction(
+              label: item.title,
+              subtitle: item.subtitle,
+              icon: Icon(item.icon),
+              selected: item.isActive,
+              destructive: item.isDanger,
+              enabled: item.enabled,
+              onSelected: item.onTap,
+            ),
+        ],
+        triggerBuilder: (toggle) => RealtimeDockItem(
+          icon: Icons.more_horiz_rounded,
+          label: strings.more,
+          showBadgeDot: hasActiveBadge,
+          showLabel: showLabel,
+          onPressed: toggle,
         ),
       );
     }

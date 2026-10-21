@@ -6,6 +6,7 @@ import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_cor
 import 'whiteboard_strings.dart';
 import 'movable_annotation_toolbar.dart';
 import 'annotation_toolbar.dart';
+import 'annotation_hit_test.dart';
 
 enum AnnotationToolbarPlacement { floating, fixedTop, none }
 
@@ -71,6 +72,7 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
   String? _failedStroke;
   Object? _error;
   bool _finishing = false;
+  final _pendingErasures = <String>{};
   static final _random = math.Random.secure();
   String _canvasId = '';
   TransformationController? _ownedTransform;
@@ -88,6 +90,32 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
     _flushTimer?.cancel();
     _ownedTransform?.dispose();
     super.dispose();
+  }
+
+  void _eraseAt(Offset offset, Size size) {
+    if (_draft != null ||
+        _finishing ||
+        !widget.session.canEdit ||
+        !widget.session.canvas.active) {
+      return;
+    }
+    final canvas = widget.session.canvas;
+    final target = findErasableShape(
+      canvas.shapes.where((shape) => !_pendingErasures.contains(shape.id)),
+      _transform.toScene(offset),
+      size,
+      radius: 14 / _transform.value.getMaxScaleOnAxis(),
+      fontFamily: RealtimeFonts.bodyOf(context),
+    );
+    if (target == null) return;
+    _pendingErasures.add(target.id);
+    _enqueue(() async {
+      try {
+        await widget.session.erase(target.id, canvasId: canvas.canvasId);
+      } finally {
+        _pendingErasures.remove(target.id);
+      }
+    });
   }
 
   AnnotationPoint _point(Offset offset, Size size) {
@@ -199,8 +227,20 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
           _previousFocal = null;
           _previousGestureScale = 1;
         },
-        onTapUp: teacher && _isEditing && _activeTool == AnnotationTool.text
-            ? (e) => _label(e.localPosition, infiniteSceneSize)
+        // Do not mount a competing tap recognizer for pen/highlight strokes;
+        // it can win the gesture arena on short drags and swallow the ink.
+        onTapUp:
+            teacher &&
+                _isEditing &&
+                (_activeTool == AnnotationTool.text ||
+                    _activeTool == AnnotationTool.eraser)
+            ? (e) {
+                if (_activeTool == AnnotationTool.text) {
+                  unawaited(_label(e.localPosition, infiniteSceneSize));
+                } else if (_activeTool == AnnotationTool.eraser) {
+                  _eraseAt(e.localPosition, infiniteSceneSize);
+                }
+              }
             : null,
         child: ClipRect(
           child: CustomPaint(
@@ -231,6 +271,10 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
   }
 
   void _start(Offset offset, Size size) {
+    if (_activeTool == AnnotationTool.eraser) {
+      _eraseAt(offset, size);
+      return;
+    }
     if (_finishing || _draft != null) return;
     final canvas = widget.session.canvas;
     if (!canvas.active) return;
@@ -264,6 +308,10 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
   }
 
   void _update(Offset offset, Size size) {
+    if (_activeTool == AnnotationTool.eraser) {
+      _eraseAt(offset, size);
+      return;
+    }
     final shape = _draft;
     if (shape == null || shape.points.length >= 2048) return;
     final point = _point(offset, size);
@@ -435,8 +483,16 @@ class _AnnotationSurfaceState extends State<AnnotationSurface> {
                   onPanCancel: _activeTool == AnnotationTool.text
                       ? null
                       : _finish,
-                  onTapUp: _activeTool == AnnotationTool.text
-                      ? (event) => _label(event.localPosition, size)
+                  onTapUp:
+                      _activeTool == AnnotationTool.text ||
+                          _activeTool == AnnotationTool.eraser
+                      ? (event) {
+                          if (_activeTool == AnnotationTool.eraser) {
+                            _eraseAt(event.localPosition, size);
+                          } else {
+                            unawaited(_label(event.localPosition, size));
+                          }
+                        }
                       : null,
                 ),
               ),
@@ -621,6 +677,9 @@ class AnnotationPainter extends CustomPainter {
                 : size.width,
           );
           label.paint(canvas, start);
+        case AnnotationTool.eraser:
+          // Editing gesture only: never rendered as a shape.
+          break;
       }
     }
     canvas.restore();

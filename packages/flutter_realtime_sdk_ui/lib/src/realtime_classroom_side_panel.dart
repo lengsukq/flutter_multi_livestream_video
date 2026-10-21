@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_realtime_classroom_preset/flutter_realtime_classroom_preset.dart';
 import 'package:flutter_realtime_media_ui/flutter_realtime_media_ui.dart';
 
+import 'realtime_classroom_workspace.dart';
+import 'realtime_classroom_notes_panel.dart';
 import 'room_chat_components.dart';
 import 'room_classroom_interactions.dart';
 import 'room_ui_controller.dart';
 
 /// Reference workspace side panel: flat underline tabs.
 ///
-/// Non-classroom rooms show Chat and People; classroom rooms add Q&A. When the
-/// room has a configured recorder, an extra Recording tab is appended. Every
-/// tab reuses an SDK component, so the panel never keeps a private copy of
-/// room state.
+/// Chat/People are capability-driven. A classroom consolidates hands, Q&A and
+/// polls under one tab. Recording and persisted Notes are only shown when
+/// their corresponding real components are supplied by the host.
 class RealtimeClassroomSidePanel extends StatefulWidget {
   const RealtimeClassroomSidePanel({
     super.key,
@@ -20,6 +20,9 @@ class RealtimeClassroomSidePanel extends StatefulWidget {
     this.pinnedMessage,
     this.onClose,
     this.recordingPanel,
+    this.notesPanel,
+    this.initialTabId,
+    this.initialClassroomSection,
   });
 
   final int initialTab;
@@ -35,20 +38,30 @@ class RealtimeClassroomSidePanel extends StatefulWidget {
   /// Optional recording view shown as a trailing tab.
   final Widget? recordingPanel;
 
+  /// Optional host-persisted notes content; no synthetic local notes.
+  final Widget? notesPanel;
+  final RealtimeWorkspaceTab? initialTabId;
+  final RealtimeClassroomSection? initialClassroomSection;
+
   @override
   State<RealtimeClassroomSidePanel> createState() =>
       _RealtimeClassroomSidePanelState();
 }
 
+/// Stable navigation identity independent of the translated label or
+/// the presence of chat and recording capabilities.
+enum RealtimeWorkspaceTab { chat, people, classroom, recording, notes }
+
 class _RealtimeClassroomSidePanelState
     extends State<RealtimeClassroomSidePanel> {
-  int? _userSelected;
+  RealtimeWorkspaceTab? _userSelected;
 
   @override
   void didUpdateWidget(covariant RealtimeClassroomSidePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialTab != widget.initialTab ||
-        oldWidget.initialTabLabel != widget.initialTabLabel) {
+        oldWidget.initialTabLabel != widget.initialTabLabel ||
+        oldWidget.initialTabId != widget.initialTabId) {
       _userSelected = null;
     }
   }
@@ -62,53 +75,83 @@ class _RealtimeClassroomSidePanelState
       listenable: controller,
       builder: (context, _) {
         final classroom = controller.classroomState;
-        final state = classroom;
+        final notesAvailable =
+            classroom?.isTeacher == true &&
+            (widget.notesPanel != null || classroom?.notes != null);
         final hasChat = controller.room.chat != null;
-        final pending =
-            state?.questions
-                .where((q) => q.status == ClassroomQuestionStatus.pending)
-                .length ??
-            0;
-        final online = state?.stats.onlineCount ?? 0;
+        final pending = classroom?.stats.pendingQuestions ?? 0;
+        final online = classroom?.stats.onlineCount ?? 0;
         final hands = controller.canGrantSpeak
-            ? state?.raisedHands.length ?? 0
+            ? classroom?.raisedHands.length ?? 0
             : 0;
-
-        final tabs = <({String label, int? badge})>[
-          if (hasChat) (label: strings.chat, badge: null),
+        final tabs = <({RealtimeWorkspaceTab id, String label, int? badge})>[
+          if (hasChat)
+            (id: RealtimeWorkspaceTab.chat, label: strings.chat, badge: null),
           (
+            id: RealtimeWorkspaceTab.people,
             label: strings.isZh ? '成员' : 'People',
             badge: online > 0 ? online : null,
           ),
-          if (controller.canGrantSpeak)
-            (label: strings.classroomHands, badge: hands > 0 ? hands : null),
           if (classroom != null)
             (
-              label: strings.isZh ? '问答' : 'Q&A',
-              badge: pending > 0 ? pending : null,
+              id: RealtimeWorkspaceTab.classroom,
+              label: strings.isZh ? '课堂' : 'Classroom',
+              badge: hands + pending > 0 ? hands + pending : null,
             ),
           if (widget.recordingPanel != null)
-            (label: strings.isZh ? '录制' : 'Recording', badge: null),
+            (
+              id: RealtimeWorkspaceTab.recording,
+              label: strings.isZh ? '录制' : 'Recording',
+              badge: null,
+            ),
+          if (notesAvailable)
+            (
+              id: RealtimeWorkspaceTab.notes,
+              label: strings.isZh ? '笔记' : 'Notes',
+              badge: null,
+            ),
         ];
-        final selected = _resolveSelected(tabs);
 
+        final ids = tabs.map((tab) => tab.id).toList(growable: false);
+        final selectedId = _resolveSelected(ids);
+        final selected = ids.indexOf(selectedId);
         final pages = <Widget>[
           if (hasChat)
             _ChatTab(pinnedMessage: widget.pinnedMessage, strings: strings),
           const _PeopleTab(),
-          if (controller.canGrantSpeak) const RealtimeClassroomHandQueue(),
-          if (classroom != null) _QuestionsTab(strings: strings),
+          if (classroom != null)
+            RealtimeClassroomWorkspace(
+              initialSection: _initialClassroomSection(strings),
+            ),
           if (widget.recordingPanel != null) widget.recordingPanel!,
+          if (notesAvailable)
+            widget.notesPanel ?? const RealtimeClassroomNotesPanel(),
         ];
-
         return ColoredBox(
           color: style.surface,
           child: Column(
             children: [
               _UnderlineTabs(
-                tabs: tabs,
+                tabs: [
+                  for (final tab in tabs)
+                    (
+                      label: tab.label,
+                      badge: tab.badge,
+                      icon: switch (tab.id) {
+                        RealtimeWorkspaceTab.chat =>
+                          Icons.chat_bubble_outline_rounded,
+                        RealtimeWorkspaceTab.people =>
+                          Icons.people_outline_rounded,
+                        RealtimeWorkspaceTab.classroom => Icons.school_outlined,
+                        RealtimeWorkspaceTab.recording =>
+                          Icons.radio_button_checked_rounded,
+                        RealtimeWorkspaceTab.notes => Icons.notes_rounded,
+                      },
+                    ),
+                ],
                 selected: selected,
-                onSelected: (index) => setState(() => _userSelected = index),
+                onSelected: (index) =>
+                    setState(() => _userSelected = ids[index]),
                 onClose: widget.onClose,
               ),
               Expanded(
@@ -121,24 +164,40 @@ class _RealtimeClassroomSidePanelState
     );
   }
 
-  /// Resolves the opening tab against the tabs actually rendered. Chat and
-  /// the teacher hand queue are optional, so raw indexes drift between rooms;
-  /// a user tap always wins afterwards.
-  int _resolveSelected(List<({String label, int? badge})> tabs) {
-    if (_userSelected case final index?) {
-      return index.clamp(0, tabs.length - 1);
+  RealtimeWorkspaceTab _resolveSelected(List<RealtimeWorkspaceTab> ids) {
+    if (_userSelected != null && ids.contains(_userSelected)) {
+      return _userSelected!;
+    }
+    if (widget.initialTabId case final id? when ids.contains(id)) {
+      return id;
     }
     final label = widget.initialTabLabel;
-    if (label != null) {
-      for (var i = 0; i < tabs.length; i++) {
-        if (tabs[i].label == label) return i;
-      }
+    final mapped = switch (label) {
+      'Hands' || '举手' || 'Q&A' || '问答' => RealtimeWorkspaceTab.classroom,
+      'People' || '成员' => RealtimeWorkspaceTab.people,
+      'Chat' || '聊天' => RealtimeWorkspaceTab.chat,
+      'Recording' || '录制' => RealtimeWorkspaceTab.recording,
+      'Notes' || '笔记' => RealtimeWorkspaceTab.notes,
+      _ => null,
+    };
+    if (mapped != null && ids.contains(mapped)) return mapped;
+    return ids[widget.initialTab.clamp(0, ids.length - 1)];
+  }
+
+  RealtimeClassroomSection _initialClassroomSection(RealtimeStrings strings) {
+    if (widget.initialClassroomSection case final section?) return section;
+    final label = widget.initialTabLabel;
+    if (label == strings.classroomHands || label == 'Hands' || label == '举手') {
+      return RealtimeClassroomSection.hands;
     }
-    return widget.initialTab.clamp(0, tabs.length - 1);
+    if (label == 'Q&A' || label == '问答') {
+      return RealtimeClassroomSection.questions;
+    }
+    return RealtimeClassroomSection.overview;
   }
 }
 
-class _UnderlineTabs extends StatelessWidget {
+class _UnderlineTabs extends StatefulWidget {
   const _UnderlineTabs({
     required this.tabs,
     required this.selected,
@@ -146,49 +205,160 @@ class _UnderlineTabs extends StatelessWidget {
     this.onClose,
   });
 
-  final List<({String label, int? badge})> tabs;
+  final List<({String label, int? badge, IconData icon})> tabs;
   final int selected;
   final ValueChanged<int> onSelected;
   final VoidCallback? onClose;
 
   @override
+  State<_UnderlineTabs> createState() => _UnderlineTabsState();
+}
+
+class _UnderlineTabsState extends State<_UnderlineTabs> {
+  final _scroll = ScrollController();
+  final _anchors = <GlobalKey>[];
+  bool _hasPrevious = false;
+  bool _hasNext = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_refresh);
+    _scheduleSelectedVisibility();
+  }
+
+  @override
+  void didUpdateWidget(covariant _UnderlineTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected != oldWidget.selected ||
+        widget.tabs.length != oldWidget.tabs.length) {
+      _scheduleSelectedVisibility();
+    }
+  }
+
+  void _scheduleSelectedVisibility() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.selected >= _anchors.length) return;
+      final target = _anchors[widget.selected].currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(
+          target,
+          alignment: .5,
+          duration: RealtimeUiTokens.animFast,
+          curve: Curves.easeOutCubic,
+        );
+      }
+      _refresh();
+    });
+  }
+
+  void _refresh() {
+    if (!mounted) return;
+    final previous = _ready && _scroll.offset > 1;
+    final next =
+        _ready && _scroll.offset < _scroll.position.maxScrollExtent - 1;
+    if (previous == _hasPrevious && next == _hasNext) return;
+    setState(() {
+      _hasPrevious = previous;
+      _hasNext = next;
+    });
+  }
+
+  bool get _ready =>
+      _scroll.hasClients && _scroll.position.hasContentDimensions;
+
+  void _move(int sign) {
+    if (!_ready) return;
+    final position = _scroll.position;
+    _scroll.animateTo(
+      (_scroll.offset + sign * 150).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      ),
+      duration: RealtimeUiTokens.animFast,
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_refresh);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    while (_anchors.length < widget.tabs.length) {
+      _anchors.add(GlobalKey());
+    }
+    if (_anchors.length > widget.tabs.length) {
+      _anchors.removeRange(widget.tabs.length, _anchors.length);
+    }
     final style = RealtimeStyle.of(context);
+    final zh = RealtimeStrings.of(context).isZh;
+    final left = _hasPrevious;
+    final right = _hasNext;
     return Container(
-      height: 52,
+      height: 56,
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: style.border)),
       ),
       child: Row(
         children: [
+          if (left)
+            IconButton(
+              tooltip: zh ? '上一组标签' : 'Previous sidebar tabs',
+              onPressed: () => _move(-1),
+              icon: const Icon(Icons.chevron_left_rounded, size: 19),
+              constraints: const BoxConstraints.tightFor(width: 27, height: 38),
+              padding: EdgeInsets.zero,
+            ),
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (var i = 0; i < tabs.length; i++)
-                    _UnderlineTabButton(
-                      label: tabs[i].label,
-                      badge: tabs[i].badge,
-                      selected: i == selected,
-                      onTap: () => onSelected(i),
-                    ),
-                ],
+            child: NotificationListener<ScrollMetricsNotification>(
+              onNotification: (_) {
+                WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+                return false;
+              },
+              child: SingleChildScrollView(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < widget.tabs.length; i++)
+                      _UnderlineTabButton(
+                        key: _anchors[i],
+                        label: widget.tabs[i].label,
+                        icon: widget.tabs[i].icon,
+                        badge: widget.tabs[i].badge,
+                        selected: i == widget.selected,
+                        onTap: () => widget.onSelected(i),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
-          if (onClose != null)
+          if (right)
+            IconButton(
+              tooltip: zh ? '下一组标签' : 'Next sidebar tabs',
+              onPressed: () => _move(1),
+              icon: const Icon(Icons.chevron_right_rounded, size: 19),
+              constraints: const BoxConstraints.tightFor(width: 27, height: 38),
+              padding: EdgeInsets.zero,
+            ),
+          if (widget.onClose != null)
             Padding(
               padding: const EdgeInsets.only(right: 4),
-              child: SizedBox(
-                width: 32,
-                height: 32,
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  tooltip: 'Close Sidebar',
-                  onPressed: onClose,
-                  icon: const Icon(Icons.close_rounded, size: 18),
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                tooltip: zh ? '关闭侧边栏' : 'Close Sidebar',
+                onPressed: widget.onClose,
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
                 ),
+                icon: const Icon(Icons.close_rounded, size: 18),
               ),
             ),
         ],
@@ -199,13 +369,16 @@ class _UnderlineTabs extends StatelessWidget {
 
 class _UnderlineTabButton extends StatelessWidget {
   const _UnderlineTabButton({
+    super.key,
     required this.label,
+    required this.icon,
     required this.badge,
     required this.selected,
     required this.onTap,
   });
 
   final String label;
+  final IconData icon;
   final int? badge;
   final bool selected;
   final VoidCallback onTap;
@@ -217,27 +390,35 @@ class _UnderlineTabButton extends StatelessWidget {
       selected: selected,
       button: true,
       child: InkWell(
+        borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: AnimatedContainer(
           duration: RealtimeUiTokens.animFast,
-          height: 51,
-          padding: const EdgeInsets.symmetric(horizontal: 7),
+          curve: Curves.easeOutCubic,
+          height: 55,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
-                color: selected ? style.text : Colors.transparent,
-                width: 2,
+                color: selected ? style.primary : Colors.transparent,
+                width: 2.5,
               ),
             ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Icon(
+                icon,
+                size: 15,
+                color: selected ? style.text : style.textMuted,
+              ),
+              const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
                   fontSize: 12.5,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   color: selected ? style.text : style.textMuted,
                 ),
               ),
@@ -318,29 +499,6 @@ class _ChatTab extends StatelessWidget {
         ),
         const Expanded(child: RealtimeChatPanel(timelineStyle: true)),
       ],
-    );
-  }
-}
-
-class _QuestionsTab extends StatelessWidget {
-  const _QuestionsTab({required this.strings});
-  final RealtimeStrings strings;
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = RealtimeRoomUiScope.of(context);
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) => Column(
-        children: [
-          const Expanded(child: RealtimeClassroomQuestions()),
-          if (controller.canAskQuestion)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(10, 4, 10, 10),
-              child: RealtimeClassroomQuestionComposer(),
-            ),
-        ],
-      ),
     );
   }
 }

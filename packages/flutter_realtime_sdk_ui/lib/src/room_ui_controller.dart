@@ -32,6 +32,29 @@ class RealtimeRoomUiController extends room_ui.RealtimeRoomUiController {
       notifyListeners();
     });
   }
+
+  Future<void> publishClassroomActivity({
+    required ClassroomActivityKind kind,
+    required String title,
+    required List<String> options,
+    int? correctOption,
+  }) async {
+    final classroom = room.classroom;
+    if (classroom == null ||
+        classroomState?.capabilities.canPublishTools != true) {
+      return;
+    }
+    await execute(
+      RealtimeRoomUiAction.classroom,
+      () => classroom.publishActivity(
+        kind: kind,
+        title: title,
+        options: options,
+        correctOption: correctOption,
+      ),
+    );
+  }
+
   StreamSubscription<Object?>? _classroomSubscription;
   StreamSubscription<Object>? _classroomErrors, _liveErrors;
   StreamSubscription<LiveInteractionState>? _liveSubscription;
@@ -87,6 +110,32 @@ class RealtimeRoomUiController extends room_ui.RealtimeRoomUiController {
   bool get canGrantSpeak => classroomState?.capabilities.canGrantSpeak == true;
   bool get canViewClassroomRoster =>
       classroomState?.capabilities.canViewRoster == true;
+  bool get canManageClassroomNotes =>
+      classroomState?.isTeacher == true && classroomState?.notes != null;
+
+  Future<void> addClassroomNote(String text, {bool chapter = false}) async {
+    if (!canManageClassroomNotes) return;
+    await execute(
+      RealtimeRoomUiAction.classroom,
+      () => room.classroom!.addNote(text, chapter: chapter),
+    );
+  }
+
+  Future<void> updateClassroomNote(String id, String text) async {
+    if (!canManageClassroomNotes) return;
+    await execute(
+      RealtimeRoomUiAction.classroom,
+      () => room.classroom!.updateNote(id, text),
+    );
+  }
+
+  Future<void> deleteClassroomNote(String id) async {
+    if (!canManageClassroomNotes) return;
+    await execute(
+      RealtimeRoomUiAction.classroom,
+      () => room.classroom!.deleteNote(id),
+    );
+  }
 
   Future<void> setHandRaised(bool raised) async {
     final classroom = room.classroom;

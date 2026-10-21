@@ -162,8 +162,12 @@ void main() {
               await tester.tap(find.text('Switch camera'));
               await tester.pumpAndSettle();
               expect(chosen, isTrue);
+            } else if (scene == 'share') {
+              // Anchored menus dismiss without popping the enclosing route.
+              await tester.tapAt(const Offset(4, 4));
+              await tester.pumpAndSettle();
+              expect(find.byType(MenuItemButton), findsNothing);
             } else {
-              // Modal navigation always permits leaving without activating a capability.
               Navigator.pop(launcher);
               await tester.pumpAndSettle();
             }

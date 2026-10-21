@@ -31,6 +31,8 @@ export 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart'
     hide RealtimeRoomUiController, RealtimeRoomUiScope;
 
 export 'src/realtime_meeting_page.dart';
+export 'src/realtime_classroom_workspace.dart';
+export 'src/realtime_classroom_notes_panel.dart';
 export 'src/realtime_room_shell.dart';
 export 'src/realtime_meeting_session_info.dart';
 export 'src/realtime_live_page.dart';

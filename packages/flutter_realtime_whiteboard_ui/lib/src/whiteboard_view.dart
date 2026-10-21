@@ -3,7 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'annotation_surface.dart';
+import 'color_picker_dialog.dart';
 import 'whiteboard_strings.dart';
+
+const _quickPenColors = <int>[0xff1f2a3c, 0xff2563eb, 0xffd93a3f, 0xfff5c518];
+
+Future<void> _pickPenColor(
+  BuildContext context,
+  WhiteboardToolsController controller,
+) async {
+  final color = await showWhiteboardColorPicker(
+    context,
+    initialColor: controller.color,
+  );
+  if (color != null && context.mounted) controller.selectColor(color);
+}
 
 /// Independent view: no media, chat or classroom session is required.
 /// The host owns and disposes the session. Students follow its active page.
@@ -67,13 +81,6 @@ class _WhiteboardViewState extends State<WhiteboardView> {
   final _transform = TransformationController();
   final _viewportKey = GlobalKey();
   bool _initialViewportReady = false;
-
-  static const _penColors = <int>[
-    0xff1f2a3c,
-    0xff2563eb,
-    0xffd93a3f,
-    0xfff5c518,
-  ];
 
   @override
   void initState() {
@@ -439,6 +446,7 @@ class _WhiteboardViewState extends State<WhiteboardView> {
             (AnnotationTool.circle, Icons.circle_outlined, 'circle'),
             (AnnotationTool.arrow, Icons.arrow_outward_rounded, 'arrow'),
             (AnnotationTool.text, Icons.title_rounded, 'label'),
+            (AnnotationTool.eraser, Icons.auto_fix_off_rounded, 'eraser'),
           ])
             _RailTool(
               icon: entry.$2,
@@ -447,12 +455,25 @@ class _WhiteboardViewState extends State<WhiteboardView> {
               compact: true,
               onTap: () => _tools.selectTool(entry.$1),
             ),
-          for (final color in _penColors)
+          for (final color in _quickPenColors)
             _ColorDot(
               color: Color(color),
               selected: _tools.color == color,
               onTap: () => _tools.selectColor(color),
             ),
+          if (!_quickPenColors.contains(_tools.color))
+            _ColorDot(
+              color: Color(_tools.color),
+              selected: true,
+              onTap: () => unawaited(_pickPenColor(context, _tools)),
+            ),
+          _RailTool(
+            icon: Icons.palette_outlined,
+            tooltip: s.t('moreColors'),
+            selected: !_quickPenColors.contains(_tools.color),
+            compact: true,
+            onTap: () => unawaited(_pickPenColor(context, _tools)),
+          ),
           _RailTool(
             icon: Icons.undo_rounded,
             tooltip: s.t('undo'),
@@ -540,6 +561,7 @@ class _WhiteboardToolRailState extends State<WhiteboardToolRail> {
             (AnnotationTool.circle, Icons.circle_outlined, 'circle'),
             (AnnotationTool.arrow, Icons.arrow_outward_rounded, 'arrow'),
             (AnnotationTool.text, Icons.title_rounded, 'label'),
+            (AnnotationTool.eraser, Icons.auto_fix_off_rounded, 'eraser'),
           ])
             _RailTool(
               icon: entry.$2,
@@ -549,17 +571,25 @@ class _WhiteboardToolRailState extends State<WhiteboardToolRail> {
               onTap: () => tools.selectTool(entry.$1),
             ),
           divider,
-          for (final color in const <int>[
-            0xff1f2a3c,
-            0xff2563eb,
-            0xffd93a3f,
-            0xfff5c518,
-          ])
+          for (final color in _quickPenColors)
             _ColorDot(
               color: Color(color),
               selected: tools.color == color,
               onTap: () => tools.selectColor(color),
             ),
+          if (!_quickPenColors.contains(tools.color))
+            _ColorDot(
+              color: Color(tools.color),
+              selected: true,
+              onTap: () => unawaited(_pickPenColor(context, tools)),
+            ),
+          _RailTool(
+            icon: Icons.palette_outlined,
+            tooltip: s.t('moreColors'),
+            selected: !_quickPenColors.contains(tools.color),
+            compact: horizontal,
+            onTap: () => unawaited(_pickPenColor(context, tools)),
+          ),
           divider,
           _RailTool(
             icon: Icons.undo_rounded,

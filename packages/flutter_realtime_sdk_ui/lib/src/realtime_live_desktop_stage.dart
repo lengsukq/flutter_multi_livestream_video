@@ -7,7 +7,6 @@ import 'package:flutter_realtime_live_preset/flutter_realtime_live_preset.dart';
 import 'package:flutter_realtime_room_ui/flutter_realtime_room_ui.dart'
     show RealtimeConnectionIndicator;
 
-import 'realtime_dock_item.dart';
 import 'realtime_dock_microphone_button.dart';
 import 'realtime_dock_camera_button.dart';
 import 'realtime_live_gift_banner.dart';
@@ -63,6 +62,10 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
   final VoidCallback? onViewAudience;
   final VoidCallback? onOpenChat;
   final VoidCallback? onOpenHostTools;
+
+  /// Backward-compatible hook for callers still providing a single display
+  /// settings action. Prefer the individual rail actions instead.
+  @Deprecated('Use onToggleVideoFit, onToggleCleanScreen and onOpenHostTools')
   final VoidCallback? onOpenDisplayOptions;
   final Duration? liveDuration;
   final DateTime? startedAt;
@@ -99,7 +102,6 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
         final width = constraints.maxWidth;
         final wide = RealtimeBreakpoints.isWide(context, width);
         final compact = width < RealtimeBreakpoints.compactMaxWidth;
-        final tablet = !wide && !compact;
         final liveEnabled =
             showLiveInteractions && room.liveInteractions != null;
         final hasChat = showChat && room.chat != null;
@@ -119,6 +121,41 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
             badgeCount: participants.length,
             onPressed: wide ? () => onSelectedTab?.call(1) : onViewAudience,
           ),
+          if (onToggleVideoFit != null ||
+              onToggleCleanScreen != null ||
+              (isHost && onOpenHostTools != null))
+            const RealtimeMeetingRailItem.divider(),
+          if (onToggleVideoFit != null)
+            RealtimeMeetingRailItem(
+              icon: videoFit == BoxFit.contain
+                  ? Icons.crop_free_rounded
+                  : Icons.fit_screen_rounded,
+              tooltip: videoFit == BoxFit.contain
+                  ? strings.fillLiveScreen
+                  : strings.showFullVideo,
+              onPressed: onToggleVideoFit,
+            ),
+          if (onToggleCleanScreen != null)
+            RealtimeMeetingRailItem(
+              icon: Icons.fullscreen_rounded,
+              tooltip: strings.isZh ? '清屏' : 'Hide controls',
+              onPressed: onToggleCleanScreen,
+            ),
+          if (isHost && onOpenHostTools != null)
+            RealtimeMeetingRailItem(
+              icon: Icons.tune_rounded,
+              tooltip: strings.isZh ? '主播工具' : 'Host tools',
+              onPressed: onOpenHostTools,
+            ),
+          if (onToggleVideoFit == null &&
+              onToggleCleanScreen == null &&
+              onOpenHostTools == null &&
+              onOpenDisplayOptions != null)
+            RealtimeMeetingRailItem(
+              icon: Icons.tune_rounded,
+              tooltip: strings.isZh ? '显示设置' : 'Display settings',
+              onPressed: onOpenDisplayOptions,
+            ),
         ];
 
         final header = RealtimeMeetingTopBar(
@@ -241,35 +278,7 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
               if (isHost && controller.canUseCamera)
                 const RealtimeDockCameraButton(showLabel: false),
             ],
-            panelsGroup: compact
-                ? [
-                    if (showChat)
-                      RealtimeDockItem(
-                        icon: Icons.chat_bubble_outline_rounded,
-                        label: strings.chat,
-                        showLabel: false,
-                        onPressed: onOpenChat,
-                      ),
-                    RealtimeDockItem(
-                      icon: Icons.people_outline_rounded,
-                      label: strings.participants,
-                      showLabel: false,
-                      onPressed: onViewAudience,
-                    ),
-                  ]
-                : const [],
             collaborationGroup: [
-              if (!compact && onToggleVideoFit != null)
-                RealtimeDockItem(
-                  icon: videoFit == BoxFit.contain
-                      ? Icons.crop_free_rounded
-                      : Icons.fit_screen_rounded,
-                  label: videoFit == BoxFit.contain
-                      ? strings.fillLiveScreen
-                      : strings.showFullVideo,
-                  showLabel: false,
-                  onPressed: onToggleVideoFit,
-                ),
               if (liveEnabled && !wide) ...[
                 if (customGiftPanel != null)
                   customGiftPanel!
@@ -277,36 +286,14 @@ class RealtimeLiveDesktopStage extends StatelessWidget {
                   const RealtimeLiveGiftButton(),
                 const RealtimeLiveLikeButton(iconOnly: true),
               ],
-              if (!compact && onToggleCleanScreen != null)
-                RealtimeDockItem(
-                  icon: Icons.fullscreen_rounded,
-                  label: strings.isZh ? '清屏' : 'Hide controls',
-                  showLabel: false,
-                  onPressed: onToggleCleanScreen,
-                ),
-              if (isHost && onOpenHostTools != null)
-                RealtimeDockItem(
-                  icon: Icons.tune_rounded,
-                  label: strings.isZh ? '主播工具' : 'Host tools',
-                  showLabel: false,
-                  onPressed: onOpenHostTools,
-                ),
             ],
-            moreAction: compact
-                ? RealtimeDockItem(
-                    icon: Icons.more_horiz_rounded,
-                    label: strings.isZh ? '显示选项' : 'Display options',
-                    showLabel: false,
-                    onPressed: onOpenDisplayOptions,
-                  )
-                : null,
           ),
         );
 
         return RealtimeRoomShell(
           compact: compact,
           header: header,
-          tabletRail: tablet
+          tabletRail: !wide
               ? RealtimeMeetingRail(horizontal: true, items: actions)
               : null,
           desktopRail: wide ? RealtimeMeetingRail(items: actions) : null,

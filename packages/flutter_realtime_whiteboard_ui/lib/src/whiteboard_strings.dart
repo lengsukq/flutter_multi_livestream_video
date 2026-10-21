@@ -10,6 +10,7 @@ class WhiteboardStrings {
       'annotate': ['标注 / 移动', 'Draw / navigate'],
       'moveTools': ['拖动工具条', 'Drag toolbar'],
       'pen': ['画笔', 'Pen'],
+      'eraser': ['橡皮擦（按笔迹擦除）', 'Eraser (whole stroke)'],
       'highlight': ['高亮', 'Highlight'],
       'circle': ['圆圈', 'Circle'],
       'arrow': ['箭头', 'Arrow'],
@@ -33,6 +34,9 @@ class WhiteboardStrings {
       'selectColor': ['选择颜色', 'Select Color'],
       'customColor': ['自定义颜色', 'Custom Color'],
       'moreColors': ['更多颜色', 'More colors'],
+      'hue': ['色相', 'Hue'],
+      'saturation': ['饱和度', 'Saturation'],
+      'brightness': ['亮度', 'Brightness'],
       'confirm': ['确定', 'Confirm'],
     };
     return words[key]?[zh ? 0 : 1] ?? key;

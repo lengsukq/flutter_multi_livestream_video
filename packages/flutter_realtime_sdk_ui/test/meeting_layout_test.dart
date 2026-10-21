@@ -107,6 +107,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('meeting keeps core actions below and settings in the rail', (
+    tester,
+  ) async {
+    for (final size in const [Size(390, 844), Size(1280, 820)]) {
+      final fixture = await MeetingSharingFixture.create(withTrack: false);
+      await pumpPage(tester, fixture, size);
+      final dock = find.byType(RealtimeMeetingDock);
+      final rail = find.byType(RealtimeMeetingRail);
+      expect(find.byType(RealtimeDockMoreButton), findsNothing);
+      expect(
+        find.descendant(
+          of: dock,
+          matching: find.byType(RealtimeDockMicrophoneButton),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: dock,
+          matching: find.byType(RealtimeDockCameraButton),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: dock,
+          matching: find.byType(RealtimeDockSharedContentButton),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: dock, matching: find.byTooltip('Flip')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: rail, matching: find.byTooltip('Flip')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: rail,
+          matching: find.byTooltip('Virtual background'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull, reason: 'at $size');
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(fixture.room.dispose);
+    }
+  });
+
   testWidgets('phone keeps one dock and opens panels as a drawer', (
     tester,
   ) async {
@@ -115,7 +166,13 @@ void main() {
     await pumpPage(tester, fixture, const Size(390, 844));
 
     expect(find.byType(RealtimeMeetingTopBar), findsOneWidget);
-    expect(find.byType(RealtimeMeetingRail), findsNothing);
+    expect(find.byType(RealtimeMeetingRail), findsOneWidget);
+    expect(
+      tester
+          .widget<RealtimeMeetingRail>(find.byType(RealtimeMeetingRail))
+          .horizontal,
+      isTrue,
+    );
     expect(find.byType(RealtimeMeetingDock), findsOneWidget);
     expect(find.byType(RealtimeMeetingSidePanel), findsNothing);
 
@@ -126,7 +183,7 @@ void main() {
 
     // No bottom sheet: the participants panel is a right-hand drawer.
     final participants = find.descendant(
-      of: find.byType(RealtimeMeetingDock),
+      of: find.byType(RealtimeMeetingRail),
       matching: find.byTooltip('Participants'),
     );
     await tester.ensureVisible(participants);

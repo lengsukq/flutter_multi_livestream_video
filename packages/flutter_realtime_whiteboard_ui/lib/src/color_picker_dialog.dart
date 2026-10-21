@@ -194,6 +194,7 @@ class _WhiteboardColorPickerDialogState
               const SizedBox(height: 14),
 
               // Hue Slider
+              Text(s.t('hue'), style: theme.textTheme.labelSmall),
               Row(
                 children: [
                   const Icon(Icons.colorize, size: 18),
@@ -207,6 +208,7 @@ class _WhiteboardColorPickerDialogState
                         ),
                       ),
                       child: Slider(
+                        key: const ValueKey('whiteboard-color-hue'),
                         value: _hue,
                         min: 0,
                         max: 360,
@@ -217,6 +219,26 @@ class _WhiteboardColorPickerDialogState
                 ],
               ),
 
+              const SizedBox(height: 8),
+              Text(s.t('saturation'), style: theme.textTheme.labelSmall),
+              Row(
+                children: [
+                  const Icon(Icons.gradient_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Slider(
+                      key: const ValueKey('whiteboard-color-saturation'),
+                      value: _saturation,
+                      min: 0,
+                      max: 1,
+                      onChanged: (v) => setState(() => _saturation = v),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+              Text(s.t('brightness'), style: theme.textTheme.labelSmall),
               // Brightness / Value Slider
               Row(
                 children: [
@@ -231,8 +253,9 @@ class _WhiteboardColorPickerDialogState
                         ),
                       ),
                       child: Slider(
+                        key: const ValueKey('whiteboard-color-brightness'),
                         value: _value,
-                        min: 0.05,
+                        min: 0,
                         max: 1.0,
                         onChanged: (v) => setState(() => _value = v),
                       ),

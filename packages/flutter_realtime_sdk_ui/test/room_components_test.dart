@@ -352,6 +352,21 @@ void main() {
     expect(find.byType(RealtimeMeetingSidebar), findsOneWidget);
     expect(find.byType(RealtimeLiveVideoStage), findsOneWidget);
     expect(find.byType(RealtimeLiveMediaControls), findsNothing);
+    expect(find.byType(RealtimeDockMoreButton), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byType(RealtimeMeetingDock),
+        matching: find.byTooltip('Host tools'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(RealtimeMeetingRail),
+        matching: find.byTooltip('Host tools'),
+      ),
+      findsOneWidget,
+    );
 
     final rail = find.byType(RealtimeMeetingRail);
     await tester.tap(
@@ -406,13 +421,19 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(RealtimeRoomShell), findsOneWidget);
-    expect(find.byType(RealtimeMeetingRail), findsNothing);
+    expect(find.byType(RealtimeMeetingRail), findsOneWidget);
+    expect(
+      tester
+          .widget<RealtimeMeetingRail>(find.byType(RealtimeMeetingRail))
+          .horizontal,
+      isTrue,
+    );
     expect(find.byType(RealtimeMeetingSidebar), findsNothing);
     expect(find.byType(RealtimeDockMicrophoneButton), findsNothing);
     expect(find.byType(RealtimeDockCameraButton), findsNothing);
     expect(find.byTooltip('Host tools'), findsNothing);
     final people = find.descendant(
-      of: find.byType(RealtimeMeetingDock),
+      of: find.byType(RealtimeMeetingRail),
       matching: find.byTooltip('Participants'),
     );
     await tester.ensureVisible(people);
@@ -424,7 +445,7 @@ void main() {
   });
 
   testWidgets(
-    'large text keeps live host controls reachable from display options',
+    'large text keeps live host tools reachable from secondary rail',
     (tester) async {
       final hostRoom = _room(_FakeMediaSession(role: MediaRole.host));
       addTearDown(hostRoom.dispose);
@@ -445,14 +466,15 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      final more = find.byTooltip('Display options');
-      expect(more, findsOneWidget);
-      await tester.ensureVisible(more);
+      expect(find.byTooltip('Display options'), findsNothing);
+      final hostTools = find.descendant(
+        of: find.byType(RealtimeMeetingRail),
+        matching: find.byTooltip('Host tools'),
+      );
+      expect(hostTools, findsOneWidget);
+      await tester.ensureVisible(hostTools);
       await tester.pumpAndSettle();
-      await tester.tap(more);
-      await tester.pumpAndSettle();
-      expect(find.text('Host tools'), findsOneWidget);
-      await tester.tap(find.text('Host tools'));
+      await tester.tap(hostTools);
       await tester.pumpAndSettle();
       expect(find.byType(RealtimeHostToolsPanel), findsOneWidget);
       expect(tester.takeException(), isNull);

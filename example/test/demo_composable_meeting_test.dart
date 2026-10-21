@@ -99,24 +99,22 @@ void main() {
       expect(find.byType(RealtimeRoomUiScope), findsOneWidget);
       expect(find.byType(RealtimeVideoGrid), findsOneWidget);
       expect(find.byTooltip('Meeting participant'), findsOneWidget);
-      if (width < 600) {
-        expect(find.byType(RealtimeDockMoreButton), findsOneWidget);
-      } else {
-        expect(find.byType(RealtimeDockRaiseHandButton), findsOneWidget);
-        expect(find.byType(RealtimeDockHandQueueButton), findsOneWidget);
-      }
+      expect(find.byType(RealtimeMeetingRail), findsOneWidget);
+      expect(find.byType(RealtimeDockMoreButton), findsNothing);
+      expect(find.byType(RealtimeDockRaiseHandButton), findsOneWidget);
+      expect(find.byType(RealtimeDockHandQueueButton), findsNothing);
       if (width >= 1280) {
         final backgrounds = find.byIcon(Icons.blur_on_outlined);
         expect(
           backgrounds,
           findsOneWidget,
           reason:
-              'Desktop meeting exposes one background action, in the dock, at '
+              'Desktop meeting exposes one background action in the rail at '
               '$width',
         );
         expect(
           find.descendant(
-            of: find.byType(RealtimeMeetingDock),
+            of: find.byType(RealtimeMeetingRail),
             matching: backgrounds,
           ),
           findsOneWidget,

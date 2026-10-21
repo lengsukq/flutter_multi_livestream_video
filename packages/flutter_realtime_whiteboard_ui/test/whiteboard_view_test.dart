@@ -3,6 +3,7 @@ import 'package:flutter_realtime_design_ui/flutter_realtime_design_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_realtime_whiteboard_core/flutter_realtime_whiteboard_core.dart';
 import 'package:flutter_realtime_whiteboard_ui/flutter_realtime_whiteboard_ui.dart';
+import 'package:flutter_realtime_whiteboard_ui/src/annotation_hit_test.dart';
 
 class _CountedScreen extends StatelessWidget {
   const _CountedScreen(this.onBuild);
@@ -15,6 +16,187 @@ class _CountedScreen extends StatelessWidget {
 }
 
 void main() {
+  test(
+    'eraser hit-testing handles geometry, topmost marks and empty space',
+    () {
+      const size = Size(1000, 1000);
+      final circle = AnnotationShape(
+        id: 'circle',
+        tool: AnnotationTool.circle,
+        points: const [AnnotationPoint(.2, .2), AnnotationPoint(.8, .8)],
+      );
+      final arrow = AnnotationShape(
+        id: 'arrow',
+        tool: AnnotationTool.arrow,
+        points: const [AnnotationPoint(.1, .5), AnnotationPoint(.9, .5)],
+      );
+      final text = AnnotationShape(
+        id: 'text',
+        tool: AnnotationTool.text,
+        text: 'Lesson title',
+        points: const [AnnotationPoint(.35, .35)],
+      );
+      expect(
+        findErasableShape([circle], const Offset(500, 200), size)?.id,
+        'circle',
+      );
+      expect(findErasableShape([circle], const Offset(500, 500), size), isNull);
+      expect(
+        findErasableShape([arrow, circle], const Offset(500, 500), size)?.id,
+        'arrow',
+      );
+      expect(
+        findErasableShape([text], const Offset(360, 355), size)?.id,
+        'text',
+      );
+      expect(findErasableShape([text], const Offset(10, 10), size), isNull);
+    },
+  );
+
+  testWidgets(
+    'eraser deletes real ink, undo restores it without covering ink',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final board = WhiteboardSession.local();
+      final controls = WhiteboardToolsController();
+      await board.start();
+      addTearDown(controls.dispose);
+      await board.begin(
+        AnnotationShape(
+          id: 'ink-center',
+          tool: AnnotationTool.pen,
+          color: 0xff2563eb,
+          points: const [AnnotationPoint(.45, .5), AnnotationPoint(.55, .5)],
+        ),
+        canvasId: board.canvas.canvasId,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Row(
+              children: [
+                SizedBox(
+                  width: 60,
+                  child: SingleChildScrollView(
+                    child: WhiteboardToolRail(
+                      session: board,
+                      controller: controls,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: WhiteboardView(
+                    session: board,
+                    toolsController: controls,
+                    showToolRail: false,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final eraser = find.descendant(
+        of: find.byType(WhiteboardToolRail),
+        matching: find.byTooltip('Eraser (whole stroke)'),
+      );
+      expect(eraser, findsOneWidget);
+      await tester.tap(eraser);
+      await tester.pumpAndSettle();
+      final surface = tester.getRect(find.byType(AnnotationSurface));
+      await tester.tapAt(surface.center);
+      await tester.pumpAndSettle();
+      expect(board.canvas.shapes, isEmpty);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(WhiteboardToolRail),
+          matching: find.byTooltip('Undo'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(board.canvas.shapes.single.id, 'ink-center');
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(board.dispose);
+    },
+  );
+
+  testWidgets('merged whiteboard rail custom palette colors real strokes', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final session = WhiteboardSession.local();
+    final controls = WhiteboardToolsController();
+    await session.start();
+    addTearDown(controls.dispose);
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Row(
+            children: [
+              SizedBox(
+                width: 60,
+                child: SingleChildScrollView(
+                  child: WhiteboardToolRail(
+                    session: session,
+                    controller: controls,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: WhiteboardView(
+                  session: session,
+                  toolsController: controls,
+                  showToolRail: false,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(WhiteboardToolRail), findsOneWidget);
+    final palette = find.descendant(
+      of: find.byType(WhiteboardToolRail),
+      matching: find.byTooltip('More colors'),
+    );
+    expect(palette, findsOneWidget);
+    final initialColor = controls.color;
+    await tester.tap(palette);
+    await tester.pumpAndSettle();
+    expect(find.byType(WhiteboardColorPickerDialog), findsOneWidget);
+    expect(find.byKey(const ValueKey('whiteboard-color-hue')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('whiteboard-color-saturation')),
+      findsOneWidget,
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('whiteboard-color-hue')),
+      const Offset(90, 0),
+    );
+    await tester.drag(
+      find.byKey(const ValueKey('whiteboard-color-saturation')),
+      const Offset(75, 0),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+    expect(controls.color, isNot(initialColor));
+    expect(find.byType(WhiteboardColorPickerDialog), findsNothing);
+
+    final surface = tester.getRect(find.byType(AnnotationSurface));
+    await tester.dragFrom(surface.center, const Offset(36, 28));
+    await tester.pumpAndSettle();
+    expect(session.canvas.shapes, isNotEmpty);
+    expect(session.canvas.shapes.last.color, controls.color);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(session.dispose);
+  });
+
   testWidgets(
     'annotation labels follow the host font and repaint when it changes',
     (tester) async {

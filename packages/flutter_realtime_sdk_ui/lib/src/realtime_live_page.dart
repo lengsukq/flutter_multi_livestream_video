@@ -56,61 +56,6 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
         widget.loadImagePresets?.call() ?? Future.value(widget.imagePresets);
   }
 
-  void _openDisplayOptions(BuildContext context) {
-    final strings = RealtimeStrings.of(context);
-    final isHost = widget.room.media.role == MediaRole.host;
-    unawaited(
-      showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        builder: (sheetContext) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isHost)
-                  ListTile(
-                    leading: const Icon(Icons.tune_rounded),
-                    title: Text(strings.isZh ? '主播工具' : 'Host tools'),
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      _openHostToolsSheet(context);
-                    },
-                  ),
-                ListTile(
-                  leading: const Icon(Icons.fit_screen_rounded),
-                  title: Text(
-                    _liveVideoFitOverride == BoxFit.contain
-                        ? strings.fillLiveScreen
-                        : strings.showFullVideo,
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    setState(
-                      () => _liveVideoFitOverride =
-                          _liveVideoFitOverride == BoxFit.contain
-                          ? BoxFit.cover
-                          : BoxFit.contain,
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.fullscreen_rounded),
-                  title: Text(strings.isZh ? '清屏' : 'Hide controls'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    setState(() => _cleanScreen = true);
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   void _showActionError(RealtimeException error) {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -327,7 +272,6 @@ class _RealtimeLivePageState extends State<RealtimeLivePage> {
                             : _LiveSidePanel.chat,
                       ),
                       onOpenChat: () => _openMobileSheet(_LiveSidePanel.chat),
-                      onOpenDisplayOptions: () => _openDisplayOptions(context),
                       onViewAudience: wide
                           ? () => setState(
                               () => _sidePanel = _LiveSidePanel.members,

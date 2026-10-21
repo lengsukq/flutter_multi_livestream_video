@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_realtime_sdk_runtime/flutter_realtime_sdk_runtime.dart';
 
 import '../flutter_realtime_sdk_ui.dart';
+import 'classroom_sidebar_visuals.dart';
 
 /// Recording studio panel backed by the room's cloud recording controller.
 ///
@@ -27,181 +28,332 @@ class RealtimeRecordingPanel extends StatelessWidget {
     final style = RealtimeStyle.of(context);
     final strings = RealtimeStrings.of(context);
     final zh = strings.isZh;
-    return StreamBuilder<RecordingStatus>(
-      stream: room.recordingStatuses,
-      initialData: room.recordingStatus,
-      builder: (context, statusSnapshot) {
-        final status = statusSnapshot.data ?? RecordingStatus.idle;
-        final recording = status == RecordingStatus.recording;
-        final starting = status == RecordingStatus.starting;
-        final stopping = status == RecordingStatus.stopping;
-        final processing = status == RecordingStatus.processing;
-        final canManage =
-            room.recording.isConfigured && room.media.isLogicalOwner;
-        final options = room.recording.currentOptions;
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          children: [
-            StreamBuilder<Duration>(
-              stream: room.recordingDurations,
-              initialData: room.recording.duration,
-              builder: (context, durationSnapshot) {
-                final elapsed = durationSnapshot.data ?? Duration.zero;
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _format(elapsed),
-                            style: TextStyle(
-                              fontFamily: RealtimeFonts.displayOf(context),
-                              fontSize: 34,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.8,
-                              color: style.text,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
+    // Classroom notes update independently of cloud recording status.
+    // Subscribing here keeps markers in sync across teacher clients.
+    return StreamBuilder<ClassroomState>(
+      stream: room.classroom?.states,
+      initialData: room.classroom?.state,
+      builder: (context, classroomSnapshot) => StreamBuilder<RecordingStatus>(
+        stream: room.recordingStatuses,
+        initialData: room.recordingStatus,
+        builder: (context, statusSnapshot) {
+          final status = statusSnapshot.data ?? RecordingStatus.idle;
+          final recording = status == RecordingStatus.recording;
+          final starting = status == RecordingStatus.starting;
+          final stopping = status == RecordingStatus.stopping;
+          final processing = status == RecordingStatus.processing;
+          final canManage =
+              room.recording.isConfigured && room.media.isLogicalOwner;
+          final options = room.recording.currentOptions;
+          final chapterState = classroomSnapshot.data ?? room.classroom?.state;
+          final canAddChapter =
+              chapterState?.isTeacher == true && chapterState?.notes != null;
+          final chapters =
+              chapterState?.notes
+                  ?.where((note) => note.kind == ClassroomNoteKind.chapter)
+                  .toList(growable: false) ??
+              [];
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+            children: [
+              ClassroomSidebarCard(
+                emphasized: recording,
+                padding: const EdgeInsets.all(16),
+                child: StreamBuilder<Duration>(
+                  stream: room.recordingDurations,
+                  initialData: room.recording.duration,
+                  builder: (context, durationSnapshot) {
+                    final elapsed = durationSnapshot.data ?? Duration.zero;
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Container(
-                                width: 7,
-                                height: 7,
-                                decoration: BoxDecoration(
-                                  color: recording || starting
-                                      ? style.live
-                                      : style.textMuted,
-                                  shape: BoxShape.circle,
+                              Text(
+                                _format(elapsed),
+                                style: TextStyle(
+                                  fontFamily: RealtimeFonts.displayOf(context),
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.8,
+                                  color: style.text,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 6),
-                              Flexible(
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      color: recording || starting
+                                          ? style.live
+                                          : style.textMuted,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      _statusLabel(status, zh: zh),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: recording || starting
+                                            ? style.live
+                                            : style.textMuted,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        _RoundAction(
+                          icon: recording
+                              ? Icons.stop_rounded
+                              : Icons.fiber_manual_record_rounded,
+                          danger: recording,
+                          busy: busy || starting || stopping || processing,
+                          tooltip: recording
+                              ? (zh ? '停止录制' : 'Stop recording')
+                              : (zh ? '开始录制' : 'Start recording'),
+                          onPressed:
+                              !canManage || status == RecordingStatus.unknown
+                              ? null
+                              : onToggleRecording,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              ClassroomSidebarSectionTitle(
+                title: zh ? '录制配置' : 'Capture configuration',
+                icon: Icons.settings_input_component_outlined,
+              ),
+              const SizedBox(height: 9),
+              ClassroomSidebarCard(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (options != null) ...[
+                      _SettingRow(
+                        icon: Icons.dashboard_outlined,
+                        label: zh ? '布局' : 'Layout',
+                        value: switch (options.layout) {
+                          RecordingLayout.grid => zh ? '宫格' : 'Grid',
+                          RecordingLayout.screenShare =>
+                            zh ? '共享画面' : 'Screen share',
+                          RecordingLayout.featuredParticipant =>
+                            zh ? '指定成员' : 'Featured participant',
+                          RecordingLayout.activeSpeaker =>
+                            zh ? '发言人' : 'Active speaker',
+                          _ => zh ? '后端模板' : 'Backend template',
+                        },
+                      ),
+                      _SettingRow(
+                        icon: Icons.mic_none_rounded,
+                        label: zh ? '媒体' : 'Media',
+                        value: switch (options.streamType) {
+                          RecordingStreamType.audioOnly =>
+                            zh ? '仅音频' : 'Audio only',
+                          RecordingStreamType.videoOnly =>
+                            zh ? '仅视频' : 'Video only',
+                          RecordingStreamType.both =>
+                            zh ? '音视频' : 'Audio and video',
+                        },
+                      ),
+                      _SettingRow(
+                        icon: Icons.cloud_outlined,
+                        label: zh ? '输出' : 'Output',
+                        value: zh ? '云端录制' : 'Cloud recording',
+                      ),
+                    ] else
+                      Text(
+                        zh
+                            ? '开始录制时选择布局，实际内容由后端模板决定。'
+                            : 'Choose a layout when starting. Captured content depends on the backend template.',
+                        style: TextStyle(fontSize: 13, color: style.textMuted),
+                      ),
+                  ],
+                ),
+              ),
+              if (canAddChapter || chapters.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                ClassroomSidebarSectionTitle(
+                  icon: Icons.bookmarks_outlined,
+                  title: zh ? '课堂章节标记' : 'Lesson chapter markers',
+                  trailing: canAddChapter
+                      ? TextButton.icon(
+                          key: const ValueKey('recording-add-chapter'),
+                          onPressed: () => _addChapter(context),
+                          icon: const Icon(
+                            Icons.bookmark_add_outlined,
+                            size: 16,
+                          ),
+                          label: Text(zh ? '添加' : 'Add'),
+                        )
+                      : ClassroomSidebarStatus(label: '${chapters.length}'),
+                ),
+                const SizedBox(height: 9),
+                ClassroomSidebarCard(
+                  child: Column(
+                    children: [
+                      if (chapters.isEmpty)
+                        Text(
+                          zh ? '暂未标记章节' : 'No chapter markers yet',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: style.textMuted,
+                          ),
+                        ),
+                      for (final note in chapters)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${(note.elapsedSeconds ~/ 60).toString().padLeft(2, '0')}:${(note.elapsedSeconds % 60).toString().padLeft(2, '0')}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                  color: style.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
                                 child: Text(
-                                  _statusLabel(status, zh: zh),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                  note.text,
                                   style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: recording || starting
-                                        ? style.live
-                                        : style.textMuted,
+                                    fontSize: 12.5,
+                                    color: style.text,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                    _RoundAction(
-                      icon: recording
-                          ? Icons.stop_rounded
-                          : Icons.fiber_manual_record_rounded,
-                      danger: recording,
-                      busy: busy || starting || stopping || processing,
-                      tooltip: recording
-                          ? (zh ? '停止录制' : 'Stop recording')
-                          : (zh ? '开始录制' : 'Start recording'),
-                      onPressed: !canManage || status == RecordingStatus.unknown
-                          ? null
-                          : onToggleRecording,
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: style.surfaceSubtle,
-                borderRadius: BorderRadius.circular(
-                  RealtimeUiTokens.controlRadius,
-                ),
-                border: Border.all(color: style.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    zh ? '录制内容' : "What's being recorded",
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: style.text,
-                    ),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  if (options != null) ...[
-                    _SettingRow(
-                      icon: Icons.dashboard_outlined,
-                      label: zh ? '布局' : 'Layout',
-                      value: switch (options.layout) {
-                        RecordingLayout.grid => zh ? '宫格' : 'Grid',
-                        RecordingLayout.screenShare =>
-                          zh ? '共享画面' : 'Screen share',
-                        RecordingLayout.featuredParticipant =>
-                          zh ? '指定成员' : 'Featured participant',
-                        RecordingLayout.activeSpeaker =>
-                          zh ? '发言人' : 'Active speaker',
-                        _ => zh ? '后端模板' : 'Backend template',
-                      },
-                    ),
-                    _SettingRow(
-                      icon: Icons.mic_none_rounded,
-                      label: zh ? '媒体' : 'Media',
-                      value: switch (options.streamType) {
-                        RecordingStreamType.audioOnly =>
-                          zh ? '仅音频' : 'Audio only',
-                        RecordingStreamType.videoOnly =>
-                          zh ? '仅视频' : 'Video only',
-                        RecordingStreamType.both =>
-                          zh ? '音视频' : 'Audio and video',
-                      },
-                    ),
-                    _SettingRow(
-                      icon: Icons.cloud_outlined,
-                      label: zh ? '输出' : 'Output',
-                      value: zh ? '云端录制' : 'Cloud recording',
-                    ),
-                  ] else
-                    Text(
-                      zh
-                          ? '开始录制时选择布局，实际内容由后端模板决定。'
-                          : 'Choose a layout when starting. Captured content depends on the backend template.',
-                      style: TextStyle(fontSize: 13, color: style.textMuted),
-                    ),
-                ],
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  zh
+                      ? '时间相对课堂开始，尚未与视频播放位置关联。'
+                      : 'Offsets are room-relative, not video seek positions.',
+                  style: TextStyle(fontSize: 11, color: style.textMuted),
+                ),
+              ],
+              const SizedBox(height: 20),
+              ClassroomSidebarSectionTitle(
+                title: zh ? '录制结果' : 'Recording result',
+                icon: Icons.cloud_done_outlined,
+              ),
+              const SizedBox(height: 9),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: status == RecordingStatus.idle
+                      ? null
+                      : onOpenResult,
+                  icon: const Icon(Icons.cloud_download_outlined, size: 18),
+                  label: Text(zh ? '查看录制结果' : 'View recording result'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                zh
+                    ? '布局与画质由后端录制模板决定，停止后仍会继续处理一段时间。'
+                    : 'Layout and quality come from the backend template; processing continues after stopping.',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.45,
+                  color: style.textMuted,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _addChapter(BuildContext context) async {
+    final classroom = room.classroom;
+    if (classroom?.state?.isTeacher != true ||
+        classroom?.state?.notes == null) {
+      return;
+    }
+    final zh = RealtimeStrings.of(context).isZh;
+    var title = '';
+    final submitted = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(zh ? '添加课堂章节' : 'Add lesson chapter'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              autofocus: true,
+              maxLength: 140,
+              onChanged: (value) => title = value,
+              decoration: InputDecoration(
+                hintText: zh ? '章节标题' : 'Chapter title',
+                border: const OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: status == RecordingStatus.idle ? null : onOpenResult,
-              icon: const Icon(Icons.cloud_download_outlined, size: 18),
-              label: Text(zh ? '查看录制结果' : 'View recording result'),
-            ),
-            const SizedBox(height: 8),
             Text(
               zh
-                  ? '布局与画质由后端录制模板决定，停止后仍会继续处理一段时间。'
-                  : 'Layout and quality come from the backend template; processing continues after stopping.',
-              style: TextStyle(
-                fontSize: 11.5,
-                height: 1.45,
-                color: style.textMuted,
-              ),
+                  ? '章节时间由服务端按课堂开始时间记录，暂不能跳转视频。'
+                  : 'Time is recorded by the server relative to class start, not video playback.',
+              style: Theme.of(dialog).textTheme.bodySmall,
             ),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: Text(zh ? '取消' : 'Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('recording-confirm-chapter'),
+            onPressed: () => Navigator.pop(dialog, title.trim()),
+            child: Text(zh ? '保存章节' : 'Save chapter'),
+          ),
+        ],
+      ),
     );
+    if (submitted == null || submitted.isEmpty || !context.mounted) return;
+    try {
+      final controller = RealtimeRoomUiScope.maybeOf(context);
+      if (controller != null) {
+        await controller.addClassroomNote(submitted, chapter: true);
+      } else {
+        await classroom!.addNote(submitted, chapter: true);
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
   }
 
   static String _format(Duration value) {

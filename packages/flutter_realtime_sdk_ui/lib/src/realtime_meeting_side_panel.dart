@@ -19,6 +19,7 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
     this.workspaceMode = false,
     this.pinnedMessage,
     this.recordingPanel,
+    this.notesPanel,
   });
 
   final RealtimeMeetingPanel panel;
@@ -31,6 +32,9 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
   final bool workspaceMode;
   final String? pinnedMessage;
   final Widget? recordingPanel;
+
+  /// Host-managed persistent class notes; omitted if unavailable.
+  final Widget? notesPanel;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +60,11 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
           child: RealtimeClassroomSidePanel(
             key: ValueKey<int>(classroomPanelVisit),
             initialTab: initialTab,
+            initialTabId: switch (panel) {
+              RealtimeMeetingPanel.participants => RealtimeWorkspaceTab.people,
+              RealtimeMeetingPanel.chat => RealtimeWorkspaceTab.chat,
+              _ => RealtimeWorkspaceTab.classroom,
+            },
             initialTabLabel: switch (panel) {
               RealtimeMeetingPanel.participants =>
                 strings.isZh ? '成员' : 'People',
@@ -66,6 +75,7 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
             },
             pinnedMessage: pinnedMessage,
             recordingPanel: recordingPanel,
+            notesPanel: notesPanel,
             onClose: onClose,
           ),
         );
@@ -137,6 +147,9 @@ class RealtimeMeetingSidePanel extends StatelessWidget {
       ),
       child: RealtimeClassroomSidePanel(
         initialTab: panel == RealtimeMeetingPanel.participants ? 1 : 0,
+        initialTabId: panel == RealtimeMeetingPanel.participants
+            ? RealtimeWorkspaceTab.people
+            : RealtimeWorkspaceTab.chat,
         initialTabLabel: panel == RealtimeMeetingPanel.participants
             ? (strings.isZh ? '成员' : 'People')
             : strings.chat,

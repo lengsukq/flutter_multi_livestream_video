@@ -34,6 +34,50 @@ void main() {
       await tester.runAsync(fixture.room.dispose);
     },
   );
+
+  testWidgets(
+    'whiteboard rail appears on share and disappears on stop without resizing',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1280, 800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final fixture = await MeetingSharingFixture.create(
+        mode: SharedContentMode.members,
+        withTrack: false,
+      );
+      addTearDown(fixture.room.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RealtimeUiTheme.light(),
+          home: RealtimeMeetingPage(room: fixture.room, showClassroom: false),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final rail = find.byType(RealtimeMeetingRail);
+      expect(rail, findsOneWidget);
+      expect(find.byType(WhiteboardToolRail), findsNothing);
+      expect(find.byType(AnnotationSurface), findsNothing);
+
+      // No re-mount or window resize: the mode changes exclusively through
+      // the real classroom/shared-content state stream.
+      await tester.runAsync(() => fixture.mode(SharedContentMode.whiteboard));
+      await tester.pumpAndSettle();
+      expect(find.byType(WhiteboardToolRail), findsOneWidget);
+      expect(
+        find.ancestor(of: find.byType(WhiteboardToolRail), matching: rail),
+        findsOneWidget,
+      );
+      expect(find.byType(AnnotationSurface), findsWidgets);
+
+      await tester.runAsync(() => fixture.mode(SharedContentMode.members));
+      await tester.pumpAndSettle();
+      expect(find.byType(WhiteboardToolRail), findsNothing);
+      expect(find.byType(AnnotationSurface), findsNothing);
+      expect(rail, findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.runAsync(fixture.room.dispose);
+    },
+  );
   testWidgets(
     'merged rail changes whiteboard tools and keeps meeting navigation',
     (tester) async {
@@ -54,6 +98,22 @@ void main() {
       final rail = find.byType(RealtimeMeetingRail);
       expect(rail, findsOneWidget);
       expect(find.byType(WhiteboardToolRail), findsOneWidget);
+      expect(
+        find.ancestor(
+          of: find.byType(WhiteboardToolRail),
+          matching: find.byType(RealtimeMeetingRail),
+        ),
+        findsOneWidget,
+      );
+      final peopleButton = find.descendant(
+        of: rail,
+        matching: find.byTooltip('Participants'),
+      );
+      expect(
+        tester.getTopLeft(find.byType(WhiteboardToolRail)).dy,
+        lessThan(tester.getTopLeft(peopleButton).dy),
+        reason: 'Whiteboard tools should be above ordinary room controls',
+      );
 
       final boardTools = find.byType(WhiteboardToolRail);
       final highlight = find.descendant(
@@ -71,6 +131,8 @@ void main() {
         of: boardTools,
         matching: find.byTooltip('Pen'),
       );
+      await tester.ensureVisible(pen);
+      await tester.pumpAndSettle();
       await tester.tap(pen);
       await tester.pumpAndSettle();
       expect(
