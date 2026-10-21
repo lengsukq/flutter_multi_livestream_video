@@ -107,7 +107,7 @@ AWS 对外统一展示为一个 Vendor，内部按模式路由：`Meeting -> Chi
 | 加入前 Provider 网络探测 | 需要房间凭证时不支持 | 无 | 无 | 无 | 无 | 需要参与者令牌时不支持 |
 | 网络统计 | 支持 | Adapter 未提供 | 支持 | 支持 | Adapter 未提供 | 基础 RTC 统计 |
 | 屏幕共享 | 发布者支持，Web 移动端限制 | 原生 Adapter 未提供；Web 按能力检查 | 原生暂未实现；Web 按能力检查 | Android/iOS 发布者；Web 按能力检查 | Web 按能力检查 | Web 按能力检查 |
-| Blur / image processed-video sink | Android/macOS/Web，iOS/Windows 源码已接待 E2E | Android/macOS conditional/Web | Android/macOS/Web，Windows 源码已接待 E2E | Android/macOS/Web，Windows 源码已接待 E2E | Android/macOS conditional/Web | Android/macOS conditional/Web |
+| Blur / image processed-video sink | Android/macOS/Web，iOS Release 已编译，Windows 待验证 | Android/macOS conditional/Web | Android/macOS/Web，iOS Release 已编译，Windows 待验证 | Android/macOS/Web，iOS Release 已编译，Windows 待验证 | Android/macOS conditional/Web | Android/macOS conditional/Web |
 | 房主查看参与者列表 | 后端验证逻辑房主 | Meeting 创建者通过逻辑房主凭证 | 后端验证逻辑房主 | 后端验证逻辑房主 | 后端验证逻辑房主 | 后端验证逻辑房主 |
 | 房主移除参与者 | 支持 | 不支持 | 不支持 | 不支持 | 不支持 | 通过 IVS `DisconnectParticipant` |
 | 房主关闭房间 | 后端支持 | Meeting 创建者通过控制面关闭 | 后端支持 | 后端支持 | 后端支持 | 后端支持 |
@@ -125,17 +125,20 @@ AWS 对外统一展示为一个 Vendor，内部按模式路由：`Meeting -> Chi
 Android/macOS/Web 的发布者按平台与运行时能力启用；ARTC、Chime、IVS 的 macOS 输入需要真实能力探测。
 当前源码（2026-10-21）已新增 iOS 效果桥和 LiveKit iOS 处理视频输入，并通过
 iOS 无签名 Release 构建，但**尚未完成真机与真实远端像素验收**；Agora/TRTC/ARTC/AWS 的
-iOS processed-video 发布能力仍待逐项接入和验证。Windows 已写入 Media Foundation
+iOS LiveKit、Agora、TRTC 原生处理后视频轨道均已接入并通过 iOS 无签名 Release
+构建，但仍需分别完成 iPhone 真实远端像素及长时间运行测试。Windows 已写入 Media Foundation
 摄像头、ONNX PPHumanSeg 人像分割、模糊/换图合成、Flutter Texture 插件与本地原生帧分发；
-预编译的 PPHumanSeg 模型及 Apache-2.0 许可文件已校验，ONNX Runtime 仍需宿主构建时配置，
+预编译的 PPHumanSeg 模型及 Apache-2.0 许可文件已校验；Windows CMake 默认
+获取 SHA256 固定校验的官方 ONNX Runtime x64 并打包运行库与许可，
+也支持 `REALTIME_ONNXRUNTIME_ROOT` 在离线环境复用已安装的运行库。
 LiveKit、Agora、TRTC Windows 三个 Provider 的 Native ProcessedVideoSink 发布桥接代码均已写入，
 包括完整的原生插件注册、单包 SDK 打包适配和退出/重连释放路径的代码。
 相关 Dart 平台能力测试和帧处理测试通过，但 Windows 原生链接、ONNX 推理性能、
 远端视频画面与长时间稳定性均待实机验收。**当前不得视为三个供应商生产级已完成**。
 Flutter Windows 原生构建门禁见 `.github/workflows/windows-video-effects-smoke.yml`；
-工作流包含三个 Provider 的 Windows 原生构建检查。默认无 ONNX Runtime 的 smoke build
-只能证明插件可编译，不代表推理可用；需要配置 `REALTIME_ONNXRUNTIME_ROOT`
-后执行 Windows 双设备真实通话验收。
+工作流包含三个 Provider 的 Windows 原生构建检查，并执行带 ONNX Runtime
+链接的 x64 Release 构建。编译通过不代表实际人像分割质量和远端像素验收通过；
+仍必须完成 Windows 双设备真实通话。
 这些都是开发工作区变化，未包含于已发布的 dev.10。实现不等于真实远端画面验收通过。
 
 Demo 的 Pre-Join 直接使用 Platform Bridge 做实时虚化预览，不进入 Provider 房间。

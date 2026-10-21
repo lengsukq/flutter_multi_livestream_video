@@ -21,7 +21,7 @@ Provider ProcessedVideoSink      published track
 | Android | Implemented | Native RGBA frame hub + Flutter Texture preview |
 | macOS | Implemented | Native `CVPixelBuffer` frame hub + Flutter Texture preview |
 | Web | Implemented | Processed `MediaStreamTrack` + HTML video preview |
-| iOS | Native bridge + iOS Release build verified; real-device E2E pending | Vision + Core Image BGRA `CVPixelBuffer` hub / Flutter Texture; LiveKit sink |
+| iOS | Native bridge + iOS Release build verified; real-device E2E pending | Vision + Core Image BGRA `CVPixelBuffer` hub / Flutter Texture; LiveKit, Agora, TRTC native sinks |
 | Windows | Native plugin and three provider sinks written; Windows native build and device E2E pending | Media Foundation, PPHumanSeg ONNX, BGRA compositing, Flutter Texture, LiveKit/Agora/TRTC custom video tracks |
 
 Provider adapters own only the sink side (`ProcessedVideoSink`). When an
@@ -30,20 +30,22 @@ instead of routing frames through Dart or publishing the raw camera frame.
 
 The iOS bridge is **development source**, not part of published
 `flutter_realtime_sdk 0.1.0-dev.10`. It has no physical-iPhone/remote-pixel
-acceptance record yet. Only LiveKit is wired to its native processed track.
+acceptance record yet. LiveKit, Agora and Tencent TRTC have native iOS
+processed-video sink code and the iOS unsigned Release build passes.
 Windows now has native camera and ONNX person-segmentation source code, with
 verified model bytes/Apache-2.0 license and portable C++ compositor tests.
-**This code has not been built or tested on Windows**, and requires an explicit
-`REALTIME_ONNXRUNTIME_ROOT` pointing at ONNX Runtime C++ headers, import library
-and runtime DLL. Without ONNX Runtime, the plugin must return false from
-`isSupported`. LiveKit, Agora and TRTC now have native Windows processed-video
+**This code has not been built or tested on Windows**. Windows CMake fetches
+the official, SHA256-pinned ONNX Runtime 1.23.2 x64 distribution, linking and
+bundling the DLL and license. Offline builds can set
+`REALTIME_ONNXRUNTIME_ROOT` to the installed C++ SDK. A missing or invalid
+runtime is a build error; it must not silently disable requested effects.
+LiveKit, Agora and TRTC have native Windows processed-video
 publisher bridges in source, including a custom VideoSource patch in the
 vendored `flutter_webrtc` fork. Their implementation is not considered verified
 until a Windows x64 native build and dual-device RTC test pass. A local Texture
 must never be mistaken for successful remote camera publication.
 The Windows C++ Frame Hub rejects raw frames when a virtual background is
-required. Configure the runtime and verify real remote pixels before enabling
-any Windows background capability in a provider adapter.
+required. Verify real remote pixels before claiming Windows production support.
 
 ## Shared frame contract
 

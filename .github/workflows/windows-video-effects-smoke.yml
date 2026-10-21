@@ -2,6 +2,9 @@ name: Windows virtual-background native build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/ios-windows-virtual-background
   pull_request:
     paths:
       - "packages/flutter_realtime_video_effects/**"
@@ -62,7 +65,7 @@ jobs:
             "  flutter_realtime_media_trtc:",
             "    path: ../../packages/flutter_realtime_media_trtc"
           ) -join "`n"
-          $manifest = $manifest -replace '(?m)^dependencies:\s*$', "dependencies:`n$dependencies"
+          $manifest = $manifest -replace '(?m)^dependencies:[ \t]*$', "dependencies:`n$dependencies"
           $manifest += "`ndependency_overrides:`n  flutter_webrtc:`n    path: ../../packages/flutter_webrtc`n"
           Set-Content -Path pubspec.yaml -Value $manifest -Encoding utf8
           flutter pub get
@@ -70,8 +73,13 @@ jobs:
           flutter build windows --release
           if ($LASTEXITCODE -ne 0) { throw "native Windows build failed" }
           Pop-Location
+      - name: Upload Windows Release smoke executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-virtual-background-smoke
+          path: build/windows-effects-smoke/build/windows/x64/runner/Release/**
+          if-no-files-found: error
 
-# The default smoke build checks Windows C++/CMake without an ONNX Runtime
-# distribution. Native isSupported correctly reports false in that configuration.
-# A separate hardware acceptance run must configure REALTIME_ONNXRUNTIME_ROOT
-# and verify actual inference, Texture preview, and WebRTC remote publication.
+# The Windows plugin now downloads and bundles a pinned official ONNX Runtime
+# release with checksum verification. A real camera and two-device RTC call are
+# still required to validate inference quality and remote video publishing.

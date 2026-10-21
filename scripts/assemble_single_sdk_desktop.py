@@ -97,15 +97,8 @@ void FlutterRealtimeSdkPluginCApiRegisterWithRegistrar(FlutterDesktopPluginRegis
         'set(flutter_realtime_screen_annotation_bundled_libraries',
         'set(flutter_realtime_sdk_bundled_libraries'
     )
-    # The aggregated effects plugin uses the same optional ONNX Runtime ABI
-    # as the standalone source plugin; absent ORT it must compile but report
-    # effects unsupported rather than publish a raw camera stream.
-    source_cmake = (VIDEO_EFFECTS / "windows" / "CMakeLists.txt").read_text()
-    onnx_section = source_cmake[source_cmake.index("# Optional pinned ONNX Runtime distribution."):]
-    onnx_section = onnx_section.replace(
-        'set(flutter_realtime_video_effects_bundled_libraries',
-        'set(flutter_realtime_sdk_bundled_libraries'
-    )
+    # The bundled SDK must ship the same pinned ONNX Runtime as the standalone
+    # source plugin; never compile a silently disabled placeholder.
     source += (
         '\ntarget_include_directories(${PLUGIN_NAME} PRIVATE\n'
         '  "${CMAKE_CURRENT_SOURCE_DIR}/effects"\n'
@@ -131,7 +124,11 @@ void FlutterRealtimeSdkPluginCApiRegisterWithRegistrar(FlutterDesktopPluginRegis
         '  message(FATAL_ERROR "Tencent TRTC Windows SDK headers missing")\n'
         'endif()\n'
         'target_include_directories(${PLUGIN_NAME} PRIVATE "${AGORA_NATIVE_INCLUDE}" "${TRTC_WINDOWS}/include")\n'
-        + onnx_section
+        'include("${CMAKE_CURRENT_SOURCE_DIR}/effects/onnxruntime.cmake")\n'
+        'realtime_effects_configure_ort(${PLUGIN_NAME})\n'
+        'set(flutter_realtime_sdk_bundled_libraries\n'
+        '  "${REALTIME_EFFECTS_ORT_BUNDLED_DLL}"\n'
+        '  "${REALTIME_EFFECTS_ORT_BUNDLED_LICENSE}" PARENT_SCOPE)\n'
     )
     cmake.write_text(source)
     enable_platform("windows", "        pluginClass: FlutterRealtimeSdkPluginCApi\n")

@@ -15,18 +15,8 @@ target_include_directories(${PLUGIN_NAME} INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}
 target_link_libraries(${PLUGIN_NAME} PRIVATE
     flutter flutter_wrapper_plugin mfplat mfreadwrite mf mfuuid windowscodecs ole32)
 
-# Optional pinned ONNX Runtime distribution. Without it the plugin compiles,
-# but isSupported returns false and cannot create an effects source.
-set(ORT_DIR "$ENV{REALTIME_ONNXRUNTIME_ROOT}")
-set(flutter_realtime_video_effects_bundled_libraries "" PARENT_SCOPE)
-if(ORT_DIR AND EXISTS "${ORT_DIR}/include/onnxruntime_cxx_api.h"
-           AND EXISTS "${ORT_DIR}/lib/onnxruntime.lib"
-           AND EXISTS "${ORT_DIR}/lib/onnxruntime.dll")
-    target_include_directories(${PLUGIN_NAME} PRIVATE "${ORT_DIR}/include")
-    target_link_libraries(${PLUGIN_NAME} PRIVATE "${ORT_DIR}/lib/onnxruntime.lib")
-    target_compile_definitions(${PLUGIN_NAME} PRIVATE REALTIME_VIDEO_EFFECTS_ONNX=1)
-    set(flutter_realtime_video_effects_bundled_libraries
-        "${ORT_DIR}/lib/onnxruntime.dll" PARENT_SCOPE)
-else()
-    message(STATUS "Windows virtual backgrounds unavailable: REALTIME_ONNXRUNTIME_ROOT not configured")
-endif()
+include("${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime.cmake")
+realtime_effects_configure_ort(${PLUGIN_NAME})
+set(flutter_realtime_video_effects_bundled_libraries
+    "${REALTIME_EFFECTS_ORT_BUNDLED_DLL}"
+    "${REALTIME_EFFECTS_ORT_BUNDLED_LICENSE}" PARENT_SCOPE)

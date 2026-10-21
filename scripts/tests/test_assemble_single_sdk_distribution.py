@@ -168,8 +168,9 @@ class SingleSdkDistributionTest(unittest.TestCase):
         self.assertEqual(self.report["native"]["android"]["registrations"], 10)
         self.assertEqual(self.report["native"]["macos"]["registrations"], 10)
         # iOS effects, processed frame hub and LiveKit publisher add three
-        # native entrypoints to the original four.
-        self.assertEqual(self.report["native"]["ios"]["registrations"], 7)
+        # iOS now registers Agora and TRTC processed-video provider plugins
+        # alongside the existing Apple native effect pipeline.
+        self.assertEqual(self.report["native"]["ios"]["registrations"], 9)
         for platform in ("android", "ios", "macos", "windows", "linux", "web"):
             self.assertIn(f"      {platform}:", pubspec)
         self.assertIn(
@@ -193,7 +194,7 @@ class SingleSdkDistributionTest(unittest.TestCase):
 
     def test_apple_and_desktop_registration_bridges(self):
         ios = (self.root / "ios/Classes/FlutterRealtimeSdkPlugin.swift").read_text()
-        self.assertEqual(ios.count(".register(with: registrar)"), 7)
+        self.assertEqual(ios.count(".register(with: registrar)"), 9)
         mac = (self.root / "macos/Classes/FlutterRealtimeSdkPlugin.m").read_text()
         self.assertEqual(mac.count('@"FlutterRealtime'), 10)
         self.assertIn("FlutterRealtimeMediaAwsDesktopPlugin", mac)
@@ -223,7 +224,10 @@ class SingleSdkDistributionTest(unittest.TestCase):
         )
         windows_cmake = (self.root / "windows/CMakeLists.txt").read_text()
         self.assertIn("effects/flutter_realtime_video_effects_plugin.cpp", windows_cmake)
-        self.assertIn("REALTIME_ONNXRUNTIME_ROOT", windows_cmake)
+        self.assertIn("realtime_effects_configure_ort", windows_cmake)
+        ort_setup = (self.root / "windows/effects/onnxruntime.cmake").read_text()
+        self.assertIn("REALTIME_ONNXRUNTIME_ROOT", ort_setup)
+        self.assertIn("EXPECTED_HASH", ort_setup)
         self.assertIn("livekit/livekit_processed_video_plugin.cpp", windows_cmake)
         self.assertIn("agora/agora_processed_video_plugin.cpp", windows_cmake)
         self.assertIn("trtc/trtc_processed_video_plugin.cpp", windows_cmake)

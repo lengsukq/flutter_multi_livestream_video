@@ -23,11 +23,12 @@ Flutter MethodChannel 仅传递源身份、效果配置和绑定信息。
 
 1. Windows 10+/11、Visual Studio 2022（含 Desktop C++、MSVC 与 Windows SDK）、
    Flutter 3.47+、CMake、可用摄像头。
-2. 安装或解压 **Microsoft 发布的 ONNX Runtime x64 C++ 分发包**，
-   设置 `REALTIME_ONNXRUNTIME_ROOT` 指向包含
+2. Windows Flutter 构建默认自动下载并核验 SHA-256 固定的
+   **Microsoft ONNX Runtime 1.23.2 x64 官方 C++ 分发包**，将 DLL 与许可一起打包。
+   离线构建可设置 `REALTIME_ONNXRUNTIME_ROOT` 指向包含
    `include/onnxruntime_cxx_api.h`、`lib/onnxruntime.lib` 和
    `lib/onnxruntime.dll` 的根目录。分发需同时保留 ONNX Runtime
-   的许可声明；不配置时插件编译为安全的 unsupported。
+   的许可声明。下载/校验失败时构建直接失败，不静默禁用虚拟背景。
 3. `packages/flutter_realtime_video_effects/assets/windows/pphumanseg.onnx`
    必须随 Flutter assets 打包；检查 `PPHUMANSEG_LICENSE.txt`，
    模型 SHA256 见 `windows/MODEL.md`。
@@ -38,9 +39,9 @@ Flutter MethodChannel 仅传递源身份、效果配置和绑定信息。
 
 Windows GitHub Actions 工作流：
 `.github/workflows/windows-video-effects-smoke.yml`。
-包含三个 Provider 原生插件的编译入口；GitHub Actions 未运行前没有
-Windows 构建通过的证据。没有 ONNX Runtime 的默认 smoke 构建只验证
-链接，不验证真实推理。
+包含三个 Provider 原生插件的编译入口和 ONNX Runtime 真实链接；
+GitHub Actions 未实际运行并成功前没有 Windows 构建通过的证据。
+该工作流不等于摄像头/模型实际推理和 RTC 远端验收。
 
 每个 Provider 均需逐项记录：
 
